@@ -1,35 +1,33 @@
-# PS-020-02 — validation rules
+# PS-020-02 — Validation rules: Three-party cycles
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-02. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S02.M01 Three-party cycles](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/cycle_matching/three` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the validation rules process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-020-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-020-02.R01** Profile overrides are validated against bounds before they take effect.
+- **PS-020-02.R02** The explanation query validates that the subject is a 3-party suggestion owned by the caller's vault.
+- **PS-020-02.R03** All amounts in the explanation are computed with bigint arithmetic in the cycle settlement currency.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | toleranceBps override is an integer in 0..1000 | VALIDATION_FAILED |
+| V02 | absoluteMinMajor override is an integer in 0..100 | VALIDATION_FAILED |
+| V03 | explanation subject exists in this vault and its length equals 3 | MUTINY_PROFILE_LENGTH_MISMATCH |
+| V04 | maxPairBucket override is within 0..4 and not looser than gt50 | VALIDATION_FAILED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-020-09.T02 | unit | PS-020-01.R02, PS-020-02.R01 | override 1001 bps, 1000 bps, absolute minimum 101 and 100 | 1001 and 101 rejected, 1000 and 100 accepted and recorded |
+| TEST-PS-020-09.T03 | unit | PS-020-01.R03, PS-020-02.R03, PS-020-09.R02 | golden 3-party explanation | gaps 500, 200, 300 with tolerances 600, 600, 590 exactly as in the example |
+| TEST-PS-020-09.T04 | unit | PS-020-02.R02, PS-020-04.R03 | explain a 4-party suggestion | MUTINY_PROFILE_LENGTH_MISMATCH |
+| TEST-PS-020-09.T06 | unit | PS-020-02.R03, PS-020-07.R01 | JPY fixture | absolute minimum is 5 minor units and formatting follows the currency |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

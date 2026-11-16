@@ -1,0 +1,274 @@
+id: F07.S03.M02
+scope: MVP
+summary: >-
+  Trust attestations are small signed claims about a DID - self-declared labels, 'met in person' statements by a peer,
+  'verified email' statements signed by a relay operator, and generic claims signed by any third-party DID. Each is a
+  signed statement (classrup.identity.attestation/v1) that evidences that the signer asserted the claim, not that it is
+  true, and the interface always shows who signed it. The module stores no identity documents, no email addresses and no
+  phone numbers (no KYC data). Subjects control whether a claim about them is shown publicly, to contacts, or not at all.
+responsibilities:
+  - Define the attestation kinds and their default validity - self_claim 365 days, peer_met_in_person 180 days, relay_verified_email 365 days, third_party 365 days.
+  - Issue attestations as the local principal (self, peer, third party), receive and verify attestations from others, and revoke them with a signed revocation statement by the issuer.
+  - Let a relay operator issue a relay_verified_email attestation signed with the relay's key after an out-of-band check, storing only the fact and the date, never the email.
+  - Show attestations with issuer provenance and keep subject-controlled visibility (public, contacts, private) for display and re-publication.
+non_responsibilities:
+  - Reputation from reviews (F07.S03.M01) and account recovery (F07.S01.M03).
+  - Performing email or phone verification flows; MVP relies on an operator's out-of-band check, and automated verification via notification channels is Future.
+  - Collecting, storing or evaluating identity documents (KYC); explicitly out of scope.
+  - "Future: automated email proof flow through F13, web-of-trust path display, attestation revocation lists distributed by relays."
+depends_on: [F07.S01.M01, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
+user_stories:
+  - As a user, I add a self-declared label such as 'Member of the Elm Street repair cafe' and it is shown as self-declared.
+  - As a buyer who just met a seller, I can sign 'met in person' about them, and they can show it on their profile.
+  - As a relay operator, I can attest that I checked control of an email for a member without storing the email.
+  - As a viewer, I can see exactly who signed each claim and whether I know or trust the signer.
+edge_cases:
+  - An attestation's signature is valid but the issuer is a brand-new DID; it is shown with the issuer's pseudonym and 'new signer' and carries no extra weight.
+  - The issuer revokes after the subject republished it; viewers who receive the revocation mark it revoked, viewers who do not stay unaware, and the UI shows 'last checked' time.
+  - Relay key is later compromised; the operator publishes a signed revocation or key retirement; attestations from the old key show 'signer key retired' once viewers learn of it.
+  - A peer tries to attest 'met in person' for someone they never completed a meetup with; the issuing vault warns when no local meetup evidence exists and the statement then says 'no local evidence' in a field.
+  - A subject receives an unwanted claim about them (for example an insulting label); they set visibility private and can report it to the relay, but they cannot delete the issuer's statement.
+  - 21 attestations exist for one subject; only the 20 newest valid ones are displayed and the rest are kept in history.
+  - The claimed expiry is 10 years ahead; it is clamped to the kind's maximum validity from local receipt time.
+  - An attestation label contains links, or looks like an official claim ('Verified by government'); free text is plain text, linkless, and labels with reserved official words are refused for self_claim.
+ux:
+  screens:
+    - "Profile > Trust: list of attestations with signer pseudonym, DID fingerprint, kind badge (Self-declared, Met in person, Verified by relay, Signed claim), date, validity, and a 'Signed by' detail sheet."
+    - "Issue attestation sheet: kind selector, claim label (80 chars), optional context, explanation of what the signature means, Sign button."
+    - "Operator console: issue relay attestation for a DID after an out-of-band check, with a checklist and a note that the email is not stored."
+  states: [loading, empty, active, expired, revoked, pending-offline, error]
+  a11y:
+    - Kind badges have text labels and the signer detail is reachable by keyboard with a modal dialog that traps focus correctly.
+    - Revoked and expired states are text and announced via aria-live polite.
+    - All actions are buttons at least 44 by 44 px with accessible names including the claim label.
+processes:
+  domain_schema:
+    requirements:
+      - A TrustAttestation stores kind, subject, issuer, claim label, validity, the signed statement fields and provenance; it stores no email, phone, document or biometric data.
+      - Every attestation carries the issuer's Ed25519 signature over JCS bytes and is verifiable offline against the issuer DID.
+      - Visibility is a local setting of the subject and never alters the signed statement.
+    entities:
+      - name: TrustAttestation
+        schema: classrup.identity.attestation/v1
+        storage: relay+device
+        privacy: P1
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "kind: enum — self_claim | peer_met_in_person | relay_verified_email | third_party"
+          - "subjectDid: did — the DID the claim is about"
+          - "issuerDid: did — signer; equals subjectDid for self_claim; a relay key DID for relay_verified_email"
+          - "claimKey: string — 1..40 characters from a fixed vocabulary or custom:<slug> for self_claim and third_party"
+          - "label: string — 1..80 code points, plain text, no links, no reserved official words for self_claim"
+          - "contextRef?: object — { type: meetup|deal, id: uuidv7, localEvidence: boolean }"
+          - "claimedIssuedAt: timestamp — issuer's claim"
+          - "claimedExpiresAt: timestamp — issuer's claim"
+          - "effectiveExpiresAt: timestamp — min(claimedExpiresAt, firstSeenAt plus the kind's maximum validity)"
+          - "firstSeenAt: timestamp — local clock when this vault first saw the statement"
+          - "origin: enum — issued | received"
+          - "provenance?: object — { originRelay?, via, receivedAt, verifiedAt }"
+          - "cid: string — sha256-base64url of JCS(statement without sig)"
+          - "sig: string — Ed25519 signature by the issuer key over JCS bytes"
+          - "visibility: enum — public | contacts | private; local to the subject, default private for received, public for issued self_claim"
+          - "syncState?: enum — local_committed | prepared | transport_acknowledged | peer_accepted (issued statements)"
+          - "status: enum — active | revoked | expired"
+          - "revocation?: object — { statementCid, reason: issuer_revoked|key_retired|tombstoned, receivedAt }"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - The signature verifies against issuerDid over JCS bytes of the statement without sig.
+          - issuerDid equals subjectDid exactly when kind is self_claim.
+          - effectiveExpiresAt is at most 365 days after firstSeenAt (180 days for peer_met_in_person).
+          - No field holds an email, phone number, address or identity document data.
+    sql: |
+      CREATE TABLE identity_attestation (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, kind TEXT NOT NULL, subject_did TEXT NOT NULL, issuer_did TEXT NOT NULL,
+        cid TEXT NOT NULL, status TEXT NOT NULL, effective_expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX identity_attestation_cid ON identity_attestation(tenant_id, cid);
+      CREATE INDEX identity_attestation_subject ON identity_attestation(tenant_id, subject_did, status);
+  validation_rules:
+    requirements:
+      - Every attestation is verified for signature, kind rules and field limits before it is displayed.
+      - Free-text labels are restricted to plain text with a reserved-word filter so a label cannot pose as an official verification.
+      - Expiry is anchored on the verifier's own clock and capped per kind.
+    rules:
+      - "V01 | signature verifies against issuerDid over JCS bytes and the statement is at most 4 KiB | IDENTITY_ATTESTATION_SIGNATURE_INVALID"
+      - "V02 | kind rules hold - self_claim has issuer equal to subject, peer_met_in_person has issuer different from subject, relay_verified_email is signed by a relay key | IDENTITY_ATTESTATION_KIND_INVALID"
+      - "V03 | label is 1..80 code points of plain text without links, and for self_claim contains none of the reserved words verified, official, certified, government, police | VALIDATION_FAILED"
+      - "V04 | claimedExpiresAt is after claimedIssuedAt, and effectiveExpiresAt is capped at 365 days (180 days for peer_met_in_person) after firstSeenAt | VALIDATION_FAILED"
+      - "V05 | the issuer has issued fewer than 10 attestations in the last 24 hours and the subject has at most 20 active displayed attestations | RATE_LIMITED"
+      - "V06 | one active peer_met_in_person per (issuerDid, subjectDid) pair | CONFLICT_STATE"
+      - "V07 | revocation is signed by the original issuerDid and refers to the attestation cid | IDENTITY_ATTESTATION_SIGNATURE_INVALID"
+  workflow_state_machine:
+    requirements:
+      - An attestation is active until the issuer revokes it or it expires; both ends are final for that statement.
+      - Revocation takes effect for a viewer only when the viewer receives the signed revocation, and the viewer's UI shows the last-checked time.
+      - Re-issuing creates a new statement and a new attestation record.
+    machines:
+      - entity: TrustAttestation
+        initial: active
+        terminal: [revoked, expired]
+        transitions:
+          - "active -> revoked | identity.attestation.revoke by the issuer, a signed revocation received from the issuer, key retirement notice, or a tombstone | set revocation details, emit identity.attestation.revoked"
+          - "active -> expired | expiry sweep at effectiveExpiresAt | hide from default lists, keep as history, emit identity.attestation.revoked with reason expired"
+    timeouts:
+      - "Expiry sweep every 60 s while the app is open and at every unlock."
+      - "Expired and revoked attestations are kept 2 years (RET-EVIDENCE) for verifying past statements, then deleted."
+  commands_queries_events:
+    requirements:
+      - issue, revoke and set_visibility are vault commands; issue and revoke produce the signed statements classrup.identity.attestation/v1 and classrup.identity.attestation_revocation/v1; receive is the vault intake of someone else's statement.
+      - issue_relay is a relay command signed with the relay key and stores no personal data beyond the subject DID and date.
+      - Every command emits its events in the same transaction as the state change.
+    commands:
+      - name: identity.attestation.issue
+        capability: identity.attestation.issue
+        input: "{ kind: self_claim|peer_met_in_person|third_party, subjectDid, claimKey, label, contextRef?, validityDays?, audience: subject_only|public, targetRelays? }"
+        output: "{ attestationId, cid, statement: classrup.identity.attestation/v1, syncState: local_committed }"
+        errors: [VALIDATION_FAILED, IDENTITY_ATTESTATION_KIND_INVALID, CONFLICT_STATE, BLOCKED_PARTY, RATE_LIMITED]
+        emits: [identity.attestation.added]
+        idempotent: true
+      - name: identity.attestation.receive
+        capability: identity.attestation.receive
+        input: "{ statement: classrup.identity.attestation/v1, provenance }"
+        output: "{ attestationId, status, effectiveExpiresAt }"
+        errors: [IDENTITY_ATTESTATION_SIGNATURE_INVALID, IDENTITY_ATTESTATION_KIND_INVALID, VALIDATION_FAILED, BLOCKED_PARTY, RATE_LIMITED]
+        emits: [identity.attestation.added]
+        idempotent: true
+      - name: identity.attestation.revoke
+        capability: identity.attestation.revoke
+        input: "{ attestationId, expectedRevision }"
+        output: "{ attestationId, revision, revocation: classrup.identity.attestation_revocation/v1 }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [identity.attestation.revoked]
+        idempotent: true
+      - name: identity.attestation.set_visibility
+        capability: identity.attestation.set_visibility
+        input: "{ attestationId, visibility: public|contacts|private, expectedRevision }"
+        output: "{ attestationId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION]
+        emits: []
+        idempotent: true
+      - name: identity.attestation.issue_relay
+        capability: identity.attestation.issue_relay
+        input: "{ subjectDid, kind: relay_verified_email, validityDays? (1..365, default 365), checkNote? (0..140 code points, no email) }"
+        output: "{ attestationId, cid, statement: classrup.identity.attestation/v1 }"
+        errors: [VALIDATION_FAILED, CONFLICT_STATE, FORBIDDEN, RATE_LIMITED]
+        emits: [identity.attestation.added]
+        idempotent: true
+    queries:
+      - name: identity.attestation.list_for_subject
+        capability: identity.attestation.read_view
+        input: "{ subjectDid, includeInactive?: boolean, cursor?, limit? (1..50) }"
+        output: "{ items: [TrustAttestation with signer pseudonym and lastCheckedAt], nextCursor? }"
+        errors: [NOT_FOUND]
+      - name: identity.attestation.list_issued
+        capability: identity.attestation.read_issued
+        input: "{ status?: active|all, cursor?, limit? (1..50) }"
+        output: "{ items: TrustAttestation[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: identity.attestation.added, privacy: P1, payload: "{ attestationId, kind, subjectDid, issuerDid, effectiveExpiresAt, origin }"}
+      - {type: identity.attestation.revoked, privacy: P1, payload: "{ attestationId, subjectDid, issuerDid, reason: issuer_revoked|key_retired|tombstoned|expired }"}
+    events_consumed:
+      - {type: federation.tombstone.applied, effect: "mark the targeted attestation revoked with reason tombstoned"}
+      - {type: identity.device_key.revoked, effect: "re-verify issued statements; statements are signed by the account key so they stay valid, and only the displayed signer-device info is refreshed"}
+      - {type: privacy.deletion.completed, effect: "vault erase - delete all attestations and issued statements"}
+    errors:
+      - "IDENTITY_ATTESTATION_SIGNATURE_INVALID | 422 | no | attestation or revocation signature does not verify against the issuer DID"
+      - "IDENTITY_ATTESTATION_KIND_INVALID | 422 | no | issuer and subject do not satisfy the rules of the attestation kind"
+    example: |
+      vault command: identity.attestation.issue { "kind": "peer_met_in_person", "subjectDid": "did:key:z6Mk…", "claimKey": "met_in_person", "label": "Met at the Saturday swap meet", "contextRef": { "type": "meetup", "id": "0192f460-…" }, "audience": "subject_only" }
+      -> { "attestationId": "0192f461-…", "cid": "sha256-Qm…", "syncState": "local_committed", "statement": { "type": "classrup.identity.attestation/v1", "author": "did:key:z6MkIssuer…", "payload": { "subject": "did:key:z6Mk…", "claimKey": "met_in_person" }, "sig": "…" } }
+      meaning shown to viewers: "Signed by Riverstone (did:key …a1b2c3d4) on 2026-11-04. This shows they said so; it does not prove it is true."
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the unlocked principal issues or revokes attestations under its own DID and sets visibility of claims about itself; received attestations are accepted only on a valid signature from the stated issuer.
+      - Relay policy - only the operator role of a relay can issue relay_verified_email attestations, signed with that relay's key; the attestation means only that this relay's operator vouched, and viewers choose which relays they trust.
+      - Viewing follows the subject's visibility; private attestations are never included in published or shared profile statements.
+    capabilities:
+      - "identity.attestation.issue | principal | unlocked principal; issuer DID equals the principal DID; subject not blocked"
+      - "identity.attestation.receive | principal | signature verifies against the issuer DID; issuer not blocked"
+      - "identity.attestation.revoke | principal | unlocked principal and attestation.issuerDid equals the principal DID"
+      - "identity.attestation.set_visibility | principal | unlocked principal and attestation.subjectDid equals the principal DID"
+      - "identity.attestation.issue_relay | operator | operator role on this relay and relay signing key available"
+      - "identity.attestation.read_view | principal, anonymous | vault - unlocked principal; relay copies - public attestations only"
+      - "identity.attestation.read_issued | principal | unlocked local principal"
+  failure_recovery_idempotency:
+    requirements:
+      - Issue, receive and revoke are idempotent by statement cid, and duplicate delivery never creates a duplicate attestation.
+      - Statements go through the sync outbox with states local_committed, prepared, transport_acknowledged and peer_accepted, and the UI never shows more than the reached state.
+      - A revocation that cannot be delivered still takes effect locally, and the UI says other people may not have seen it yet.
+    idempotency: "Idempotency-Key per command in the vault log for 24 h; receive and revocation keyed by cid; issue_relay keyed by (subjectDid, kind, validity window)."
+    concurrency: "expectedRevision on revoke and visibility; unique cid index; one active peer attestation per pair enforced in the transaction; Web Locks serialize tabs."
+    retries: "Outbox retries follow base 500 ms, cap 30 s, full jitter, max 6 attempts per window until transport_acknowledged or the user cancels."
+    offline: "Issue, revoke and visibility changes work offline and wait in the outbox; verification of received statements needs no network."
+    partial_failure: "If statement signing fails nothing is stored; if delivery to one relay fails, local state stays and the per-relay sync state shows the error."
+  privacy_retention_abuse:
+    requirements:
+      - No KYC or contact data is stored; the relay_verified_email attestation records only that the operator checked something on a date, never the email address.
+      - Attestations are evidence that a signer asserted a claim; the UI never states that a claim is true, and a signer can be a stranger or a throwaway DID.
+      - Subjects control visibility of claims about themselves, but cannot erase another person's signed statement from other vaults.
+    data:
+      - "TrustAttestation: P1 when public; subject-only deliveries are end-to-end encrypted (P2); claim labels are free text with a 80 code point limit."
+      - "Operator check notes: at most 140 code points, kept on the relay in audit logs for RET-AUDIT (1 year), never containing the email."
+    retention:
+      - "RET-EVIDENCE (2 years after last related activity) for attestations; revoked and expired kept as history for the same period; local quarantined items 30 days."
+      - "On vault erase all local attestations are deleted; copies in other vaults and relays remain until signed tombstones arrive."
+    threats:
+      - "T01 | Attestation mistaken for proof of truth or identity | wording 'Signed by X; this shows they said so', issuer always shown with pseudonym and DID fingerprint, no checkmark icon implying verification"
+      - "T02 | Sybil attestation rings (Douceur 2002) where throwaway DIDs vouch for each other | attestations have no numeric reputation effect in MVP, new signers are labelled, per-issuer limit of 10 per 24 h, pairs limited to one active peer attestation"
+      - "T03 | Operator misuse or key compromise of relay_verified_email | claims only say this relay vouched, signature binds the relay key, key retirement notice marks attestations 'signer key retired', viewers can choose to hide a relay's attestations"
+      - "T04 | Harassing or defamatory labels about a person | subject can hide them from their own profile, report to relay hosting policy, viewers can hide locally; honest limit - the statement can remain elsewhere"
+      - "T05 | Label impersonates an official verification | reserved-word filter for self-claims and a fixed visual style for self-declared items"
+      - "T06 | Stale or expired claims relied upon | expiry capped per kind and anchored on local first-seen time, last-checked time shown for revocations"
+    abuse_controls:
+      - "Issuer limit 10 attestations per 24 hours; vault intake 100 attestations per hour per transport source; 20 displayed active attestations per subject."
+      - "Operator issue_relay limited to 100 per day per relay and every issuance logged with operator role and subject DID only."
+  observability_performance:
+    requirements:
+      - Relays export operator-issued attestation counts per CTR-OBS-001; vaults keep local counters only.
+      - Verification of one attestation takes at most 8 ms p95 on a Moto G-class device.
+      - Listing 50 attestations for a subject completes within 50 ms p95 locally.
+    metrics:
+      - "classrup_identity_relay_attestations_total{outcome=issued|rejected} (relay)"
+      - "local counter attestation_total{event=issued|received|revoked|expired|rejected}"
+    logs:
+      - "info attestation.event {event, kind, correlationId} - no DIDs, labels or check notes."
+    budgets:
+      - "verify p95 <= 8 ms on device; list 50 p95 <= 50 ms; issue p95 <= 100 ms; issue_relay p95 <= 300 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test with fixed key pairs and an injected clock.
+      - Signature tests include tampering, wrong issuer and wrong kind negative cases.
+      - Privacy tests prove that no email, phone or document data is stored anywhere in the module.
+    fixtures: "Principal P, peers Q and R, relay operator key O, new throwaway DID Z, fixed clock 2026-11-04T10:00:00Z, label corpus (valid, with links, with reserved words)."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | issue a self_claim and a peer_met_in_person | statements signed and verify; fields match; no personal data fields exist"
+      - "T02 | unit | 02.R01,02.R02,02.R03 | tampered label, issuer equals subject for a peer claim, relay kind signed by a non-relay key, label with a link, label 'Verified by police' | IDENTITY_ATTESTATION_SIGNATURE_INVALID, IDENTITY_ATTESTATION_KIND_INVALID or VALIDATION_FAILED"
+      - "T03 | unit | 01.R03,02.R03 | claimedExpiresAt 10 years ahead | effectiveExpiresAt clamped to 365 days (180 for peer) after first seen"
+      - "T04 | property | 03.R01,03.R02,03.R03 | random sequences of receive, revoke, expire, re-issue | only declared transitions succeed; revoked and expired are final; re-issue creates a new record"
+      - "T05 | integration | 03.R02,06.R03 | revocation received after the subject republished the claim | viewer marks revoked with lastChecked time; subject's copy shows revoked on next sync"
+      - "T06 | contract | 04.R01,04.R02,04.R03,09.R02 | all commands, queries and events run | outputs, statements and payloads validate against registry schemas; signatures verify"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | non-operator issues relay attestation; non-issuer revokes; stranger reads private attestation | FORBIDDEN or NOT_FOUND; private claim never exposed"
+      - "T08 | chaos | 06.R01,06.R02,06.R03 | duplicate delivery, offline revoke, signing failure | one record; revoked locally with honest outbox state; nothing stored on failed signing"
+      - "T09 | abuse | 07.R01,07.R02,07.R03 | inspect all storage, logs and events for emails, phones and documents; relay issue note containing an email address | none stored; note with an email-like string rejected"
+      - "T10 | abuse | 07.R03,02.R03 | throwaway DID issues 11 attestations in 24 hours and a ring of 5 DIDs vouch for each other | RATE_LIMITED on the 11th; no numeric trust effect and new-signer labels shown"
+      - "T11 | load | 08.R01,08.R02,08.R03 | verify 1 000 attestations and list 50 on emulated Moto G | verify p95 <= 8 ms, list p95 <= 50 ms"
+      - "T12 | a11y | 01.R01,03.R01 | trust list and issue sheet with axe-core and keyboard only | zero serious or critical issues; signer dialog focus trap works"
+      - "T13 | unit | 09.R01,09.R03 | traceability run over PS-057 | every requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import in a fresh vault, tombstone after import | statements re-verified and round-trip; tombstoned attestation becomes revoked"
+    acceptance:
+      - All tests T01-T14 pass in CI.
+      - No KYC, email, phone or document data is stored or logged by this module (privacy suite).
+      - Every displayed attestation shows its signer and the wording that it evidences an assertion, not truth.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains attestations issued by the principal and about the principal and those the user kept, with signatures.
+      - Import re-verifies every signature and kind rule, recomputes effective expiry from the import time capped by the original claim, and skips invalid statements with a report.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section identity.attestations in classrup-export/v1 (schema classrup.identity.attestation/v1) including statements and revocations; visibility settings are included."
+    import: "Each statement is re-verified; invalid ones are reported and skipped; effectiveExpiresAt is recomputed from the import time; revoked statements import as revoked."
+    backup: "The vault export is the primary backup (IOX-6); relays store public statements only and operator audit logs follow RET-AUDIT (IOX-7)."
+    migration_rollback: "Additive optional fields in v1 under ext for signed statements; rollback is safe because older readers ignore unknown ext keys and the signature covers them."

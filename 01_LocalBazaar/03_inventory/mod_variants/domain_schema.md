@@ -1,35 +1,59 @@
-# PS-009-01 — domain schema
+# PS-009-01 — Domain schema: Listing variants
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-009-01. **Owner:** [01_LocalBazaar/03_inventory/mod_variants](SPEC.md). **Implementing module:** 01_LocalBazaar/03_inventory/mod_variants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S03.M02 Listing variants](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/inventory/variants` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the domain schema process for variants within 03_inventory. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-009-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-009-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-009-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-009-01.R01** A Variant stores label, a small attribute map, price as Money in the listing currency, position and status; quantity is not stored here.
+- **PS-009-01.R02** Variants are part of the owner's listing data (P0 once published inside the signed projection, P3 while draft).
+- **PS-009-01.R03** At most 50 variants exist per listing and at most 5 attribute pairs per variant.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Variant
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.bazaar.variant/v1` · storage **device** · privacy **P3** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-009-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — fixed local-vault tenant (ID-6) |
+| listingId | uuidv7 — ref F01.S01.M01 Listing |
+| ownerId | did:key — local principal |
+| label | string — 1..60 code points |
+| attributes | object — 1..5 pairs, key 1..20 and value 1..40 code points, keys from size, colour, condition, material, model, other |
+| price? | Money — CTR-MNY-001; > 0; same currency as SellTerms.askingPrice; absent means the listing asking price applies |
+| position | int — 0..49 |
+| status | enum — active \| retired \| deleted |
+| attributesHash | string — sha256- over JCS(attributes), unique per listing among active and retired |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- At most 50 variants with status active or retired per listing; positions are unique among them.
+- price currency equals the listing asking currency whenever price is present.
+- A variant with active holds or open offers is never retired or deleted.
+
+### Storage DDL
+
+```sql
+CREATE TABLE bazaar_variant (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, status TEXT NOT NULL,
+  position INTEGER NOT NULL, attributes_hash TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX bazaar_variant_attrs ON bazaar_variant(tenant_id, listing_id, attributes_hash) WHERE status <> 'deleted';
+CREATE UNIQUE INDEX bazaar_variant_pos ON bazaar_variant(tenant_id, listing_id, position) WHERE status <> 'deleted';
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-009-09.T01 | unit | PS-009-01.R01, PS-009-01.R03, PS-009-02.R01, PS-009-02.R02 | add a valid variant with quantity 3 | Variant stored, inventory item onHand 3, 50-variant and 5-attribute limits enforced |
+| TEST-PS-009-09.T02 | unit | PS-009-01.R02, PS-009-07.R01 | read projection and events | variants only in projection; no quantities in event or projection beyond in-stock flag |
+
+## Dependencies
+
+Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S02.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

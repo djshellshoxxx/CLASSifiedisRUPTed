@@ -1,35 +1,36 @@
-# PS-055-08 — observability performance
+# PS-055-08 — Observability and performance: Portable identity
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-08. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F07.S02.M01 Portable identity](SPEC.md) · **Scope:** MVP · **Code:** `packages/identity/src/profiles/portable` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the observability performance process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-055-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-055-08.R01** Relays export publication and read metrics per CTR-OBS-001; vaults keep local diagnostics only.
+- **PS-055-08.R02** Signature verification and storage of a document take at most 10 ms p95 on a Moto G-class device and 5 ms on the relay.
+- **PS-055-08.R03** Relay reads meet the read budget of p95 at most 150 ms.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- classrup_identity_doc_publications_total{outcome=ok|invalid|chain|rate_limited} (relay)
+- classrup_identity_doc_contested_total (relay)
+- local counter portable_doc_total{event=issued|received|contested}
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- info portable_doc.stored {outcome, correlationId} - no DID, keys or relay URLs.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- verify and store p95 <= 10 ms on device and <= 5 ms on relay; relay read p95 <= 150 ms; issue p95 <= 100 ms.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-055-09.T12 | load | PS-055-08.R01, PS-055-08.R02, PS-055-08.R03 | 1 000 verifications on emulated Moto G and 50 reads per second on relay | <= 10 ms device, <= 5 ms relay, read p95 <= 150 ms |
+
+## Dependencies
+
+Module depends on: F07.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

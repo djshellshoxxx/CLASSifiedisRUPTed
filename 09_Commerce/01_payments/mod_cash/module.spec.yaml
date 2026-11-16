@@ -1,0 +1,226 @@
+# F09.S01.M02 Cash payments (ADR-0015, ADR-0016). Cash claims are evidence only; no verification is claimed.
+id: F09.S01.M02
+scope: MVP
+summary: >-
+  Defines the rules that apply when a Deal obligation is paid in cash: the payee must acknowledge receipt, an optional
+  bilateral receipt can be agreed, and the UI shows safety guidance for in-person cash handover. Cash terms are a small
+  signed agreement between the payee and the payer stored in both vaults. This module plugs into F09.S01.M01 through the
+  MethodRulePort. It never verifies cash; the strongest state a cash claim can reach is acknowledged by the payee, and the
+  platform never touches the money.
+responsibilities:
+  - Own CashTerms per Deal obligation: acknowledgement requirement (always true), optional bilateral receipt, handover guidance key and an optional public-place hint.
+  - Implement the cash MethodRulePort: reject cash claims on obligations that do not allow cash, amounts above a jurisdiction cash limit, and claims whose terms are unaccepted when receipts are required.
+  - Produce and verify the signed statements classrup.commerce.cash_terms/v1 (payee) and classrup.commerce.cash_terms_accept/v1 (payer).
+  - Show safety guidance (public place, daytime, count together, counterfeit check, no home address) keyed to amount thresholds and never block on guidance alone.
+  - Keep the label honest: claimed (unverified) then acknowledged by payee; never confirmed.
+non_responsibilities:
+  - The PaymentClaim state machine, acknowledge and dispute commands (F09.S01.M01).
+  - Signing receipts (F09.S02.M01); this module only records that a bilateral receipt is requested and prompts the parties.
+  - Meetup scheduling and safe-spot suggestions (F08.S03); this module links to them by reference.
+  - "Future: cash handover QR attestations and counterfeit-detection partners."
+depends_on: [F09.S01.M01, F09.S03.M03, F18.S01.M01, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a seller accepting cash, I require the buyer to sign a receipt, and I see a reminder to count the cash together in a public place.
+  - As a buyer paying cash for a high-value item, I see safety guidance and can still proceed if I choose.
+  - As either party, I see that a cash payment is only ever acknowledged by the seller and never shown as verified.
+edge_cases:
+  - Payee proposes new cash terms after the payer already claimed; the existing claim keeps the terms in force when it was made, and the new terms apply only to later claims.
+  - Jurisdiction profile sets a cash limit of 1 000.00 EUR and the obligation is 2 500.00 EUR; the cash method is refused for that obligation with COMMERCE_CASH_LIMIT_EXCEEDED.
+  - The payer never answers the terms proposal; after 7 days the proposal expires and default terms (acknowledgement required, no receipt) apply.
+  - Handover hint contains what looks like a street address with a house number; the UI warns and the hint is rejected if it matches a home address pattern the user stored as private.
+  - Statement terms arrive from a party who is not the payee of the obligation; ingest quarantines it.
+  - Offline: terms are proposed locally and wait in the sync outbox; the UI shows prepared, not agreed.
+ux:
+  screens:
+    - "Cash terms sheet: toggle Require signed receipt, public-place hint (≤ 120 chars), safety checklist; button Propose terms."
+    - "Payer view: terms summary with Accept or Decline, and the safety guidance panel."
+    - "Cash safety card shown before claiming: meet in public, count together, check notes, never share your home address; amounts above the threshold show the stronger variant."
+  states: [loading, defaults, proposed, accepted, declined, expired, pending-offline]
+  a11y:
+    - Toggles have visible labels and state announced politely.
+    - Guidance is plain text in a collapsible region with a 44 px high header button and aria-expanded.
+    - Status is conveyed by text, not color alone.
+processes:
+  domain_schema:
+    requirements:
+      - CashTerms stores dealId, obligationId, receiptRequired, handoverHint, proposer, status and signed statement cids per CTR-ID-001, in both parties' vaults.
+      - CashTerms are P2 and retained as RET-EVIDENCE because they bound what each party agreed when the claim was made.
+      - acknowledgementRequired is a constant true; the schema has no field that could mark cash as verified.
+    entities:
+      - name: CashTerms
+        schema: classrup.commerce.cash_terms/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "dealId: uuid — ref F09.S01.M01 Deal"
+          - "obligationId: string — ref Deal.obligations; cash must be in allowedMethods"
+          - "acknowledgementRequired: boolean — always true"
+          - "receiptRequired: boolean — payee asks for a bilateral signed receipt (F09.S02.M01)"
+          - "handoverHint?: string — ≤ 120 code points, public place suggestion only"
+          - "safetyLevel: enum — standard | elevated; elevated when amount ≥ 100 000 minor units of a 2-decimal currency equivalent (scaled by decimals)"
+          - "proposerId: did — payee of the obligation"
+          - "status: enum — proposed | accepted | superseded | expired"
+          - "termsCid: string — sha256 of the signed cash_terms statement"
+          - "acceptCid?: string — cid of the payer acceptance statement"
+          - "expiresAt: timestamp — proposedAt + 7 days"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+        invariants:
+          - At most one CashTerms with status accepted per (dealId, obligationId).
+          - acknowledgementRequired is true in every row.
+          - proposerId is the payee of the obligation.
+  validation_rules:
+    requirements:
+      - Terms input is validated strictly; unknown fields are rejected with VALIDATION_FAILED.
+      - The cash method rule validates allowed methods, jurisdiction limits and term acceptance before a claim is created.
+      - Guidance never blocks a claim; only the listed rules do.
+    rules:
+      - "V01 | obligation exists, cash is in allowedMethods and Deal is open | COMMERCE_CASH_NOT_ALLOWED"
+      - "V02 | handoverHint is at most 120 code points and plain text | VALIDATION_FAILED"
+      - "V03 | actor is the obligation payee when proposing and the payer when accepting | FORBIDDEN"
+      - "V04 | obligation amount is at most the jurisdiction cash limit when a limit is configured | COMMERCE_CASH_LIMIT_EXCEEDED"
+      - "V05 | when receiptRequired is accepted, a cash claim is allowed only after acceptance | COMMERCE_CASH_TERMS_UNACCEPTED"
+      - "V06 | handoverHint does not match a stored private home-address pattern | COMMERCE_CASH_HINT_PRIVATE"
+      - "V07 | at most 1 proposal per obligation per hour | RATE_LIMITED"
+  workflow_state_machine:
+    requirements:
+      - Terms start as proposed and end as accepted, superseded or expired; default terms are created already accepted.
+      - A new proposal supersedes the previous one without altering claims made under it.
+      - Expiry after 7 days returns the obligation to default terms.
+    machines:
+      - entity: CashTerms
+        initial: proposed
+        terminal: [superseded, expired]
+        transitions:
+          - "proposed -> accepted | commerce.cash_terms.accept by payer, or defaults created on commerce.deal.opened | acceptance statement signed; defaults need no acceptance"
+          - "proposed -> superseded | commerce.cash_terms.set by payee | newer proposal replaces it"
+          - "accepted -> superseded | commerce.cash_terms.set by payee | payer must accept again; existing claims keep old terms"
+          - "proposed -> expired | expiry sweep | 7 days without acceptance; default terms apply"
+    timeouts:
+      - "Proposal expiry sweep every 5 min and at vault unlock: proposed terms older than 7 days become expired."
+  commands_queries_events:
+    requirements:
+      - Terms commands are vault commands that produce the signed statements classrup.commerce.cash_terms/v1 and classrup.commerce.cash_terms_accept/v1; no relay command exists.
+      - The module emits no domain events (catalog emits is empty); state is observable through queries and the Deal card.
+      - The module consumes Deal and claim events to create default terms and show safety guidance.
+    commands:
+      - name: commerce.cash_terms.set
+        capability: commerce.cash_terms.set
+        input: "[vault command, produces signed statement classrup.commerce.cash_terms/v1] { dealId, obligationId, receiptRequired, handoverHint? }"
+        output: "{ termsId, revision: 1, status: proposed, expiresAt, peerSync }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN, COMMERCE_CASH_NOT_ALLOWED, COMMERCE_CASH_LIMIT_EXCEEDED, COMMERCE_CASH_HINT_PRIVATE, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: commerce.cash_terms.accept
+        capability: commerce.cash_terms.accept
+        input: "[vault command, produces signed statement classrup.commerce.cash_terms_accept/v1] { termsId, expectedRevision }"
+        output: "{ termsId, revision, status: accepted }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED]
+        emits: []
+        idempotent: true
+    queries:
+      - name: commerce.cash_terms.get
+        capability: commerce.cash_terms.read
+        input: "{ dealId, obligationId }"
+        output: "{ current: CashTerms, history: CashTerms[], guidance: { level, keys[] } }"
+        errors: [NOT_FOUND]
+    events_produced: []
+    events_consumed:
+      - {type: commerce.deal.opened, effect: "create default accepted CashTerms (acknowledgement required, no receipt) for every obligation that allows cash"}
+      - {type: commerce.payment.claimed, effect: "for cash claims show the safety guidance and, when receiptRequired, prompt both parties to sign receipts after acknowledgement"}
+      - {type: commerce.payment.acknowledged, effect: "for cash claims with receiptRequired, show the pending receipt prompt (F09.S02.M01); no state change here"}
+      - {type: commerce.payment.expired, effect: "close open receipt prompts for the expired cash claim"}
+    errors:
+      - "COMMERCE_CASH_NOT_ALLOWED | 422 | no | the obligation does not allow cash or the Deal is not open"
+      - "COMMERCE_CASH_LIMIT_EXCEEDED | 422 | no | obligation exceeds the cash limit of the active jurisdiction profile"
+      - "COMMERCE_CASH_TERMS_UNACCEPTED | 409 | no | receipt-required terms are not yet accepted by the payer"
+      - "COMMERCE_CASH_HINT_PRIVATE | 422 | no | hint appears to contain a stored private address"
+    example: |
+      vault command commerce.cash_terms.set
+      { "dealId": "0192f3a6-…", "obligationId": "o1", "receiptRequired": true, "handoverHint": "Outside the library main entrance, daytime" }
+      => { "termsId": "0192f3a8-…", "revision": 1, "status": "proposed", "expiresAt": "2026-11-11T10:00:00.000Z", "peerSync": "prepared" }
+      vault command commerce.cash_terms.accept { "termsId": "0192f3a8-…", "expectedRevision": 1 }
+      => { "termsId": "0192f3a8-…", "revision": 2, "status": "accepted" }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked principal changes its vault; set requires the payee role and accept requires the payer role as recorded in the Deal.
+      - Incoming terms statements are accepted only when signed by the obligation payee or payer respectively; otherwise they are quarantined.
+      - No relay role has any capability over cash terms.
+    capabilities:
+      - "commerce.cash_terms.set | local-principal | principal is the payee of the obligation; Deal open"
+      - "commerce.cash_terms.accept | local-principal | principal is the payer of the obligation; terms proposed and not expired"
+      - "commerce.cash_terms.read | local-principal | principal is a party of the Deal"
+  failure_recovery_idempotency:
+    requirements:
+      - Both commands are idempotent per CTR-IDM-001 and use expectedRevision.
+      - Concurrent proposals from several tabs serialize and the later one supersedes the earlier one.
+      - Statement delivery uses the sync outbox states and the UI never shows terms as agreed before peer_accepted.
+    idempotency: "Vault command ID recorded for 24 h; terms statements dedupe by cid."
+    concurrency: "expectedRevision on accept; unique partial index for one accepted terms per obligation; Web Lock commerce-cash per Deal."
+    retries: "Sync outbox retry 5 s, 30 s, 5 min, 1 h, then every 6 h until terms expire."
+    offline: "Propose and accept commit locally and show prepared; delivery resumes online."
+    partial_failure: "If sending fails after local commit the terms stay proposed locally with sync state prepared; the user sees that the peer has not received them."
+  privacy_retention_abuse:
+    requirements:
+      - Cash terms are P2 and never leave the vault except inside end-to-end encrypted envelopes to the other party.
+      - The handover hint is public-place guidance only; the UI warns against sharing a home address (P3) and rejects hints that match the user's stored private address.
+      - Pressure tactics are limited by the proposal rate limit and by the dispute path.
+    data:
+      - "CashTerms: P2 (parties); handoverHint is P2 free text."
+    retention:
+      - "RET-EVIDENCE (2 years after last related activity); pseudonymized on account deletion."
+    threats:
+      - "T01 | Counterparty pressures an unsafe private meeting for cash | guidance card, public-place hint field, safe-spot link (F08.S03), no home address prompt"
+      - "T02 | Payee claims cash was never handed over after signing a receipt | signed receipts are assertions both parties hold; dispute path preserves them; platform states it cannot verify cash"
+      - "T03 | Fake terms statement from a non-party | signer-role check at ingest; quarantine"
+    abuse_controls:
+      - "Proposal limit of 1 per obligation per hour and 20 per day per vault; ingest limit 20 statements per hour per sender."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); counters stay in local diagnostics.
+      - Local commit meets the budgets below.
+      - Guidance and limit rejections are counted locally.
+    metrics:
+      - "Local diagnostics: classrup_commerce_cash_terms_total{status}"
+      - "Local diagnostics: classrup_commerce_cash_limit_rejections_total"
+    logs:
+      - "info cash_terms.accepted {termsId, dealId, correlationId} — no hint text, no amounts."
+    budgets:
+      - "set and accept p95 ≤ 100 ms local commit on a mid-range phone."
+      - "Terms sweep over 5 000 rows ≤ 500 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Contract tests validate command outputs and statement envelopes against the schema registry.
+      - Honest-label behavior is checked in UI tests.
+    fixtures: "Two vaults A (payer) and B (payee) with a Deal for EUR 45.00 allowing cash; jurisdiction profile with cash limit EUR 1 000.00; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | propose valid terms | row stored with acknowledgementRequired true, status proposed, signed statement created"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V07 violated in turn | documented error code and nothing stored"
+      - "T03 | property | 03.R01,03.R02 | random sequences of set, accept and expiry | only declared transitions succeed; at most one accepted terms per obligation"
+      - "T04 | integration | 03.R02,03.R03 | clock advanced 7 days on a proposal; claim made under old terms then new proposal | proposal expires to defaults; existing claim keeps old terms"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | execute both commands and ingest in vault B | outputs and envelopes validate; no events emitted"
+      - "T06 | integration | 04.R03,01.R02 | commerce.deal.opened delivered twice | exactly one default terms row per cash obligation"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | payer proposes terms; third-party signer; relay inspects traffic | FORBIDDEN or quarantine; relay sees only ciphertext"
+      - "T08 | integration | 06.R01,06.R02,06.R03 | replay of a command ID and interrupted delivery | original result; UI shows prepared until peer_accepted"
+      - "T09 | abuse | 07.R01,07.R02,07.R03 | hint equal to stored private address; 2 proposals in an hour | hint rejected with COMMERCE_CASH_HINT_PRIVATE; second proposal RATE_LIMITED"
+      - "T10 | unit | 08.R01,08.R02,08.R03 | diagnostics and timing run | no network telemetry; budgets met"
+      - "T11 | e2e | 01.R03,09.R03 | claim cash then acknowledge on second device | labels read claimed (unverified) then acknowledged by payee; never confirmed; axe zero serious issues"
+      - "T12 | unit | 09.R01 | traceability tool run | every PS-067 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, roll back one release | terms round-trip identical; expired proposals import as expired"
+    acceptance:
+      - All tests T01 to T13 pass in CI.
+      - A cash claim can reach acknowledged but never confirmed or final, and no UI text implies verification.
+      - Safety guidance is displayed for every cash claim and never blocks on its own.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the principal's cash terms with their signed statements in the section commerce.cash_terms.
+      - Import verifies signatures and parties against the imported Deals and quarantines terms whose signer is not a party.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section commerce.cash_terms in classrup-export/v1; one line per CashTerms (schema classrup.commerce.cash_terms/v1) with statement envelopes."
+    import: "Accepted and superseded terms import as read-only history; proposed terms past expiry import as expired."
+    backup: "The vault export is the primary backup (IOX-6); relays hold no cash terms."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields."

@@ -1,0 +1,173 @@
+# F02.S02.M01 Three-party cycles: length-3 LengthProfile of the matcher (ADR-0005, ADR-0016).
+id: F02.S02.M01
+scope: MVP
+summary: >-
+  The length-3 profile of the cycle engine. It fixes the thresholds that apply to exactly three participants (value tolerance, distance, want age,
+  imbalance quantum) and the plain-language explanation shown to each participant of a 3-party suggestion. It registers its LengthProfile with the registry
+  held by F02.S02.M05, which the engine F02.S02.M03 reads, and owns no records. The absolute minimum is a reference amount of 5.00 EUR converted to the
+  settlement currency with the subject's pinned quote, so it means the same value in EUR, JPY or BTC. The engine in the vault or on a relay remains the only
+  producer of suggestions, and a suggestion remains advice.
+responsibilities:
+  - Define and register with the F02.S02.M05 registry the immutable-per-release length-3 profile: tolerance 500 basis points of the larger side (MNY-5 default 5 percent), absolute minimum reference 5.00 EUR (converted to the settlement currency with the pinned barter_normalization quote, MNY-4), maximum pair distance bucket 3 (25_50 in the F02.S02.M04 ordinal mapping), imbalance quantum 10 permille, minimum want age 15 minutes.
+  - Allow tenant or vault settings to override the profile only inside bounds (tolerance 0..1000 bps, absolute minimum reference 0..100.00 EUR) and record the effective profile version used for each suggestion.
+  - Produce the participant-facing explanation of a 3-party suggestion, naming for each participant what they give, what they receive, the value gap against tolerance, distance bucket and the facts that are only claims of others.
+non_responsibilities:
+  - Enumeration, scoring order and selection (F02.S02.M03); this module supplies parameters only.
+  - Feasibility verdicts (F02.S02.M05) and proposals (F02.S03.M01).
+  - Profiles for 2 and 4+ participants (the engine default profile, F02.S02.M02 and the engine N profile).
+  - "Future: per-region profile variants and user-adjustable tolerance shown as a slider."
+depends_on: [F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001]
+user_stories:
+  - As a member in a 3-party suggestion, I can read why it was suggested and see that my gap of 5.00 EUR is within the 5 percent tolerance.
+  - As a relay operator, I can see which length-3 profile version my relay uses for public matching.
+edge_cases:
+  - A participant's gap is exactly at tolerance; the explanation says within tolerance and the engine kept the cycle.
+  - A tenant override sets tolerance to 1000 bps; the engine records profile version with the override and the explanation shows the effective numbers, not the defaults.
+  - A relay-imported suggestion was computed with a different profile version than the vault's; the vault shows both and re-verifies with its own profile.
+  - Participant settlement currency has zero decimals (JPY); the absolute minimum is 5.00 EUR converted with the pinned EUR->JPY quote (163/1 gives 815 JPY), and the explanation uses the currency's own formatting.
+  - Settlement currency is BTC (exponent 8); the same reference converts with a pinned EUR->BTC quote (1/60000 gives 8333 satoshi), never 5 BTC.
+  - Explanation requested for a suggestion of another length; the query returns VALIDATION_FAILED instead of a wrong explanation.
+ux:
+  screens:
+    - "Explanation panel inside suggestion detail: three rows (one per participant) with gives, receives, gap, tolerance, distance bucket and a basis chip."
+    - "Profile info sheet: values used for 3-party cycles and the profile version."
+  states: [loading, ready, override-applied, error]
+  a11y:
+    - Each participant row is a list item with a single sentence readable by screen readers, such as 'You give Lamp worth 120.00 EUR and receive Chair worth 115.00 EUR; the 5.00 difference is within tolerance'.
+    - Numbers are formatted with the user's locale and currency; no meaning is conveyed by color alone.
+processes:
+  domain_schema:
+    entities: []
+    note: "Library module. The length-3 profile is a typed constant LengthProfile {length: 3, toleranceBps: 500, absoluteMinRef: {amount: '500', currency: 'EUR'}, maxPairBucket: 3 (25_50 per the F02.S02.M04 ordinal mapping), imbalanceQuantumPermille: 10, minWantAgeMinutes: 15, version: 'p3.2'} registered with the F02.S02.M05 LengthProfile registry; absoluteMinRef is converted to the settlement currency with the subject's pinned barter_normalization quote (F02.S04.M02) using MNY-4 HALF_EVEN; overrides are tenant settings, not records owned here."
+    requirements:
+      - The length-3 profile is a typed, versioned constant with the numeric defaults stated in the responsibilities and is registered at startup with the F02.S02.M05 LengthProfile registry, which the engine reads.
+      - Overrides are accepted only within the stated bounds and the effective values and profile version are copied into every suggestion's explanation so later changes never rewrite history.
+      - The explanation model is derived from the CycleSuggestion legs and local ports and stores nothing of its own.
+  validation_rules:
+    requirements:
+      - Profile overrides are validated against bounds before they take effect.
+      - The explanation query validates that the subject is a 3-party suggestion owned by the caller's vault.
+      - All amounts in the explanation are computed with bigint arithmetic in the cycle settlement currency.
+    rules:
+      - "V01 | toleranceBps override is an integer in 0..1000 | VALIDATION_FAILED"
+      - "V02 | absoluteMinRef override is an integer amount of EUR minor units in 0..10000 | VALIDATION_FAILED"
+      - "V03 | explanation subject exists in this vault and its length equals 3 | MUTINY_PROFILE_LENGTH_MISMATCH"
+      - "V04 | maxPairBucket override is an integer ordinal within 0..4 of the F02.S02.M04 mapping (lt5=0, 5_10=1, 10_25=2, 25_50=3, gt50=4) | VALIDATION_FAILED"
+  workflow_state_machine:
+    machines: []
+    note: "No stateful entity. The profile is a constant per release and the explanation is computed on demand."
+    timeouts: []
+    requirements:
+      - There are no lifecycle states; a profile version change applies to suggestions generated after it, and earlier suggestions keep their recorded version.
+      - Engine and explanation always read the profile through the F02.S02.M05 registry so they cannot disagree.
+      - Profile lookups for length 3 never fall back silently to another length's profile; a missing provider falls back to the engine default and logs a diagnostic.
+  commands_queries_events:
+    requirements:
+      - The module exposes two read-only queries and no commands because it carries no state and produces no statements.
+      - The catalog lists mutiny.cycle.suggested for this module, but the single producer is the engine F02.S02.M03; this module emits nothing itself.
+      - Queries run in the vault for the local principal and on a relay only for the relay's public profile description.
+    commands: []
+    queries:
+      - name: mutiny.cycle3.get_profile
+        capability: mutiny.cycle3.read_profile
+        input: "{ tenantId? default current }"
+        output: "{ length: 3, toleranceBps, absoluteMinRef: Money, maxPairBucket, imbalanceQuantumPermille, minWantAgeMinutes, version, overridden: boolean }"
+        errors: []
+      - name: mutiny.cycle3.explain
+        capability: mutiny.cycle3.read_explanation
+        input: "{ suggestionId }"
+        output: "{ suggestionId, profileVersion, absoluteMinConverted: Money, participants: { actorId, gives, receives, gap, tolerance, withinTolerance, distanceBucket 0..4 (label discovery.bucket.*), bases[] }[3], summaryKey }"
+        errors: [NOT_FOUND, MUTINY_PROFILE_LENGTH_MISMATCH]
+    events_produced: []
+    events_consumed:
+      - {type: mutiny.cycle.suggested, effect: "pre-compute and cache the explanation for length-3 suggestions so the detail screen opens within 100 ms"}
+      - {type: mutiny.matching_profile.updated, effect: "invalidate cached explanations for the affected participant"}
+    errors: []
+    example: |
+      # 3-party explanation (values EUR minor units): Alice gives guitar 12000, Bob gives bike 11800, Carol gives desk 11500
+      mutiny.cycle3.explain { "suggestionId": "0192f3c0-…" }
+      -> { "profileVersion": "p3.2", "participants": [
+           { "actorId": "did:key:z6MkAlice", "gives": "12000", "receives": "11500", "gap": "500", "tolerance": "600", "withinTolerance": true, "distanceBucket": 1 },
+           { "actorId": "did:key:z6MkBob",   "gives": "11800", "receives": "12000", "gap": "200", "tolerance": "600", "withinTolerance": true, "distanceBucket": 2 },
+           { "actorId": "did:key:z6MkCarol", "gives": "11500", "receives": "11800", "gap": "300", "tolerance": "590", "withinTolerance": true, "distanceBucket": 1 } ] }
+      # tolerance = max(500 bps of the larger side, 5.00 EUR reference = 500 EUR minor, no conversion in EUR): Alice max(600, 500)=600, Carol max(590, 500)=590.
+      # JPY settlement with pinned EUR->JPY 163/1: absolute minimum 500 x 163 x 10^0 / (1 x 10^2) = 815 JPY; BTC with EUR->BTC 1/60000: 500 x 10^8 / (60000 x 10^2) = 8333 satoshi.
+  authorization_capabilities:
+    requirements:
+      - Only the local principal reads explanations in its vault, and a relay exposes only the public profile numbers.
+      - Explanations show only data the principal already has, with basis labels for peer claims.
+      - There is no write capability in this module, so no statement can originate here.
+    capabilities:
+      - "mutiny.cycle3.read_profile | principal, relay-client | public numbers; relay serves them to any client without authentication"
+      - "mutiny.cycle3.read_explanation | principal | suggestion belongs to the principal's vault"
+  failure_recovery_idempotency:
+    requirements:
+      - Queries are pure reads and safe to repeat; there is nothing to replay.
+      - If the engine registration is missing at startup the module reports degraded and the engine default profile is used.
+      - Cached explanations are rebuilt from suggestions after a crash.
+    idempotency: "Queries are naturally idempotent; no Idempotency-Key is needed."
+    concurrency: "Read-only; explanations are rebuilt from a consistent IndexedDB snapshot."
+    retries: "No network calls; nothing to retry."
+    offline: "Fully available offline."
+    partial_failure: "If a port needed for a basis label fails, that row shows basis unverifiable and the explanation is still returned."
+  privacy_retention_abuse:
+    requirements:
+      - Explanations reveal no block lists, exclusion lists or other trades of the principal.
+      - Cached explanations are P2, device-only and purged with their suggestion.
+      - Profile numbers are public and carry no personal data.
+    data:
+      - "Explanation cache: P2, derived from CycleSuggestion."
+      - "Profile constants: P0."
+    retention:
+      - "Explanation cache is deleted together with its CycleSuggestion (RET-SHORT, 30 days) and dropped as soon as the suggestion is no longer status suggested (on read and by a 60 s sweep)."
+    threats:
+      - "T01 | Explanation leaks why a participant was excluded or blocked | explanations list only included participants and never negative information about absent people"
+      - "T02 | Tampered override loosens tolerance to manipulate selection | bounds are enforced and the effective values are recorded and shown to the user in each explanation"
+    abuse_controls:
+      - "Query rate limit 120 per minute per vault to bound cache churn."
+  observability_performance:
+    requirements:
+      - Explanation latency is recorded locally and no data leaves the device.
+      - Explanation computation completes within 10 ms for 3 participants.
+      - Profile version in use is visible in engine run statistics.
+    metrics:
+      - "classrup_mutiny_cycle3_explain_duration_ms (histogram, local diagnostics and relay if served there)"
+    logs:
+      - "debug cycle3.explained {suggestionId, profileVersion, correlationId} — no DIDs or amounts."
+    budgets:
+      - "explain p95 ≤ 10 ms computing and ≤ 100 ms including IndexedDB reads on a mid-range phone."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - The 3-party worked example is a golden test with exact bigint outputs.
+      - The module is tested for emitting no events and no statements.
+    fixtures: "3-party values 12000, 11800, 11500 EUR minor; JPY variant 12000, 11800, 11500 yen; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,03.R01,07.R03 | read default profile as principal and as relay-client | toleranceBps 500, absoluteMinRef 500 EUR minor, maxPairBucket 3, quantum 10, minWantAgeMinutes 15, version p3.2; output carries no personal data"
+      - "T02 | unit | 01.R02,02.R01 | override 1001 bps, 1000 bps, absolute minimum reference 10001 and 10000 EUR minor | 1001 and 10001 rejected, 1000 and 10000 accepted and recorded"
+      - "T03 | unit | 01.R03,02.R03,09.R02 | golden 3-party explanation | gaps 500, 200, 300 with tolerances 600, 600, 590 exactly as in the example"
+      - "T04 | unit | 02.R02,04.R03 | explain a 4-party suggestion | MUTINY_PROFILE_LENGTH_MISMATCH"
+      - "T05 | contract | 04.R01,04.R02,09.R03 | queries and engine events | outputs validate against registry; module emits no events and sends no statement"
+      - "T06 | unit | 02.R03,07.R01 | JPY fixture with pinned EUR->JPY 163/1 (golden) | absolute minimum 815 JPY, gaps computed in bigint and formatting follows the currency; no negative information about absent people"
+      - "T07 | integration | 03.R02,03.R03,06.R03 | engine started without the length-3 profile registered | engine default profile used from the F02.S02.M05 registry and degraded diagnostic logged"
+      - "T08 | abuse | 05.R01,05.R02,05.R03,07.R01 | other principal queries; explanation inspected for exclusions | NOT_FOUND; no negative information about absent people"
+      - "T09 | integration | 06.R01,06.R02,08.R02 | crash and restart | explanations rebuilt, computation within 10 ms"
+      - "T10 | unit | 08.R01,08.R03 | engine run statistics | profile version p3.2 present, latency recorded locally only"
+      - "T11 | unit | 09.R01 | traceability tool run | every PS-020 requirement maps to a passing test"
+      - "T12 | integration | 10.R01,10.R02,10.R03 | export, import, rollback | no module records exported; profile version of imported suggestions retained"
+      - "T13 | a11y | 01.R01 | explanation panel | axe zero serious issues; sentence per participant readable"
+      - "T14 | unit | 02.R03,01.R01 | BTC settlement fixture with pinned EUR->BTC 1/60000 (golden) | absolute minimum 8333 satoshi, never 5 BTC"
+      - "T15 | integration | 07.R02 | suggestion expires and is superseded with an injected clock | cached explanation dropped on next read and by the 60 s sweep; nothing remains after the suggestion is purged"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - The golden 3-party example reproduces gaps 500, 200, 300 and tolerances 600, 600, 590 exactly.
+      - The module emits no events and no statements and holds no records.
+  import_export_backup_rollback:
+    requirements:
+      - The module owns no records, so export contains nothing of its own; the profile version is stored inside each exported CycleSuggestion explanation metadata.
+      - Imported suggestions keep the profile version they were computed with and are re-verified with the importing vault's profile.
+      - Profile version changes follow semantic versions and a rollback restores the previous constants without data migration.
+    export: "Nothing of its own; profile version p3.2 is carried in exported CycleSuggestion records of F02.S02.M03."
+    import: "No import; imported suggestions are re-verified with the local effective profile on first open."
+    backup: "No data to back up; tenant overrides are part of tenant settings backups (F15.S04.M03)."
+    migration_rollback: "Profile constants ship with the release; rollback restores the previous constants and previously generated suggestions keep their recorded version."

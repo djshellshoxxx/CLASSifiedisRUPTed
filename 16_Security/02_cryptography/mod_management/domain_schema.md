@@ -1,35 +1,67 @@
-# PS-129-01 — domain schema
+# PS-129-01 — Domain schema: Key registry and revocation
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-129-01. **Owner:** [16_Security/02_cryptography/mod_management](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_management. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S02.M02 Key registry and revocation](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/cryptography/management` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the domain schema process for management within 02_cryptography. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-129-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-129-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-129-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-129-01.R01** A KeyRecord stores public key, algorithm, purpose, owner principal, status, validity window, revocation details, successor, provenance and the revocation freshness, with tenant and revision per CTR-ID-001.
+- **PS-129-01.R02** Key records are P1 public data once published; local notes on counterparty keys are P3 in the vault, and retention is RET-EVIDENCE because signatures are verified against historical status.
+- **PS-129-01.R03** Key IDs are unique per public key and a revoked key ID is never reused or reactivated.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### KeyRecord
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.security.keyrecord/v1` · storage **relay+device** · privacy **P1** · retention **RET-EVIDENCE**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-129-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — store scope (vault or relay hosting scope) |
+| keyId | string — SHA-256 thumbprint of the raw public key, base64url, 43 chars |
+| publicKey | string — raw public key, base64url |
+| algorithm | enum — ed25519 \| x25519 \| ecdsa_p256 |
+| purpose | enum — device_signing \| agreement \| relay_transport \| vapid \| peer_relay |
+| ownerPrincipal | did:key — principal the key belongs to; for relay keys the relay did:key |
+| relationship | enum — own \| counterparty \| relay_registered \| peer_relay |
+| status | enum — active \| revoked \| expired \| conflicted |
+| notBefore | timestamp — RFC 3339 UTC, claimed by the registering statement |
+| notAfter? | timestamp — RFC 3339 UTC |
+| firstSeenAt | timestamp — RFC 3339 UTC, this store's clock |
+| revokedAt? | timestamp — RFC 3339 UTC, this store's clock when the revocation was recorded |
+| revocationEffectiveFrom? | timestamp — RFC 3339 UTC, claimed by the revocation statement, at most 30 days before revokedAt |
+| revocationReason? | enum — compromised \| lost \| superseded \| retired \| administrative |
+| revocationStatementCid? | string — content id of the verified revocation statement |
+| successorKeyId? | string — key ID of the rotation successor |
+| freshnessCheckedAt | timestamp — RFC 3339 UTC, when revocation knowledge for this key was last refreshed from a source |
+| freshnessSource? | string — relay ID, peer ID or own for own keys |
+| revision | int — CTR-ID-001 ID-4 |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- status revoked is permanent; a revoked keyId can never return to active.
+- revocationEffectiveFrom is never earlier than revokedAt minus 30 days and never later than revokedAt.
+- Own keys have freshnessSource own and are always fresh; counterparty keys carry the real age of their knowledge.
+
+### Storage DDL
+
+```sql
+CREATE TABLE security_key_record (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, key_id TEXT NOT NULL, algorithm TEXT NOT NULL, purpose TEXT NOT NULL,
+  owner_principal TEXT NOT NULL, relationship TEXT NOT NULL, status TEXT NOT NULL, revoked_at TEXT,
+  freshness_checked_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX security_key_unique ON security_key_record(tenant_id, key_id);
+CREATE INDEX security_key_owner ON security_key_record(tenant_id, owner_principal, status);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-129-09.T01 | unit | PS-129-01.R01, PS-129-01.R02, PS-129-01.R03, PS-129-02.R01 | register K2 with link statement signed by K1 and K2 | KeyRecord stored active, keyId equals thumbprint, event emitted |
+| TEST-PS-129-09.T03 | property | PS-129-01.R03, PS-129-03.R01 | random sequences of register, revoke, expire, conflict resolution | revoked and expired never change; revoked never returns to active |
+
+## Dependencies
+
+Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-CAP-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).

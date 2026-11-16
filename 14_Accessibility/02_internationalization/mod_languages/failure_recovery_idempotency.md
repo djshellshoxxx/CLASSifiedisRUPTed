@@ -1,35 +1,33 @@
-# PS-113-06 — failure recovery idempotency
+# PS-113-06 — Failure recovery and idempotency: Languages
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-113-06. **Owner:** [14_Accessibility/02_internationalization/mod_languages](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_languages. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S02.M01 Languages](SPEC.md) · **Scope:** MVP · **Code:** `packages/i18n/src/internationalization/languages` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for languages within 02_internationalization. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-113-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-113-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-113-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-113-06.R01** Locale negotiation and catalog lookup are pure and idempotent; switching to the active locale does nothing.
+- **PS-113-06.R02** If a catalog fails to load or parse, the app keeps the last good catalog or en and shows a retry control.
+- **PS-113-06.R03** Interpolation never fails; a missing param renders as an empty value with a development warning, not an exception.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** negotiateLocale and t are pure; setLocale to the current locale is a no-op.
+- **concurrency:** Catalog loads for the same locale share one in-flight promise; a later request for another locale cancels the earlier one, so the last request wins.
+- **retries:** Catalog load retries once after 1 s; afterwards the retry control is shown.
+- **offline:** All catalogs are precached by the service worker after first load; en ships in the main bundle so the app works fully offline.
+- **partial failure:** A corrupt non-en catalog is ignored with a local diagnostic entry and the UI continues in en.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-113-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-113-09.T02 | unit | PS-113-01.R03, PS-113-02.R02, PS-113-06.R01 | negotiateLocale for de-AT, pt-BR, xx-YY, malformed, empty list | de, en, en, en, en with no exception |
+| TEST-PS-113-09.T04 | unit | PS-113-03.R01, PS-113-03.R02, PS-113-06.R02, PS-113-06.R03 | remove a key from fr at runtime; corrupt the de catalog JSON | en string returned, dev warning, local diagnostic entry; UI continues in en; never raw key or blank |
+| TEST-PS-113-09.T05 | e2e | PS-113-03.R03, PS-113-06.R01, PS-113-04.R03 | switch locale en to de to ar-XB while a form is half filled | text updates; input and focus preserved; lang and dir updated; announcement in the new language |
+
+## Dependencies
+
+Module depends on: CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

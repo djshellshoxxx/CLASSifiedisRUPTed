@@ -1,44 +1,99 @@
-# F11.S01.M02 — records
+# F11.S01.M02 — Federated records
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F11.S01.
+**Status:** SPECIFIED (Stage 3). **Scope:** MVP. **Parent:** [F11.S01](../SPEC.md). **Process IDs:** PS-084-01…PS-084-10. **Code:** `packages/federation/src/protocol/records`.
 
-## Purpose and business behavior
-Provide records as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
+
+## Purpose
+
+Verifies, stores and quarantines signed statements in the CTR-FED-001 envelope format. The envelope is the universal sharing format for every cross-party statement (vault to relay, vault to vault, relay to relay) under ADR-0016. The same module runs in the user's browser vault (IndexedDB) and in an optional relay (SQLite). A vault verifies the signature and that the signer holds the role the statement type requires, stores it with provenance, or quarantines it. A relay verifies signature, size and hosting policy and stores signed public projections and encrypted mailbox envelopes without ever being authoritative. Relay-to-relay federation (POST /fed/v1/inbox batches of at most 100 envelopes between allowlisted peers, only owner-opted-in P0 data at L2 or coarser) stays behind a flag that is off by default; vault to relay sharing is active whenever the user selects a relay. A signature proves the key holder asserted the content, not that it is true or was delivered, and timestamps from other parties are claims.
+
+## Responsibilities
+
+- Own FederatedRecord (statement or mirror plus provenance originRelay, receivedAt, via, verifiedAt, optional relay receipt) and Tombstone, in the vault and in the relay, with the vault receive and publish commands and the relay inbox endpoint.
+- [object Object]
+- Apply tombstones signed by the author or the origin relay, remove mirrored content within 1 h of receipt (deadline 24 h) and keep the tombstone 180 days to stop resurrection.
+- Reject envelopes with createdAt older than 180 days or more than 10 minutes in the future so a replayed old record can never outlive its tombstone.
+- Emit one record.accepted, record.rejected or tombstone.applied event per envelope outcome in the same local transaction as the state change; events stay on the device or relay (EVT-8) and only signed statements leave it (EVT-9).
+- [object Object]
+
+## Not responsible for
+
+- Canonicalization, signing and did:key handling (F11.S01.M03).
+- Field allowlists and record mapping (F11.S01.M01).
+- Cid dedup rules and gap-buffer decisions (F11.S02.M02 supplies pure decision functions; this module stores the buffered rows).
+- Fork detection and operator conflict review (F11.S02.M03).
+- Peer allowlist, quotas and block rules (F11.S03.M01, F11.S03.M02).
+- Outbound delivery and retries (F11.S02.M01).
+- Future: multi-hop relay forwarding (via longer than 1) and ActivityPub or AT Protocol inbound adapters.
+- Future: federating anything above P0, including reviews, offers and proposals.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
 
-## Scope
-- Required process spec: `records_domain_model.md` (not yet authored)
-- Required process spec: `records_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `records_validation_and_authorization.md` (not yet authored)
-- Required process spec: `records_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `records_interfaces_and_events.md` (not yet authored)
-- Required process spec: `records_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `records_acceptance_and_property_tests.md` (not yet authored)
+- As a buyer on relay A, I can browse a listing mirrored from relay B, see its origin relay and verified time, and I cannot edit it.
+- As a seller, when I unpublish a federated listing, the mirrors on peer relays disappear within 24 h and a tombstone proves it was withdrawn.
+- As a user, I can see that a statement from another party was quarantined because its signer was not authorized for that role, and I can choose to discard it.
+- As a relay operator, I can see why an inbound envelope was rejected and which peer or device sent it without seeing any private data.
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Edge cases
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+- A peer sends the same envelope twice or two peers send it; the second arrival is acknowledged as duplicate, via is not extended in MVP and no event is emitted.
+- Envelope seq 7 arrives before seq 6; it is stored as buffered for up to 24 h, then fetched from the origin or dropped with reason gap_timeout.
+- Tombstone arrives before the record it targets; it is kept pending for 24 h and then stored as applied so the later record is rejected with FEDERATION_TOMBSTONED.
+- Two different envelopes from one author with the same seq arrive; both go to quarantine via F11.S02.M03 and neither is visible until operator review.
+- A batch has 101 envelopes or 4 MiB plus one byte; the whole request is refused with FEDERATION_BATCH_TOO_LARGE and nothing is stored.
+- Relay B forwards a record whose author is homed at relay C; rejected with FEDERATION_ORIGIN_MISMATCH.
+- Federation flag F11 is switched off while a batch is processing; the batch finishes its current transaction and later relay-to-relay requests return FEATURE_DISABLED while vault to relay sharing continues.
+- A statement signed by a valid key that is not the listing author claims to accept an offer; the vault quarantines it with reason signer_role_invalid and does not act on it.
+- Relay stops responding after a statement was published; the statement stays local committed and the UI shows delivery unknown.
+- Envelope createdAt is 181 days old or 11 minutes in the future; rejected with FEDERATION_RECORD_TIME_INVALID.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+## UX and accessibility
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Mirrored record view: origin relay name, verified-at time, banner 'Remote copy, read-only', link to origin; no edit controls.
+- Relay operator federation inbox: counts per peer and reason, rejected list with cid prefix and code, quarantine queue link (F11.S02.M03).
+- Owner federation panel in listing and profile settings: per-record opt-in toggle, sync state (local committed, prepared, transport acknowledged, peer accepted, withdrawn) and button 'Withdraw from federation' that issues a signed tombstone with a notice that copies already fetched cannot be recalled (PRV-6).
 
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+**States:** loading; empty; local-committed; buffered; accepted; quarantined; tombstoned; rejected; flag-off
 
-## Required process specification inventory
-- [ ] `records_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+**Accessibility:** Remote-copy banner is a role=note region read before the content and is not conveyed by colour alone.; Withdraw button is ≥ 44×44 px, has the accessible name 'Withdraw this listing from federation' and confirms in a dialog that traps and restores focus.; Operator tables have header cells with scope attributes and sortable columns announced via aria-sort.
+
+## Owned data
+
+- `FederatedRecord` (classrup.federation.record/v1, P2, RET-STANDARD)
+- `Tombstone` (classrup.federation.tombstone/v1, P0, RET-STANDARD)
+
+## Interfaces
+
+- Commands: `federation.record.ingest`, `federation.record.receive`, `federation.record.publish`, `federation.tombstone.issue`
+- Queries: `federation.record.get`, `federation.record.list_by_author`, `federation.record.head`, `federation.record.list_rejections`
+- Emits: `federation.record.accepted`, `federation.record.rejected`, `federation.tombstone.applied`
+- Consumes: `federation.block_rule.changed`, `federation.peer.suspended`, `federation.conflict.detected`, `federation.conflict.resolved`, `federation.account.moved`, `privacy.deletion.requested`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `services.offering.withdrawn`, `platform.flag.changed`
+
+## Dependencies
+
+F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F15.S04.M02, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001
+
+## Process specifications and aggregation
+
+| ID | Process | Requirements |
+|---|---|---|
+| PS-084-01 | [Domain schema](domain_schema.md) | 4 |
+| PS-084-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-084-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
+| PS-084-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-084-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
+| PS-084-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
+| PS-084-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-084-08 | [Observability and performance](observability_performance.md) | 4 |
+| PS-084-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
+| PS-084-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
+
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/federation/src/protocol/records/index.ts`.
+
+## Acceptance criteria
+
+- All tests T01–T24 pass in CI.
+- Adversarial suite shows forged provenance, replay, flood, fork and metadata leakage are each blocked.
+- No record above P0 or finer than L2 is ever stored or served (privacy suite).
+- Tombstoned content is gone from reads within 1 h and from storage within 24 h in the chaos test.

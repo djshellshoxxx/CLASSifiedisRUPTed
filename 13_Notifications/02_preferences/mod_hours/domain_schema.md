@@ -1,35 +1,48 @@
-# PS-105-01 — domain schema
+# PS-105-01 — Domain schema: Quiet-hours schedule
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-105-01. **Owner:** [13_Notifications/02_preferences/mod_hours](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_hours. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F13.S02.M02 Quiet-hours schedule](SPEC.md) · **Scope:** MVP · **Code:** `packages/notify/src/preferences/hours` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the domain schema process for hours within 02_preferences. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-105-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-105-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-105-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-105-01.R01** A QuietHoursSchedule stores the user DID, an IANA time zone, an enabled flag, up to 4 windows each with days of week 1 to 7 and local start and end as HH:mm, the tzdata version used, and a mirror sequence, with tenant and revision per CTR-ID-001.
+- **PS-105-01.R02** The schedule is P2, held in the vault and mirrored to relays only as time zone plus windows plus sequence; it contains no location and no content, but a time zone reveals a coarse region, which the UI states.
+- **PS-105-01.R03** Evaluation is a pure function of the instant, the schedule and the pinned tzdata; local wall-clock windows are mapped to instants with the rules in the invariants.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### QuietHoursSchedule
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.notify.quiet_hours/v1` · storage **relay+device** · privacy **P2** · retention **RET-STANDARD**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-105-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — tenant scope |
+| userDid | did:key — owner |
+| enabled | boolean — false means never quiet |
+| timeZone | string — IANA identifier present in the pinned tzdata, for example Europe/Berlin |
+| windows | array — 0..4 items { days: int[1..7] (ISO, 1 Monday), start: HH:mm, end: HH:mm } |
+| tzdataVersion | string — IANA tzdata release used when the schedule was saved, for example 2026b |
+| mirrorSeq | int — sequence of the last mirror statement sent |
+| updatedAtClaim | timestamp — user clock, a claim |
+| revision | int — CTR-ID-001 ID-4 |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- A window whose end is not later than its start crosses midnight and belongs to the day of its start; its length is at least 15 minutes and at most 12 hours.
+- A local start time that does not exist (spring-forward gap) moves forward by the gap length; a local time that occurs twice is interpreted as the earlier occurrence for a start and the later occurrence for an end, so the whole repeated hour lies inside a window that spans it.
+- Windows of one schedule must not overlap in real time on any day and the union of windows must be shorter than 24 hours per day.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-105-09.T01 | unit | PS-105-01.R01, PS-105-01.R02, PS-105-01.R03, PS-105-02.R01 | save a valid New York schedule 22:00 to 07:00 daily | stored with tzdataVersion and mirrorSeq 0; mirror statement contains only timeZone, windows, enabled, seq |
+| TEST-PS-105-09.T03 | unit | PS-105-01.R03, PS-105-02.R02 | evaluate New York on 2026-03-08 across the gap | window covers 8 real hours: quiet from 03:00 UTC to 11:00 UTC on 2026-03-08 inclusive of the start and exclusive of the end |
+| TEST-PS-105-09.T04 | unit | PS-105-01.R03 | evaluate New York on 2026-11-01 across the repeated hour | window covers 10 real hours from 02:00 UTC to 12:00 UTC; both 01:30 occurrences are quiet |
+| TEST-PS-105-09.T05 | unit | PS-105-01.R03, PS-105-02.R02 | window starting 02:30 on 2026-03-08 New York, and Lord_Howe, London and Auckland transitions | start shifts forward by the gap, empty window yields not quiet, 30-minute shifts handled, results equal reference implementation |
+
+## Dependencies
+
+Module depends on: F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).

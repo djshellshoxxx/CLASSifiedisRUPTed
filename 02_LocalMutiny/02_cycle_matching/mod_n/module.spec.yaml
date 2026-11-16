@@ -1,0 +1,369 @@
+# F02.S02.M03 N-party cycle engine (ADR-0005, ADR-0016). Suggestions are never proposals and never authority.
+id: F02.S02.M03
+scope: MVP
+summary: >-
+  Bounded deterministic search for barter cycles of 2..Lmax participants over public want and have projections.
+  It builds a directed compatibility graph, enumerates elementary cycles with a Johnson-style depth-first search
+  restricted by the smallest-node-start rule, scores them with a fixed tuple and selects disjoint cycles greedily.
+  The engine runs in the user's vault over retained signed projections (rooted at the local principal) or on a
+  user-selected relay over the public projections that relay indexes. Its output is a CycleSuggestion, which is advice only.
+  A suggestion binds nobody, reserves nothing and becomes a proposal only when a participant explicitly proposes it (F02.S03.M01). Other participants' items
+  are rechecked against their signed listings, but their availability stays a claim until each of them signs a reservation; 'verified' is used only for
+  facts checked against this vault's own inventory. Each suggestion carries a per-participant trust panel so Sybil rings are visible before anyone proposes.
+responsibilities:
+  - Build the CompatibilityGraph from retained public want and have projections, matching profiles, valuations and local block lists, with pair distances computed cell to cell from the L2 cells of the giver's listing projection and the receiver's want projection; regionL1 is used only for partitioning.
+  - Attach a trust panel per participant (first-seen age of the projection in this vault, completed-trade count from F07.S03.M01, same-owner key linkage from F07 per N11), exclude identities with no history unless the principal opted in (F02.S02.M04 includeUnknownIdentities), and flag rings in which two or more participants are key-linked.
+  - Register the engine default LengthProfile with the F02.S02.M05 registry and read all profiles from it, and register export, deletion and retention handlers with F10 (N6).
+  - Enumerate elementary cycles of length 2..Lmax (default 5, tenant maximum 8) in deterministic order within hard budgets of 100000 expanded nodes and 250 ms.
+  - Score cycles with the tuple (participants, minus relative value imbalance, minus max distance bucket, oldest-want age) and select disjoint cycles greedily.
+  - Persist CycleSuggestion records with a stable cycleKey, expiry (24 h) and a locally re-verifiable explanation, and import relay-computed suggestions only after local re-verification.
+non_responsibilities:
+  - Turning a suggestion into a proposal, collecting consent or reserving items (F02.S03.M01 and F02.S03.M02).
+  - Per-length thresholds and explanation text (F02.S02.M01, F02.S02.M02 register LengthProfile providers with this engine).
+  - Eligibility and opt-in data (F02.S02.M04) and the pure feasibility checks (F02.S02.M05).
+  - "Future: exact maximum-weight cycle packing with an ILP solver behind the same CyclePackingPort (ADR-0005), multi-item bundles per leg, sharding across overlapping L1 cells, and learned ranking."
+depends_on: [F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001]
+user_stories:
+  - As a member who wants a bicycle and has a guitar, I am shown a 3-party cycle that includes me, with what I give, what I receive and why it was suggested, and nothing is reserved until I choose to propose it.
+  - As a member, I can dismiss a suggestion and it will not come back for 30 days.
+  - As a relay operator, I can enable public matching for my relay, which computes suggestions from the public projections I index and delivers them as encrypted envelopes, while members re-verify every suggestion in their own vault.
+edge_cases:
+  - The graph contains no cycle; the run completes with zero suggestions and run_completed reports cyclesFound 0, never an error.
+  - The search exhausts 100000 expansions or 250 ms; the run is marked truncated and returns the deterministic prefix of the enumeration, and the UI says results may be incomplete.
+  - A relay-computed suggestion names an item whose listing was tombstoned; local re-verification fails and the suggestion is stored as unverified and cannot be proposed.
+  - Two members hold the same cycle (same cycleKey) in different vaults; each keeps its own CycleSuggestion, and proposing in both vaults is resolved by F02.S03.M01 duplicate-proposal rules.
+  - A participant opts out or is blocked between two runs; the next run supersedes every active suggestion containing that edge.
+  - The device clock is wrong; projection ages are computed against the local clock, so suggestions built from projections dated in the future are discarded as claims from the future.
+  - Two participants of a ring share a device key in their portable identity documents; the suggestion is flagged key-linked, shown with a warning and cannot be proposed without explicit confirmation.
+  - A participant was first seen 2 days ago and has no completed trade known to this vault; the edge is excluded unless the principal turned on 'include people with no trade history', and then the explanation recommends a simultaneous handover for the legs next to that participant.
+  - A listing projection carries only an L1 cell; the pair is treated as at least 25_50 (ordinal 3) because an L1 cell cannot support a finer bucket.
+  - The vault is offline; the run uses retained projections only and labels the result with the age of the oldest projection used.
+ux:
+  screens:
+    - "Suggestions list: cards showing cycle length, what I give and receive, indicative value gap, distance bucket, expiry countdown, and the badge 'rechecked against signed listings on this device' (never 'verified'), with the note that others' availability is their claim until they sign a reservation."
+    - "Suggestion detail: ordered ring diagram of 2..8 participants with pseudonyms, item thumbnails and per-edge reason ('your want Bicycle matches Alice's listing'); a trust panel per participant (first seen here N days ago, completed trades known here, linked keys warning); a simultaneous-handover recommendation for legs next to new identities; buttons Propose this exchange and Dismiss."
+    - "Matching settings link to F02.S02.M04 and a 'Last search' line with time, projection age, and truncated notice."
+  states: [loading, empty, searching, results, truncated, stale-projections, offline, unverified-relay-suggestion, key-linked-warning, error]
+  a11y:
+    - The ring diagram has a text alternative listing each hand-over in order ('Alice gives Lamp to Bob').
+    - Expiry countdown and truncation notices are announced via an aria-live polite region.
+    - Propose and Dismiss are buttons of at least 44 by 44 px with accessible names that include the cycle length.
+processes:
+  domain_schema:
+    requirements:
+      - A CycleSuggestion stores an ordered ring of legs (giver, receiver, item, satisfied want), its cycleKey, score tuple, mode, expiry and status; it is advice and contains no consent, reservation or signature of any participant.
+      - The cycleKey is sha256 over the RFC 8785 JCS bytes of the ring rotated so the smallest giver DID is first, so the same cycle yields the same key in every vault and on every relay.
+      - A CompatibilityGraph is a derived, short-lived cache of nodes and edges plus run statistics (expansions, duration, truncation) and an inputHash used to prove determinism; it is never exported and is purged after 24 h.
+      - Edge, node and result caps are fixed numbers, at most 2000 nodes, 20000 edges, 8 legs per cycle and 500 suggestions per run.
+    entities:
+      - name: CycleSuggestion
+        schema: classrup.mutiny.cycle_suggestion/v1
+        storage: device
+        privacy: P2
+        retention: RET-SHORT
+        fields:
+          - "id: uuidv7 — primary key in the vault"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "cycleKey: cid — sha256-base64url of JCS(ring rotated to smallest giver DID first); unique among status suggested"
+          - "runId: uuidv7 — run that produced or last confirmed it"
+          - "mode: enum — local_rooted | relay_global | relay_imported"
+          - "length: int — 2..8"
+          - "legs: array — 2..8 items {position, giverId did, receiverId did, inventoryItemId uuidv7, listingCid cid, wantCid cid, indicativeValue Money, distanceBucket int 0..4 (F02.S02.M04 ordinal of bucketBetween(giver listing cell, receiver want cell))}"
+          - "settlementCurrency: string — registered currency code (F09.S03.M01)"
+          - "score: object — {participants int, imbalancePermille int 0..1000, maxDistanceBucket 0..4, oldestWantAgeDays int}"
+          - "needsCompensation: boolean — true when some gap exceeds the profile tolerance but is within 250 permille and all participants accept compensation"
+          - "rank: int — 1-based position in the run selection"
+          - "status: enum — suggested | proposed | dismissed | expired | superseded"
+          - "verifiedLocally: boolean — true when every leg was rechecked against retained signed projections in this vault (shown as 'rechecked against signed listings on this device'; peer availability remains a claim until that peer signs a reservation)"
+          - "trust: array — one per participant {actorId, firstSeenDays int (local first sighting of the projection), completedTrades int (F07.S03.M01 completedByType total known here), keyLinkedWith did[] (F07 key-linkage reads), newIdentity boolean}"
+          - "keyLinked: boolean — true when two or more participants are key-linked; the ring is shown with a warning and needs explicit confirmation to propose"
+          - "projectionAsOf: timestamp — oldest projection timestamp used (a claim of the projection authors)"
+          - "relayId?: string — origin relay when mode is relay_imported"
+          - "relaySig?: string — Ed25519 signature of the relay over JCS of the suggestion body; evidence of relay assertion only"
+          - "firstSeenAt: timestamp — RFC 3339 UTC, local clock"
+          - "expiresAt: timestamp — now + 24 h on every confirmation, hard cap firstSeenAt + 7 d"
+          - "suppressedUntil?: timestamp — set to dismissal time + 30 d on dismissed"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Every legs[i].receiverId equals legs[i+1 mod length].giverId, all giverIds are distinct and all inventoryItemIds are distinct.
+          - A participant DID and an inventory item appear in at most one suggestion with status suggested per vault.
+          - length equals legs.length and is at most min(tenant Lmax, 8).
+      - name: CompatibilityGraph
+        schema: classrup.mutiny.compatibility_graph/v1
+        storage: derived
+        privacy: P2
+        retention: RET-EPHEMERAL
+        fields:
+          - "id: uuidv7 — primary key"
+          - "runId: uuidv7 — owning run"
+          - "partitionKey: string — 'all' or 'l1:<geohash4>' from the matching profile regionL1 (partitioning only); cross-cell edges are not built in MVP"
+          - "mode: enum — local_rooted | relay_global"
+          - "inputHash: cid — sha256 of JCS(sorted nodes, sorted edges, parameters); equal inputHash must give equal output"
+          - "nodeCount: int — 0..2000"
+          - "edgeCount: int — 0..20000"
+          - "edges: array — sorted by (from, to) items {from did, to did, inventoryItemId, wantCid, valueMinor string, distanceBucket int 0..4 (cell to cell from L2 cells), wantCreatedAt timestamp}"
+          - "lmax: int — 2..8"
+          - "expansions: int — 0..100000"
+          - "durationMs: int — wall time of enumeration"
+          - "cyclesFound: int — elementary cycles discovered before filtering"
+          - "truncated: enum — none | expansions | time | graph_cap"
+          - "startedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one edge exists per ordered pair (from, to) and no edge has from equal to to.
+          - Nodes are ordered by DID string ascending, the order used by the enumeration.
+    sql: |
+      CREATE TABLE mutiny_cycle_suggestion (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, cycle_key TEXT NOT NULL, status TEXT NOT NULL,
+        length INTEGER NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX mutiny_suggestion_active_key ON mutiny_cycle_suggestion(tenant_id, cycle_key) WHERE status = 'suggested';
+      CREATE INDEX mutiny_suggestion_expiry ON mutiny_cycle_suggestion(tenant_id, status, expires_at);
+  validation_rules:
+    requirements:
+      - Run parameters are validated before any search; Lmax outside 2..tenant maximum (8) or budgets above the ADR-0005 caps are refused.
+      - Edge admission rules are pure functions of signed projections, profiles, valuations and local blocks, applied identically in vault and relay modes.
+      - A relay-delivered suggestion is accepted for display only after its signature and every leg are re-verified locally; otherwise it is stored unverified and cannot be proposed.
+    rules:
+      - "V01 | lmax is an integer in 2..tenant maximum (default tenant maximum 8, default run value 5) | MUTINY_LMAX_INVALID"
+      - "V02 | expansionBudget ≤ 100000 and timeBudgetMs ≤ 250 | VALIDATION_FAILED"
+      - "V03 | both endpoints of an edge have a verified, non-tombstoned matching_profile projection with optedIn true and not paused | MUTINY_PROFILE_NOT_ELIGIBLE"
+      - "V04 | giver differs from receiver, item quantity available ≥ 1, listing published and flagged barterAcceptable, projection not older than 30 days and not dated in the future | MUTINY_EDGE_INVALID"
+      - "V05 | want category equals or is an ancestor of the item category, item condition is at least the want minimum condition, and item indicative value ≤ want maxBudget when present | MUTINY_EDGE_INVALID"
+      - "V06 | pair bucket = F02.S02.M04 ordinal of F06.S02.M01 bucketBetween(giver listing projection cell, receiver want projection cell), both checked with assertPublicCell and at most L2; an L1-only cell counts as at least 3; the bucket is ≤ both participants' maxDistanceBucket and the profile maxPairBucket | MUTINY_EDGE_INVALID"
+      - "V07 | neither party is in the other's local block list or excluded set known to this vault | BLOCKED_PARTY"
+      - "V08 | graph has ≤ 2000 nodes and ≤ 20000 edges after partitioning by L1 cell | MUTINY_GRAPH_TOO_LARGE"
+      - "V09 | imported suggestion has a valid relay signature, cycleKey recomputes from its legs, and legs.length is within 2..8 | MUTINY_SUGGESTION_UNVERIFIED"
+      - "V10 | the caller has opted in to matching (F02.S02.M04) | MUTINY_MATCHING_NOT_ENABLED"
+      - "V11 | a counterparty with no history in this vault (projection first seen < 30 d and no completed trade known through F07.S03.M01) is excluded unless the principal set includeUnknownIdentities | MUTINY_EDGE_INVALID"
+      - "V12 | a ring in which two or more participants are key-linked (shared device key, rotation chain or same-owner attestation per N11) is stored with keyLinked true and is never proposable without the principal's explicit confirmation | MUTINY_RING_KEY_LINKED"
+  workflow_state_machine:
+    requirements:
+      - A suggestion is advice with a short lifecycle; it moves to proposed only when F02.S03.M01 reports that a participant proposed it.
+      - Expiry, supersession and dismissal are terminal, and a dismissed cycleKey is suppressed for 30 days so it is not suggested again.
+      - A later run that finds the same cycleKey still valid refreshes expiresAt instead of creating a second record, so suggestions are stable between runs.
+    machines:
+      - entity: CycleSuggestion
+        initial: suggested
+        terminal: [proposed, dismissed, expired, superseded]
+        transitions:
+          - "suggested -> proposed | mutiny.cycle.proposed consumed with this suggestionId | emits nothing; sets proposedCycleId"
+          - "suggested -> dismissed | mutiny.suggestion.dismiss by the principal | sets suppressedUntil = now + 30 d"
+          - "suggested -> expired | expiry evaluation finds expiresAt ≤ local now | no statement is sent"
+          - "suggested -> superseded | a later run no longer finds the cycle valid, or an edge item, want, profile or block changed | reason recorded"
+    timeouts:
+      - "Suggestions expire 24 h after the last confirming run, hard cap 7 d after firstSeenAt; evaluated on vault open and every 60 s while the PWA is open (lazy, no background guarantee)."
+      - "CompatibilityGraph caches are purged 24 h after startedAt."
+  commands_queries_events:
+    requirements:
+      - The vault commands generate, import and dismiss change only local records and send no statement; only the relay command compute_public runs on a relay and is optional.
+      - Every command is idempotent per CTR-IDM-001 and emits its events in the same IndexedDB transaction as the state change (EVT-8).
+      - Runs are serialized per vault with a Web Locks mutex so at most one run executes at a time, and the relay serializes runs per tenant.
+      - The engine consumes want, listing, profile, valuation, block and cycle events only to mark the graph dirty or to change suggestion status; it never acts on another party's behalf.
+      - "classrup.mutiny.cycle_suggestion/v1 envelopes are registered with the F11.S01.M01 statement registry with signer role 'relay that computed it' (evidence of a relay assertion only); this module is their single ingest owner, and a relay run calls the relay platform hook notify.notification.dispatch for a content-free push after each mailbox put (N17), with no build dependency because the hook is provided by the relay runtime."
+    commands:
+      - name: mutiny.suggestion.generate
+        capability: mutiny.suggestion.generate
+        input: "{ lmax? (2..8, default 5), mode? local_rooted (default), timeBudgetMs? ≤ 250, expansionBudget? ≤ 100000, dryRun? }"
+        output: "{ runId, suggestions: CycleSuggestion[], stats: { nodes, edges, expansions, durationMs, cyclesFound, truncated, projectionAsOf } }"
+        errors: [MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_MATCHING_NOT_ENABLED, MUTINY_RUN_IN_PROGRESS, RATE_LIMITED]
+        emits: [mutiny.cycle.suggested, mutiny.matching.run_completed]
+        idempotent: true
+      - name: mutiny.suggestion.import
+        capability: mutiny.suggestion.import
+        input: "{ envelope: classrup.mutiny.cycle_suggestion/v1 signed by a relay, received via mailbox }"
+        output: "{ suggestionId, verifiedLocally, status }"
+        errors: [MUTINY_SUGGESTION_UNVERIFIED, VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [mutiny.cycle.suggested]
+        idempotent: true
+      - name: mutiny.suggestion.dismiss
+        capability: mutiny.suggestion.dismiss
+        input: "{ suggestionId, expectedRevision }"
+        output: "{ suggestionId, revision, suppressedUntil }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: mutiny.suggestion.compute_public
+        capability: mutiny.suggestion.compute_public
+        input: "{ partition?: l1 geohash4, lmax? ≤ tenant maximum, scheduledAt } — relay command; delivers each suggestion as an end-to-end encrypted envelope to the participants' mailboxes, calls notify.notification.dispatch for a content-free push, keeps computed rings RET-EPHEMERAL and never logs them"
+        output: "{ runId, stats, deliveredEnvelopes: int }"
+        errors: [MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED]
+        emits: [mutiny.matching.run_completed]
+        idempotent: true
+    queries:
+      - name: mutiny.suggestion.list_mine
+        capability: mutiny.suggestion.read
+        input: "{ status? default suggested, cursor?, limit ≤ 50 }"
+        output: "{ items: CycleSuggestion[], nextCursor? }"
+        errors: []
+      - name: mutiny.suggestion.get
+        capability: mutiny.suggestion.read
+        input: "{ suggestionId }"
+        output: "{ suggestion: CycleSuggestion, explanation: Explanation }"
+        errors: [NOT_FOUND]
+      - name: mutiny.graph.get_stats
+        capability: mutiny.graph.read_stats
+        input: "{ runId? default latest }"
+        output: "{ runId, nodes, edges, expansions, durationMs, truncated, inputHash }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: mutiny.cycle.suggested, privacy: P2, payload: "{ suggestionId, runId, cycleKey, length, participantIds, mode, verifiedLocally, expiresAt }"}
+      - {type: mutiny.matching.run_completed, privacy: P2, payload: "{ runId, mode, nodes, edges, expansions, durationMs, cyclesFound, suggestionsCreated, truncated }"}
+    events_consumed:
+      - {type: bazaar.want.declared, effect: "mark graph dirty; schedule a run after the 60 s debounce"}
+      - {type: bazaar.want.withdrawn, effect: "supersede active suggestions whose legs reference the want"}
+      - {type: bazaar.listing.unpublished, effect: "supersede active suggestions containing an item of that listing"}
+      - {type: bazaar.listing.expired, effect: "supersede active suggestions containing an item of that listing"}
+      - {type: bazaar.inventory.depleted, effect: "supersede active suggestions containing that inventory item"}
+      - {type: mutiny.matching_profile.updated, effect: "mark graph dirty; supersede suggestions whose participant opted out, paused or narrowed maxCycleLength or distance"}
+      - {type: mutiny.valuation.declared, effect: "mark graph dirty; supersede suggestions whose value gap changed beyond the profile tolerance"}
+      - {type: identity.block.added, effect: "supersede active suggestions containing the blocked DID; no notification names the block"}
+      - {type: mutiny.cycle.proposed, effect: "set matching suggestion to proposed when payload.suggestionId matches"}
+      - {type: mutiny.cycle.declined, effect: "suppress the cycleKey for 30 days in this vault"}
+      - {type: identity.portable_doc.published, effect: "recompute keyLinked and the trust panel of active suggestions containing that DID"}
+      - {type: identity.reputation.recomputed, effect: "refresh completedTrades in the trust panel of active suggestions containing that DID"}
+      - {type: privacy.deletion.completed, effect: "delete all suggestions and graph caches of the erased local principal; suggestions are RET-SHORT and not evidence"}
+    errors:
+      - "MUTINY_LMAX_INVALID | 422 | no | Lmax is outside 2..tenant maximum"
+      - "MUTINY_GRAPH_TOO_LARGE | 422 | no | graph exceeds 2000 nodes or 20000 edges even after L1 partitioning"
+      - "MUTINY_MATCHING_NOT_ENABLED | 409 | no | the principal has not opted in to matching"
+      - "MUTINY_RUN_IN_PROGRESS | 409 | yes | another matching run holds the mutex"
+      - "MUTINY_PROFILE_NOT_ELIGIBLE | 409 | no | an endpoint of an edge is not an opted-in, unpaused participant"
+      - "MUTINY_EDGE_INVALID | 422 | no | an edge fails item, want, distance or projection-age admission"
+      - "MUTINY_SUGGESTION_UNVERIFIED | 422 | no | relay suggestion failed local signature or leg re-verification"
+      - "MUTINY_RING_KEY_LINKED | 409 | no | two or more participants of the ring are key-linked and proposing needs explicit confirmation"
+    example: |
+      # Algorithm (ADR-0005). nodes = DIDs sorted ascending; edge A->B when an item A offers satisfies an active want of B.
+      # For each start s in ascending order: restrict to nodes >= s, keep the strongly connected component of s,
+      # compute reverse BFS distance d(v) to s, DFS from s in ascending neighbour order, abandon a branch when depth + d(v) > Lmax.
+      # Johnson blocking sets are not used with a length cap because blocking is unsound under a depth bound.
+      # Unbounded Johnson 1975 is O((n+e)(c+1)) for c cycles; the bounded search is limited by 100000 expansions / 250 ms instead.
+      # Maximum-weight cycle packing is NP-hard for cycle length cap >= 3 (Abraham, Blum, Sandholm 2007) so selection is greedy.
+      # Score tuple, compare descending: (participants, -imbalance quantized to 10 permille, -maxDistanceBucket, oldestWantAgeDays); ties by cycleKey ascending.
+      #
+      # 2-party: edges a1->a2 [bike], a2->a1 [guitar]          => cycle [a1,a2] length 2
+      # 3-party: a3->a4 [lamp], a4->a5 [desk], a5->a3 [chair]  => cycle [a3,a4,a5] length 3
+      # 4-party: b1->b2 [skis], b2->b3 [tent], b3->b4 [drill], b4->b1 [novel] => cycle [b1,b2,b3,b4] length 4
+      # N-party (6): c1->c2->c3->c4->c5->c6->c1 : with Lmax 5 no cycle (length 6 > 5, pruned); with Lmax 8 cycle [c1..c6]
+      # Greedy: nodes n1..n4, edges n1->n2, n2->n1, n2->n3, n3->n4, n4->n1.
+      #   candidates from n1: [n1,n2] (2 participants) and [n1,n2,n3,n4] (4 participants)
+      #   4 participants outranks 2, selected; [n1,n2] shares n1 and n2 so it is dropped. Max cycles through a node stay bounded by budgets.
+      POST (vault command) mutiny.suggestion.generate
+      Idempotency-Key: 0192f3a4-0000-7000-8000-0000000000a1
+      { "lmax": 5, "mode": "local_rooted" }
+      200 { "runId": "0192f3a5-1111-7000-8000-000000000001",
+            "suggestions": [ { "id": "0192f3a5-2222-7000-8000-000000000002", "length": 3, "status": "suggested", "verifiedLocally": true,
+              "score": { "participants": 3, "imbalancePermille": 42, "maxDistanceBucket": 1, "oldestWantAgeDays": 12 } } ],
+            "stats": { "nodes": 412, "edges": 1380, "expansions": 9120, "durationMs": 38, "cyclesFound": 17, "truncated": "none" } }
+  authorization_capabilities:
+    requirements:
+      - Vault commands run only for the unlocked local principal; no other actor can generate, import or dismiss suggestions in that vault.
+      - A relay run requires relay policy permission; the relay computes only from public projections it indexes, but it knows every ring composition it computed (a derived P2 composition) and learns from mailbox metadata which participants fetched it, so it keeps computed rings RET-EPHEMERAL, never logs them and receives no proposal or accept feedback.
+      - A suggestion is visible to the principal of the vault that holds it, including the other participants' pseudonyms and public item data that are already public projections; the other participants learn of it only when someone proposes it, except that a relay run delivers the same suggestion to every participant's mailbox, which the suggestion UI and the F02.S02.M04 disclosure state.
+    capabilities:
+      - "mutiny.suggestion.generate | principal | vault unlocked; matching opted in (F02.S02.M04); rate 6 runs/hour"
+      - "mutiny.suggestion.import | principal | vault unlocked; envelope relay signature verifies against a relay the principal selected"
+      - "mutiny.suggestion.dismiss | principal | suggestion exists in this vault"
+      - "mutiny.suggestion.compute_public | relay-operator | relay policy enables public matching for the tenant; invoked by the relay scheduler or operator-signed request"
+      - "mutiny.suggestion.read | principal | own vault only"
+      - "mutiny.graph.read_stats | principal, relay-operator | principal reads own run statistics; relay operator reads statistics without edges"
+  failure_recovery_idempotency:
+    requirements:
+      - Generate and import are idempotent; a replay with the same Idempotency-Key within 24 h returns the stored result without a second run.
+      - The same inputHash with the same parameters and the same expansion budget must yield byte-identical suggestions; only the time budget can shorten the deterministic prefix.
+      - A crash during a run leaves the previous suggestion set intact because new records are written in one IndexedDB transaction at the end of the run.
+    idempotency: "Idempotency-Key per command, replay window 24 h (CTR-IDM-001 IDM-1); suggestions are additionally deduplicated by cycleKey while status is suggested."
+    concurrency: "One run at a time per vault through a Web Locks mutex named mutiny-matching; a second request returns MUTINY_RUN_IN_PROGRESS (retryable). On a relay, runs are serialized per tenant and partition."
+    retries: "Client retries only MUTINY_RUN_IN_PROGRESS and RATE_LIMITED with IDM-4 backoff; a truncated run is not retried automatically."
+    offline: "Generation works offline over retained projections and shows projectionAsOf; import of relay suggestions waits in the mailbox until the vault is online; nothing is queued as a statement because the engine sends none."
+    partial_failure: "If the 250 ms time budget fires, the run returns the deterministic prefix with truncated=time and every returned suggestion is still individually valid; if graph caps are exceeded the run partitions by L1 cell and reports truncated=graph_cap for unprocessed cells."
+  privacy_retention_abuse:
+    requirements:
+      - Matching consumes only public projections and the local principal's private data; it never reads another party's P2 or P3 records.
+      - Suggestions are P2, stay in the vault, and are purged 30 days after creation unless they led to a proposal, in which case the proposal evidence is retained under RET-EVIDENCE by F02.S03.M01.
+      - A relay that computes suggestions knows each ring composition it computed, a derived P2 composition, and learns from mailbox metadata which participants fetched it; it keeps computed rings RET-EPHEMERAL, never logs them, delivers them only as end-to-end encrypted envelopes, and receives no proposal or accept feedback, and this limit is shown in the F02.S02.M04 opt-in disclosure.
+      - Gaming by flash wants, fake inventory or self-dealing rings is limited by want age, per-participant caps, local rechecking, the trust panel, exclusion of identities with no history by default and the key-linked ring flag.
+      - The module registers ExportSectionPort (section mutiny.suggestions), DeletionPort and RetentionPurgePort with F10 (N6), annotates CycleSuggestion and CompatibilityGraph fields with their F10.S02.M02 class, and purges graph caches through RetentionPurgePort 24 h after startedAt.
+    data:
+      - "CycleSuggestion: P2, device only; contains pseudonym DIDs and public item references, no address, no exact location (distance bucket only)."
+      - "CompatibilityGraph: P2, derived, never exported, never logged."
+      - "Excluded counterparties and local blocks are P3 inputs; they filter edges locally (F07.S02.M02 filterBlocked) and appear in no event, log or relay request."
+      - "Relay-computed rings: P2 derived compositions held RET-EPHEMERAL by the relay only for delivery, never logged; mailbox fetch metadata (mailbox id, size, time) is visible to the relay."
+    retention:
+      - "CycleSuggestion: RET-SHORT, purged 30 days after createdAt (dismissal suppression ends at 30 days)."
+      - "CompatibilityGraph: RET-EPHEMERAL, purged after 24 h."
+      - "Relay ring compositions: RET-EPHEMERAL, deleted once the envelopes are delivered or after 24 h, whichever is first."
+    threats:
+      - "T01 | A malicious relay fabricates a cycle to steer a user into a bad trade | the vault re-derives every leg from retained signed projections; unverifiable suggestions are labelled unverified and cannot be proposed"
+      - "T02 | Sybil identities (free did:key) create fake wants and haves to form rings that extract real items | trust panel per participant (first-seen age, completed trades from F07.S03.M01, key linkage per N11), identities with no history excluded by default, key-linked rings flagged and not proposable without confirmation, simultaneous handover recommended next to new identities, wants at least 15 minutes old, and every giver still signs consent and a reservation"
+      - "T03 | Relay learns who is likely to trade with whom from suggestions | stated honestly: the relay knows each ring it computed and who fetched it; rings are RET-EPHEMERAL and never logged, no proposal or accept feedback reaches the relay, and users can choose a relay with matching disabled or run vault-only"
+      - "T04 | Resource exhaustion by a huge graph | caps of 2000 nodes, 20000 edges, 100000 expansions and 250 ms, partitioning by L1 cell"
+      - "T05 | Inference that a counterparty excluded or blocked someone | exclusions are applied locally only; the relay cannot apply them, so the recipient vault silently drops such suggestions and sends no signal"
+    abuse_controls:
+      - "Per-vault rate limit of 6 generate runs per hour; relay rate limit 1 compute_public run per partition per 5 minutes."
+      - "Wants younger than 15 minutes and valuations flagged implausible are excluded from the graph."
+      - "Signals about repeated dismissals by the same participant are local only; no global reputation write."
+      - "Identities with no history are excluded by default; at most 1 key-linked ring is shown per run and it carries a warning."
+  observability_performance:
+    requirements:
+      - Run duration, expansions, truncation and result counts are recorded locally per run and, on relays only, as metrics per CTR-OBS-001; the PWA sends no telemetry (OBS-7).
+      - A relay run over a graph of at most 5000 edges with Lmax 5 completes within 250 ms at p95 on the reference relay.
+      - Determinism is observable by exposing inputHash in run statistics.
+    metrics:
+      - "classrup_mutiny_matching_runs_total{outcome=complete|truncated|failed} (relay)"
+      - "classrup_mutiny_matching_expansions_count (histogram, relay)"
+      - "classrup_mutiny_matching_duration_ms (histogram, relay)"
+      - "classrup_mutiny_suggestions_total{outcome=created|refreshed|superseded|expired|dismissed} (relay)"
+    logs:
+      - "info matching.run_completed {runId, nodes, edges, expansions, durationMs, truncated, correlationId} — no DIDs, no item ids."
+      - "warn matching.truncated {runId, reason, expansions, durationMs}"
+    budgets:
+      - "Search p95 ≤ 250 ms for graphs ≤ 5000 edges and Lmax 5 on the reference relay (OBS-4); hard stop at 250 ms and 100000 expansions everywhere."
+      - "Vault-mode run on a mid-range phone runs in a Web Worker, never blocks the UI thread, and renders results within 1 s of completion."
+      - "Graph build over 20000 edges ≤ 150 ms; memory ≤ 32 MiB."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Property tests prove every suggested cycle is elementary, uses each participant once, uses each item at most once, respects Lmax and budgets, and is deterministic for the same input.
+      - Contract tests check command output and event payloads against the schema registry and verify relay signatures.
+      - Fixtures include explicit 2-, 3-, 4- and 6-party cycles and a greedy conflict case.
+    fixtures: "Graphs g2 (a1<->a2), g3 (a3,a4,a5), g4 (b1..b4), g6 (c1..c6 ring), gG (n1..n4 greedy case), gDense (1000 nodes, 5000 edges, seed 42); fixed clock 2026-11-04T10:00:00Z; seeded fast-check with 200 runs per PR and 10000 nightly."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,04.R01,09.R04 | run on g2, g3, g4 | suggestions of length 2, 3, 4 with stable cycleKey rotated to smallest DID; no statement emitted"
+      - "T02 | unit | 01.R04,02.R01,02.R02 | Lmax 1 and 9, and graph with 2001 nodes | MUTINY_LMAX_INVALID and MUTINY_GRAPH_TOO_LARGE respectively"
+      - "T03 | property | 09.R02,01.R01 | random graphs up to 60 nodes | every suggestion is elementary, has distinct participants, distinct items, length ≤ Lmax and receiverId of leg i equals giverId of leg i+1"
+      - "T04 | property | 09.R02,06.R02 | same random graph and parameters run twice, and with shuffled input order | byte-identical output and equal inputHash"
+      - "T05 | unit | 03.R01,03.R02,03.R03 | g6 with Lmax 5 and Lmax 8, and gG | no cycle at Lmax 5, 6-party cycle at Lmax 8, greedy picks the 4-party cycle and drops the overlapping 2-party one"
+      - "T06 | unit | 02.R02 | edges violating V03..V07 in turn | no edge is built for each violation and an explanation reason code is recorded"
+      - "T07 | unit | 02.R03,02.R01 | relay suggestion with bad signature, with tombstoned listing, and valid one | first two MUTINY_SUGGESTION_UNVERIFIED or stored unverified and not proposable, third verified"
+      - "T08 | integration | 03.R03,06.R01 | two consecutive runs on same graph | second run keeps suggestion id and refreshes expiresAt; no duplicate cycleKey"
+      - "T09 | integration | 04.R02,04.R03,06.R01 | replay generate with same key, different body, and parallel generate | stored result replayed; IDEMPOTENCY_KEY_REUSED; second parallel gets MUTINY_RUN_IN_PROGRESS"
+      - "T10 | contract | 04.R02,09.R03 | each command and event | payloads validate against registry schemas classrup.mutiny.cycle_suggestion/v1 and event payloads"
+      - "T11 | integration | 04.R04,03.R02 | consume want.withdrawn, block.added, cycle.declined | suggestions superseded, and declined cycleKey suppressed 30 days"
+      - "T12 | abuse | 05.R01,05.R02,05.R03 | other principal calls commands, relay operator reads suggestions | FORBIDDEN or NOT_FOUND; relay stats contain no edges"
+      - "T13 | abuse | 07.R01,07.R04 | want younger than 15 minutes, implausible valuation, 7th run in an hour | excluded from graph and RATE_LIMITED respectively"
+      - "T14 | integration | 07.R02,07.R03 | suggestion older than 30 days; relay compute_public delivery | purged by retention sweep; relay envelope is ciphertext only; relay ring store empty after delivery and absent from relay logs; no proposal or accept message is sent to the relay"
+      - "T15 | chaos | 06.R03,03.R03 | kill the vault mid-run | previous suggestion set intact after restart, no partial records"
+      - "T16 | load | 08.R01,08.R02,08.R03 | gDense on reference relay, 100 runs | p95 ≤ 250 ms, truncation flagged when budget forced, metrics exported"
+      - "T17 | property | 09.R02,02.R02 | budget 100000 expansions on adversarial dense graph | expansions never exceed 100000 and truncated is expansions or time"
+      - "T18 | unit | 09.R01 | traceability tool run | every PS-018 requirement maps to a passing test"
+      - "T19 | e2e | 05.R03 | mobile user opens suggestion, dismisses it | ring diagram text alternative present, badge reads 'rechecked against signed listings on this device' and never 'verified', axe zero serious issues, no network call made"
+      - "T20 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, schema rollback | unexpired suggestions round-trip as unverified until re-verified; graph caches absent"
+      - "T21 | integration | 01.R03 | graph built at T0, clock injected to T0 + 24 h + 1 s | CompatibilityGraph purged by the retention sweep and get_stats returns NOT_FOUND for that run"
+      - "T22 | abuse | 07.R04,02.R02 | 2-Sybil ring: two fresh did:key identities sharing a device key form a 3-ring with a real member | with default settings the ring is not suggested; with includeUnknownIdentities on it is flagged keyLinked, trust panel shows first seen 0 days and 0 completed trades, MUTINY_RING_KEY_LINKED without confirmation, simultaneous handover recommended"
+      - "T23 | unit | 02.R02,01.R01 | pair distance from L2 cells u4pru and u4prv, an L1-only listing cell, and a 6-character cell | ordinal 0, at least 3, and DISCOVERY_PRECISION_FORBIDDEN rejection of the projection edge"
+      - "T24 | contract | 04.R05 | registry entry of classrup.mutiny.cycle_suggestion/v1 and relay push hook | signer role relay; compute_public calls notify.notification.dispatch once per delivered envelope with no content"
+      - "T25 | integration | 07.R05 | F10 export, deletion and retention sweep | section mutiny.suggestions exported; erased principal's suggestions and graphs deleted; graph caches purged at 24 h"
+    acceptance:
+      - All tests T01–T25 pass in CI with seeds recorded.
+      - No suggestion is ever created as a proposal, reservation, consent or signed statement by the engine.
+      - Same inputHash and parameters produce identical suggestions on two different devices.
+  import_export_backup_rollback:
+    requirements:
+      - Export includes active and recent CycleSuggestion records of the user, flagged derived, and excludes CompatibilityGraph caches.
+      - Imported suggestions are always re-verified before they can be proposed and expire at their original expiresAt.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section mutiny.suggestions in classrup-export/v1; one line per non-purged CycleSuggestion (schema classrup.mutiny.cycle_suggestion/v1)."
+    import: "Suggestions import with verifiedLocally=false and status unchanged unless expiresAt is past, in which case expired; re-verification runs on first open."
+    backup: "The user's vault export is the primary backup (IOX-6); relays hold only transient suggestion envelopes in mailboxes (IOX-7)."
+    migration_rollback: "Additive optional fields only in v1; rollback to the previous release ignores unknown fields; the suggestion set is derived so a rollback can always regenerate it by running generate."

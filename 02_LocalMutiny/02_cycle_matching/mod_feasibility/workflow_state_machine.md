@@ -1,35 +1,30 @@
-# PS-016-03 — workflow state machine
+# PS-016-03 — Workflow state machine: Cycle feasibility checks
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-016-03. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_feasibility](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_feasibility. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S02.M05 Cycle feasibility checks](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/cycle_matching/feasibility` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for feasibility within 02_cycle_matching. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-016-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-016-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-016-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-016-03.R01** Reports have no state transitions; a new evaluation creates a new report and the previous report for the same subject revision remains for audit until retention.
+- **PS-016-03.R02** Staleness is computed from the local clock at read time and a stale report is never accepted for consent or commit decisions.
+- **PS-016-03.R03** The pure function has no side effects other than the optional storage of its report.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** FeasibilityReport is immutable derived output with no lifecycle; staleness is computed from staleAt at read time. Subject state machines live in F02.S01.M01 and F02.S03.M01.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-016-03`; scenarios and fixtures to be detailed in Prompt 3.
+- Reports expire for decisions after 10 minutes and are purged after 30 days.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-016-09.T06 | unit | PS-016-03.R01, PS-016-03.R02 | report older than 10 minutes used for consent | MUTINY_FEASIBILITY_STALE |
+| TEST-PS-016-09.T12 | integration | PS-016-03.R03, PS-016-07.R03 | report cited by a signed revision, 30 days later | standalone report purged, cited hash retained in revision evidence |
+
+## Dependencies
+
+Module depends on: F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

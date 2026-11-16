@@ -1,0 +1,277 @@
+id: F06.S01.M01
+scope: MVP
+summary: >-
+  Builds a full-text (SQLite FTS5) search index over signed public projections of listings, service offerings,
+  auctions and rentals. The same code runs in two places: a local index inside the user's browser vault over
+  projections the user published, fetched from relays or imported, and an optional relay index over projections
+  published to that relay. Only P0 fields and a location cell no finer than geohash precision 5 (L2) are indexed,
+  and only after the author's Ed25519 signature over the projection verifies. The index is derived data: it is
+  rebuilt from retained signed projections, and a signed tombstone or an unpublish removes the text at once.
+responsibilities:
+  - Own SearchDocument rows and the discovery_fts FTS5 table, in the vault (local index) and on a relay (relay index), with identical schema and rules.
+  - Admit a projection only when its author signature verifies (CTR-FED-001 FED-2), its type is a known public schema, and its cell is L2 or coarser; otherwise refuse and leave the previous document untouched.
+  - Apply publication, edit, expiry, archive, tombstone and deletion events idempotently, ignoring events whose source revision is not newer.
+  - Rank-time hygiene - store the local first-seen time of each document and use it, not the author's claimed time, as the recency anchor.
+  - Provide a rebuild that swaps in a freshly built index atomically, and enforce local storage caps (5 000 retained documents in the vault, 200 per author on a relay).
+non_responsibilities:
+  - Parsing user queries, cursors and saved searches (F06.S01.M02).
+  - Filter semantics and SQL compilation (F06.S01.M03).
+  - Scoring and re-ranking (F06.S03.M01, F06.S03.M02).
+  - Producing or signing listing projections (F01) and transporting them between relays (F11).
+  - "Future: semantic or vector search, typo-tolerant trigram fallback, private-set matching of saved searches against a relay without revealing the query."
+depends_on: [F06.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
+user_stories:
+  - As a buyer, I can search listings I have retained or imported while offline, because the index lives in my vault.
+  - As a seller using a relay, my published listing becomes searchable on that relay within 5 seconds, and disappears from its index within 5 seconds of my signed tombstone.
+  - As a relay operator, I can rebuild the relay index after a tokenizer change without search downtime.
+  - As a privacy-conscious seller, I am never findable by anything more precise than my listing's approximate area (about 5 km).
+edge_cases:
+  - A projection arrives with an invalid or mismatched signature; it is quarantined by the kernel with reason signature_invalid and never indexed.
+  - Events for the same source arrive out of order (edit before publish); the sourceRevision guard ignores the stale one and the stored projection is read at its latest revision.
+  - A projection carries a 6-character geohash; indexing is refused with DISCOVERY_CELL_TOO_PRECISE and nothing is stored.
+  - The author's claimed publishedAt is in the future or 3 years in the past; recency uses min(claim, firstSeenAt), so backdating or post-dating gains nothing.
+  - A tombstone arrives before the projection it targets; the tombstone is kept for 180 days and the later projection is refused as tombstoned.
+  - The vault reaches its 5 000 document cap; least-recently-viewed documents not referenced by a saved search, favourite or conversation are evicted first.
+  - The relay is stopped; the vault's local index keeps working and results from it are labelled with their last-seen time.
+  - A rebuild runs while new events arrive; events are applied to both live and shadow index until the swap.
+ux:
+  screens:
+    - "Settings > Search data: local index size, document count, last rebuild, a Rebuild button, and the list of relays this vault fetches from."
+    - "Result cards show provenance badge: 'From this device', 'From <relay name>' or 'Imported', plus 'last seen' time."
+  states: [loading, empty, offline-local-only, rebuilding, error]
+  a11y:
+    - Rebuild progress is a progress element with a text percentage announced through an aria-live polite region.
+    - Provenance badges are text, not colour only, and the Rebuild button is at least 44 by 44 px.
+processes:
+  domain_schema:
+    requirements:
+      - A SearchDocument stores only P0 fields from a signature-verified public projection, a location cell snapped to geohash precision 5 or coarser, and provenance (author DID, projection cid, origin, first-seen time).
+      - The FTS5 table indexes title and body only; every other attribute is a typed column used by filters and ranking.
+      - Removed documents lose title and body immediately and are purged 30 days after removal; the row until then only guarantees idempotent replay and tombstone handling.
+    entities:
+      - name: SearchDocument
+        schema: classrup.discovery.search_document/v1
+        storage: relay+device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key, generated by the vault or relay that indexes it"
+          - "tenantId: uuidv7 — tenant scope (single fixed tenant in a vault)"
+          - "sourceKind: enum — listing | offering | auction | rental"
+          - "sourceId: uuidv7 — id of the source aggregate; unique with tenantId and sourceKind"
+          - "sourceRevision: int — highest source revision applied; older events are ignored"
+          - "authorDid: did — did:key of the signing author (the seller)"
+          - "projectionCid: string — sha256-base64url cid of the signed projection (CTR-ID-001 ID-3)"
+          - "origin: enum — own | fetched | imported | relay_published"
+          - "listingKind: enum — sell | wanted | giveaway | service | rental | auction"
+          - "title?: string — 1..120 code points after NFC and control-character stripping; null when removed"
+          - "body?: string — 0..2000 code points, plain text; null when removed"
+          - "categoryId: uuidv7 — category from governance catalog"
+          - "priceMinor?: int — 0..1 000 000 000 000, minor units per CTR-MNY-001"
+          - "currency?: string — registered currency code, required when priceMinor is set"
+          - "condition?: enum — new | like_new | good | fair | for_parts"
+          - "barterAcceptable: boolean — author accepts barter proposals"
+          - "geoCell5: string — geohash of exactly 5 characters (L2) or empty string when the author shows no location"
+          - "claimedPublishedAt: timestamp — author's claim, never trusted for ordering"
+          - "firstSeenAt: timestamp — local clock when this vault or relay first indexed the document"
+          - "authorFirstSeenAt: timestamp — local clock when this index first saw any document by authorDid"
+          - "expiresAt: timestamp — claimed source expiry; document removed at or after min(expiresAt, firstSeenAt + 90 d)"
+          - "endsAt?: timestamp — claimed auction end"
+          - "promotedUntil?: timestamp — relay-local paid promotion end; always null in a vault index"
+          - "status: enum — active | removed | purged"
+          - "removedReason?: enum — unpublished | expired | archived | sold_out | tombstoned | hosting_policy | local_hidden | deleted | auction_closed | withdrawn | evicted"
+          - "removedAt?: timestamp — set when status becomes removed"
+          - "revision: int — CTR-ID-001 ID-4, increments on every applied change"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - geoCell5 is empty or a valid geohash of length exactly 5; a longer value is never stored.
+          - status active implies the stored projection signature verified against authorDid and title is non-null.
+          - status removed or purged implies title and body are null and no discovery_fts row exists for the document.
+          - At most one document exists per (tenantId, sourceKind, sourceId, authorDid).
+    sql: |
+      CREATE TABLE discovery_doc (
+        rid INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, tenant_id TEXT NOT NULL, source_kind TEXT NOT NULL,
+        source_id TEXT NOT NULL, source_revision INTEGER NOT NULL, author_did TEXT NOT NULL, projection_cid TEXT NOT NULL,
+        origin TEXT NOT NULL, listing_kind TEXT NOT NULL, title TEXT, body TEXT, category_id TEXT NOT NULL,
+        price_minor INTEGER, currency TEXT, condition TEXT, barter INTEGER NOT NULL DEFAULT 0,
+        geo_cell5 TEXT NOT NULL DEFAULT '' CHECK (length(geo_cell5) IN (0,5)), claimed_published_at TEXT NOT NULL,
+        first_seen_at TEXT NOT NULL, author_first_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, ends_at TEXT,
+        promoted_until TEXT, status TEXT NOT NULL, removed_reason TEXT, removed_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX discovery_doc_source ON discovery_doc(tenant_id, source_kind, source_id, author_did);
+      CREATE INDEX discovery_doc_cell ON discovery_doc(tenant_id, status, geo_cell5, first_seen_at);
+      CREATE INDEX discovery_doc_author ON discovery_doc(tenant_id, author_did, status);
+      CREATE VIRTUAL TABLE discovery_fts USING fts5(title, body, content='discovery_doc', content_rowid='rid',
+        tokenize='unicode61 remove_diacritics 2', prefix='2 3');
+  validation_rules:
+    requirements:
+      - Every upsert is validated against the SearchDocument schema and the author signature before it touches the FTS table; failures leave the previous document unchanged.
+      - Location precision, tombstone state and revision monotonicity are checked on every event so a bad or hostile source cannot widen what is publicly findable.
+      - Text is normalized (NFC, control and bidi characters removed, length limits applied) so index content is stable across browsers and Node.
+    rules:
+      - "V01 | title is 1..120 and body 0..2000 code points after NFC normalization and control or bidi character removal | VALIDATION_FAILED"
+      - "V02 | geoCell5 is empty or matches ^[0-9b-hjkmnp-z]{5}$ (geohash base32, exactly 5 characters) | DISCOVERY_CELL_TOO_PRECISE"
+      - "V03 | the projection is a known public P0 schema, not expired, not tombstoned, and its Ed25519 signature verifies against authorDid over JCS bytes | DISCOVERY_PROJECTION_INVALID"
+      - "V04 | incoming source revision is greater than the stored sourceRevision, otherwise the event is acknowledged and ignored | DISCOVERY_SOURCE_STALE"
+      - "V05 | priceMinor is an integer within 0..1 000 000 000 000 and currency is present when priceMinor is present | VALIDATION_FAILED"
+      - "V06 | rebuild is requested by the vault principal or a relay operator and no other rebuild is running | DISCOVERY_REBUILD_IN_PROGRESS"
+      - "V07 | the index holds fewer than 5 000 documents in a vault or fewer than 200 active documents per author on a relay, otherwise least-recently-viewed or oldest documents are evicted or deferred | DISCOVERY_INDEX_CAP"
+  workflow_state_machine:
+    requirements:
+      - A document is active only while its signed projection is valid, unexpired and not tombstoned; any removal trigger moves it to removed within the indexing latency budget.
+      - A removed document becomes active again only through a newer verified republish or restore; it never reuses stale text.
+      - Purging is irreversible and happens 30 days after removal by the sweep.
+    machines:
+      - entity: SearchDocument
+        initial: active
+        terminal: [purged]
+        transitions:
+          - "active -> active | listing edited, sell terms set, variant changed or auction extended | verify new projection, bump revision, update FTS row, emit discovery.index.updated with op upsert"
+          - "active -> removed | unpublished, expired, archived, depleted, auction closed, offering withdrawn, signed tombstone, hosting policy removal, local hide, author deletion or eviction | delete FTS row, null title and body, emit discovery.index.updated with op remove"
+          - "removed -> active | republish or restore with newer sourceRevision and valid signature | re-insert FTS row, emit discovery.index.updated with op upsert"
+          - "removed -> purged | purge sweep 30 days after removedAt | delete the row; the tombstone record is kept 180 days by the kernel per CTR-FED-001 FED-4"
+    timeouts:
+      - "Expiry sweep every 60 s removes active documents past their effective expiry (reason expired)."
+      - "Purge sweep every 6 h deletes removed documents with removedAt older than 30 days."
+  commands_queries_events:
+    requirements:
+      - The only command is rebuild; it is a vault-local command on a device and a relay command when served by a relay operator, and it never produces a signed statement.
+      - Normal indexing is driven by consumed events (local events in a vault, events derived from verified statements with actor.kind federated or user); no network or statement is produced by this module.
+      - Each applied change emits exactly one discovery.index.updated event in the same local transaction as the document change.
+    commands:
+      - name: discovery.index.rebuild
+        capability: discovery.search_document.rebuild
+        input: "{ scope: all|listing|offering|auction|rental }"
+        output: "{ rebuildId, startedAt, status: started }"
+        errors: [DISCOVERY_REBUILD_IN_PROGRESS, FORBIDDEN]
+        emits: [discovery.index.updated]
+        idempotent: true
+    queries:
+      - name: discovery.index.stats
+        capability: discovery.search_document.read_stats
+        input: "{ scope?: all|listing|offering|auction|rental }"
+        output: "{ activeCount, removedCount, oldestPendingEventAgeMs, lastRebuildAt?, byKind: {listing, offering, auction, rental}, byOrigin: {own, fetched, imported, relay_published} }"
+        errors: [FORBIDDEN]
+    events_produced:
+      - {type: discovery.index.updated, privacy: P0, payload: "{ documentId, sourceKind, sourceId, op: upsert|remove|rebuilt, listingKind?, categoryId?, geoCell5?, authorDid?, origin?, claimedPublishedAt?, priceMinor?, currency? }"}
+    events_consumed:
+      - {type: bazaar.listing.published, effect: "verify signed projection and upsert a document (kinds sell, wanted, giveaway, service, rental, auction); in a vault the event is local for own listings or derived from a verified received statement"}
+      - {type: bazaar.listing.edited, effect: "reload projection and update the document if the source revision is newer"}
+      - {type: bazaar.listing.unpublished, effect: "remove the document with reason unpublished"}
+      - {type: bazaar.listing.expired, effect: "remove the document with reason expired"}
+      - {type: bazaar.listing.archived, effect: "remove the document with reason archived"}
+      - {type: bazaar.listing.restored, effect: "reload projection and re-add the document only if the listing is published again"}
+      - {type: bazaar.sell_terms.set, effect: "update priceMinor, currency and barterAcceptable from the verified projection"}
+      - {type: bazaar.variant.changed, effect: "update the lowest variant price in priceMinor"}
+      - {type: bazaar.inventory.depleted, effect: "remove the document with reason sold_out"}
+      - {type: services.offering.published, effect: "upsert a document with sourceKind offering and listingKind service"}
+      - {type: services.offering.withdrawn, effect: "remove the document with reason withdrawn"}
+      - {type: auctions.auction.opened, effect: "set endsAt from the host-signed auction statement and mark the auction document active"}
+      - {type: auctions.auction.extended, effect: "update endsAt to the host-signed new end time"}
+      - {type: auctions.auction.closed, effect: "remove the document with reason auction_closed"}
+      - {type: federation.tombstone.applied, effect: "remove the document the signed tombstone targets with reason tombstoned and refuse later republish of that cid"}
+      - {type: moderation.action.applied, effect: "relay: remove documents covered by that relay's hosting-policy action with reason hosting_policy; vault: apply a local hide with reason local_hidden"}
+      - {type: privacy.deletion.completed, effect: "vault erase: remove all documents with origin own and, on full erase, all documents"}
+    errors:
+      - "DISCOVERY_CELL_TOO_PRECISE | 422 | no | location cell is longer than 5 geohash characters (finer than L2)"
+      - "DISCOVERY_PROJECTION_INVALID | 422 | no | projection signature, schema, expiry or tombstone check failed"
+      - "DISCOVERY_SOURCE_STALE | 409 | no | event revision is not newer than the indexed revision"
+      - "DISCOVERY_REBUILD_IN_PROGRESS | 409 | no | a rebuild is already running"
+      - "DISCOVERY_INDEX_CAP | 409 | no | document cap reached; eviction or deferral applied"
+    example: |
+      event bazaar.listing.published (actor.kind federated, via relay https://relay.example.org)
+        { aggregate.id: "0192f3a4-5b6c-7d8e-9f01-23456789abcd", revision: 3, payload: { cid: "sha256-Qm…", author: "did:key:z6Mk…" } }
+      -> signature verifies, geoCell "u4pru", price 45000 EUR
+      -> emits discovery.index.updated { documentId: "0192f3b0-…", sourceKind: "listing", op: "upsert", geoCell5: "u4pru", origin: "fetched" }
+      vault command: discovery.index.rebuild { "scope": "all" }  -> { "rebuildId": "0192f3c1-…", "startedAt": "2026-11-04T10:00:00.000Z", "status": "started" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the unlocked local principal may run rebuild or read statistics on the vault index; indexing itself runs as the system actor of the local event dispatcher.
+      - Relay policy - rebuild and statistics on a relay require the relay operator role of that relay; no relay role affects any vault.
+      - Search reads of documents are authorized in F06.S01.M02 and F06.S02.M03 and expose only public fields.
+    capabilities:
+      - "discovery.search_document.rebuild | principal, operator | vault - unlocked local principal; relay - operator role of that relay and no rebuild running"
+      - "discovery.search_document.read_stats | principal, operator | vault - unlocked local principal; relay - operator role of that relay"
+  failure_recovery_idempotency:
+    requirements:
+      - Event handling is idempotent through the inbox and the sourceRevision guard; replays never duplicate or resurrect documents.
+      - A failed handler retries with backoff and moves to dead letter after 8 attempts, leaving the previous document in place.
+      - A crash during rebuild leaves the live index untouched because the swap is one transaction.
+    idempotency: "Consumers record (consumer, eventId) in the local inbox before side effects; rebuild requires an Idempotency-Key and replays the stored response for 24 h; upsert is keyed by (tenantId, sourceKind, sourceId, authorDid)."
+    concurrency: "Single writer per vault (one IndexedDB or SQLite transaction per event); on a relay one writer per aggregate by (aggregate.id, revision) order; rebuild builds shadow tables and swaps in one transaction."
+    retries: "Handler retries use base 500 ms, cap 30 s, full jitter, max 8 attempts, then dead_letter; the vault shows 'search data needs repair' with a Rebuild button."
+    offline: "The local index is fully functional offline; the relay index is simply not queried. Statements fetched later are indexed on arrival in creation order."
+    partial_failure: "If a projection cannot be verified because the author's identity document is unavailable, the event is retried for 24 h then quarantined; removals never depend on verification, only on the tombstone or unpublish event."
+  privacy_retention_abuse:
+    requirements:
+      - Only P0 fields and an L2-or-coarser cell are indexed; exact addresses, drafts, offers, contact data and L3/L4 locations never reach this module, and the vault index never leaves the device.
+      - Removal is fast and complete so unpublished or tombstoned content is not searchable or recoverable from FTS shadow tables on the same index; copies already fetched by other vaults cannot be recalled, and the publish flow warns about this before signing.
+      - A hostile author cannot flood a relay corpus or backdate content; caps and first-seen anchoring bound the effect.
+    data:
+      - "SearchDocument: P0 copy of public projection data; location cell max 5 characters; provenance is the author's DID, which is a pseudonymous identifier, not anonymity."
+      - "FTS5 shadow tables hold tokens of P0 text only and are rebuilt on removal."
+    retention:
+      - "Active documents live until removed or past effective expiry; removed documents keep ids only for 30 days then are purged (RET-STANDARD)."
+      - "Relay: retention of projections follows the relay's published policy and signed tombstones are honoured within 24 h (PRV-6); rebuild shadow tables are dropped within 1 h of swap or failure."
+    threats:
+      - "T01 | Index leaks a location finer than L2 through a buggy or hostile source | V02 length check on every upsert, SQL CHECK constraint, contract test with 6-character cells, refusal recorded as a local diagnostic"
+      - "T02 | Tombstoned or unpublished content stays searchable | removal deletes the FTS row in the same transaction, 5 s removal budget, daily reconciliation against retained signed tombstones"
+      - "T03 | A hostile author floods a relay index or fills a vault cache | 200 active documents per author on a relay, 5 000 document vault cap with eviction rules, per-author fairness cap in F06.S03.M02"
+      - "T04 | Forged or tampered projection injected through a relay | Ed25519 signature check over JCS bytes against the author DID, kernel quarantine on failure, relay-signed receipt time treated as evidence of that relay clock only"
+      - "T05 | Author backdates or post-dates claimedPublishedAt to gain recency | recency anchored on local firstSeenAt via min(claim, firstSeenAt), claim never used for sorting"
+    abuse_controls:
+      - "Per-author active cap 200 on a relay (excess stored removed with reason withdrawn) and relay hosting-policy removal with a statement of reasons; vault users can hide an author locally."
+      - "Relay ingestion rate is limited by relay policy (default 60 projections per author per hour); the vault accepts at most 1 000 new documents per hour from fetch."
+  observability_performance:
+    requirements:
+      - Index freshness, backlog and rejection counts are measured; relays export them per CTR-OBS-001 and vaults keep them in the local diagnostics log only (OBS-7).
+      - Indexing keeps up with 200 events per second on a relay and 50 events per second in a vault, and freshness stays within 5 seconds at p95.
+      - A full rebuild of 100 000 documents on a relay completes within 10 minutes and of 5 000 documents in a vault within 30 seconds, without blocking reads.
+    metrics:
+      - "classrup_discovery_index_documents{status=active|removed} (relay export; vault local counter)"
+      - "classrup_discovery_index_apply_total{outcome=upserted|removed|ignored_stale|rejected}"
+      - "classrup_discovery_index_freshness_ms (histogram: now - event occurredAt at commit)"
+      - "classrup_discovery_index_rebuild_duration_ms"
+    logs:
+      - "info index.applied {sourceKind, op, correlationId} - no titles, bodies or DIDs; relay logs follow OBS-1, vault logs stay on the device."
+      - "warn index.rejected {code, sourceKind, correlationId}."
+    budgets:
+      - "Single upsert p95 <= 50 ms on the relay, <= 80 ms in the vault on a Moto G-class device; freshness p95 <= 5 s."
+      - "Relay rebuild of 100 000 documents <= 10 min while query p95 stays <= 200 ms; vault rebuild of 5 000 documents <= 30 s."
+      - "Index size <= 1.5 KiB per document average including FTS tokens (vault cap about 8 MiB)."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test with deterministic clock and ID generator.
+      - Event handlers are verified against recorded event fixtures and a fake signed-projection reader.
+      - Privacy and signature tests prove that no field outside P0, no unsigned projection and no cell longer than 5 characters can be indexed.
+    fixtures: "Tenant T, author A with did:key keypair, signed projections L1..L5, fixed clock 2026-11-04T10:00:00Z, fake projection reader, relay and vault harnesses sharing the same package."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | upsert a valid signed projection | document stored active, FTS row present, text NFC-normalized, provenance fields set"
+      - "T02 | unit | 01.R01,02.R02 | projection with geo cell u4pruy (6 chars) | DISCOVERY_CELL_TOO_PRECISE, no row written"
+      - "T03 | property | 02.R03 | random Unicode titles with control and bidi characters | stored text has none of them and length limits hold"
+      - "T04 | integration | 03.R01,03.R02 | publish, unpublish, republish a listing | active, removed (FTS row gone), active with fresh text and a newer revision"
+      - "T05 | integration | 01.R03,03.R03 | removed document older than 30 days | purge sweep deletes it; younger rows kept"
+      - "T06 | integration | 04.R02,06.R01 | deliver the same event twice and an older edit afterwards | one document, stale edit ignored"
+      - "T07 | contract | 04.R01,04.R03 | rebuild command and each applied change | command and discovery.index.updated payloads validate against registry schemas; one event per change"
+      - "T08 | abuse | 02.R02,07.R03 | tampered projection, wrong author key and unsigned projection | all rejected with DISCOVERY_PROJECTION_INVALID, nothing indexed"
+      - "T09 | abuse | 05.R01,05.R02 | non-operator calls rebuild on a relay; locked vault calls rebuild | FORBIDDEN in both cases"
+      - "T10 | integration | 04.R02,07.R02 | signed tombstone then later republish of the same cid | document removed with reason tombstoned, republish refused"
+      - "T11 | integration | 06.R02,06.R03 | handler fails 8 times; crash during rebuild; verification key unavailable | dead_letter after 8 attempts; live index unchanged; event quarantined after 24 h"
+      - "T12 | abuse | 07.R03 | author with 201 documents; claimedPublishedAt 3 years ahead | excess stored removed; recency uses firstSeenAt"
+      - "T13 | integration | 05.R03,07.R01 | query layer asks for a document from a removed row | no title or body is ever returned"
+      - "T14 | load | 08.R01,08.R02,08.R03 | 200 events/s on relay for 5 minutes and 5 000 documents rebuild in a vault emulation | freshness p95 <= 5 s; relay 100 000 rebuild <= 10 min; vault rebuild <= 30 s"
+      - "T15 | unit | 09.R01,09.R02,09.R03 | traceability tool run over PS-045 | every requirement maps to a passing test and privacy suite is green"
+      - "T16 | integration | 10.R01,10.R02,10.R03 | restore of vault from export then rebuild; relay backup restore then rebuild | index equals expectation derived from retained signed projections"
+    acceptance:
+      - All tests T01-T16 pass in CI.
+      - A newly published listing is searchable on a relay within 5 seconds p95 and a tombstoned one is gone within 5 seconds p95.
+      - No indexed row contains a geohash longer than 5 characters, an unsigned projection or any P1-P4 field (privacy suite).
+  import_export_backup_rollback:
+    requirements:
+      - The index is derived data; it is neither exported as its own section nor imported and is regenerated from retained signed projections.
+      - Restoring a vault from export or a relay from backup is followed by a rebuild so the index matches restored sources.
+      - Schema changes to the FTS tokenizer or columns are applied by building a new shadow index and swapping, never in place.
+    export: "No export section: SearchDocument is derived from signed projections that already travel in the user's listings and retained-records sections (CTR-IOX-001 IOX-5, IOX-6)."
+    import: "Nothing is imported directly; imported signed projections are verified and indexed through the normal events."
+    backup: "Vault export is the primary backup (IOX-6); a relay backup follows IOX-3 and IOX-7; after restore the index is rebuilt with scope all."
+    migration_rollback: "Tokenizer or column changes use a shadow FTS table and swap; rollback is redeploying the previous release and running rebuild (at most 30 s in a vault, 10 min per 100 000 documents on a relay)."

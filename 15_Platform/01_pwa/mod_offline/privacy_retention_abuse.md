@@ -1,35 +1,52 @@
-# PS-116-07 — privacy retention abuse
+# PS-116-07 — Privacy, retention and abuse: Offline outbox
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-07. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S01.M01 Offline outbox](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/platform/offline` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-116-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-116-07.R01** Queued payloads are signed statements or relay commands that can contain P2 content; they stay in the vault, P2 statements are sent only as end-to-end encrypted envelopes to the listed participants (CTR-PRV-001 PRV-5), and P3/P4 data is never queued.
+- **PS-116-07.R02** Unsent entries expire after 7 days with a prompt, entries awaiting a peer after 30 days; expired entries are not sent.
+- **PS-116-07.R03** A hostile page script or another principal on a shared browser profile must not be able to read or send a principal's entries, and the PWA sends no telemetry (CTR-OBS-001 OBS-7).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- OutboxEntry: P2 vault-local; contains signed statements or relay command inputs but never private keys, relay tokens or P3 exact home address.
+- meta.storageMarker and lastExportAt: P0 local bookkeeping.
+- relayReceipt.relayTime: relay-clock evidence only, not a trusted timestamp.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- completed and peer_accepted entries: deleted 60 s after the state is reached (the domain record keeps its own provenance); discarded: immediately; expired: shown for 24 h then deleted; absolute maximum 30 days plus 24 h on the device.
+- Locking or signing out keeps entries so queued work is not lost; 'Erase vault' and F10.S01.M04 deletion remove all entries of the principal.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Shared browser profile: another principal reads or sends a previous principal's queued statements | entries bound to principal DID; list and delivery filter by the unlocked principal; vault locked by default after 5 minutes idle |
+| T02 | Stale destructive intent delivered weeks later | 7-day expiry with day-6 prompt; expectedRevision conflict detection for relay commands; statements carry their own validity expiry checked by the receiver |
+| T03 | Queue growth fills device storage or causes local denial of service | caps of 200 entries, 262144 bytes per payload and 5 MiB per principal; PLATFORM_OUTBOX_FULL shown to user |
+| T04 | Script injection reads IndexedDB | strict CSP (script-src 'self', no inline scripts, no third-party scripts); payloads contain no private keys or tokens so impact is limited to the user's own queued content |
+| T05 | Relay lies about delivery or peer acceptance | transport_acknowledged is only a relay receipt; peer_accepted requires a verified signed acknowledgement by the counterparty key; relay receipt time is never trusted as event time |
+| T06 | Forked vault produces two conflicting signed promises | receiving module detects the fork, outbox entry becomes conflict, coordination is frozen for renegotiation and nothing is merged by last-writer-wins |
+
+**Abuse controls**
+- Relays rate limit written commands under their own policy (RATE_LIMITED is retryable with retryAfterMs); the outbox honors it and cannot bypass limits.
+- The client never retries after a non-retryable error, which prevents hammering a relay with a failing entry.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-116-09.T10 | abuse | PS-116-05.R01, PS-116-07.R03 | principal P2 unlocks a vault profile holding P1 entries | list and delivery return none of P1's entries; P1 entries keep their state |
+| TEST-PS-116-09.T12 | integration | PS-116-07.R01, PS-116-07.R02 | clock advanced 6 d, 7 d, then a transport_acknowledged entry advanced 30 d | day-6 prompt; unsent entry expired at 7 d and never sent; unconfirmed entry expired at 30 d |
+| TEST-PS-116-09.T13 | abuse | PS-116-07.R01, PS-116-07.R03 | inspect network traffic and script injection under CSP during a full session | no telemetry request; inline script blocked; P3/P4 fields rejected at enqueue |
+| TEST-PS-116-09.T16 | integration | PS-116-04.R01, PS-116-07.R03, PS-116-03.R03 | two vaults send conflicting acceptances for one reservation; receiving module reports the fork | entry becomes conflict, affected coordination frozen, no winner chosen |
+
+## Dependencies
+
+Module depends on: F15.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-PRV-001, CTR-UX-001, CTR-OBS-001, CTR-CAP-001, CTR-FED-001, CTR-IOX-001, CTR-EVT-001. Predecessor: [domain_schema.md](domain_schema.md).

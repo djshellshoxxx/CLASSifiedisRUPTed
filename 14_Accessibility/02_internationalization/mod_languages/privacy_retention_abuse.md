@@ -1,35 +1,46 @@
-# PS-113-07 — privacy retention abuse
+# PS-113-07 — Privacy, retention and abuse: Languages
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-113-07. **Owner:** [14_Accessibility/02_internationalization/mod_languages](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_languages. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S02.M01 Languages](SPEC.md) · **Scope:** MVP · **Code:** `packages/i18n/src/internationalization/languages` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for languages within 02_internationalization. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-113-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-113-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-113-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-113-07.R01** The chosen locale is a mild fingerprinting signal, so it is stored only in the vault and never sent to relays except as the standard Accept-Language header the browser already sends.
+- **PS-113-07.R02** User-provided text is inserted into messages as plain text only, preventing injection through parameters.
+- **PS-113-07.R03** Missing-key diagnostics stay on the device in local diagnostics and are not transmitted.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Locale preference: P3 vault setting.
+- Missing-key diagnostics: P3 local diagnostics, exportable by the user.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Locale setting kept until the user changes it; diagnostics kept 30 days locally (RET-SHORT).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-113-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Injection through message params (HTML or parameter syntax in user text) | params are escaped as text and never re-parsed; React-style text rendering only |
+| T02 | Right-to-left override characters used to spoof text | bidi control characters are stripped from user-visible titles and names at input by the owning feature, and numbers are isolated with FSI and PDI |
+| T03 | Locale-based fingerprinting | no locale telemetry; no locale in URLs; locale only in the vault and the browser's own header |
+
+**Abuse controls**
+- Catalogs are static and reviewed in pull requests; user content can never add or change catalog entries.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-113-09.T07 | abuse | PS-113-07.R02, PS-113-07.R01 | params with <script>, {name} and bidi override characters | rendered as inert text; parameters not re-evaluated; bidi isolated |
+| TEST-PS-113-09.T08 | e2e | PS-113-01.R03, PS-113-02.R03, PS-113-07.R01 | run all routes in en-XA (40 percent expansion) and ar-XB at 320 px | no clipping, overlap or horizontal scroll; layout mirrored; V06 passes |
+| TEST-PS-113-09.T10 | abuse | PS-113-07.R01, PS-113-07.R03, PS-113-05.R03 | capture network traffic during locale switch and diagnostics export | locale not transmitted by the app; diagnostics only in user-initiated export |
+| TEST-PS-113-09.T11 | a11y | PS-113-07.R03, PS-113-03.R03 | axe in each shipped locale and pseudolocale | zero serious or critical findings; lang attributes correct on inline foreign text |
+
+## Dependencies
+
+Module depends on: CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,35 +1,60 @@
-# PS-081-04 — commands queries events
+# PS-081-04 — Commands, queries and events: Data classification model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-081-04. **Owner:** [10_Privacy/02_security_boundaries/mod_model](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_model. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F10.S02.M02 Data classification model](SPEC.md) · **Scope:** MVP · **Code:** `packages/privacy/src/security_boundaries/model` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the commands queries events process for model within 02_security_boundaries. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-081-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-081-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-081-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-081-04.R01** The public surface is the TypeScript package; there are no relay or vault commands, queries or events.
+- **PS-081-04.R02** Errors are returned as Result values with the codes in the errors table, and logging the redaction summary uses only counts and paths.
+- **PS-081-04.R03** The package exposes a test helper assertSinkSafe(value, schema, sink) for module tests.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-081-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| PRIVACY_CLASSIFICATION_MISSING | 500 | no | a schema field or event payload lacks a classification; build fails and runtime treats the field as P3 |
+| PRIVACY_SINK_FORBIDDEN | 403 | no | the data class is not allowed to flow to this sink |
+| PRIVACY_LOCATION_TOO_PRECISE | 422 | no | location precision is finer than L2 for a public sink |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Library module. Package surface (packages/privacy/src/security_boundaries/model): classOf(path, map), maxClass(a, b), canFlow(cls, sink), capLocation(level, sink), redactForLog / redactForEvent / redactForFederation / redactForNotification / redactForProjection / redactForExport(record, schema, ctx), labelKey(cls), loadClassification(schemaId), assertSinkSafe(value, schema, sink). No relay or vault commands, no events.
+
+### Example
+
+```
+redactForLog({ id: "0192…", title: "Bike", address: "Main St 4", note: "mail me a@b.example" }, schema "classrup.bazaar.listing/v1", ctx)
+=> { id: "0192…", title: "Bike", address: "[redacted:P3]", note: "mail me [email]" } with dropped ["address"]
+redactForFederation({ …, location: { lat: 52.5208, lon: 13.4095 } }) => location snapped to geohash5 "u336y" (L2) or refused if opt-in is missing
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-081-09.T07 | contract | PS-081-04.R01, PS-081-04.R02, PS-081-09.R02 | run the public API surface through the contract checker | signatures and error codes match the errors table |
+| TEST-PS-081-09.T08 | unit | PS-081-04.R03, PS-081-02.R02 | assertSinkSafe on a module test with an unsafe value | assertion fails with path list and no values in the message |
+
+## Dependencies
+
+Module depends on: CTR-PRV-001, CTR-EVT-001, CTR-FED-001, CTR-ERR-001, CTR-IOX-001, CTR-OBS-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

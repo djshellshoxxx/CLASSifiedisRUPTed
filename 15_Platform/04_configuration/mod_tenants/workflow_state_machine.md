@@ -1,35 +1,50 @@
-# PS-125-03 — workflow state machine
+# PS-125-03 — Workflow state machine: Tenants
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-125-03. **Owner:** [15_Platform/04_configuration/mod_tenants](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_tenants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S04.M03 Tenants](SPEC.md) · **Scope:** MVP · **Code:** `packages/platform/src/configuration/tenants` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for tenants within 04_configuration. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-125-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-125-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-125-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-125-03.R01** A tenant moves provisioning to active once an operator key is set and bootstrap completes, and any transition not listed is refused with CONFLICT_STATE.
+- **PS-125-03.R02** Suspension is reversible; archiving is final and is allowed only from suspended to prevent accidents.
+- **PS-125-03.R03** Status changes are written with their event in one transaction.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Tenant lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **provisioning**; terminal **archived**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-125-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| provisioning -> active | platform.tenant.create completes with a valid operator key | emits platform.tenant.created |
+| active -> suspended | platform.tenant.change_status by operator or admin with a reason | relay refuses writes with PLATFORM_TENANT_SUSPENDED; emits platform.tenant.status_changed |
+| suspended -> active | platform.tenant.change_status by operator or admin | emits platform.tenant.status_changed |
+| suspended -> archived | platform.tenant.change_status by admin after 30 days suspended | read-only export remains for 90 days; emits platform.tenant.status_changed |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> provisioning
+  provisioning --> active: platform.tenant.create completes with a valid operator key
+  active --> suspended: platform.tenant.change_status by operator or admin with a reason
+  suspended --> active: platform.tenant.change_status by operator or admin
+  suspended --> archived: platform.tenant.change_status by admin after 30 days suspended
+  archived --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- Archiving requires the tenant to have been suspended for at least 2592000000 ms (30 days); archived tenants are purged from the relay 7776000000 ms (90 days) after archiving.
+- Configuration cache TTL 30000 ms, invalidated immediately on change.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-125-09.T03 | property | PS-125-03.R01, PS-125-03.R02 | random sequences of status commands | only declared transitions occur; archived never changes; archive requires 30 days suspended |
+| TEST-PS-125-09.T04 | integration | PS-125-03.R03, PS-125-04.R02, PS-125-06.R03 | status change with injected event-insert failure | transaction rolled back, no status change visible, no event |
+
+## Dependencies
+
+Module depends on: F15.S02.M03, F15.S04.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-IOX-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

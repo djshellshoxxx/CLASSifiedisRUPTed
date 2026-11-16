@@ -1,0 +1,301 @@
+id: F03.S01.M02
+scope: MVP
+summary: >-
+  The provider's availability calendar lives in the provider's local vault. It holds weekly recurring windows and dated
+  exceptions in the provider's IANA time zone and turns them into DST-safe UTC slots. While a quote is outstanding the
+  provider vault places a time-limited slot hold; holds, and the conflict checks that protect them, exist only in that one
+  vault (ADR-0016 section 5). An optional signed availability summary lets clients see candidate windows; it is advisory
+  and reserves nothing. Quotes and bookings are F03.S02.M01.
+responsibilities:
+  - Own AvailabilityCalendar (weekly rules, exceptions, buffers, notice and horizon) and SlotHold records in the provider vault.
+  - Expand local wall-clock rules into UTC slots with the bundled IANA tz database, skipping nonexistent local times and resolving repeated local times to the first occurrence.
+  - Prevent double allocation inside the provider vault - a slot overlapping a held or committed slot (including buffers) is refused.
+  - Sign and publish an optional availability summary statement (classrup.services.availability/v1, expiry 14 days) to user-selected relays or directly to a client.
+non_responsibilities:
+  - Quote, booking and cancellation statements (F03.S02.M01) - this module only holds and commits slots on its command.
+  - Cross-vault guarantees - a client or relay copy of the summary can be stale; only the provider's signed quote or confirmation promises a slot.
+  - Rental calendars (F05.S01.M01).
+  - "Future: external calendar import (ICS/CalDAV) and multi-staff providers."
+depends_on: [F03.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a provider in Berlin, I set Monday to Friday 09:00-17:00 local with 15 minute buffers and my clients see correct local times in their own zone.
+  - As a provider, I add a closed exception for a holiday and an extra Saturday window and see the affected quotes flagged.
+  - As a client, I see candidate windows from the provider's summary and understand they are not reserved until the provider's quote.
+edge_cases:
+  - Spring-forward day (Europe/Berlin 2027-03-28) - a 02:30 local slot does not exist; it is skipped and no slot is shifted silently.
+  - Fall-back day (Europe/Berlin 2026-10-25) - 02:30 occurs twice; only the first occurrence (UTC+2) is generated, the repeated hour offers no extra slot.
+  - Provider changes time zone; existing holds and bookings keep their UTC instants and display in the new zone, new slots use the new zone.
+  - The bundled tz database changes a zone rule; affected future slots are regenerated and holds whose local time moved are marked needs_reconfirmation.
+  - Two quotes are issued for overlapping slots at the same moment in two tabs; a Web Locks lock serializes them and the second gets SERVICES_SLOT_UNAVAILABLE.
+  - Hold expires while the client's acceptance is in transit; the provider vault refuses to confirm if the slot has been re-held, and the client sees a declined statement.
+  - Client device clock is wrong; the summary carries UTC instants and the signer's zone, so display remains correct, while expiry uses the receiver's own clock plus a stated 5 minute tolerance.
+ux:
+  screens:
+    - "Weekly planner: seven day rows with time windows, slot length selector (15, 30, 45, 60, 90, 120 minutes), buffer before and after (0 to 120 minutes), minimum notice (0 to 14 days) and horizon (1 to 180 days)."
+    - "Exceptions list: closed dates and extra windows, each shown in provider local time with the UTC offset in effect that day."
+    - "Slot preview: next 14 days of generated slots, with a banner on DST change days stating the lost or repeated hour."
+  states: [loading, empty, saved-local, publish-prepared, publish-acknowledged, tz-warning, conflict]
+  a11y:
+    - Time inputs are native time fields with visible labels that name the zone (for example Monday start, Europe/Berlin).
+    - DST banners are role=status text, not colour alone.
+    - Slot grid is a keyboard-navigable table with row and column headers; each slot button has an accessible name with weekday, local time and offset.
+processes:
+  domain_schema:
+    requirements:
+      - An AvailabilityCalendar stores the provider, IANA zone, weekly windows, exceptions, buffers, notice, horizon and tz database version; slots are derived, never stored as local strings.
+      - A SlotHold stores UTC start and end, the quote it serves, the holder, an expiry and a status, and is a P2 record kept only in the provider vault with RET-SHORT after it ends.
+      - Calendar rules are P3 in the vault; only the signed summary (windows, no client names, no hold data) is P1 and leaves the device on provider action.
+    entities:
+      - name: AvailabilityCalendar
+        schema: classrup.services.availability/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — vault tenant scope"
+          - "providerId: actorId — local principal"
+          - "offeringId?: uuidv7 — ref F03.S01.M01 ServiceOffering; absent means provider-wide"
+          - "timeZone: string — IANA zone name known to the bundled tz database"
+          - "tzdbVersion: string — version of the bundled IANA database used to expand rules, for example 2026b"
+          - "weeklyRules: WeeklyRule[] — 0..28 items {isoWeekday 1..7, startLocal HH:mm, endLocal HH:mm, slotMinutes 15..240}; windows on one day must not overlap"
+          - "exceptions: Exception[] — 0..200 items {localDate YYYY-MM-DD, kind closed | open_extra, windows? }"
+          - "bufferBeforeMinutes: int — 0..120"
+          - "bufferAfterMinutes: int — 0..120"
+          - "minNoticeMinutes: int — 0..20160"
+          - "horizonDays: int — 1..180"
+          - "summaryCid?: string — cid of the last signed summary statement"
+          - "syncState: map — per destination {state: prepared | transport_acknowledged | peer_accepted | refused, at}"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - weeklyRules windows on the same weekday never overlap and each window length is a multiple of slotMinutes.
+          - timeZone is always a valid IANA name; offsets are never stored as fixed numbers.
+          - Derived slot start instants are unique per calendar and ordered by UTC time.
+      - name: SlotHold
+        schema: classrup.services.slot_hold/v1
+        storage: device
+        privacy: P2
+        retention: RET-SHORT
+        fields:
+          - "id: uuidv7 — primary key"
+          - "calendarId: uuidv7 — ref AvailabilityCalendar"
+          - "startUtc: timestamp — RFC 3339 UTC, slot start"
+          - "endUtc: timestamp — RFC 3339 UTC; endUtc > startUtc; length equals a multiple of 15 minutes"
+          - "quoteId?: uuidv7 — ref F03.S02.M01 ServiceQuote that this hold serves"
+          - "holderId: actorId — client principal the quote was issued to"
+          - "status: enum — held | committed | released | expired"
+          - "expiresAt: timestamp — holdAt + 15 min default, range 5 min..72 h (quote validity)"
+          - "needsReconfirmation: boolean — set when a tz database change moved the local time"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - No two holds with status held or committed on one calendar overlap once buffers are applied.
+          - A committed hold keeps its UTC interval even if later rule changes remove the slot from the generated set.
+          - expiresAt is local-clock based; a hold never outlives its quote validity.
+    sql: |
+      CREATE TABLE services_slot_hold (
+        id TEXT PRIMARY KEY, calendar_id TEXT NOT NULL, start_utc TEXT NOT NULL, end_utc TEXT NOT NULL,
+        status TEXT NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX services_slot_hold_range ON services_slot_hold(calendar_id, status, start_utc, end_utc);
+  validation_rules:
+    requirements:
+      - Calendar input is validated strictly; zone names are checked against the bundled tz database, not against the device locale.
+      - Slot holds are validated for overlap including buffers, horizon, notice and exceptions before they are stored.
+      - Every violation maps to one stable error code with a localized message key.
+    rules:
+      - "V01 | timeZone is a canonical IANA name present in the bundled tz database | SERVICES_TZ_UNKNOWN"
+      - "V02 | weeklyRules windows are valid HH:mm, startLocal < endLocal, no overlap on a weekday, length multiple of slotMinutes | VALIDATION_FAILED"
+      - "V03 | buffers within 0..120, notice within 0..20160, horizon within 1..180 | VALIDATION_FAILED"
+      - "V04 | requested slot start is a generated slot at least minNoticeMinutes from now and within horizonDays | SERVICES_SLOT_UNAVAILABLE"
+      - "V05 | requested interval plus buffers overlaps no held or committed interval | SERVICES_SLOT_UNAVAILABLE"
+      - "V06 | a client holds at most 3 active holds and a calendar has at most 50 active holds | SERVICES_HOLD_LIMIT"
+      - "V07 | exceptions has at most 200 items and each localDate is within the horizon plus 30 days | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - A slot hold follows held to committed, released or expired; committed can only be released by a booking cancellation.
+      - Hold expiry is evaluated against the provider vault clock at command time and by a local sweep, so a stale hold can never block a slot after its expiry.
+      - Commit is atomic with the booking confirmation written by F03.S02.M01 inside one IndexedDB transaction.
+    machines:
+      - entity: SlotHold
+        initial: held
+        terminal: [released, expired]
+        transitions:
+          - "held -> committed | services.slot.commit called by the quote module on acceptance | hold not expired and no overlap; emits services.slot.committed"
+          - "held -> released | services.slot.release, quote declined, withdrawn or expired | emits services.slot.released"
+          - "held -> expired | local sweep at expiresAt | emits services.slot.released with reason expired"
+          - "committed -> released | booking cancelled | emits services.slot.released with reason booking_cancelled"
+    timeouts:
+      - "Hold expiry sweep runs at app start, on every calendar command and every 30 s while the PWA is open; a hold past expiresAt is treated as expired by every read even before the sweep runs."
+  commands_queries_events:
+    requirements:
+      - Calendar and slot commands are vault-local; only publish_summary produces a signed statement (classrup.services.availability/v1).
+      - Every command writes its local events in the same IndexedDB transaction as the state change.
+      - The module consumes booking and quote outcome events to release held or committed slots.
+    commands:
+      - name: services.calendar.set_rules
+        capability: services.calendar.set_rules
+        input: "[vault-local] { calendarId?, offeringId?, timeZone, weeklyRules[], bufferBeforeMinutes, bufferAfterMinutes, minNoticeMinutes, horizonDays, expectedRevision? }"
+        output: "{ calendarId, revision, affectedHoldIds[] }"
+        errors: [VALIDATION_FAILED, SERVICES_TZ_UNKNOWN, CONFLICT_REVISION]
+        emits: [services.availability.changed]
+        idempotent: true
+      - name: services.calendar.add_exception
+        capability: services.calendar.set_rules
+        input: "[vault-local] { calendarId, expectedRevision, exception }"
+        output: "{ calendarId, revision, affectedHoldIds[] }"
+        errors: [NOT_FOUND, VALIDATION_FAILED, CONFLICT_REVISION]
+        emits: [services.availability.changed]
+        idempotent: true
+      - name: services.calendar.remove_exception
+        capability: services.calendar.set_rules
+        input: "[vault-local] { calendarId, expectedRevision, localDate }"
+        output: "{ calendarId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION]
+        emits: [services.availability.changed]
+        idempotent: true
+      - name: services.calendar.publish_summary
+        capability: services.calendar.publish_summary
+        input: "[statement classrup.services.availability/v1 signed with the provider device key, expiry 14 days] { calendarId, destinations[] (relay ids or client ids, max 5) }"
+        output: "{ summaryCid, syncState }"
+        errors: [NOT_FOUND, PRECONDITION_FAILED, DEPENDENCY_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: services.slot.hold
+        capability: services.slot.hold
+        input: "[vault-local] { calendarId, startUtc, durationMinutes, holderId, quoteId?, ttlMs? (default 900000, max 259200000) }"
+        output: "{ holdId, expiresAt }"
+        errors: [NOT_FOUND, SERVICES_SLOT_UNAVAILABLE, SERVICES_HOLD_LIMIT, VALIDATION_FAILED]
+        emits: [services.slot.held]
+        idempotent: true
+      - name: services.slot.release
+        capability: services.slot.hold
+        input: "[vault-local] { holdId, expectedRevision }"
+        output: "{ holdId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [services.slot.released]
+        idempotent: true
+      - name: services.slot.commit
+        capability: services.slot.hold
+        input: "[vault-local, called in the same transaction as booking confirmation] { holdId, expectedRevision }"
+        output: "{ holdId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, EXPIRED, SERVICES_SLOT_UNAVAILABLE]
+        emits: [services.slot.committed]
+        idempotent: true
+    queries:
+      - name: services.calendar.list_slots
+        capability: services.calendar.read_own
+        input: "[vault-local] { calendarId, fromDate, toDate (≤ 31 days after fromDate), durationMinutes }"
+        output: "{ slots: [{ startUtc, endUtc, startLocal, utcOffsetMinutes, state: free | held | committed }] (≤ 2000) }"
+        errors: [NOT_FOUND, VALIDATION_FAILED]
+      - name: services.calendar.get
+        capability: services.calendar.read_own
+        input: "[vault-local] { calendarId }"
+        output: "{ calendar: AvailabilityCalendar }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: services.availability.changed, privacy: P3, payload: "{ calendarId, providerId, revision, affectedHoldIds[] }"}
+      - {type: services.slot.held, privacy: P2, payload: "{ holdId, calendarId, startUtc, endUtc, expiresAt, quoteId? }"}
+      - {type: services.slot.committed, privacy: P2, payload: "{ holdId, calendarId, startUtc, endUtc }"}
+      - {type: services.slot.released, privacy: P2, payload: "{ holdId, calendarId, reason }"}
+    events_consumed:
+      - {type: services.quote.declined, effect: "release the hold of the quote"}
+      - {type: services.quote.expired, effect: "release the hold of the quote"}
+      - {type: services.booking.cancelled, effect: "release the committed hold of the booking and free the interval"}
+    errors:
+      - "SERVICES_TZ_UNKNOWN | 422 | no | time zone name is not in the bundled tz database"
+      - "SERVICES_SLOT_UNAVAILABLE | 409 | no | slot is not generated, too soon, too far, or overlaps a hold, booking or buffer"
+      - "SERVICES_HOLD_LIMIT | 409 | no | too many active holds for this client or calendar"
+    example: |
+      vault command services.calendar.set_rules
+      { "timeZone": "Europe/Berlin", "weeklyRules": [{ "isoWeekday": 1, "startLocal": "09:00", "endLocal": "17:00", "slotMinutes": 60 }],
+        "bufferBeforeMinutes": 15, "bufferAfterMinutes": 15, "minNoticeMinutes": 1440, "horizonDays": 60 }
+      -> { "calendarId": "0192f3b0-0001-7000-8000-000000000001", "revision": 1, "affectedHoldIds": [] }
+      vault command services.slot.hold { "calendarId": "0192f3b0-0001-…", "startUtc": "2027-03-29T07:00:00.000Z", "durationMinutes": 60, "holderId": "did:key:z6Mk…" }
+      -> { "holdId": "0192f3b0-0002-…", "expiresAt": "2026-11-04T10:15:00.000Z" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the unlocked local principal who owns the calendar may run any command or query in this module.
+      - The signed summary is accepted by receivers only when its signature verifies against the provider key named in the offering; otherwise it is quarantined with a reason.
+      - No relay role is involved; a relay may refuse to host the summary by its own policy, which changes only the sync state.
+    capabilities:
+      - "services.calendar.set_rules | principal | calendar.providerId = local principal"
+      - "services.calendar.publish_summary | principal | calendar.providerId = local principal; destination relay accepts the signed upload by its own policy"
+      - "services.calendar.read_own | principal | calendar.providerId = local principal"
+      - "services.slot.hold | principal | calendar.providerId = local principal; holder is a known counterparty and not blocked locally"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent through local command ids and hold creation is atomic with its overlap check.
+      - Concurrent holds are serialized by a Web Locks lock per calendar; no distributed lock exists or is claimed.
+      - A crash between a hold and its event leaves neither (single IndexedDB transaction).
+    idempotency: "Local command id stored 24 h; replay of slot.hold with the same id returns the same holdId; summary statements are idempotent by cid."
+    concurrency: "Web Locks lock services-calendar-<id> around every hold, commit and rule change; expectedRevision on rule changes; two devices of one provider that diverge are detected by the signed seq/prev chain and frozen for explicit merge, never last-writer-wins for commitments."
+    retries: "Summary upload retries 1 s, 2 s, 4 s, 8 s up to 8 attempts; local commands are not retried automatically."
+    offline: "Everything except summary delivery works offline; delivery shows prepared, transport_acknowledged or peer_accepted and never more."
+    partial_failure: "If rule expansion fails for one DST edge case the previous generated set stays in force and the UI reports the failing date; if relay upload fails the calendar change is still committed locally."
+  privacy_retention_abuse:
+    requirements:
+      - Calendar rules and holds never leave the vault except the signed summary, which contains windows only and no client identities.
+      - Summaries have a 14 day expiry so stale availability disappears from receivers' vaults.
+      - Slot hoarding by clients is limited by per-client and per-calendar hold caps and short expiries.
+    data:
+      - "AvailabilityCalendar: P3 in the vault; summary: P1 signed projection."
+      - "SlotHold: P2, holder identity stays local and is never in the summary."
+    retention:
+      - "Holds: RET-SHORT, purged 30 days after release or expiry."
+      - "Calendar: RET-STANDARD until vault deletion; expired summaries are dropped by receivers after expiry plus 24 h."
+    threats:
+      - "T01 | Client hoards slots with repeated quote requests | at most 3 active holds per client, 50 per calendar, default expiry 15 minutes, provider may block locally"
+      - "T02 | Summary reveals routine and when the provider is away | summary windows can be coarsened to day parts by the provider and expire in 14 days; the UI states that copies cannot be recalled"
+      - "T03 | Forged or replayed summary attributed to a provider | signature over JCS bytes, author must equal the offering provider key, expiry enforced by the receiver clock with 5 minute tolerance"
+      - "T04 | DST confusion produces a double booking | slots are UTC intervals, overlap checks use UTC, property test across all zones with DST changes"
+    abuse_controls:
+      - "Receivers apply per-sender quotas (20 summaries per day per author) and drop excess."
+      - "Relay hosting policy may rate limit uploads; the module surfaces refusal in the sync state."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); local counters and the diagnostics log stay in the vault.
+      - Slot generation for 31 days meets p95 ≤ 50 ms on a mid-range phone.
+      - Hold and commit commands meet p95 ≤ 100 ms with 5 000 stored holds.
+    metrics:
+      - "classrup_services_slot_holds_total{outcome=held|committed|released|expired} (local counter)"
+      - "classrup_services_slot_conflicts_total (local counter)"
+    logs:
+      - "info slot.held {holdId, calendarId, correlationId} in the local diagnostics log - no client identity."
+    budgets:
+      - "list_slots for 31 days p95 ≤ 50 ms; hold/commit p95 ≤ 100 ms; set_rules p95 ≤ 150 ms."
+      - "Expiry sweep over 5 000 holds ≤ 100 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - DST behaviour is covered by property tests over every zone in the bundled database for the years 2026 to 2028.
+      - Statement and event payloads are checked against the schema registry.
+    fixtures: "Calendar in Europe/Berlin Mon-Fri 09:00-17:00 slot 60 min; America/New_York calendar; Pacific/Auckland calendar; fixed clock 2026-11-04T10:00:00Z; tz database 2026b."
+    tests:
+      - "T01 | unit | 01.R01,01.R03 | expand Monday rule on 2027-03-28 and 2026-10-25 in Europe/Berlin | nonexistent 02:30 skipped; repeated 02:30 produces one slot at UTC+2; slots stored as UTC"
+      - "T02 | unit | 02.R01,02.R02,02.R03 | each rule V01–V07 violated | documented code returned and nothing stored"
+      - "T03 | property | 01.R01,02.R02,03.R02,09.R02 | random rules in every zone for 2026-2028 | derived slots are unique, ordered, non-overlapping, and no slot falls in a DST gap"
+      - "T04 | unit | 01.R02,03.R01 | hold, commit, release, expire transitions plus undeclared ones | only declared transitions succeed; others CONFLICT_STATE"
+      - "T05 | integration | 03.R03,06.R03 | crash injected between commit and booking confirmation | both or neither persisted"
+      - "T06 | integration | 02.R03,06.R02 | two tabs hold overlapping slots simultaneously | exactly one succeeds, other SERVICES_SLOT_UNAVAILABLE"
+      - "T07 | contract | 04.R01,04.R02,09.R01,09.R03 | each command and the summary statement | outputs, events and statement validate against registry schemas; signature verifies"
+      - "T08 | integration | 04.R03 | quote declined, expired and booking cancelled events delivered twice | holds released once; duplicates skipped"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | foreign principal command; summary with wrong author key; relay refusal | FORBIDDEN; summary quarantined; sync state refused without local change"
+      - "T10 | abuse | 07.R03 | one client requests 4 holds | 4th returns SERVICES_HOLD_LIMIT"
+      - "T11 | integration | 06.R01,07.R01,07.R02 | replay hold command; inspect summary payload; advance clock 15 days | same holdId; summary has no client identity; expired summary dropped"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 5 000 holds, mobile throttled profile | generation p95 ≤ 50 ms, hold p95 ≤ 100 ms, no network requests"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, change tz database version | calendars round-trip; moved holds flagged needs_reconfirmation"
+      - "T14 | a11y | 01.R03 | slot grid and DST banner with screen reader and keyboard | all slots reachable, banner announced, axe zero serious issues"
+    acceptance:
+      - All tests T01–T14 pass in CI.
+      - Property test finds no overlapping committed intervals and no slot inside a DST gap for any zone in 2026-2028.
+      - Hold and commit work fully offline and the UI never shows peer_accepted without a signed acknowledgement.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains calendars, exceptions and holds; expired holds are exported only as history.
+      - Import validates the zone against the bundled tz database and flags holds whose local time moved.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section services.calendars in classrup-export/v1; one line per calendar and per hold (schemas classrup.services.availability/v1 and classrup.services.slot_hold/v1)."
+    import: "Calendars import as saved-local without publishing; held holds with expiresAt in the past import as expired; committed holds import as is."
+    backup: "Vault export is the primary backup (IOX-6); relays hold only the signed summary (IOX-7)."
+    migration_rollback: "Additive fields only in v1; the stored tzdbVersion lets a rollback regenerate slots with the earlier database without losing committed intervals."

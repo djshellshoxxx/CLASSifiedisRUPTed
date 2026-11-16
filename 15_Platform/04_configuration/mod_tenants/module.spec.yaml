@@ -1,0 +1,303 @@
+# F15.S04.M03 Tenants (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
+id: F15.S04.M03
+scope: MVP
+summary: >-
+  A tenant is relay-local configuration: a community hosted by one relay, with its allowed currencies,
+  jurisdiction profile, default locale, limits and operator assignment. A relay may host several tenants, and a
+  single-community relay has one fixed tenant created at bootstrap (CTR-ID-001 ID-6). Under ADR-0016 the vault
+  has no tenants and no accounts; it has local settings of the same shape (default locale, preferred currencies,
+  local limits) that never leave the device. Tenant configuration governs only what that relay hosts, and
+  "suspended" means suspended on that relay (CTR-CAP-001 CAP-9). Operators are device keys (did:key), assigned by
+  the relay configuration, not user accounts in a central database.
+responsibilities:
+  - Own the Tenant record on a relay with slug, display name, status, allowed currencies (1..20), jurisdiction profile id, default locale, limits and operator device keys (1..10), with revision-based concurrency.
+  - Bootstrap the first tenant from the relay CLI with filesystem access (relay tenant bootstrap --slug <slug> --operator <did:key>), and allow an admin operator to create further tenants on a multi-community relay (up to 50 per relay).
+  - Provide the configuration query used by other modules to apply currencies, locale and limits, with a 30 s cache and invalidation on change.
+  - Own the vault-local LocalSettings record with the same settings shape, stored only in the user's vault and included in the user's export.
+  - Emit platform.tenant.created and platform.tenant.configured, plus platform.tenant.status_changed, with payloads that let consumers react without reading the tenant.
+non_responsibilities:
+  - Registering currencies and validating that a code is a registered asset (F09.S03.M01 consumes tenant events and enforces membership at use time).
+  - Resolving jurisdiction profiles to retention and legal rules (F18.S01.M01); this module stores only the profile id and F18 falls back to the generic profile when the id is unknown.
+  - Message catalogs and locale negotiation (F14.S02.M01 falls back to en for an unsupported default locale).
+  - Role assignment records and authorization decisions (F16.S01.M01 consumes the operator list from tenant events).
+  - Flag values (F15.S04.M02) and relay process configuration (F15.S02.M01).
+  - "Future: per-tenant branding and custom domains; Future: signed tenant directory shared between federated relays."
+depends_on: [F15.S02.M03, F15.S04.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-IOX-001, CTR-OBS-001]
+user_stories:
+  - As a relay operator, I can start a relay for my town, name the community, choose EUR as the only currency, set the German default locale and limits, and name my own device key as operator.
+  - As a relay operator running two communities, I can configure each with different currencies and limits and suspend one without affecting the other.
+  - As a member, I can set my own default language and preferred currencies on my device, and these settings are not shared with any relay.
+  - As a member, I can see which currencies, jurisdiction profile and limits the selected relay applies before I publish.
+edge_cases:
+  - Shrinking allowedCurrencies while listings in a removed currency exist; allowed, existing records keep their currency, consumers refuse new records in removed currencies, and the change event carries the removed codes.
+  - Removing the last operator key; refused with PLATFORM_TENANT_LAST_OPERATOR so the community cannot become unmanageable.
+  - Two operators edit settings at once; the second gets CONFLICT_REVISION with currentRevision.
+  - A tenant is suspended; the relay refuses writes for it with PLATFORM_TENANT_SUSPENDED while reads and exports stay available, and other tenants and all vaults are unaffected.
+  - The slug is already used on this relay; refused with PLATFORM_TENANT_SLUG_TAKEN.
+  - Bootstrap is run twice with the same arguments; the second run finds the existing tenant and returns it unchanged (idempotent), a different slug on a single-tenant relay is refused.
+  - A limit is set above its allowed maximum (for example maxUploadBytes 50 MiB); refused with VALIDATION_FAILED and the maximum in fields.
+  - The vault default locale is unsupported by the build; the app falls back to en and shows a notice, no error.
+ux:
+  screens:
+    - "Operator console > Community: form for display name, currencies (chip input with ISO code check), jurisdiction profile (select), default locale (select), limits table with defaults and maximums, operator keys list with add and remove."
+    - "Settings > Preferences (vault): language, preferred currencies, display options; clearly marked 'Stored only on this device'."
+    - "Relay details sheet (client): shows the selected relay's community name, allowed currencies, jurisdiction profile id, limits and status."
+  states: [loading, ready, saving, conflict, suspended, archived, offline-read-only, validation-error]
+  a11y:
+    - Every field has a visible label with units (for example bytes shown as MiB) and error messages are linked with aria-describedby.
+    - Currency chips are removable by keyboard with accessible names, and status changes are announced via aria-live polite.
+    - Destructive actions (suspend, archive, remove operator) use a confirmation dialog with focus on the cancel action.
+processes:
+  domain_schema:
+    requirements:
+      - A Tenant stores slug, display name, status, allowed currencies, jurisdiction profile id, default locale, limits and operator keys with the base record fields of CTR-ID-001 (id is the tenantId).
+      - Tenant data is public hosting information (P0) except operator device keys, which are public keys and so also P0, and is retained as RET-STANDARD while the community exists.
+      - LocalSettings is the vault's own preference record with the same settings shape, P1, stored only on the device and exported with the vault.
+    entities:
+      - name: Tenant
+        schema: classrup.platform.tenant/v1
+        storage: relay
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key, used as tenantId everywhere on this relay"
+          - "slug: string — ^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$, unique per relay"
+          - "displayName: string — 1..80 characters, plain text"
+          - "status: enum — provisioning | active | suspended | archived"
+          - "allowedCurrencies: string[] — 1..20 distinct codes matching ^[A-Z0-9]{2,12}$ (ISO 4217 alpha-3 or configured asset code)"
+          - "jurisdictionProfile: string — ^[a-z0-9_-]{2,40}$, default 'generic'"
+          - "defaultLocale: string — BCP 47 tag matching ^[a-z]{2,3}(-[A-Z]{2})?$, default 'en'"
+          - "limits: json — { maxRegisteredDevices 1..1000000 default 10000, maxIndexedListingsPerPublisher 1..1000 default 100, maxUploadBytes 65536..10485760 default 5242880, maxMailboxBytesPerRecipient 1048576..1073741824 default 52428800, maxEnvelopeBytes 4096..1048576 default 262144, requestRatePerMinutePerKey 10..1200 default 120, maxCycleLength 3..6 default 5 }"
+          - "operatorKeys: string[] — 1..10 distinct did:key principals with operator role on this tenant"
+          - "suspendedReason?: string — ≤ 200 characters, shown to clients"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At least one operator key exists while status is provisioning-complete (active, suspended).
+          - slug is unique per relay and immutable after creation.
+          - Every limit stays within its documented minimum and maximum.
+          - A tenant in archived status accepts no writes and no configuration changes.
+      - name: LocalSettings
+        schema: classrup.platform.local_settings/v1
+        storage: device
+        privacy: P1
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key, one record per vault"
+          - "defaultLocale: string — BCP 47 tag, default taken from the browser language, fallback 'en'"
+          - "preferredCurrencies: string[] — 0..20 codes matching ^[A-Z0-9]{2,12}$, used for display and defaults only"
+          - "localLimits: json — { maxLocalAttachmentBytes 65536..10485760 default 5242880, maxOutboxEntries 10..200 default 200 }"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - Exactly one LocalSettings record exists per vault and it is never sent to a relay.
+          - Local limits can only be lower than or equal to the platform maximums (never raise a relay's limits).
+    sql: |
+      CREATE TABLE platform_tenant (
+        id TEXT PRIMARY KEY, slug TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX platform_tenant_slug ON platform_tenant(slug);
+  validation_rules:
+    requirements:
+      - Tenant input is validated strictly; unknown fields are rejected with VALIDATION_FAILED and each violation lists its field path.
+      - Currency, locale and profile values are validated for format here and for registry membership by their owning modules at use time.
+      - Operator assignment rules protect the community from becoming unmanageable.
+    rules:
+      - "V01 | slug matches ^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$ and is not in use on this relay | PLATFORM_TENANT_SLUG_TAKEN"
+      - "V02 | displayName is 1..80 characters of plain text | VALIDATION_FAILED"
+      - "V03 | allowedCurrencies has 1..20 distinct codes matching ^[A-Z0-9]{2,12}$ | VALIDATION_FAILED"
+      - "V04 | defaultLocale matches ^[a-z]{2,3}(-[A-Z]{2})?$ and jurisdictionProfile matches ^[a-z0-9_-]{2,40}$ | VALIDATION_FAILED"
+      - "V05 | each limit is within its documented range | VALIDATION_FAILED"
+      - "V06 | operatorKeys has 1..10 distinct valid did:key Ed25519 principals | VALIDATION_FAILED"
+      - "V07 | revoking an operator leaves at least 1 operator | PLATFORM_TENANT_LAST_OPERATOR"
+      - "V08 | tenant status is active for writes, and configure is not allowed when archived | PLATFORM_TENANT_SUSPENDED"
+      - "V09 | the relay hosts at most 50 tenants | PLATFORM_TENANT_LIMIT"
+      - "V10 | expectedRevision equals the stored revision | CONFLICT_REVISION"
+  workflow_state_machine:
+    requirements:
+      - A tenant moves provisioning to active once an operator key is set and bootstrap completes, and any transition not listed is refused with CONFLICT_STATE.
+      - Suspension is reversible; archiving is final and is allowed only from suspended to prevent accidents.
+      - Status changes are written with their event in one transaction.
+    machines:
+      - entity: Tenant
+        initial: provisioning
+        terminal: [archived]
+        transitions:
+          - "provisioning -> active | platform.tenant.create completes with a valid operator key | emits platform.tenant.created"
+          - "active -> suspended | platform.tenant.change_status by operator or admin with a reason | relay refuses writes with PLATFORM_TENANT_SUSPENDED; emits platform.tenant.status_changed"
+          - "suspended -> active | platform.tenant.change_status by operator or admin | emits platform.tenant.status_changed"
+          - "suspended -> archived | platform.tenant.change_status by admin after 30 days suspended | read-only export remains for 90 days; emits platform.tenant.status_changed"
+    timeouts:
+      - "Archiving requires the tenant to have been suspended for at least 2592000000 ms (30 days); archived tenants are purged from the relay 7776000000 ms (90 days) after archiving."
+      - "Configuration cache TTL 30000 ms, invalidated immediately on change."
+  commands_queries_events:
+    requirements:
+      - Tenant commands are relay commands with Idempotency-Key; LocalSettings commands are vault-local; no command produces a signed statement.
+      - Every tenant command emits its events in the same transaction as the state change, and payloads carry only changed fields and IDs.
+      - The module consumes no events from other modules.
+    commands:
+      - name: platform.tenant.create
+        capability: platform.tenant.create
+        input: "{ slug, displayName, allowedCurrencies, jurisdictionProfile?, defaultLocale?, limits?, operatorKeys } — relay command, admin or local CLI bootstrap"
+        output: "{ tenantId, revision: 1, status: active }"
+        errors: [FORBIDDEN, VALIDATION_FAILED, PLATFORM_TENANT_SLUG_TAKEN, PLATFORM_TENANT_LIMIT]
+        emits: [platform.tenant.created]
+        idempotent: true
+      - name: platform.tenant.configure
+        capability: platform.tenant.configure
+        input: "{ tenantId, expectedRevision, patch: { displayName?, allowedCurrencies?, jurisdictionProfile?, defaultLocale?, limits? } } — relay command, operator"
+        output: "{ tenantId, revision, changed: string[] }"
+        errors: [FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, CONFLICT_REVISION, PLATFORM_TENANT_SUSPENDED]
+        emits: [platform.tenant.configured]
+        idempotent: true
+      - name: platform.tenant.assign_operator
+        capability: platform.tenant.assign_operator
+        input: "{ tenantId, expectedRevision, add?: did[], remove?: did[] } — relay command, admin or an existing operator adding keys; removal needs admin"
+        output: "{ tenantId, revision, operatorKeys }"
+        errors: [FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, CONFLICT_REVISION, PLATFORM_TENANT_LAST_OPERATOR, PLATFORM_TENANT_SUSPENDED]
+        emits: [platform.tenant.configured]
+        idempotent: true
+      - name: platform.tenant.change_status
+        capability: platform.tenant.change_status
+        input: "{ tenantId, expectedRevision, status: active|suspended|archived, reason? } — relay command, operator (suspend, resume) or admin (archive)"
+        output: "{ tenantId, revision, status }"
+        errors: [FORBIDDEN, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: [platform.tenant.status_changed]
+        idempotent: true
+      - name: platform.local_settings.update
+        capability: platform.local_settings.update
+        input: "{ expectedRevision?, patch: { defaultLocale?, preferredCurrencies?, localLimits? } } — vault-local command, actor is the unlocked local principal"
+        output: "{ revision }"
+        errors: [VALIDATION_FAILED, CONFLICT_REVISION]
+        emits: []
+        idempotent: true
+    queries:
+      - name: platform.tenant.get
+        capability: platform.tenant.read_public
+        input: "{ tenantId? | slug? } — relay query, public; defaults to the relay's only tenant"
+        output: "{ id, slug, displayName, status, allowedCurrencies, jurisdictionProfile, defaultLocale, limits, revision } (operator keys included only for operators)"
+        errors: [NOT_FOUND]
+      - name: platform.tenant.list
+        capability: platform.tenant.list
+        input: "{ status?, cursor?, limit ≤ 50 } — relay query, admin"
+        output: "{ items: Tenant[], nextCursor? }"
+        errors: [FORBIDDEN]
+      - name: platform.local_settings.get
+        capability: platform.local_settings.read
+        input: "{ } (no input) — vault-local query"
+        output: "{ defaultLocale, preferredCurrencies, localLimits, revision }"
+        errors: []
+    events_produced:
+      - {type: platform.tenant.created, privacy: P0, payload: "{ tenantId, slug, allowedCurrencies, defaultLocale, jurisdictionProfile, operatorKeys }"}
+      - {type: platform.tenant.configured, privacy: P0, payload: "{ tenantId, changed: string[], allowedCurrencies?, removedCurrencies?, defaultLocale?, jurisdictionProfile?, limits?, operatorKeys?, revision }"}
+      - {type: platform.tenant.status_changed, privacy: P0, payload: "{ tenantId, from, to, reason?, revision }"}
+    events_consumed: []
+    errors:
+      - "PLATFORM_TENANT_SLUG_TAKEN | 409 | no | a tenant with this slug already exists on this relay"
+      - "PLATFORM_TENANT_LAST_OPERATOR | 409 | no | the change would leave the tenant with no operator key"
+      - "PLATFORM_TENANT_SUSPENDED | 403 | no | tenant is suspended or archived on this relay; writes are refused"
+      - "PLATFORM_TENANT_LIMIT | 409 | no | the relay already hosts the maximum of 50 tenants"
+    example: |
+      $ relay tenant bootstrap --slug oldtown --name "Old Town Swap" --currencies EUR --locale de --operator did:key:z6Mk...
+      POST /api/v1/cmd/platform.tenant.configure
+      Idempotency-Key: 0192f3a4-0000-7000-8000-000000000021
+      { "tenantId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "expectedRevision": 1, "patch": { "allowedCurrencies": ["EUR", "CHF"], "limits": { "maxUploadBytes": 3145728 } } }
+      200 { "tenantId": "0192f3a4-…", "revision": 2, "changed": ["allowedCurrencies", "limits"] }
+      event platform.tenant.configured { "tenantId": "0192f3a4-…", "changed": ["allowedCurrencies","limits"], "allowedCurrencies": ["EUR","CHF"], "removedCurrencies": [], "revision": 2 }
+  authorization_capabilities:
+    requirements:
+      - Relay policy applies, so tenant operators manage only their tenant, relay admins manage the tenant list, and neither role has any effect on a vault or on other relays (CTR-CAP-001 CAP-9).
+      - Operators are identified by device keys in the tenant record and authenticate with signed requests or relay access tokens obtained by challenge-response; the relay stores no passwords.
+      - Vault policy applies to LocalSettings, so only the unlocked local principal reads or changes them, and no relay can read or write them.
+    capabilities:
+      - "platform.tenant.create | admin | relay admin device key, or local CLI with filesystem access to the relay data directory (bootstrap)"
+      - "platform.tenant.configure | operator, admin | key in tenant.operatorKeys; tenant status active"
+      - "platform.tenant.assign_operator | operator, admin | key in tenant.operatorKeys may add; removal needs admin; last operator cannot be removed"
+      - "platform.tenant.change_status | operator, admin | operator may suspend and resume; archive needs admin and 30 days suspended"
+      - "platform.tenant.read_public | anonymous, member, moderator, operator, admin | none; operator keys shown only to operators"
+      - "platform.tenant.list | admin | relay admin device key"
+      - "platform.local_settings.update | local-principal | vault unlocked"
+      - "platform.local_settings.read | local-principal | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - All relay commands are idempotent per CTR-IDM-001 and use expectedRevision, so concurrent operator edits never overwrite each other.
+      - Bootstrap is safe to run repeatedly and never creates duplicate tenants.
+      - Vault-local settings changes work offline and have no distributed effect.
+    idempotency: "Relay commands require Idempotency-Key with 24 h replay. platform.tenant.create with an existing slug and identical content returns the existing tenant (idempotent), with different content PLATFORM_TENANT_SLUG_TAKEN. platform.local_settings.update with the same patch returns the current revision."
+    concurrency: "expectedRevision on configure, assign_operator and change_status; the unique slug index serializes concurrent creates; all writes run in one BEGIN IMMEDIATE transaction together with the outbox event row."
+    retries: "Clients retry network errors and RATE_LIMITED with IDM-4 backoff; conflicts and validation errors are not retried automatically."
+    offline: "Tenant commands need the relay and are not queued because they are operator decisions needing live feedback; clients cache platform.tenant.get for 30 s and show last-known configuration marked as possibly stale when the relay is unreachable. LocalSettings work fully offline."
+    partial_failure: "If publishing the event row fails the transaction rolls back and no change is visible. If a consumer fails on platform.tenant.configured it retries and dead-letters per CTR-EVT-001 EVT-6 without affecting the tenant record."
+  privacy_retention_abuse:
+    requirements:
+      - Tenant configuration is public hosting information and contains no personal data beyond operator public keys, which are pseudonymous identifiers and not proof of anonymity.
+      - LocalSettings stay on the device, are not telemetry, and are never uploaded; they can reveal a user's language and currencies, so they are excluded from federation and from any relay request.
+      - Archived tenants are purged after 90 days and their exported configuration remains with the operator.
+    data:
+      - "Tenant: P0 public hosting configuration and operator public keys."
+      - "LocalSettings: P1 preferences, device only."
+    retention:
+      - "Tenant: RET-STANDARD while the community exists; archived tenants purged 90 days after archiving; operator audit of tenant changes 1 year (RET-AUDIT)."
+      - "LocalSettings: until the vault is erased."
+    threats:
+      - "T01 | Rogue operator weakens limits or changes currencies to harm members | changes are public events, vaults see the relay's configuration before publishing and may leave, limits have hard maximums, all changes audited"
+      - "T02 | Takeover by adding a malicious operator key | adding keys needs an existing operator signature, removing needs admin, last operator protected, every change emitted as an event that vault clients display"
+      - "T03 | Slug squatting or lookalike community names | slug unique per relay, display name plain text only, relay identity fingerprint shown in the client next to the name"
+      - "T04 | Leakage of local preferences to a relay | LocalSettings never included in any relay request or statement; network test verifies"
+      - "T05 | Tenant enumeration across relays | platform.tenant.get is public by design for the relay's own communities only; no cross-relay directory in MVP"
+    abuse_controls:
+      - "Tenant creation limited to admins and 50 tenants per relay; configure limited to 30 changes per minute per operator."
+      - "Suspension by an operator requires a reason that is shown to clients, and every status change is audit-logged with actor and capability."
+  observability_performance:
+    requirements:
+      - Relay tenant operations are measured per CTR-OBS-001 with the tenant label limited to a hashed short id, never names.
+      - Configuration reads are served from cache and meet the read budget; the vault sends no telemetry (OBS-7).
+      - Event delivery lag for tenant events is observable so that consumers apply configuration promptly.
+    metrics:
+      - "classrup_platform_tenant_changes_total{outcome=ok|conflict|invalid}"
+      - "classrup_platform_tenant_config_read_duration_ms (relay histogram)"
+      - "classrup_platform_tenant_count{status=active|suspended|archived}"
+    logs:
+      - "info tenant.configured {tenantHash, changed[]}; info tenant.status_changed {tenantHash, from, to} — no display names, no operator keys."
+    budgets:
+      - "platform.tenant.get p95 ≤ 20 ms cached and ≤ 150 ms cold (OBS-4); configure p95 ≤ 300 ms."
+      - "Cache TTL 30 s; consumers apply platform.tenant.configured within 2 s p95 under the dispatcher budget."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check command inputs, outputs and event payloads against the schema registry for both relay and vault commands.
+      - A privacy test proves LocalSettings never leave the device.
+    fixtures: "Relay with admin A1, operators O1 and O2 (did:key), tenants T1 (EUR) and T2 (CHF); vault with local principal L1; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | create a tenant with valid input | stored with revision 1, status active, defaults applied, schema classrup.platform.tenant/v1"
+      - "T02 | unit | 02.R01,02.R02,02.R03 | each rule V01-V10 violated in turn | documented code returned and nothing stored; fields list the offending paths"
+      - "T03 | property | 03.R01,03.R02 | random sequences of status commands | only declared transitions occur; archived never changes; archive requires 30 days suspended"
+      - "T04 | integration | 03.R03,04.R02,06.R03 | status change with injected event-insert failure | transaction rolled back, no status change visible, no event"
+      - "T05 | contract | 04.R01,04.R02,04.R03 | all commands and queries on relay and in vault | outputs and the three event payloads validate against registry schemas; no signed statement produced"
+      - "T06 | abuse | 05.R01,05.R02,05.R03 | non-operator configures; operator of T1 edits T2; relay tries to read LocalSettings | FORBIDDEN or NOT_FOUND; no relay path to LocalSettings"
+      - "T07 | integration | 06.R01,06.R02 | replay same Idempotency-Key with same and different body; run bootstrap twice; stale expectedRevision | original response replayed; IDEMPOTENCY_KEY_REUSED; second bootstrap returns existing tenant; CONFLICT_REVISION"
+      - "T08 | integration | 06.R03,05.R03 | vault offline, change language and currencies; relay offline, read tenant | LocalSettings update works; tenant read shows cached configuration marked stale"
+      - "T09 | integration | 07.R01,07.R03 | archive tenant and advance 90 days | purged from relay; operator export exists; audit retained 1 year"
+      - "T10 | abuse | 07.R02,07.R01 | capture network traffic during LocalSettings changes and publishing | zero requests contain locale or currency preferences"
+      - "T11 | abuse | 07.R01,07.R02 | add a malicious operator key without existing operator signature; remove the last operator | FORBIDDEN and PLATFORM_TENANT_LAST_OPERATOR; events displayed in client"
+      - "T12 | load | 08.R02,08.R03 | 50 req/s tenant reads and 5 configure per second for 5 minutes | read p95 ≤ 20 ms cached, configure p95 ≤ 300 ms, consumers apply within 2 s"
+      - "T13 | unit | 08.R01 | metrics scrape | counters per CTR-OBS-001 naming, tenant label hashed, no names"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-125 requirement maps to a passing test"
+      - "T15 | contract | 09.R02,09.R03 | schema registry validation of Tenant, LocalSettings and events; privacy suite | all payloads valid; LocalSettings absent from relay and federation payloads"
+      - "T16 | a11y | 04.R01 | operator console Community form and Settings > Preferences scanned with axe | zero serious issues; errors linked via aria-describedby; targets ≥ 44 px"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export vault with LocalSettings, import into fresh vault; restore relay from backup; roll back one release | LocalSettings round-trip; tenants restored with same IDs; old reader ignores new optional fields"
+      - "T18 | integration | 04.R03,01.R03 | shrink allowedCurrencies with existing records in a removed currency | change accepted, event carries removedCurrencies, existing records untouched, new records in removed currency refused by consumers"
+    acceptance:
+      - All tests T01-T18 pass in CI.
+      - A relay can bootstrap from the CLI and host several tenants with separate currencies, locales and limits.
+      - Operator changes are validated, audited and visible to clients; the last operator can never be removed.
+      - LocalSettings never leave the device and no tenant concept exists in the vault.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export includes LocalSettings as the section platform.local_settings (CTR-IOX-001 IOX-1, IOX-6); tenants are relay data and are not part of any user export.
+      - Relay tenant records are covered by relay backups (IOX-3, IOX-7) and by an operator configuration export.
+      - Import of LocalSettings validates the schema and clamps limits to platform maximums; operator import of tenants rejects conflicting slugs.
+    export: "Vault: section platform.local_settings in classrup-export/v1 (schema classrup.platform.local_settings/v1). Relay: relay tenant export --tenant <id> as JSON Lines of Tenant (operator configuration export, not a user export)."
+    import: "Vault: LocalSettings replace the current record after dry-run confirmation. Relay: relay tenant import creates tenants with their IDs, rejects conflicting slugs or IDs, and always imports as suspended until an operator resumes."
+    backup: "Relay tenants: relay SQLite backup (CTR-IOX-001 IOX-3). Vault settings: the vault export is the backup."
+    migration_rollback: "Additive fields only in v1; rollback to the previous release is safe because new optional fields and limits are ignored by older readers. Restore always creates a new instance (IOX-4) with tenants intact."

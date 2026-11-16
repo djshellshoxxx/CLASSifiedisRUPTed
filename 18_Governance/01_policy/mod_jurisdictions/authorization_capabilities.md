@@ -1,35 +1,36 @@
-# PS-145-05 — authorization capabilities
+# PS-145-05 — Authorization and capabilities: Jurisdiction profiles
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-145-05. **Owner:** [18_Governance/01_policy/mod_jurisdictions](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_jurisdictions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F18.S01.M01 Jurisdiction profiles](SPEC.md) · **Scope:** MVP · **Code:** `packages/governance/src/policy/jurisdictions` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the authorization capabilities process for jurisdictions within 01_policy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-145-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-145-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-145-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-145-05.R01** Vault policy: authoring and releasing require the publisher key; receiving, selecting and reading are available to the vault owner for trusted publishers.
+- **PS-145-05.R02** Relay policy (CAP-9): a relay applies its own profile to what it hosts and accepts profile uploads only from its operator key; a relay role has no effect on a user's local selection.
+- **PS-145-05.R03** The age declaration and the selection are P3 local preferences and are never transmitted.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Capability | Granted to | Conditions |
+|---|---|---|
+| governance.jurisdiction_profile.author | owner | local principal holds the publisher key; profile status draft |
+| governance.jurisdiction_profile.release | owner | local principal is the profile publisher; proposal verified when required; signing key unrevoked |
+| governance.jurisdiction_profile.apply | owner | vault unlocked; signature valid and publisher trusted or trusted in the same action |
+| governance.jurisdiction_profile.select | owner | vault unlocked; profiles are active and trusted |
+| governance.jurisdiction_profile.read | owner | vault unlocked; internal callers F01.S01.M03 and F10.S01.M02 on the owner's behalf |
+| governance.jurisdiction_profile.relay_read | relay-anonymous | relay policy: public read of the relay's active profiles, 60 requests per minute per IP prefix |
+| governance.jurisdiction_profile.relay_publish | relay-operator | relay policy: request signed by the operator device key |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-145-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-145-09.T07 | abuse | PS-145-05.R01, PS-145-05.R02 | untrusted publisher, tampered statement, non-publisher release | pending or FORBIDDEN or rejected; selection and age never sent over network (spy) |
+| TEST-PS-145-09.T08 | abuse | PS-145-05.R03, PS-145-07.R02 | relay serves and uploads; scan logs for age declaration | anonymous read allowed, upload needs operator key, no age data in logs |
+
+## Dependencies
+
+Module depends on: F18.S01.M03, F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

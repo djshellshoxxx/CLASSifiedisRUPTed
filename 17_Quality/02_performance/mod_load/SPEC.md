@@ -1,44 +1,83 @@
-# F17.S02.M01 — load
+# F17.S02.M01 — Load testing
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F17.S02.
+**Status:** SPECIFIED (Stage 3). **Scope:** MVP. **Parent:** [F17.S02](../SPEC.md). **Process IDs:** PS-139-01…PS-139-10. **Code:** `tests/load`.
 
-## Purpose and business behavior
-Provide load as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
+
+## Purpose
+
+A Node load-test script that drives a relay (2 vCPU / 4 GB reference profile, SQLite WAL) with read, write, search and cycle-matching traffic and compares measured latencies with the budgets of CTR-OBS-001 OBS-4. It writes a JSON and Markdown report and exits non-zero when any budget is exceeded. It runs a short smoke profile on release candidates and the full profile nightly. Per ADR-0016 and CTR-OBS-001 OBS-7 the budgets of OBS-4 apply to relays only (index, mailbox, matching over public projections, content-free push, auction host); vault performance is covered by unit and e2e budgets.
+
+## Responsibilities
+
+- Implement the load driver (Node 22, undici keep-alive, open-loop arrival rate) with profiles smoke (30 s), standard (5 min) and soak (60 min).
+- Measure p50/p95/p99 latency and error rate per scenario: read 50 req/s p95 at most 150 ms, write 50 req/s p95 at most 300 ms, search over 100 000 listings p95 at most 200 ms, cycle search on a graph of 5 000 edges with max length 5 p95 at most 250 ms.
+- Seed datasets deterministically (100 000 listings, 5 000 want/offer edges, 10 000 actors) from a fixed seed using the production commands bulk path.
+- Emit reports/load.json and reports/load.md and fail the run on any budget violation or error rate above 0.1 %.
+
+## Not responsible for
+
+- Fault injection (F17.S02.M02).
+- PWA runtime budgets in a browser (F17.S01.M04 and F17.S03.M02 gates read the report).
+- Capacity planning for multi-relay deployments.
+- Future: distributed load generation and production shadow traffic.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
 
-## Scope
-- Required process spec: `load_domain_model.md` (not yet authored)
-- Required process spec: `load_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `load_validation_and_authorization.md` (not yet authored)
-- Required process spec: `load_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `load_interfaces_and_events.md` (not yet authored)
-- Required process spec: `load_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `load_acceptance_and_property_tests.md` (not yet authored)
+- As a release manager, I get a pass or fail verdict for the OBS-4 budgets with the p95 numbers for every scenario.
+- As a developer, I run the smoke profile locally and see which endpoint regressed.
+- As an operator, I compare nightly reports over 30 days to spot slow degradation.
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Edge cases
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+- The generator itself saturates the machine; the report records generator CPU and marks the run invalid if generator CPU exceeds 70 %.
+- The relay returns RATE_LIMITED during the test; the load script uses a dedicated unthrottled test tenant and counts any 429 as an error.
+- The seeded dataset is stale after a schema change; the seed script version-checks and rebuilds, failing with QUALITY_LOAD_SEED_STALE.
+- Latency spikes from a one-off garbage collection; the report uses p95 over the whole window and also flags max over 2 s.
+- Coordinated omission would hide stalls; the driver is open loop and measures from intended send time.
+- Database file on slow disk inflates results; the run records disk type and rejects runs on non-reference hardware unless --allow-unreferenced is passed.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+## UX and accessibility
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
 
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
 
-## Required process specification inventory
-- [ ] `load_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+Headless. Output is a Markdown table per scenario (target, measured p50/p95/p99, error rate, verdict) and JSON for the gates module.
+
+## Owned data
+
+_No persisted entities (library/view module)._
+
+## Interfaces
+
+- Commands: none
+- Queries: none
+- Emits: none
+- Consumes: none
+
+## Dependencies
+
+CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, F17.S01.M01, F15.S02.M01, F15.S02.M03
+
+## Process specifications and aggregation
+
+| ID | Process | Requirements |
+|---|---|---|
+| PS-139-01 | [Domain schema](domain_schema.md) | 3 |
+| PS-139-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-139-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
+| PS-139-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
+| PS-139-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
+| PS-139-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
+| PS-139-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-139-08 | [Observability and performance](observability_performance.md) | 3 |
+| PS-139-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
+| PS-139-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
+
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `tests/load/index.ts`.
+
+## Acceptance criteria
+
+- On the 2 vCPU reference runner all OBS-4 budgets pass at 50 req/s.
+- A planted 400 ms slowdown is detected as a budget failure with exit 1.
+- The load script refuses to run against any non-allow-listed host.
+- Reports are machine-readable and consumed by the release gates.

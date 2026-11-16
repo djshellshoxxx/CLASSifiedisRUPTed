@@ -1,0 +1,267 @@
+id: F08.S01.M03
+scope: MVP
+summary: >-
+  Encrypted image attachments for private messages (ADR-0016). The sender's vault strips all metadata (EXIF, GPS, XMP,
+  ICC description text, thumbnails), re-encodes the image, encrypts it in 64 KiB chunks with a fresh per-object
+  key (XChaCha20-Poly1305) and uploads only ciphertext to the blob store of the user-selected relay. The object key
+  and a random download token travel inside the end-to-end encrypted message body, so deleting the ciphertext blob
+  crypto-shreds the attachment for everyone who has not yet saved it. Images are limited to 5 MiB. A relay without
+  blob storage disables attachments for its users (fail closed).
+responsibilities:
+  - Own the Attachment record (ciphertext blob reference, size, chunk layout, declared media type) and its lifecycle.
+  - Run the vault pipeline (strip metadata, re-encode, chunk-encrypt, queue upload) as one vault command.
+  - Provide relay commands that issue upload slots to relay-registered device keys, accept chunked ciphertext uploads and finalize them with a hash check.
+  - Serve ciphertext downloads to holders of the secret download token carried in the encrypted message, and delete blobs on author delete, expiry or vault wipe request.
+  - Enforce size, type and quota limits on declared values and on the stored ciphertext length.
+  - Provide the client-side pipeline contract for metadata stripping before encryption and verification by round-trip tests.
+non_responsibilities:
+  - Message text and key wrapping (F08.S01.M01); the attachment key and blob ID are carried inside the message plaintext.
+  - Public listing photos and their processing (F01 listing media).
+  - Image content moderation by the relay; the relay cannot read ciphertext, so reports carry plaintext from the reporter's device (F12.S01.M02).
+  - "Future: video and audio attachments, resumable uploads over 5 MiB, perceptual-hash matching on the client."
+depends_on: [F08.S01.M01, F08.S01.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001]
+user_stories:
+  - As a member, I can attach a photo to a message and be sure that location and device data in the photo are removed before it leaves my phone.
+  - As a recipient, I can view the photo only if I received the encrypted message carrying its download token, and it stops being downloadable from the relay when the sender deletes it, although a copy I already saved stays.
+  - As a member on a slow connection, I see upload progress and can retry without re-selecting the photo.
+edge_cases:
+  - Image is 5 MiB plus one byte after re-encoding; the client reduces quality in steps down to a minimum of 1280 px on the long edge and otherwise refuses with COMMS_ATTACHMENT_TOO_LARGE; the relay also refuses ciphertext over 5 MiB plus chunk overhead.
+  - Upload is interrupted after 3 of 10 chunks; the slot stays open for 1 hour and the client resumes at the next chunk index.
+  - File declared as image/jpeg but client-side sniffing shows a different type; the client refuses and the relay can only check the declared type list, so a hostile client may mislabel and recipients treat blobs as untrusted bytes.
+  - Sender deletes the message while recipients are downloading; downloads in flight finish, later relay requests return NOT_FOUND, and copies already saved by recipients cannot be recalled.
+  - Same photo attached twice; two independent keys and blobs are produced, no deduplication, so identical images cannot be linked.
+  - Quota exhausted (50 MiB per member per day); the next slot request is refused with COMMS_ATTACHMENT_QUOTA.
+ux:
+  screens:
+    - "Attach sheet: choose photo, shows a preview with a Remove location data and metadata notice, size after processing and a Send button."
+    - "Upload progress bar in the message bubble with cancel and retry."
+    - "Image viewer: full screen, pinch zoom, save to device only on explicit action, report image."
+  states: [idle, processing, uploading, uploaded, failed-retry, deleted, expired-slot, quota-exceeded]
+  a11y:
+    - Progress bar exposes role=progressbar with aria-valuenow and an accessible name.
+    - Images carry an alt text field the sender may fill (max 200 characters) that travels inside the encrypted body; default alt is Photo attachment.
+    - Viewer controls are keyboard operable with targets of at least 44 by 44 px.
+processes:
+  domain_schema:
+    requirements:
+      - An Attachment stores sender, thread, ciphertext blob reference, ciphertext size, chunk size and count, ciphertext hash and declared media type; it never stores the object key or any plaintext metadata.
+      - Attachments are P2 ciphertext with RET-STANDARD retention; deleting the blob is the crypto-shredding action because the key exists only inside encrypted messages.
+      - Plaintext limits are 5 MiB (5 242 880 bytes) after processing, 4096 px maximum on the long edge, and media types image/jpeg, image/png and image/webp only.
+    entities:
+      - name: Attachment
+        schema: classrup.comms.attachment/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key, client generated"
+          - "tenantId: uuidv7 — tenant scope"
+          - "threadId: uuidv7 — ref F08.S01.M02 Thread in the sender vault; the relay stores it only as an opaque label hash"
+          - "uploaderDid: did:key — sender device principal that holds the relay access token"
+          - "messageId?: uuidv7 — ref F08.S01.M01 Message; set when the message referencing this blob is sent"
+          - "declaredType: enum — image/jpeg | image/png | image/webp"
+          - "plainSize: int — 1..5 242 880 bytes, declared"
+          - "cipherSize: int — plainSize + 16 bytes per 64 KiB chunk, at most 5 242 880 + 1 280 bytes"
+          - "chunkSize: int — fixed 65 536"
+          - "chunkCount: int — 1..80"
+          - "cipherSha256: bytes — SHA-256 of the full ciphertext, 32 bytes, set at finalize"
+          - "blobRef: string — relay storage key, never returned to callers"
+          - "downloadTokenHash: bytes — SHA-256 of the 256-bit download token; the token itself lives only in the encrypted message body"
+          - "status: enum — pending | uploaded | deleted | expired"
+          - "uploadExpiresAt: timestamp — createdAt + 1 h"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - status uploaded implies cipherSha256 matches the stored blob and cipherSize equals the stored length.
+          - status deleted or expired implies blobRef is erased and no blob exists in storage.
+          - An Attachment is referenced by at most one Message.
+    sql: |
+      CREATE TABLE comms_attachment (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, thread_id TEXT NOT NULL, uploader_id TEXT NOT NULL, message_id TEXT,
+        status TEXT NOT NULL, cipher_size INTEGER NOT NULL, upload_expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX comms_attachment_thread ON comms_attachment(tenant_id, thread_id, status);
+      CREATE INDEX comms_attachment_uploader_day ON comms_attachment(uploader_id, status, upload_expires_at);
+  validation_rules:
+    requirements:
+      - Slot requests and uploads are validated against declared limits before any bytes are accepted.
+      - Finalization verifies stored length and hash against the declared values before the blob becomes downloadable.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | declaredType is one of image/jpeg, image/png, image/webp | COMMS_ATTACHMENT_TYPE_UNSUPPORTED"
+      - "V02 | plainSize between 1 and 5 242 880 and chunkCount equals ceil(plainSize / 65 536) | COMMS_ATTACHMENT_TOO_LARGE"
+      - "V03 | in the vault the thread exists, is active and the sender is a participant; at the relay the caller holds a valid relay access token | NOT_FOUND"
+      - "V04 | uploader has fewer than 3 pending slots and used less than 50 MiB of ciphertext in the last 24 h | COMMS_ATTACHMENT_QUOTA"
+      - "V05 | each uploaded chunk has index within range, length 65 536 plus 16 (last chunk shorter) and arrives within the slot lifetime | VALIDATION_FAILED"
+      - "V06 | finalize ciphertext length equals cipherSize and SHA-256 equals the declared hash | COMMS_ATTACHMENT_HASH_MISMATCH"
+      - "V07 | slot not expired at upload or finalize | EXPIRED"
+      - "V08 | a member requests at most 60 slots per day | RATE_LIMITED"
+  workflow_state_machine:
+    requirements:
+      - An Attachment starts pending, becomes uploaded only after hash verification and ends deleted or expired; both ends are terminal.
+      - Pending slots not finalized within 1 hour expire and their partial chunks are erased by a sweep every 5 minutes.
+      - Deletion of the referencing message by its author, a signed vault wipe request or relay retention expiry (30 days after upload unless the author extends to 90 days) deletes the blob and moves the Attachment to deleted.
+    machines:
+      - entity: Attachment
+        initial: pending
+        terminal: [deleted, expired]
+        transitions:
+          - "pending -> uploaded | comms.attachment.finalize by uploader | length and SHA-256 verified; emits comms.attachment.uploaded"
+          - "pending -> expired | slot sweep at uploadExpiresAt | partial chunks erased"
+          - "uploaded -> deleted | comms.attachment.delete by uploader, comms.message.deleted, relay retention expiry | blob erased; emits comms.attachment.deleted"
+    timeouts:
+      - "Slot sweep every 5 minutes expires pending attachments past uploadExpiresAt (1 h)."
+      - "Relay blob retention expiry removes uploaded blobs 30 days after upload (hosting policy default; author may extend to 90 days)."
+  commands_queries_events:
+    requirements:
+      - The module exposes slot creation, chunk upload, finalize and delete commands and a ciphertext download query.
+      - Finalize emits comms.attachment.uploaded in the same transaction as the state change.
+      - The module consumes message and deletion events locally to issue signed relay delete requests; every command is classed below as vault command or relay command.
+    commands:
+      - name: comms.attachment.attach
+        capability: comms.attachment.attach
+        input: "[vault command; the message that references the blob is signed later by comms.message.send] { attachmentId, threadId, imageBytes (≤ 25 MiB source), altText? }"
+        output: "{ attachmentId, plainSize, chunkCount, syncState: local_committed }"
+        errors: [VALIDATION_FAILED, COMMS_ATTACHMENT_TYPE_UNSUPPORTED, COMMS_ATTACHMENT_TOO_LARGE, NOT_FOUND]
+        emits: []
+        idempotent: true
+      - name: comms.attachment.create_slot
+        capability: comms.attachment.upload
+        input: "[relay command, relay access token] { attachmentId, threadLabelHash, declaredType, plainSize, chunkCount }"
+        output: "{ attachmentId, uploadExpiresAt, chunkSize: 65536 }"
+        errors: [VALIDATION_FAILED, COMMS_ATTACHMENT_TYPE_UNSUPPORTED, COMMS_ATTACHMENT_TOO_LARGE, COMMS_ATTACHMENT_QUOTA, NOT_FOUND, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: comms.attachment.put_chunk
+        capability: comms.attachment.upload
+        input: "[relay command, relay access token] { attachmentId, index, bytes (≤ 65 552) }"
+        output: "{ attachmentId, index, received }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, EXPIRED, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: comms.attachment.finalize
+        capability: comms.attachment.upload
+        input: "[relay command, relay access token] { attachmentId, cipherSha256, downloadTokenHash, expectedRevision }"
+        output: "{ attachmentId, revision, cipherSize }"
+        errors: [NOT_FOUND, EXPIRED, COMMS_ATTACHMENT_HASH_MISMATCH, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [comms.attachment.uploaded]
+        idempotent: true
+      - name: comms.attachment.delete
+        capability: comms.attachment.delete
+        input: "[relay command, request signed by the uploader device key; the vault also records the delete locally and emits the event once the relay confirms] { attachmentId, expectedRevision }"
+        output: "{ attachmentId, revision }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [comms.attachment.deleted]
+        idempotent: true
+    queries:
+      - name: comms.attachment.download
+        capability: comms.attachment.read
+        input: "[relay query, bearer download token in the Authorization header] { attachmentId, range? (chunk indexes) }"
+        output: "ciphertext stream with Content-Type application/octet-stream and ETag = cipherSha256"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: comms.attachment.uploaded, privacy: P2, payload: "{ attachmentId, threadId, uploaderId, cipherSize, declaredType }"}
+      - {type: comms.attachment.deleted, privacy: P2, payload: "{ attachmentId, threadId, reason: sender|message_deleted|expiry|vault_wipe }"}
+    events_consumed:
+      - {type: comms.message.deleted, effect: "when the author deleted a message that carries an attachment reference, send the signed relay delete request for its blob"}
+      - {type: privacy.deletion.completed, effect: "send signed relay delete requests for every blob the vault uploaded, then erase local attachment records"}
+    errors:
+      - "COMMS_ATTACHMENT_TYPE_UNSUPPORTED | 422 | no | declared media type is not image/jpeg, image/png or image/webp"
+      - "COMMS_ATTACHMENT_TOO_LARGE | 413 | no | processed image exceeds 5 MiB or chunk count does not match size"
+      - "COMMS_ATTACHMENT_QUOTA | 429 | yes | more than 3 pending slots or 50 MiB of uploads in 24 h"
+      - "COMMS_ATTACHMENT_HASH_MISMATCH | 422 | no | stored ciphertext length or SHA-256 differs from the declared value"
+    example: |
+      POST /api/v1/relay/comms.attachment.create_slot
+      Idempotency-Key: 0192f3a4-0000-7000-8000-000000000301
+      { "attachmentId": "0192f3a4-2222-7000-8000-000000000001", "threadId": "0192f3a4-0000-7000-8000-0000000000aa",
+        "declaredType": "image/jpeg", "plainSize": 1048576, "chunkCount": 16 }
+      201 { "attachmentId": "0192f3a4-2222-7000-8000-000000000001", "uploadExpiresAt": "2026-11-04T11:00:00.000Z", "chunkSize": 65536 }
+  authorization_capabilities:
+    requirements:
+      - Relay policy lets only device keys registered at the relay (relay access token) create slots, upload and finalize, within the quotas below; vault policy lets only the local principal attach images to its own messages.
+      - Only the uploader device key can delete an attachment; a relay moderator can remove a blob only under that relay's hosting policy with a recorded reason.
+      - Download requires the secret 256-bit token that only the message participants hold; wrong tokens and unknown IDs return NOT_FOUND.
+    capabilities:
+      - "comms.attachment.attach | local principal | vault policy; participant(thread)"
+      - "comms.attachment.upload | registered relay device | relay policy; valid relay access token; attachment.uploaderDid is the caller for chunk and finalize; relay quota not exceeded"
+      - "comms.attachment.delete | registered relay device, operator | uploader device key, or relay operator under hosting policy with recorded reason"
+      - "comms.attachment.read | download token holder | SHA-256 of presented token equals downloadTokenHash; blob not expired"
+  failure_recovery_idempotency:
+    requirements:
+      - Slot creation and finalize are idempotent per CTR-IDM-001; chunk upload is idempotent on (attachmentId, index) and a repeated chunk with different bytes is refused.
+      - Interrupted uploads resume at the first missing chunk index within the 1 hour slot life without re-encrypting.
+      - Finalize and event emission are one transaction; blob storage and database remain consistent through write-then-rename and a reconciliation sweep.
+    idempotency: "Relay commands require Idempotency-Key on create_slot, finalize and delete; the vault attach command is idempotent on attachmentId; put_chunk is naturally idempotent on (attachmentId, index) with a content hash check; replay window 24 h."
+    concurrency: "expectedRevision on finalize and delete; two finalize calls race on the pending-to-uploaded transition and exactly one wins, the other replays the result."
+    retries: "Vault outbox retries network errors per chunk with backoff base 1 s, factor 2, max 6 attempts; the whole upload restarts with a new slot after EXPIRED."
+    offline: "Photo processing and encryption happen in the vault and the ready blob is queued in the sync outbox; the message referencing it is sent only after finalize succeeds, and until then it shows prepared."
+    partial_failure: "If the process crashes between blob rename and database commit the reconciliation sweep (every 10 minutes) deletes orphan blobs without a row and marks rows without a blob as expired."
+  privacy_retention_abuse:
+    requirements:
+      - The relay stores only ciphertext and the sizes needed for storage; media type is declared and unverified, and filenames are never stored; the relay sees the uploader's relay identity and upload time, which is disclosed.
+      - Client-side stripping removes EXIF, GPS, XMP, IPTC and embedded thumbnails by decoding and re-encoding pixels; this is tested on device but the relay cannot verify it, which is stated in documentation.
+      - Crypto-shredding works because the object key lives only in encrypted message bodies, so erasing the blob makes remaining message copies unusable.
+    data:
+      - "Attachment ciphertext: P2, opaque to the relay."
+      - "Attachment metadata (uploader relay identity, size, declared type, timestamps): P2 visible to the relay operator."
+    retention:
+      - "Relay blobs: RET-SHORT (30 days, author may extend to 90) or immediately on author delete; vault copies follow the vault retention of the message."
+      - "Expired slots and partial chunks: erased within 1 hour of expiry."
+    threats:
+      - "T01 | Photo leaks home location through GPS EXIF | device pipeline decodes and re-encodes pixels dropping all metadata; conformance test fixtures with GPS tags must produce zero metadata fields"
+      - "T02 | Malicious file disguised as image | recipients decode with a sandboxed image decoder, never execute; size and type limits; unknown bytes render as an error"
+      - "T03 | Storage exhaustion by flooding uploads | relay quotas of 3 pending slots, 50 MiB per day and 60 slots per day per registered device, 5-minute slot sweep; relay hosting policy may lower them"
+      - "T04 | Linking identical images across users | per-object random key and nonce so ciphertext of the same image is different every time; no deduplication"
+      - "T05 | Unwanted explicit image from a stranger | recipient vault blurs images from threads where the recipient has not replied yet; the recipient can block and report"
+    abuse_controls:
+      - "Reports include the decrypted image from the reporter's vault to the chosen relay operator or advisory feed (F12.S01.M02) after explicit confirmation."
+      - "Relay-local rate limits apply; no global signal exists."
+  observability_performance:
+    requirements:
+      - Relay upload outcomes, bytes and sweep lag are measured per CTR-OBS-001; the PWA keeps local diagnostics only (OBS-7).
+      - A 5 MiB upload completes within 20 s on a 2 Mbit/s link and server handling of each 64 KiB chunk stays under budget.
+      - Sweeps keep storage within quota and their lag is observable.
+    metrics:
+      - "classrup_comms_attachments_total{outcome=uploaded|deleted|expired|rejected}"
+      - "classrup_comms_attachment_bytes_total"
+      - "classrup_comms_attachment_orphan_blobs_total"
+      - "classrup_comms_attachment_sweep_lag_ms (gauge)"
+    logs:
+      - "info attachment.uploaded {attachmentId, cipherSize, correlationId} — no filenames, no media content."
+    budgets:
+      - "put_chunk p95 ≤ 100 ms; finalize p95 ≤ 300 ms including hash of 5 MiB; download first byte p95 ≤ 200 ms."
+      - "Relay storage overhead ≤ 2 percent over ciphertext size."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests check command input and output and event payloads against the schema registry.
+      - The metadata stripping pipeline is covered by fixture images carrying every known metadata container.
+    fixtures: "Vaults A and B, in-memory relay R with blob store, active thread TH; fixture images jpeg-with-gps.jpg, png-with-text-chunks.png, webp-with-xmp.webp, a 5 242 880-byte jpeg and a 5 242 881-byte jpeg; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01,02.R02 | create slots for allowed types and sizes and for boundary 5 242 880 and 5 242 881 | allowed accepted; larger refused with COMMS_ATTACHMENT_TOO_LARGE; svg refused with TYPE_UNSUPPORTED"
+      - "T02 | unit | 01.R02,07.R02,09.R03 | run client pipeline on the three metadata fixtures | output has zero EXIF, GPS, XMP, IPTC, thumbnail and text chunks"
+      - "T03 | unit | 02.R03,07.R01 | finalize with wrong hash and with truncated blob | COMMS_ATTACHMENT_HASH_MISMATCH and blob not downloadable"
+      - "T04 | property | 03.R01,03.R02,03.R03 | random sequences of chunk, finalize, delete, sweep | only declared transitions succeed; deleted and expired never change"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command and query executes | outputs and event payloads validate against registry schemas"
+      - "T06 | integration | 04.R03,03.R03 | author deletes message, vault wipe request, and 30-day expiry | signed relay delete issued or sweep runs, blob erased in each case and downloads return NOT_FOUND"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | upload without relay token; download with wrong token; delete signed by another device key | UNAUTHENTICATED, NOT_FOUND or FORBIDDEN"
+      - "T08 | integration | 06.R01,06.R02 | upload 10 chunks, kill connection after 3, resume, repeat chunk 2 with different bytes | upload completes; conflicting repeat refused"
+      - "T09 | chaos | 06.R03 | crash between blob rename and commit | reconciliation sweep removes orphan blob and expires row"
+      - "T10 | abuse | 07.R03,02.R03 | after message delete try to decrypt remaining message copy with key | blob missing so decryption impossible; 61st slot in a day returns RATE_LIMITED"
+      - "T11 | abuse | 07.R01 | inspect database and storage dump | only ciphertext, sizes and declared type present; no filenames or plaintext metadata"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 20 concurrent 5 MiB uploads over simulated 2 Mbit/s links | each completes within 20 s, p95 budgets met, sweep lag recovers"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-059 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, re-import and restore from backup | attachment rows and ciphertext round trip identical; import with missing blob marks row expired"
+      - "T15 | a11y | 04.R01 | attach and view flow with screen reader | progress announced, alt text field reachable, zero serious axe issues"
+    acceptance:
+      - All tests T01 to T15 pass in CI.
+      - Fixture images with GPS, XMP and text metadata produce zero metadata after the device pipeline.
+      - After a message is deleted no ciphertext blob for its attachment exists on the relay.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export contains attachment metadata and the ciphertext they hold locally, and the key remains only inside the exported encrypted messages.
+      - Import validates sizes, hashes and thread existence; rows whose blob is missing or fails the hash are kept as expired history.
+      - Schema changes follow expand and contract; a new chunk size is introduced as a new field value while v1 chunk size 65 536 stays readable.
+    export: "Section comms.attachments in classrup-export/v1; one line per Attachment (schema classrup.comms.attachment/v1) with blobs as separate files named by attachment ID in the archive."
+    import: "Hash is recomputed per blob; mismatches or oversize items are rejected; existing IDs are skipped; imported items get status uploaded only when the thread exists and is active, otherwise expired."
+    backup: "The vault export is the primary backup (IOX-6); relay blobs and rows are covered by relay SQLite plus blob directory backup (IOX-3, IOX-7) and contain ciphertext only; losing a relay loses no user-owned record."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older versions ignore unknown fields and still read chunkSize 65 536 attachments."

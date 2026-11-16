@@ -1,35 +1,50 @@
-# PS-104-07 — privacy retention abuse
+# PS-104-07 — Privacy, retention and abuse: Web push delivery
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-104-07. **Owner:** [13_Notifications/01_delivery/mod_push](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_push. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F13.S01.M01 Web push delivery](SPEC.md) · **Scope:** MVP · **Code:** `packages/notify/src/delivery/push` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for push within 01_delivery. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-104-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-104-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-104-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-104-07.R01** Payloads are content-free and encrypted end to end to the browser per RFC 8291, so the push service sees only metadata (endpoint, size, time, Topic) and the relay operator sees reference and template key only.
+- **PS-104-07.R02** The push endpoint is a P3 bearer secret stored encrypted and erased at expiry or revocation; the push service provider can link the endpoint to the browser vendor, which the explainer states.
+- **PS-104-07.R03** Pseudonymity is not anonymity because the relay links a DID to a push endpoint, and users choose the relay.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- PushSubscription: P3 (endpoint, keys) at the selected relay only.
+- Push payload: content-free reference, template key, collapse key; P2 reference semantic.
+- VAPID private key: P4 relay secret, never exported.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Active subscriptions: RET-STANDARD until revoked or expired; secrets erased at the terminal transition.
+- Send logs and delivery counters: RET-SHORT (30 days) without endpoint.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-104-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Push service or network observer reads alert content | content-free payload and RFC 8291 aes128gcm encryption; tests assert absence of text fields |
+| T02 | Subscription endpoint theft lets an attacker spam a browser | endpoint is stored encrypted, erased on expiry, sends require the relay VAPID signature so the endpoint alone cannot send |
+| T03 | Abuse of the relay as a push spammer | send is internal and gated; consent and category checks; 120 dispatches per user per hour |
+| T04 | VAPID key compromise | key rotation procedure with new vapidKeyId, old subscriptions expire and are re-created, operator alert on 401 or 403 spikes |
+| T05 | SSRF through attacker-chosen endpoint | https-only, host must resolve to public addresses, redirects not followed, 10 s timeout, allowlist of known push service domains optional per relay |
+| T06 | Relay learns user to endpoint mapping | disclosed, user selects the relay, self-hosting is supported, subscription deleted on revocation |
+
+**Abuse controls**
+- Per-user limit of 10 subscriptions and 10 subscribe calls per day; send rate limited by the gate.
+- Relay operators can block device keys or users on that relay only.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-104-09.T10 | abuse | PS-104-07.R01, PS-104-07.R02, PS-104-07.R03 | inspect database, logs, events and metrics; SSRF endpoint attempts to 169.254.169.254 and redirects | no endpoint or payload outside encrypted storage; SSRF blocked |
+| TEST-PS-104-09.T11 | abuse | PS-104-07.R03, PS-104-06.R02 | VAPID rejected 401 | operator alert raised, no subscription expired, sends paused 15 minutes |
+
+## Dependencies
+
+Module depends on: F13.S02.M03, F16.S02.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

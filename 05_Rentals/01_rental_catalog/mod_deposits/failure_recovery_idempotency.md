@@ -1,35 +1,32 @@
-# PS-040-06 — failure recovery idempotency
+# PS-040-06 — Failure recovery and idempotency: Rental deposits (noncustodial)
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-040-06. **Owner:** [05_Rentals/01_rental_catalog/mod_deposits](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_deposits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F05.S01.M02 Rental deposits (noncustodial)](SPEC.md) · **Scope:** MVP · **Code:** `packages/rentals/src/rental_catalog/deposits` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for deposits within 01_rental_catalog. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-040-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-040-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-040-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-040-06.R01** Commands are idempotent through local command ids and statements through cid; payment events through the inbox, so replays never double-settle.
+- **PS-040-06.R02** Contradictory signed statements (two forfeit claims, responses to different claim cids, two terms with the same reservation) freeze the deposit and require explicit renegotiation or dispute, never last-writer-wins.
+- **PS-040-06.R03** Each state change, event and sync outbox entry commit in one IndexedDB transaction.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Local command id stored 24 h; statements deduplicated by cid; payment events deduplicated by (consumer, eventId); the unique live-terms index makes a second proposal for one reservation a no-op or RENTALS_DEPOSIT_DUPLICATE.
+- **concurrency:** Web Locks lock rentals-deposit-<reservationId> around commands and payment handling; expectedRevision on every command; forked devices of one party are detected through the signed seq/prev chain and freeze the deposit.
+- **retries:** Sync outbox retries 1 s, 2 s, 4 s, 8 s up to 8 attempts per destination; local event handlers retry per EVT-6; dispute case creation retries 10 s, 60 s, 10 minutes.
+- **offline:** Propose, agree, attest release, claim, respond and dispute work offline and commit locally; the UI shows prepared, transport_acknowledged or peer_accepted and never claims the counterparty saw a statement before the signed acknowledgement.
+- **partial failure:** If registering a payment context with the Deal fails, the statement is not signed and the state is unchanged; if the dispute case port fails after local commit the deposit stays disputed locally with retry; relay delivery failures change only the sync state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-040-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-040-09.T07 | integration | PS-040-04.R01, PS-040-04.R02, PS-040-06.R01, PS-040-09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on released with identical cids; duplicates skipped |
+| TEST-PS-040-09.T10 | integration | PS-040-06.R02, PS-040-06.R03 | two contradictory forfeit claims; dispute port failing once | deposit frozen for dispute; claim retried; no partial state |
+
+## Dependencies
+
+Module depends on: F05.S01.M01, F09.S01.M01, F09.S02.M02, F09.S03.M01, F08.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

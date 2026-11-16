@@ -1,0 +1,346 @@
+id: F07.S03.M01
+scope: MVP
+summary: >-
+  Reviews and reputation computed locally from signed statements. A review is a signed statement
+  (classrup.identity.review/v1) by one party about another that points to a completed transaction context and carries
+  the counterparties' signatures over that completion (deal, cycle, booking or rental). Each vault verifies reviews it
+  receives, then computes a ReputationSummary for any DID from the reviews it has seen - count, Bayesian average and
+  per-type completed counts - with explicit Sybil dampening by author age, repetition, reciprocity and closed review
+  islands. There is no central reputation store; the summary says how many sources it was built from and that
+  reviews can be missing. Dampening slows manipulation; it cannot prevent it where creating identities is free
+  (Douceur 2002).
+responsibilities:
+  - Open a ReviewWindow (30 days, claim-based) when a local completion event arrives for a context the principal took part in, listing the eligible author-subject pairs.
+  - Create, sign, withdraw and receive reviews; accept a received review only if its author and subject are parties of the completion proof and the proof carries both parties' signatures over the completion cid.
+  - Own ReputationSummary per subject DID and recompute it deterministically with the documented weights; emit identity.reputation.recomputed and identity.review.posted.
+  - Keep dampening honest and visible - show raw counts next to the Bayesian average and the number of sources.
+non_responsibilities:
+  - Producing completion evidence; the owning transaction modules emit completion events and sign completion statements (F09, F02, F03, F05).
+  - Attestations such as 'met in person' (F07.S03.M02) and relay-side moderation of reviews (hosting policy only).
+  - Identity proofing or deduplication of persons; no module can prove two DIDs are the same or different people.
+  - "Future: commit-reveal double-blind reviews, vouching graphs, portable reputation proofs across relays, reputation-aware ranking."
+depends_on: [F07.S01.M01, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-COM-001, CTR-OBS-001, CTR-IOX-001, CTR-FLG-001]
+user_stories:
+  - As a buyer, after a completed deal I can rate the seller from 1 to 5, choose up to 3 tags and add a short comment; it is signed and sent to them and, if I choose, to my relays.
+  - As a seller, I see the reviews I received and my summary, with an honest note about how many sources it comes from.
+  - As a stranger evaluating a seller, I see the seller's rating with raw counts, completed-transaction counts and a note when most reviews come from new or tightly linked accounts.
+  - As a reviewer, I can withdraw my review with a signed tombstone.
+edge_cases:
+  - A review refers to a completion with only one party's signature; it is quarantined with reason proof_incomplete and not counted.
+  - The same author reviews the same subject for the same context twice; the second is refused with IDENTITY_REVIEW_DUPLICATE.
+  - In a 4-party cycle only pairs connected by a leg may review each other; a review between non-adjacent parties is refused with IDENTITY_REVIEW_NOT_ELIGIBLE.
+  - A review is posted 40 days after completion; the author's vault refuses it, and a received review with a claimed time beyond the window plus 2 days of skew is quarantined.
+  - Two new accounts review each other five times; repeat and reciprocity factors reduce their weight to near the floor and the UI notes 'many reviews from linked accounts'.
+  - A burst of 30 positive reviews from accounts first seen locally in the last 3 days; they count in raw totals but contribute small effective weight.
+  - A reviewer's relay hides their review under hosting policy; other sources still carry it, and the summary shows the reduced source count.
+  - The subject deletes their vault; reviews they received exist in other vaults and relays; the product says reviews are statements by others and cannot be deleted by the subject.
+  - A review's comment contains a link or personal data; shown as plain text, reportable to the relay, and hideable locally.
+ux:
+  screens:
+    - "Review sheet after completion: 1 to 5 star radio group, up to 3 tags, comment (500 chars), preview of what will be signed and where it will be sent, Send."
+    - "Reputation card on a profile: Bayesian average to one decimal, raw review count, positive and negative counts, completed counts by type, 'based on N reviews from M sources seen by this device', dampening notice when applicable."
+    - "Reviews list: author pseudonym with DID fingerprint, rating, tags, comment, context type, 'Hide for me' and 'Withdraw' (own)."
+  states: [loading, empty, eligible, posting, pending-offline, quarantined, withdrawn, error]
+  a11y:
+    - Star rating is a native radio group with text labels such as '4 of 5', not colour or shape only, and targets of 44 by 44 px.
+    - Reputation figures are real text with units, and dampening notices are announced via aria-live polite.
+    - The comment counter announces remaining characters politely at 450, 490 and 500.
+processes:
+  domain_schema:
+    requirements:
+      - A Review stores the signed statement fields, the completion proof with both parties' signatures, provenance and a verification status, and is immutable after posting except for local hide and withdrawal.
+      - A ReviewWindow stores the eligible pairs for a completed context for 30 days, keyed by the local completion event, and limits the number of pairs to 66.
+      - A ReputationSummary is derived, versioned by algorithm, and fully recomputable from stored reviews, so it can be thrown away and rebuilt.
+    entities:
+      - name: Review
+        schema: classrup.identity.review/v1
+        storage: relay+device
+        privacy: P1
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "contextType: enum — deal | cycle | booking | rental"
+          - "contextId: uuidv7 — id of the completed transaction context"
+          - "completionCid: string — cid of the completion statement all parties signed"
+          - "authorDid: did — reviewer"
+          - "subjectDid: did — reviewed party; differs from authorDid"
+          - "authorRole: string — role in the context, 1..24 characters, for example buyer or giver"
+          - "rating: int — 1..5"
+          - "tags?: array — at most 3 of as_described, on_time, communicative, safe_meetup, fair_price, careless"
+          - "comment?: string — 0..500 code points, plain text"
+          - "proof: object — { completionClaimedAt, signatures: array of { did, sig } covering at least authorDid and subjectDid }"
+          - "claimedPostedAt: timestamp — author's claim"
+          - "firstSeenAt: timestamp — local clock when this vault first saw the review"
+          - "origin: enum — own | received"
+          - "provenance?: object — { originRelay?, via, receivedAt, verifiedAt }"
+          - "cid: string — sha256-base64url of JCS(review statement without sig)"
+          - "sig: string — Ed25519 signature by the author's account signing key"
+          - "syncState?: enum — local_committed | prepared | transport_acknowledged | peer_accepted (own reviews)"
+          - "status: enum — pending_verification | posted | hidden | quarantined | withdrawn"
+          - "quarantineReason?: enum — signature_invalid | proof_incomplete | not_eligible | outside_window | schema_invalid | duplicate"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - At most one review per (contextType, contextId, authorDid, subjectDid).
+          - A posted review has a valid author signature and a proof signed by both authorDid and subjectDid over completionCid.
+          - authorDid and subjectDid are both parties of the completion's pair list.
+          - Rating, tags and comment are immutable after creation.
+      - name: ReputationSummary
+        schema: classrup.identity.reputation_summary/v1
+        storage: derived
+        privacy: P1
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "subjectDid: did — subject of the summary, unique per vault"
+          - "reviewCount: int — posted reviews seen, raw"
+          - "positiveCount: int — rating 4 or 5"
+          - "negativeCount: int — rating 1 or 2"
+          - "effectiveWeight: number — sum of dampening weights"
+          - "bayesianAvg: number — (5 times priorMean + weighted rating sum) divided by (5 + effectiveWeight), shown with one decimal"
+          - "priorMean: number — 4.0 unless the vault has at least 50 reviews, then their mean limited to 3.5..4.5"
+          - "completedByType: object — { deal, cycle, booking, rental } counts of distinct verified completion contexts"
+          - "sourceCount: int — distinct transports or relays the reviews came from"
+          - "dampeningNotice: enum — none | many_new_authors | linked_authors | island"
+          - "algorithmVersion: string — for example rep-1"
+          - "computedAt: timestamp — local clock"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - The summary is fully reproducible from the posted reviews and algorithmVersion.
+          - reviewCount counts raw posted reviews and is never reduced by dampening.
+          - bayesianAvg is between 1.0 and 5.0.
+      - name: ReviewWindow
+        schema: classrup.identity.review_window/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "contextType: enum — deal | cycle | booking | rental"
+          - "contextId: uuidv7 — completed context"
+          - "completionCid: string — cid of the completion statement"
+          - "pairs: array — at most 66 eligible [authorDid, subjectDid] pairs, only those involving the local principal as author"
+          - "opensAt: timestamp — local receipt time of the completion event"
+          - "closesAt: timestamp — opensAt plus 30 days"
+          - "status: enum — open | closed"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - closesAt equals opensAt plus 2 592 000 000 ms.
+          - One window exists per (contextType, contextId).
+    sql: |
+      CREATE TABLE identity_review (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, context_type TEXT NOT NULL, context_id TEXT NOT NULL,
+        author_did TEXT NOT NULL, subject_did TEXT NOT NULL, cid TEXT NOT NULL, status TEXT NOT NULL,
+        revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX identity_review_unique ON identity_review(tenant_id, context_type, context_id, author_did, subject_did);
+      CREATE UNIQUE INDEX identity_review_cid ON identity_review(tenant_id, cid);
+      CREATE INDEX identity_review_subject ON identity_review(tenant_id, subject_did, status);
+  validation_rules:
+    requirements:
+      - Reviews are validated for schema, signature, eligibility and proof before they count; failures are quarantined with a reason, not silently dropped.
+      - Eligibility derives only from completion evidence and the pair list, never from the review text.
+      - Limits on volume and size bound the work a hostile sender can cause.
+    rules:
+      - "V01 | rating is an integer 1..5, tags at most 3 from the fixed list, comment at most 500 code points of plain text | VALIDATION_FAILED"
+      - "V02 | review signature verifies against authorDid over JCS bytes | IDENTITY_REVIEW_SIGNATURE_INVALID"
+      - "V03 | proof carries valid signatures of both authorDid and subjectDid over the completion cid | IDENTITY_REVIEW_PROOF_INCOMPLETE"
+      - "V04 | authorDid and subjectDid form an eligible pair of the completion (all pairs for two-party contexts, leg-connected pairs for cycles) | IDENTITY_REVIEW_NOT_ELIGIBLE"
+      - "V05 | no review exists yet for (contextType, contextId, authorDid, subjectDid) | IDENTITY_REVIEW_DUPLICATE"
+      - "V06 | claimedPostedAt is within 30 days plus 2 days of skew after proof.completionClaimedAt, and for own posts the local window is open | IDENTITY_REVIEW_WINDOW_CLOSED"
+      - "V07 | the author has posted fewer than 30 reviews in the last 24 hours and the vault accepts fewer than 200 received reviews per hour from one source | RATE_LIMITED"
+      - "V08 | authorDid differs from subjectDid | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - A received review starts pending verification and ends posted or quarantined; a quarantined review may be re-verified when missing evidence arrives.
+      - A posted review can be hidden locally, restored, or withdrawn by its author's signed tombstone, which is final.
+      - A ReviewWindow is open for 30 days from the local completion event and then closed.
+    machines:
+      - entity: Review
+        initial: pending_verification
+        terminal: [withdrawn]
+        transitions:
+          - "pending_verification -> posted | all validation rules pass | store, emit identity.review.posted, schedule recompute of the subject summary"
+          - "pending_verification -> quarantined | any rule fails with a reason | keep the statement for 30 days, excluded from summaries"
+          - "quarantined -> pending_verification | missing completion evidence or the author's document arrives | re-run validation"
+          - "posted -> hidden | local hide by the user, or a relay hosting policy action on a relay copy | excluded from this vault's summaries and lists"
+          - "hidden -> posted | local unhide | included again and summary recomputed"
+          - "posted -> withdrawn | author's signed tombstone received or identity.review.withdraw by the author | delete comment and tags, keep tombstone, recompute"
+          - "hidden -> withdrawn | author's signed tombstone received | delete comment and tags, keep tombstone"
+      - entity: ReviewWindow
+        initial: open
+        terminal: [closed]
+        transitions:
+          - "open -> closed | 30 days after opensAt | no further own reviews for this context"
+    timeouts:
+      - "ReviewWindow closes 30 days after the local completion event (2 592 000 000 ms)."
+      - "Quarantined reviews are deleted 30 days after quarantine."
+      - "Recompute is coalesced per subject with a 5 s delay and a full recompute of all subjects runs daily at 03:00 local time while the app is open."
+  commands_queries_events:
+    requirements:
+      - post, withdraw and hide are vault commands; post produces the signed statement classrup.identity.review/v1 and withdraw produces classrup.federation.tombstone/v1; receive is the vault intake of someone else's review.
+      - Completion events open review windows; they never create reviews by themselves.
+      - Every command emits its events in the same local transaction as the state change.
+    commands:
+      - name: identity.review.post
+        capability: identity.review.post
+        input: "{ contextType, contextId, subjectDid, rating, tags?, comment?, audience: subject_only|public, targetRelays? }"
+        output: "{ reviewId, cid, statement: classrup.identity.review/v1, syncState: local_committed }"
+        errors: [VALIDATION_FAILED, IDENTITY_REVIEW_NOT_ELIGIBLE, IDENTITY_REVIEW_DUPLICATE, IDENTITY_REVIEW_WINDOW_CLOSED, IDENTITY_REVIEW_PROOF_INCOMPLETE, BLOCKED_PARTY, RATE_LIMITED]
+        emits: [identity.review.posted]
+        idempotent: true
+      - name: identity.review.receive
+        capability: identity.review.receive
+        input: "{ statement: classrup.identity.review/v1, provenance }"
+        output: "{ reviewId, status: posted|quarantined, quarantineReason? }"
+        errors: [IDENTITY_REVIEW_SIGNATURE_INVALID, IDENTITY_REVIEW_PROOF_INCOMPLETE, IDENTITY_REVIEW_NOT_ELIGIBLE, IDENTITY_REVIEW_DUPLICATE, IDENTITY_REVIEW_WINDOW_CLOSED, BLOCKED_PARTY, RATE_LIMITED]
+        emits: [identity.review.posted]
+        idempotent: true
+      - name: identity.review.withdraw
+        capability: identity.review.withdraw
+        input: "{ reviewId, expectedRevision }"
+        output: "{ reviewId, revision, tombstone: classrup.federation.tombstone/v1 }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [identity.reputation.recomputed]
+        idempotent: true
+      - name: identity.review.hide
+        capability: identity.review.hide_local
+        input: "{ reviewId, hidden: boolean, expectedRevision }"
+        output: "{ reviewId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [identity.reputation.recomputed]
+        idempotent: true
+    queries:
+      - name: identity.reputation.get
+        capability: identity.reputation_summary.read
+        input: "{ subjectDid }"
+        output: "{ summary: ReputationSummary, note: 'based on reviews seen by this device' }"
+        errors: [NOT_FOUND]
+      - name: identity.review.list_for_subject
+        capability: identity.review.read
+        input: "{ subjectDid, status?: posted|hidden, cursor?, limit? (1..50) }"
+        output: "{ items: Review[], nextCursor? }"
+        errors: [NOT_FOUND]
+      - name: identity.review.list_eligible
+        capability: identity.review_window.read_own
+        input: "{ cursor?, limit? (1..50) }"
+        output: "{ items: [{ windowId, contextType, contextId, subjectDid, closesAt }], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: identity.review.posted, privacy: P1, payload: "{ reviewId, contextType, contextId, authorDid, subjectDid, rating, origin }"}
+      - {type: identity.reputation.recomputed, privacy: P1, payload: "{ subjectDid, reviewCount, bayesianAvg, effectiveWeight, algorithmVersion }"}
+    events_consumed:
+      - {type: commerce.deal.completed, effect: "open a ReviewWindow for the deal with the eligible pair of the two parties when the local principal took part"}
+      - {type: mutiny.cycle.completed, effect: "open a ReviewWindow with leg-connected pairs involving the local principal"}
+      - {type: services.booking.completed, effect: "open a ReviewWindow for the client and provider pair"}
+      - {type: rentals.rental.closed, effect: "open a ReviewWindow for the owner and renter pair"}
+      - {type: federation.tombstone.applied, effect: "mark the targeted review withdrawn and recompute the subject summary"}
+      - {type: privacy.deletion.completed, effect: "vault erase - delete all reviews, windows and summaries"}
+    errors:
+      - "IDENTITY_REVIEW_SIGNATURE_INVALID | 422 | no | review signature does not verify against the author DID"
+      - "IDENTITY_REVIEW_PROOF_INCOMPLETE | 422 | no | completion proof lacks the signature of the author or the subject"
+      - "IDENTITY_REVIEW_NOT_ELIGIBLE | 422 | no | author and subject are not an eligible pair of the completed context"
+      - "IDENTITY_REVIEW_DUPLICATE | 409 | no | a review already exists for this context, author and subject"
+      - "IDENTITY_REVIEW_WINDOW_CLOSED | 410 | no | the 30 day review window has closed"
+    example: |
+      event commerce.deal.completed (local) -> ReviewWindow { contextType: "deal", closesAt: "2026-12-04T10:00:00.000Z" }
+      vault command: identity.review.post { "contextType": "deal", "contextId": "0192f450-…", "subjectDid": "did:key:z6Mk…", "rating": 5, "tags": ["on_time", "as_described"], "comment": "Smooth handover.", "audience": "public" }
+      -> { "reviewId": "0192f451-…", "cid": "sha256-Qm…", "syncState": "local_committed" }
+      weight(review) = w_age * w_exp * w_repeat * w_recip * w_island, each in 0.1..1.0 except w_island in 0.25..1.0; bayesianAvg = (5 * 4.0 + sum(w * rating)) / (5 + sum(w))
+  authorization_capabilities:
+    requirements:
+      - Vault policy - only the unlocked principal posts, withdraws or hides; reviews are accepted from others only on verified signatures and proofs, and authority comes from the signed completion evidence, not from the sender or relay.
+      - Reviews are readable to anyone who holds the statement; public reviews are P1 community data shared through relays the author chose, and subject-only reviews are end-to-end encrypted to the subject.
+      - Relays may hide a review copy under their hosting policy but cannot create, edit or delete the author's statement.
+    capabilities:
+      - "identity.review.post | principal | unlocked principal; open ReviewWindow containing the pair; not blockedWith subject"
+      - "identity.review.receive | principal | signature and proof verify; author not blocked"
+      - "identity.review.withdraw | principal | unlocked principal and review.authorDid equals the principal DID"
+      - "identity.review.hide_local | principal | unlocked local principal"
+      - "identity.reputation_summary.read | principal | unlocked local principal"
+      - "identity.review.read | principal | unlocked local principal; hidden reviews only with explicit request"
+      - "identity.review_window.read_own | principal | unlocked local principal"
+  failure_recovery_idempotency:
+    requirements:
+      - Posting, receiving and recomputing are idempotent because cids and the unique review key make duplicates harmless, and a summary can always be rebuilt from stored reviews.
+      - Review statements reach others through the sync outbox with states local_committed, prepared, transport_acknowledged and peer_accepted, and the UI never claims more than the reached state.
+      - Quarantine keeps unverified material out of every score until it verifies.
+    idempotency: "Idempotency-Key per command in the vault log for 24 h; receive keyed by cid; recompute is a pure function of stored reviews and algorithmVersion."
+    concurrency: "Unique key on (context, author, subject) prevents duplicates under races; expectedRevision on withdraw and hide; summary recompute is a single transaction per subject; Web Locks serialize tabs."
+    retries: "Outbox retries use base 500 ms, cap 30 s, full jitter, max 6 attempts per window until transport_acknowledged or the user cancels; validation failures are never retried."
+    offline: "Posting, receiving from stored data and recomputing work offline; the review shows 'not yet delivered' until transport_acknowledged and 'accepted by peer' only after a signed peer acknowledgement."
+    partial_failure: "If recompute fails the old summary stays with a stale marker and a retry runs in 60 s; if a review verifies but the summary write fails, the review is posted and the summary is rebuilt on the daily run."
+  privacy_retention_abuse:
+    requirements:
+      - Reviews are statements by individuals about transactions and are P1; subject-only reviews travel end-to-end encrypted, and comments never contain exact addresses or contact data by rule and by warning.
+      - Reputation is shown with its provenance - the number of reviews and sources seen by this device - because no party holds the complete set.
+      - The product states that dampening reduces but does not remove the effect of fake identities and colluding parties.
+    data:
+      - "Review: P1 when public, P2 when subject-only; comments are free text and may be reported to a relay; ReviewWindow P2; ReputationSummary P1 derived."
+    retention:
+      - "Reviews and windows RET-EVIDENCE (2 years after last related activity); withdrawn reviews keep only a tombstone for 180 days; quarantined reviews 30 days."
+      - "On vault erase everything local is deleted; copies in other vaults and relays remain and are removed only by signed tombstones."
+    threats:
+      - "T01 | Fake positive reviews from sybil identities (Douceur 2002) | weights by observed author age, author's own completion count, repetition, reciprocity and island detection; raw counts and sources always shown; honest limit - free identity creation cannot be fully defended without a central authority"
+      - "T02 | Fabricated completions between two colluding identities | the proof needs both parties' signatures, so collusion requires two keys the attacker controls; the cost is low, so such pairs are dampened by repetition and island rules and the UI notes the limit"
+      - "T03 | Retaliatory negative reviews | reviews need a real completion proof, one review per pair and context, 30 day window, withdraw option; double-blind commit-reveal is Future"
+      - "T04 | Subject suppresses bad reviews | reviews are authored and distributed by the reviewer to relays they choose, and the summary shows source count; honest limit - a viewer who sees only the subject's relay may miss reviews"
+      - "T05 | Review bombing by many real counterparties | each review needs a distinct completion context; ranking does not use reputation in MVP; viewers see raw distribution"
+      - "T06 | Comment used for harassment or doxxing | plain text, 500 code points, local hide, report to the relay hosting policy, withdraw by author"
+    abuse_controls:
+      - "Author limit 30 reviews per 24 hours; vault intake 200 reviews per hour per transport source; per subject the vault uses at most the newest 500 reviews."
+      - "Sybil dampening weights - w_age = clamp(authorAgeDays/30, 0.1, 1) from the earliest local sighting of the author's DID; w_exp = min(1, 0.25 + 0.25 times author's completed contexts known, at least 0.5); w_repeat = 1/n for the n-th review by one author about one subject in 180 days; w_recip = 0.5 when author and subject reviewed each other 2 or more times in 180 days; w_island = 0.25 for a review graph component of at most 6 DIDs with at least 6 edges and no edge to a DID outside the component, otherwise 1; reviewers the viewer has a completed context with get a floor of 0.8."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry; local diagnostics keep counters without DIDs or content.
+      - Recompute for a subject with 500 reviews completes within 20 ms on a Moto G-class device, and reputation card render fits the PWA budget (LCP at most 2.5 s on the 4G profile).
+      - Verification of a review (signature plus two proof signatures) takes at most 15 ms p95.
+    metrics:
+      - "local counter review_total{event=posted|received|quarantined|withdrawn,reason}"
+      - "local histogram reputation_recompute_duration_ms"
+    logs:
+      - "info review.event {event, correlationId} in the local diagnostics log - no DIDs, ratings or comments."
+    budgets:
+      - "verify review p95 <= 15 ms; recompute 500 reviews p95 <= 20 ms; list 50 reviews p95 <= 50 ms on a Moto G-class device."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test with fixed key pairs and an injected clock.
+      - Golden vectors pin the dampening formula and Bayesian average.
+      - Privacy and abuse tests simulate sybil rings and fabricated completions.
+    fixtures: "Principal P, counterparties Q and R, cycle of four DIDs A,B,C,D with legs A to B, B to C, C to D, D to A, signed completion statements, sybil ring of 5 new DIDs, golden review set of 100 reviews with known weights, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | integration | 01.R02,04.R03 | completion events for a deal, cycle, booking and rental | one ReviewWindow per context with the documented pairs and closesAt = opensAt plus 30 days"
+      - "T02 | unit | 01.R01,02.R01,02.R02 | post a valid review | statement signed, stored posted, immutable fields unchanged, cid computed"
+      - "T03 | unit | 02.R02,02.R03 | bad signature, proof with one signature, non-adjacent cycle pair, duplicate, 40 days late, rating 6 | the documented error or quarantine reason each time"
+      - "T04 | property | 03.R01,03.R02,03.R03 | random sequences of receive, hide, unhide, withdraw, window expiry | only declared transitions succeed; withdrawn is final; quarantined can re-verify"
+      - "T05 | unit | 01.R03,09.R02 | golden review set | reviewCount raw, effectiveWeight and bayesianAvg equal golden values within 1e-9; recompute twice gives identical results"
+      - "T06 | abuse | 07.R01,07.R02 | ring of 5 new DIDs posting 30 five-star reviews about one subject | effective weight is under 15 percent of raw, dampeningNotice is island or many_new_authors, raw count still displayed"
+      - "T07 | abuse | 07.R03,02.R03 | collusion pair posts 6 reviews on fabricated completions | repeat and reciprocity weights reduce them; all but the first per context refused as duplicates"
+      - "T08 | contract | 04.R01,04.R02,09.R03 | commands, queries, events run | outputs, statements and payloads validate against registry schemas; tombstone verifies"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | locked vault posts; non-author withdraws; relay edits a stored review | FORBIDDEN; NOT_FOUND or FORBIDDEN; edit breaks the signature and is rejected"
+      - "T10 | chaos | 06.R01,06.R02,06.R03 | duplicate delivery, crash during recompute, offline post then reconnect | one review, summary rebuilt, outbox states honest"
+      - "T11 | abuse | 07.R01,07.R02,07.R03 | 31 reviews in 24 hours by one author; 201 received per hour from one source | RATE_LIMITED for the 31st and excess quarantined; no subject-only review readable without the key"
+      - "T12 | load | 08.R01,08.R02,08.R03 | verify 1 000 reviews and recompute a 500 review subject on emulated Moto G | verify p95 <= 15 ms, recompute p95 <= 20 ms"
+      - "T13 | a11y | 01.R01,04.R01 | review sheet and reputation card with axe-core and keyboard only | zero serious or critical issues; star group labelled; notices announced"
+      - "T14 | unit | 09.R01 | traceability run over PS-058 | every requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import to a fresh vault, tombstone after import | reviews re-verified and round-trip; summary rebuilt; withdrawn review removed from the summary"
+    acceptance:
+      - All tests T01-T15 pass in CI.
+      - Golden dampening vectors are stable and a sybil ring cannot raise the effective weight of its reviews above 15 percent of raw in the ring test.
+      - The UI always shows raw counts, source count and the dampening notice, and never claims verified identity of persons.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the principal's own reviews, received reviews it chose to keep, review windows, and not the derived summary, which is rebuilt.
+      - Import re-verifies signatures and proofs and quarantines failures; open windows are restored with their original closesAt.
+      - Algorithm changes bump algorithmVersion, recompute from stored reviews, and keep the previous version's results available for 30 days.
+    export: "Sections identity.reviews and identity.review_windows in classrup-export/v1 (schemas classrup.identity.review/v1 and classrup.identity.review_window/v1); ReputationSummary is excluded because it is derived."
+    import: "Each review is re-verified; invalid ones are reported and skipped; windows already past closesAt import as closed; summaries are recomputed after import."
+    backup: "The vault export is the primary backup (IOX-6); relays store public review statements only and losing a relay loses no private data (IOX-7)."
+    migration_rollback: "Algorithm and schema changes are additive; rollback is recompute with the previous algorithmVersion from the stored reviews."

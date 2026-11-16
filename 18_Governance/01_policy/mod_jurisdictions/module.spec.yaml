@@ -1,0 +1,277 @@
+id: F18.S01.M01
+scope: MVP
+summary: >-
+  Configurable jurisdiction profiles: retention overrides, self-declared age gates, required notices and
+  restricted categories for a region or community. A profile is configuration chosen by a user or by a relay
+  operator, not legal advice and not a legal determination. Profiles are authored by a publisher, released as
+  signed statements (classrup.governance.jurisdiction_profile/v1), verified and stored in each vault, and
+  selected locally. The vault applies the selected profile when publishing and when computing retention; a relay
+  applies its own profile to what it hosts. A profile can never weaken the privacy floors of CTR-PRV-001 (public
+  location at most L2, exact addresses never public).
+responsibilities:
+  - Own JurisdictionProfile: code, countries, retention overrides inside allowed bounds, minimum age, required notices and restricted category ids.
+  - Author, version and release profiles in a publisher vault; activation of a profile that changes retention or restrictions needs an approved policy decision (F18.S02.M01) except for the first profile of a publisher.
+  - Verify and store profiles in any vault, let the user select the active profile per vault, and resolve the effective profile for a region for other modules (publish checks, retention, age gate).
+  - Reject profile content that would weaken privacy floors or set evidence retention below 180 days or above 3 650 days.
+non_responsibilities:
+  - Providing legal advice or determining what is lawful in a place; profiles are a tool the user or operator configures.
+  - Prohibited-item rules (F18.S01.M02) and the taxonomy (F18.S01.M03); profiles reference category ids only.
+  - Executing retention and deletion (F10.S01.M02, F10.S01.M04); this module supplies the effective numbers.
+  - Verifying age or identity; the age gate is a self-declaration shown before relevant actions.
+  - "Future: automatic jurisdiction suggestion from device locale and per-category age rules."
+depends_on: [F18.S01.M03, F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001]
+user_stories:
+  - As a user, I pick the jurisdiction profile that fits where I live and see exactly what it changes (notices, retention, restricted categories).
+  - As a relay operator, I publish a profile for my community and users can adopt it.
+  - As a seller, I am shown the notices that apply to my category before I publish, and I confirm them.
+edge_cases:
+  - A profile tries to lower evidence retention below 180 days; rejected with GOVERNANCE_PROFILE_BOUNDS.
+  - A profile tries to allow public location finer than L2; rejected with GOVERNANCE_PROFILE_PRIVACY_FLOOR.
+  - A profile lists a category id that does not exist in the active taxonomy; the profile is stored with a warning and the entry is ignored until the category exists.
+  - User selects a profile whose publisher they do not trust; the profile is stored as pending and not applied.
+  - Two profiles are both selected for overlapping regions; the stricter value wins for each field and the UI shows which profile set it.
+  - The user is below the minimum age declared by the profile; actions that need the age gate are disabled with an explanation, and the declaration is local only.
+  - The active profile is retired by its publisher; the vault keeps using the last version until the user selects another and shows a banner.
+ux:
+  screens:
+    - "Profile chooser: list of trusted and pending profiles with publisher fingerprint, version, age, and a Compare view of what changes."
+    - "Notice sheet shown at publish: required notices as plain-language text with a checkbox per notice and a link to the full text."
+    - "Operator editor: form for countries, retention overrides with allowed ranges, notices (message keys), minimum age, restricted categories; release button."
+  states: [loading, empty, pending-trust, active, retired-banner, conflict-merge, offline-cached]
+  a11y:
+    - Compare view is a table with headers; changes are indicated by text such as Stricter or Looser, not colour alone.
+    - Notice checkboxes have visible labels and the sheet is a dialog with focus trap; buttons are at least 44x44 px.
+    - Age declaration uses a date-free control (a yes/no statement) to avoid cognitive-function tests.
+processes:
+  domain_schema:
+    requirements:
+      - "A JurisdictionProfile has a code, a version, covered countries, bounded retention overrides, a minimum age, required notices and restricted category references."
+      - "Profiles are public signed configuration (P0); the user's selection is a P3 local preference that is never sent anywhere."
+      - "Profile bounds protect privacy floors: location precision, home address secrecy and evidence retention limits cannot be loosened by any profile."
+    entities:
+      - name: JurisdictionProfile
+        schema: classrup.governance.jurisdiction_profile/v1
+        storage: relay+device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — stable primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "publisherId: did:key — signer and origin"
+          - "code: string — [a-z0-9-]{2,32}, unique per publisher"
+          - "version: int — monotonic per code"
+          - "name: object — locale to display name, 1..60 code points"
+          - "countryCodes: string[] — 0..30 ISO 3166-1 alpha-2 codes; empty means community-wide"
+          - "retentionOverrides: object — evidenceDays 180..3650, standardPurgeDays 7..90, auditDays 90..730; absent keys use CTR-PRV-001 defaults"
+          - "minimumAge?: int — 13..21, self-declared gate"
+          - "requiredNotices: object[] — 0..20 items {noticeId, textKey, appliesTo: publish|offer|giveaway|all, categoryIds?: uuidv7[]}"
+          - "restrictedCategoryIds: uuidv7[] — 0..200 ids of F18.S01.M03 Category"
+          - "disclaimerKey: string — i18n key stating this is configuration, not legal advice; required"
+          - "status: enum — draft | active | retired"
+          - "proposalId?: uuidv7 — ref F18.S02.M01 approved decision, required for activation of changes"
+          - "effectiveFrom?: timestamp — RFC 3339 UTC, publisher claim"
+          - "provenance: object — {originRelay?, receivedAt, verifiedAt, statementCid}"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - retentionOverrides never fall outside the declared ranges and never contradict RET-LEGAL-HOLD precedence.
+          - No field can express a public location precision above L2 or the publication of home addresses.
+          - At most one active version per (publisherId, code); versions only increase.
+    sql: |
+      CREATE TABLE governance_jurisdiction_profile (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, publisher_id TEXT NOT NULL, code TEXT NOT NULL, version INTEGER NOT NULL,
+        status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX governance_jurisdiction_profile_active ON governance_jurisdiction_profile(tenant_id, publisher_id, code)
+        WHERE status = 'active';
+  validation_rules:
+    requirements:
+      - "Profile content is validated against bounds and privacy floors before it is staged, released or applied."
+      - "Selection and resolution validate trust in the publisher and the profile status."
+      - "Every violation maps to one stable error code."
+    rules:
+      - "V01 | code matches [a-z0-9-]{2,32}; names 1..60 code points with en present | VALIDATION_FAILED"
+      - "V02 | evidenceDays in 180..3650, standardPurgeDays in 7..90, auditDays in 90..730 | GOVERNANCE_PROFILE_BOUNDS"
+      - "V03 | no field requests public location above L2, exposure of exact addresses or federation of P2 data | GOVERNANCE_PROFILE_PRIVACY_FLOOR"
+      - "V04 | minimumAge between 13 and 21 | GOVERNANCE_PROFILE_BOUNDS"
+      - "V05 | at most 20 notices, each with a textKey, and at most 200 restricted category ids | VALIDATION_FAILED"
+      - "V06 | disclaimerKey present | VALIDATION_FAILED"
+      - "V07 | activation of a changed profile cites a proposal verified by F18.S02.M01 for this profile code | GOVERNANCE_PROFILE_PROPOSAL_REQUIRED"
+      - "V08 | profile signature verifies and publisher is trusted by this vault when selecting | GOVERNANCE_PROFILE_UNTRUSTED"
+      - "V09 | version is greater than the stored version for the same publisher and code | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - "JurisdictionProfile follows the declared machine in the publisher vault; vaults mirror status from verified statements."
+      - "Retired is terminal; a changed profile is a new version that supersedes the previous active one atomically."
+      - "A user's local selection is separate from profile status and can be changed at any time."
+    machines:
+      - entity: JurisdictionProfile
+        initial: draft
+        terminal: [retired]
+        transitions:
+          - "draft -> active | governance.jurisdiction_profile.release by publisher | proposal verified (except first profile); statement signed; previous active version of the same code becomes retired"
+          - "active -> retired | governance.jurisdiction_profile.retire by publisher, or superseded by a higher version | signed retirement statement queued"
+          - "draft -> retired | discard by publisher | local only"
+    timeouts:
+      - "A profile pending trust is discarded after 30 days without a decision."
+  commands_queries_events:
+    requirements:
+      - "draft, release and retire are publisher commands in the publisher's vault; release and retire produce signed statements (classrup.governance.jurisdiction_profile/v1 and classrup.governance.jurisdiction_profile_retirement/v1)."
+      - "receive and select are vault commands in every user's vault; select is a local preference and produces no statement."
+      - "resolve and get are queries used by F01.S01.M03 (publish), F10.S01.M02 (retention) and the UI."
+    commands:
+      - name: governance.jurisdiction_profile.draft
+        capability: governance.jurisdiction_profile.author
+        input: "[vault-local, publisher] { profileId?, expectedRevision?, code, name, countryCodes, retentionOverrides?, minimumAge?, requiredNotices, restrictedCategoryIds, disclaimerKey }"
+        output: "{ profileId, revision, version, status: draft }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, GOVERNANCE_PROFILE_BOUNDS, GOVERNANCE_PROFILE_PRIVACY_FLOOR]
+        emits: []
+        idempotent: true
+      - name: governance.jurisdiction_profile.release
+        capability: governance.jurisdiction_profile.release
+        input: "[vault-local, publisher + statement classrup.governance.jurisdiction_profile/v1] { profileId, expectedRevision, proposalId?, relayIds[] }"
+        output: "{ profileId, version, status: active, statementCid, syncState: prepared }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, GOVERNANCE_PROFILE_PROPOSAL_REQUIRED, GOVERNANCE_PROFILE_BOUNDS, GOVERNANCE_PROFILE_PRIVACY_FLOOR]
+        emits: [governance.jurisdiction_profile.activated]
+        idempotent: true
+      - name: governance.jurisdiction_profile.retire
+        capability: governance.jurisdiction_profile.release
+        input: "[vault-local, publisher + statement classrup.governance.jurisdiction_profile_retirement/v1] { profileId, expectedRevision }"
+        output: "{ profileId, status: retired }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [governance.jurisdiction_profile.activated]
+        idempotent: true
+      - name: governance.jurisdiction_profile.receive
+        capability: governance.jurisdiction_profile.apply
+        input: "[vault-local, inbound statement] { envelope, provenance, trustPublisher?: boolean }"
+        output: "{ profileId?, stored: boolean, pendingReason? }"
+        errors: [VALIDATION_FAILED, GOVERNANCE_PROFILE_UNTRUSTED, GOVERNANCE_PROFILE_BOUNDS, GOVERNANCE_PROFILE_PRIVACY_FLOOR, UNSUPPORTED_SCHEMA_VERSION, CONFLICT_STATE]
+        emits: [governance.jurisdiction_profile.activated]
+        idempotent: true
+      - name: governance.jurisdiction_profile.select
+        capability: governance.jurisdiction_profile.select
+        input: "[vault-local] { profileIds: uuidv7[] (1..3), declaredAgeAtLeast?: int }"
+        output: "{ selected: uuidv7[], effectiveMinimumAge? }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, GOVERNANCE_PROFILE_UNTRUSTED]
+        emits: []
+        idempotent: true
+    queries:
+      - name: governance.jurisdiction_profile.get
+        capability: governance.jurisdiction_profile.read
+        input: "{ profileId }"
+        output: "{ profile: JurisdictionProfile }"
+        errors: [NOT_FOUND]
+      - name: governance.jurisdiction_profile.list
+        capability: governance.jurisdiction_profile.read
+        input: "{ publisherId?, status?, cursor?, limit <= 50 }"
+        output: "{ items: JurisdictionProfile[], nextCursor? }"
+        errors: [VALIDATION_FAILED]
+      - name: governance.jurisdiction_profile.resolve
+        capability: governance.jurisdiction_profile.read
+        input: "{ regionCountry?, categoryId?, action?: publish|offer|giveaway }"
+        output: "{ effective: { evidenceDays, standardPurgeDays, auditDays, minimumAge?, requiredNotices[], restricted: boolean }, sources: [{ profileId, field }] }"
+        errors: [VALIDATION_FAILED]
+    events_produced:
+      - {type: governance.jurisdiction_profile.activated, privacy: P0, payload: "{ profileId, publisherId, code, version, status: active|retired, statementCid }"}
+    events_consumed:
+      - {type: governance.category.changed, effect: "revalidate restricted category references of stored profiles; entries for retired categories follow mergedInto"}
+    errors:
+      - "GOVERNANCE_PROFILE_BOUNDS | 422 | no | a retention or age value is outside the allowed range"
+      - "GOVERNANCE_PROFILE_PRIVACY_FLOOR | 422 | no | profile would weaken a privacy floor of CTR-PRV-001"
+      - "GOVERNANCE_PROFILE_PROPOSAL_REQUIRED | 412 | no | activation needs a verified approved policy decision"
+      - "GOVERNANCE_PROFILE_UNTRUSTED | 403 | no | publisher is not trusted by this vault"
+    example: |
+      publisher vault: dispatch("governance.jurisdiction_profile.release", { "profileId": "0192f3b4-...", "expectedRevision": 2, "proposalId": "0192f3b2-...", "relayIds": ["relay:berlin.example"] })
+      => { "profileId": "0192f3b4-...", "version": 3, "status": "active", "statementCid": "sha256-Zm9v...", "syncState": "prepared" }
+      user vault: dispatch("governance.jurisdiction_profile.select", { "profileIds": ["0192f3b4-..."], "declaredAgeAtLeast": 18 })
+      => { "selected": ["0192f3b4-..."], "effectiveMinimumAge": 16 }
+      query governance.jurisdiction_profile.resolve { regionCountry: "DE", action: "publish" } => effective notices and retention with sources.
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: authoring and releasing require the publisher key; receiving, selecting and reading are available to the vault owner for trusted publishers."
+      - "Relay policy (CAP-9): a relay applies its own profile to what it hosts and accepts profile uploads only from its operator key; a relay role has no effect on a user's local selection."
+      - "The age declaration and the selection are P3 local preferences and are never transmitted."
+    capabilities:
+      - "governance.jurisdiction_profile.author | owner | local principal holds the publisher key; profile status draft"
+      - "governance.jurisdiction_profile.release | owner | local principal is the profile publisher; proposal verified when required; signing key unrevoked"
+      - "governance.jurisdiction_profile.apply | owner | vault unlocked; signature valid and publisher trusted or trusted in the same action"
+      - "governance.jurisdiction_profile.select | owner | vault unlocked; profiles are active and trusted"
+      - "governance.jurisdiction_profile.read | owner | vault unlocked; internal callers F01.S01.M03 and F10.S01.M02 on the owner's behalf"
+      - "governance.jurisdiction_profile.relay_read | relay-anonymous | relay policy: public read of the relay's active profiles, 60 requests per minute per IP prefix"
+      - "governance.jurisdiction_profile.relay_publish | relay-operator | relay policy: request signed by the operator device key"
+  failure_recovery_idempotency:
+    requirements:
+      - "Commands are idempotent per CTR-IDM-001; statements are deduplicated by cid and version."
+      - "Release, supersession of the previous version and the outbox entry commit in one transaction."
+      - "Offline use is complete locally; publication state is prepared until a relay receipt exists."
+    idempotency: "Idempotency-Key required on authoring, release and select; keys kept 24 h; receive is idempotent by statementCid."
+    concurrency: "expectedRevision on draft, release and retire; unique active index per publisher and code; two releases racing in one publisher vault are serialized by the transaction and the second sees CONFLICT_REVISION."
+    retries: "Relay upload retries follow IDM-4 (base 500 ms, cap 30 s, 6 attempts); validation errors are not retried."
+    offline: "All commands except relay upload work offline; the last verified profile stays in force offline."
+    partial_failure: "A rejected relay upload leaves the local release committed with delivery state relay_rejected; a failed signature check on receive stores nothing."
+  privacy_retention_abuse:
+    requirements:
+      - "Profiles contain no personal data; the user's selection and age declaration are P3 local data and never leave the vault."
+      - "Profile versions are retained RET-STANDARD, with the last 3 versions of each code kept locally."
+      - "The UI states that profiles are configuration, not legal advice, and that the platform cannot verify age."
+    data:
+      - "JurisdictionProfile: P0 signed configuration."
+      - "Selection and age declaration: P3, local only."
+    retention:
+      - "JurisdictionProfile mirror: RET-STANDARD; last 3 versions per code."
+    threats:
+      - "T01 | Operator profile that quietly weakens privacy or shortens evidence retention to destroy records | hard bounds and privacy floors enforced in every vault, proposal required for activation, visible compare view"
+      - "T02 | Forged profile statement | signature over JCS and trusted-publisher check"
+      - "T03 | Age gate treated as verification | UI wording says self-declared; declaration never stored remotely"
+      - "T04 | Restricted-category list used to censor competitors | categories referenced by id, proposal and public changelog, user can choose another profile"
+    abuse_controls:
+      - "Publisher limit of 50 profiles; vault trusts at most 10 publishers."
+      - "Upload limit 10 per day per operator key on a relay."
+  observability_performance:
+    requirements:
+      - "No telemetry leaves the device (OBS-7); counters are local diagnostics."
+      - "Resolve is called on every publish and must be fast on Moto G-class hardware."
+      - "Relay profile serving follows OBS-1 to OBS-4."
+    metrics:
+      - "classrup_governance_profile_applied_total{outcome} (local)"
+      - "classrup_governance_profile_resolve_duration_ms (local histogram)"
+      - "classrup_governance_profile_downloads_total (relay)"
+    logs:
+      - "info jurisdiction_profile.activated {profileId, version, correlationId} in local diagnostics."
+    budgets:
+      - "resolve p95 <= 15 ms; receive p95 <= 80 ms on Moto G-class hardware."
+      - "Relay profile download p95 <= 150 ms at 50 req/s."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate statements, commands and events against the registry and verify signatures."
+      - "Privacy-floor tests fail the build if any profile field can loosen CTR-PRV-001."
+    fixtures: "Publisher vault P with key KP, trusted and untrusted publisher keys, categories C1 (restricted) and C2, approved proposal D1 for code eu-de, user vault U, clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01,02.R02 | draft a valid profile and one with bad code | stored revision 1; invalid input rejected with documented code"
+      - "T02 | unit | 01.R02,01.R03,02.R03 | violate each rule V01-V09 | documented error code returned; nothing released or stored"
+      - "T03 | property | 01.R03,02.R02 | random retention and location values | values outside bounds or above L2 never accepted"
+      - "T04 | property | 03.R01,03.R02 | random lifecycle commands | only declared transitions; at most one active version per code; retired terminal"
+      - "T05 | integration | 03.R03,04.R03 | select two overlapping profiles | stricter value wins per field; sources reported"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | release, receive, select | statements validate and verify; activated event payload valid"
+      - "T07 | abuse | 05.R01,05.R02 | untrusted publisher, tampered statement, non-publisher release | pending or FORBIDDEN or rejected; selection and age never sent over network (spy)"
+      - "T08 | abuse | 05.R03,07.R02 | relay serves and uploads; scan logs for age declaration | anonymous read allowed, upload needs operator key, no age data in logs"
+      - "T09 | integration | 06.R01,06.R02 | replay release; crash after supersede | one active version; consistent after restart"
+      - "T10 | chaos | 06.R03 | relay rejects upload | local release stands with relay_rejected delivery"
+      - "T11 | abuse | 07.R01,07.R03 | inspect UI strings and stored data | disclaimer present; no age verification claim; no personal data in profiles"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 100 resolves per second for 1 minute on Moto G profile; relay 50 req/s | resolve p95 <= 15 ms, relay p95 <= 150 ms, no telemetry"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-145 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import profile with bad bounds | round-trip; invalid profile rejected in dry-run"
+    acceptance:
+      - All tests T01-T14 pass in CI.
+      - No profile can weaken a privacy floor, set evidence retention outside 180 to 3 650 days, or be activated without a verified decision (except a publisher's first profile).
+      - The age declaration and selection never leave the device.
+  import_export_backup_rollback:
+    requirements:
+      - "The user export contains stored profiles with provenance, the trusted publisher list and the local selection."
+      - "Import re-verifies signatures, bounds and privacy floors; failing profiles are stored as read-only history."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days."
+    export: "Sections governance.jurisdiction_profiles and governance.profile_selection in classrup-export/v1, one line per JurisdictionProfile (schema classrup.governance.jurisdiction_profile/v1); the selection line includes the age declaration because the export goes to the owner only."
+    import: "Untrusted publishers import as pending; selection is restored only for profiles that verify; bounds violations are rejected in the dry-run."
+    backup: "Vault export is the primary backup (IOX-6); relays hold public signed profiles that can be re-fetched."
+    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release; to undo a profile change the publisher releases the earlier content as a higher version."

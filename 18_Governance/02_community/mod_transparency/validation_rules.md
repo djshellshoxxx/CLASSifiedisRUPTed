@@ -1,35 +1,36 @@
-# PS-148-02 — validation rules
+# PS-148-02 — Validation rules: Transparency reports
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-148-02. **Owner:** [18_Governance/02_community/mod_transparency](SPEC.md). **Implementing module:** 18_Governance/02_community/mod_transparency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F18.S02.M02 Transparency reports](SPEC.md) · **Scope:** MVP · **Code:** `packages/governance/src/community/transparency` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for transparency within 02_community. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-148-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-148-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-148-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-148-02.R01** Inputs are validated against closed vocabularies so counters can never carry identifying text.
+- **PS-148-02.R02** Computation and publication validate suppression, coverage, reviewer separation and period state.
+- **PS-148-02.R03** Every violation maps to one stable error code.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | periodKey matches YYYY-Qn (n 1..4) or YYYY-MM and the period has ended before compute | GOVERNANCE_TRANSPARENCY_PERIOD_INVALID |
+| V02 | legal request type in court_order, law_enforcement, data_subject, other and outcome in complied, partial, rejected | VALIDATION_FAILED |
+| V03 | legal request increment is an integer 1..1000 and no free text is accepted | VALIDATION_FAILED |
+| V04 | counter dimension belongs to the closed vocabulary of its metric | VALIDATION_FAILED |
+| V05 | computed tables contain no cell with value 1..9 and apply complementary suppression per row | GOVERNANCE_TRANSPARENCY_SUPPRESSION |
+| V06 | reviewer key differs from the compiler key and is a registered operator key | GOVERNANCE_TRANSPARENCY_SELF_REVIEW |
+| V07 | publish only for status computed with matching contentCid | CONFLICT_STATE |
+| V08 | at most 1 published version per period unless the new version supersedes it with a correction note | CONFLICT_STATE |
+| V09 | report body <= 64 KiB JCS and schema version supported | UNSUPPORTED_SCHEMA_VERSION |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-148-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-148-09.T01 | unit | PS-148-01.R01, PS-148-01.R02, PS-148-02.R01 | compute 2026-Q3 | report immutable with contentCid; counters hold closed-vocabulary dimensions only |
+| TEST-PS-148-09.T02 | unit | PS-148-02.R02, PS-148-02.R03 | violate each rule V01-V09 | documented error code returned; nothing published |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

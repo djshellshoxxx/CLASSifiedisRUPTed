@@ -1,0 +1,335 @@
+# F09.S01.M03 Crypto payments (ADR-0015, ADR-0016). CTR-COM-001 COM-5 applies: no verifier configured means claims stay claimed.
+id: F09.S01.M03
+scope: MVP
+summary: >-
+  Lets a payee ask for payment in a crypto asset by supplying their own receiving address, amount and chain, and lets each
+  party's vault check a claimed transaction against the chain through a ChainVerifierPort adapter that the user configured
+  (their own node, an Esplora-compatible or EVM JSON-RPC endpoint, or a user-selected relay that returns relay-signed
+  observations). It tracks confirmations, applies the finality policy (Bitcoin 6 confirmations, Ethereum-family at or below
+  the finalized tag), handles reorgs, and never confirms anything without a verifier. The platform never requests, derives
+  or stores private keys or seed phrases and never signs or broadcasts payments.
+responsibilities:
+  - Own CryptoPaymentRequest (payee address, amount, asset, chain, validity) and its signed statement classrup.commerce.crypto_request/v1.
+  - Own ChainObservation per claimed transaction and run the observation loop through ChainVerifierPort adapters, in the vault, while the PWA is running or when periodic background sync fires.
+  - Apply finality (COM-5): Bitcoin 6 confirmations, Ethereum-family block number at or below the finalized tag, other chains disabled; emit commerce.payment.confirming, confirmed, finalized, reorged and the extra commerce.payment.failed.
+  - Verify address, amount and asset (native or token contract from F09.S03.M01) before a transaction can count; underpayment or wrong destination never confirms.
+  - Implement the crypto MethodRulePort for F09.S01.M01 and refuse any input that looks like a private key, seed phrase or extended private key.
+  - Let the user configure verifier endpoints per chain and show which endpoint and trust level produced each observation.
+non_responsibilities:
+  - The Deal, PaymentClaim and payee acknowledgement commands (F09.S01.M01).
+  - Wallet functionality, key management, address derivation, transaction construction, signing or broadcasting; the payer pays from their own wallet outside the app.
+  - Currency definitions and decimals (F09.S03.M01) and FX conversion (F09.S03.M02, F09.S03.M03).
+  - "Future: Lightning invoices, Layer 2 chains, Solana or other chains configured per tenant, and multi-endpoint quorum by default (MVP supports an optional 2-of-2 quorum when two endpoints are configured)."
+depends_on: [F09.S01.M01, F09.S03.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001]
+user_stories:
+  - As a seller, I enter my own receiving address and the amount in BTC or USDC and send the request to the buyer, knowing the app never holds my keys.
+  - As a buyer, I pay from my own wallet, paste the transaction ID, and see confirmed 2 of 6 on chain, then final, or a clear reorg notice.
+  - As a user with no verifier configured, I still can claim payment, and I see claimed (unverified) and a prompt to set up a verifier.
+edge_cases:
+  - No ChainVerifierPort is configured for the chain; the claim stays claimed and verification.source stays self; nothing is auto-confirmed.
+  - The transaction pays the right address but 4 000 sats less than requested; the observation records underpaid, the claim does not confirm, and the payee sees the difference and can dispute or ask for the remainder via a new claim.
+  - A Bitcoin block with the transaction is orphaned at 2 confirmations; status moves to reorged, the UI shows it, and if the transaction is re-included the claim returns to pending_confirmation.
+  - The verifier endpoint returns inconsistent data between polls or two configured endpoints disagree; the observation is marked disagreement, no progress is applied, and the user is warned.
+  - The user pastes a 12-word seed phrase or a WIF key into the txRef or note field; the input is rejected without being stored or logged.
+  - ERC-20 transfer is sent from a different token contract than the registered USDC contract; the observation records wrong_asset and never confirms.
+  - The PWA stays closed for 3 days; on open the observation catches up from the chain and applies the final status, with checkedAt showing when it was last verified.
+ux:
+  screens:
+    - "Request payment sheet: asset and chain (BTC, ETH, USDC), amount, receiving address field with checksum feedback, 'Use a fresh address' hint, validity selector, Send request."
+    - "Pay screen for the payer: address and amount with QR and copy, warning 'Send exactly this amount on this chain', then field Paste transaction ID."
+    - "Verification panel: status chip claimed (unverified), confirming 2 of 6, confirmed, final, reorged; shows verifier endpoint host, last checked time and trust label."
+    - "Verifier settings: endpoint URL per chain, optional second endpoint, test connection button."
+  states: [no-verifier, claimed-unverified, pending, confirming-n-of-m, confirmed, final, reorged, failed, underpaid, endpoint-disagreement, offline]
+  a11y:
+    - Confirmation progress is text such as 'confirmed 2 of 6 on chain' in an aria-live polite region, not only a bar.
+    - Addresses are shown in monospace groups of 4 characters with a copy button and an accessible name that includes the chain.
+    - QR codes always have the address as adjacent text.
+processes:
+  domain_schema:
+    requirements:
+      - A CryptoPaymentRequest stores deal and obligation refs, payee-supplied address, chain, asset, Money amount in asset minor units, validity and status, and is signed by the payee as classrup.commerce.crypto_request/v1.
+      - A ChainObservation stores the claimed txid, the verifier used, block data, confirmations, finality flag and a match result, and is kept in the vault only; observations are local evidence and not statements about the other party.
+      - Both entities are P2 and retained as RET-EVIDENCE; no field ever holds a private key, seed or signing material.
+    entities:
+      - name: CryptoPaymentRequest
+        schema: classrup.commerce.crypto_request/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "dealId: uuid — ref F09.S01.M01 Deal"
+          - "obligationId: string — ref Deal.obligations; crypto must be in allowedMethods"
+          - "payeeId: did — signer; supplies the address"
+          - "payerId: did — recipient of the request"
+          - "chainId: enum — bitcoin-mainnet | ethereum-mainnet (other chains disabled)"
+          - "asset: string — registry code BTC, ETH or USDC (F09.S03.M01)"
+          - "address: string — payee receiving address; bech32 or base58check for Bitcoin, 0x plus 40 hex with EIP-55 checksum for EVM"
+          - "amount: Money — CTR-MNY-001; in the asset's minor units; > 0"
+          - "expiresAt: timestamp — createdAt + 7 days by default, range 1 h to 14 days"
+          - "status: enum — open | claimed | settled | cancelled | expired"
+          - "requestCid: string — sha256 of the signed request statement"
+          - "peerSync: string — local_committed | prepared | transport_acknowledged | peer_accepted"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC, local clock"
+        invariants:
+          - address is valid for chainId and unchanged after creation; a different address needs a new request.
+          - asset belongs to chainId in the registry; a token asset has a registered contract.
+          - At most one open or claimed request per (dealId, obligationId).
+      - name: ChainObservation
+        schema: classrup.commerce.chain_observation/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope"
+          - "requestId: uuidv7 — ref CryptoPaymentRequest"
+          - "claimId: uuidv7 — ref F09.S01.M01 PaymentClaim"
+          - "chainId: string — chain observed"
+          - "txid: string — transaction hash as supplied by the payer (64 hex for Bitcoin, 0x plus 64 hex for EVM)"
+          - "status: enum — watching | pending | confirmed | final | reorged | failed | stopped"
+          - "matchResult: enum — none | match | underpaid | wrong_address | wrong_asset | reverted"
+          - "receivedAmount?: Money — amount paid to the request address in asset minor units"
+          - "blockHash?: string — inclusion block hash at last check"
+          - "blockHeight?: int — inclusion block height at last check"
+          - "confirmations: int — ≥ 0; Bitcoin tip minus height plus 1"
+          - "requiredConfirmations: int — 6 for Bitcoin; for EVM policy is finalized tag (stored as 0)"
+          - "finalityPolicy: string — btc-6-conf | evm-finalized-tag"
+          - "verifierId: string — endpoint adapter id and version, e.g. esplora@1.2 or evm-jsonrpc@1.0"
+          - "verifierTrust: enum — user-node | user-endpoint | relay-signed"
+          - "firstSeenAt?: timestamp — local clock"
+          - "checkedAt: timestamp — local clock of last successful check"
+          - "reorgCount: int — number of reorg events observed"
+          - "disagreement: boolean — true when two endpoints disagreed at last check"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - status final requires matchResult match and finalityPolicy satisfied at checkedAt.
+          - A claim is never driven past claimed by an observation whose verifierId is empty; with no verifier no observation exists.
+          - One ChainObservation per (claimId, txid).
+    sql: |
+      CREATE TABLE commerce_crypto_request (
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, deal_id TEXT NOT NULL, obligation_id TEXT NOT NULL,
+        chain_id TEXT NOT NULL, status TEXT NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX commerce_crypto_request_open ON commerce_crypto_request(vault_id, deal_id, obligation_id)
+        WHERE status IN ('open','claimed');
+      CREATE TABLE commerce_chain_observation (
+        id TEXT PRIMARY KEY, vault_id TEXT NOT NULL, claim_id TEXT NOT NULL, chain_id TEXT NOT NULL, txid TEXT NOT NULL,
+        status TEXT NOT NULL, checked_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX commerce_chain_observation_tx ON commerce_chain_observation(vault_id, claim_id, txid);
+  validation_rules:
+    requirements:
+      - Request input is validated strictly, including address format and checksum for the chain and the asset registry binding.
+      - Any free-text or reference field is scanned for private key, seed phrase and extended private key patterns and rejected before storage or logging.
+      - Observation results are validated by amount, destination, asset and chain before any state advances.
+    rules:
+      - "V01 | chainId is enabled in the vault and asset belongs to that chain in the registry | COMMERCE_CRYPTO_CHAIN_DISABLED"
+      - "V02 | address is valid for the chain, mainnet only, with EIP-55 checksum when mixed case | COMMERCE_CRYPTO_ADDRESS_INVALID"
+      - "V03 | amount is positive and within 38 digits in the asset's minor units | VALIDATION_FAILED"
+      - "V04 | txid format is valid for the chain | COMMERCE_CRYPTO_TXID_INVALID"
+      - "V05 | no field contains a WIF key, xprv or xpub-private form, hex of 64 characters labelled key, or a 12/15/18/21/24-word BIP39 phrase | COMMERCE_CRYPTO_SECRET_REJECTED"
+      - "V06 | actor is the obligation payee when creating or cancelling a request | FORBIDDEN"
+      - "V07 | request is open and not expired when a claim references it | COMMERCE_CRYPTO_REQUEST_NOT_OPEN"
+      - "V08 | request is not claimed when cancelling | CONFLICT_STATE"
+      - "V09 | the same txid is not already attached to another claim in this vault | COMMERCE_CRYPTO_TX_REUSED"
+      - "V10 | at most 3 manual refreshes per observation per minute | RATE_LIMITED"
+  workflow_state_machine:
+    requirements:
+      - Requests and observations follow the declared machines; any other transition is refused with CONFLICT_STATE.
+      - An observation advances only on data from a configured ChainVerifierPort adapter; with none configured no observation is created and the claim stays claimed (COM-5).
+      - A reorg moves a confirmed or pending observation to reorged; a reorged observation returns to pending if the transaction reappears and becomes failed after the grace period (24 h Bitcoin, 6 h EVM) or immediately for a reverted EVM transaction.
+      - Observation stops when the claim reaches a terminal state, the claim expires after 14 days, or the user removes the verifier.
+    machines:
+      - entity: CryptoPaymentRequest
+        initial: open
+        terminal: [settled, cancelled, expired]
+        transitions:
+          - "open -> claimed | event commerce.payment.claimed with method crypto and matching request | claim references this request"
+          - "claimed -> open | event commerce.payment.failed or commerce.payment.expired for the claim | request validity remains; payer may submit another transaction"
+          - "claimed -> settled | event commerce.payment.finalized for the claim | finality reached"
+          - "open -> cancelled | commerce.crypto_request.cancel by payee | signed cancel statement; refused once claimed"
+          - "open -> expired | expiry sweep at expiresAt | no claim attached"
+      - entity: ChainObservation
+        initial: watching
+        terminal: [final, failed, stopped]
+        transitions:
+          - "watching -> pending | verifier finds the transaction in mempool or a block but not yet matched or included | emits commerce.payment.confirming"
+          - "watching -> confirmed | verifier finds an included, matching transaction | emits commerce.payment.confirming then commerce.payment.confirmed in one transaction"
+          - "pending -> confirmed | transaction included in a block and destination, amount and asset match | emits commerce.payment.confirmed"
+          - "confirmed -> final | finality policy met (Bitcoin 6 confirmations, EVM block at or below finalized tag) | emits commerce.payment.finalized"
+          - "pending -> reorged | transaction no longer found or inclusion block replaced | emits commerce.payment.reorged"
+          - "confirmed -> reorged | inclusion block replaced or transaction no longer found | emits commerce.payment.reorged"
+          - "reorged -> pending | transaction seen again | emits commerce.payment.confirming"
+          - "reorged -> failed | not seen again within 24 h Bitcoin or 6 h EVM, or EVM receipt status is failed | emits commerce.payment.failed"
+          - "watching -> stopped | claim terminal, claim expired or verifier removed | no event"
+          - "pending -> stopped | claim terminal, claim expired or verifier removed | no event"
+          - "confirmed -> stopped | claim terminal other than final, claim expired or verifier removed | no event"
+          - "reorged -> stopped | claim terminal, claim expired or verifier removed | no event"
+    timeouts:
+      - "Polling: Bitcoin every 60 s, EVM every 24 s while the PWA is running; exponential backoff to 10 min on endpoint errors; periodic background sync every 15 min where the browser allows."
+      - "Request expiry sweep every 5 min; default request validity 7 days."
+      - "Reorg grace: 24 h for Bitcoin and 6 h for EVM chains before failed."
+  commands_queries_events:
+    requirements:
+      - Request commands are vault commands that produce the signed statements classrup.commerce.crypto_request/v1 and classrup.commerce.crypto_request_cancel/v1; configure and refresh are vault-local with no statement and no relay command.
+      - Observation transitions emit the catalog events into the vault outbox in the same IndexedDB transaction as the observation update; the extra event commerce.payment.failed is also emitted.
+      - The module consumes the claim and Deal events to start and stop observation and never writes a PaymentClaim status directly.
+    commands:
+      - name: commerce.crypto_request.create
+        capability: commerce.crypto_request.create
+        input: "[vault command, produces signed statement classrup.commerce.crypto_request/v1] { dealId, obligationId, chainId, asset, address, amount: Money, validForMs? (default 604800000, 3600000..1209600000) }"
+        output: "{ requestId, revision: 1, requestCid, expiresAt, peerSync }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN, CONFLICT_STATE, COMMERCE_CRYPTO_CHAIN_DISABLED, COMMERCE_CRYPTO_ADDRESS_INVALID, COMMERCE_CRYPTO_SECRET_REJECTED]
+        emits: []
+        idempotent: true
+      - name: commerce.crypto_request.cancel
+        capability: commerce.crypto_request.cancel
+        input: "[vault command, produces signed statement classrup.commerce.crypto_request_cancel/v1] { requestId, expectedRevision }"
+        output: "{ requestId, revision, status: cancelled }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: commerce.crypto_verifier.configure
+        capability: commerce.crypto_verifier.configure
+        input: "[vault command, local setting] { chainId, endpoints: [{kind: esplora|evm-jsonrpc|relay, url, apiKeyRef?}] (1..2), quorum?: 1|2 }"
+        output: "{ chainId, endpoints, testedAt, ok }"
+        errors: [VALIDATION_FAILED, COMMERCE_CRYPTO_CHAIN_DISABLED, DEPENDENCY_UNAVAILABLE]
+        emits: []
+        idempotent: true
+      - name: commerce.crypto_observation.refresh
+        capability: commerce.crypto_observation.refresh
+        input: "[vault command, local] { claimId }"
+        output: "{ observationId, status, confirmations, checkedAt }"
+        errors: [NOT_FOUND, RATE_LIMITED, DEPENDENCY_UNAVAILABLE, COMMERCE_CRYPTO_NO_VERIFIER]
+        emits: [commerce.payment.confirming, commerce.payment.confirmed, commerce.payment.finalized, commerce.payment.reorged, commerce.payment.failed]
+        idempotent: true
+    queries:
+      - name: commerce.crypto_request.get
+        capability: commerce.crypto_request.read
+        input: "{ requestId }"
+        output: "{ request: CryptoPaymentRequest, observation?: ChainObservation }"
+        errors: [NOT_FOUND]
+      - name: commerce.crypto_observation.get_for_claim
+        capability: commerce.crypto_request.read
+        input: "{ claimId }"
+        output: "{ observation: ChainObservation, label: string }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: commerce.payment.confirming, privacy: P2, payload: "{ claimId, dealId, chainId, txid, confirmations, requiredConfirmations, verifierId }"}
+      - {type: commerce.payment.confirmed, privacy: P2, payload: "{ claimId, dealId, chainId, txid, confirmations, blockHeight, verifierId }"}
+      - {type: commerce.payment.finalized, privacy: P2, payload: "{ claimId, dealId, chainId, txid, finalityPolicy, checkedAt, verifierId }"}
+      - {type: commerce.payment.reorged, privacy: P2, payload: "{ claimId, dealId, chainId, txid, previousBlockHash, reorgCount }"}
+      - {type: commerce.payment.failed, privacy: P2, payload: "{ claimId, dealId, chainId, txid, reason: absent|reverted }"}
+    events_consumed:
+      - {type: commerce.payment.claimed, effect: "for method crypto with a matching open request, attach txid, mark the request claimed and create a watching ChainObservation if a verifier exists; otherwise leave the claim claimed"}
+      - {type: commerce.payment.expired, effect: "stop observation and reopen the request when validity remains"}
+      - {type: commerce.deal.cancelled, effect: "cancel the open request of the Deal and stop observations"}
+    errors:
+      - "COMMERCE_CRYPTO_CHAIN_DISABLED | 422 | no | chain is not enabled or has no registered asset"
+      - "COMMERCE_CRYPTO_ADDRESS_INVALID | 422 | no | address format, network or checksum is invalid"
+      - "COMMERCE_CRYPTO_TXID_INVALID | 422 | no | transaction id format is invalid for the chain"
+      - "COMMERCE_CRYPTO_SECRET_REJECTED | 422 | no | input looks like a private key or seed phrase and was discarded"
+      - "COMMERCE_CRYPTO_REQUEST_NOT_OPEN | 409 | no | the payment request is not open or has expired"
+      - "COMMERCE_CRYPTO_TX_REUSED | 409 | no | the transaction id is already attached to another claim"
+      - "COMMERCE_CRYPTO_NO_VERIFIER | 409 | no | no chain verifier is configured; the claim stays claimed (unverified)"
+    example: |
+      vault command commerce.crypto_request.create
+      { "dealId": "0192f3a6-…", "obligationId": "o1", "chainId": "bitcoin-mainnet", "asset": "BTC",
+        "address": "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq", "amount": { "amount": "125000", "currency": "BTC" } }
+      => { "requestId": "0192f3a9-…", "revision": 1, "requestCid": "sha256-1ab2…", "expiresAt": "2026-11-11T10:00:00.000Z", "peerSync": "prepared" }
+      later: observation moves watching -> pending -> confirmed (2 of 6) -> final; each step emits commerce.payment.* into the vault outbox
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked principal mutates its vault; request creation and cancellation require the payee role in the Deal.
+      - Incoming request statements are accepted only when signed by the obligation payee; otherwise they are quarantined.
+      - No relay role has any capability over requests or observations; a relay-hosted verifier endpoint only returns signed observations the vault verifies.
+    capabilities:
+      - "commerce.crypto_request.create | local-principal | principal is the obligation payee; crypto in allowedMethods; Deal open"
+      - "commerce.crypto_request.cancel | local-principal | principal is the payee; request open"
+      - "commerce.crypto_verifier.configure | local-principal | vault unlocked; HTTPS endpoint only"
+      - "commerce.crypto_observation.refresh | local-principal | principal is a party of the Deal; at most 3 per minute per observation"
+      - "commerce.crypto_request.read | local-principal | principal is a party of the Deal"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent per CTR-IDM-001 and observation updates are idempotent by (claimId, txid).
+      - Endpoint failures never change claim status; the observation keeps its last good state and shows when it was last checked.
+      - Conflicting data from two endpoints or an inconsistent single endpoint freezes progress and warns the user instead of picking a winner.
+    idempotency: "Vault command ID recorded for 24 h; observation upserts keyed by (vault, claim, txid); consumed events deduplicated in the inbox."
+    concurrency: "expectedRevision on cancel; partial unique index allows one open or claimed request per obligation; observation loop holds a Web Lock commerce-chain per claim so two tabs do not poll twice."
+    retries: "Endpoint calls: 3 attempts per poll with 1 s, 2 s, 4 s backoff and 8 s timeout; poll backoff doubles to 10 min; refresh failures return DEPENDENCY_UNAVAILABLE (retryable)."
+    offline: "Requests and cancellations commit locally and queue statements. Observation pauses offline; on reconnect it catches up from the chain, so a missed 3-day window is verified at open."
+    partial_failure: "A failure after the verifier answered but before commit discards the answer; the next poll repeats it. A partially applied reorg cannot happen because status, confirmations and event outbox row commit in one IndexedDB transaction."
+  privacy_retention_abuse:
+    requirements:
+      - Receiving addresses, txids and observations are P2 and never appear in public projections, logs at P2 detail or notifications; addresses are shared only inside end-to-end encrypted envelopes to the payer.
+      - The module never requests, derives, stores or logs private keys, seed phrases or signatures that authorize spending; secret-looking input is rejected and discarded.
+      - A user-configured verifier endpoint learns which transactions and addresses the user queries; the UI says so and offers a relay or own-node choice.
+    data:
+      - "CryptoPaymentRequest and ChainObservation: P2 (parties). Verifier endpoint URLs: P3; API keys: P4 held in the vault key store."
+      - "On-chain data is public; linking a pseudonym to an address is the sensitive part, so addresses are never published."
+    retention:
+      - "RET-EVIDENCE (2 years after last related activity); observations may be compacted after 90 days to the final status, txid, block hash and verifier ID."
+      - "On deletion: did pseudonymized in retained records; chain data cannot be erased and the UI says so."
+    threats:
+      - "T01 | Payee address swapped by an attacker in transit | address inside a signed statement over JCS; payer UI shows the address checksum groups and asks to compare the first and last 6 characters"
+      - "T02 | Payer sends a fake txid to get a completed state | claim stays claimed until a configured verifier matches address, amount and asset; wrong or absent data never confirms"
+      - "T03 | Malicious or compromised verifier endpoint reports false finality | trust label shows endpoint; optional 2-of-2 quorum; relay-signed observations are labelled; payee can always dispute"
+      - "T04 | Reorg after the goods were released | reorged state is shown; UI warns not to release goods before final; Bitcoin 6 confirmations and EVM finalized tag are defaults"
+      - "T05 | Social engineering to reveal a seed phrase | validation rejects secret patterns; copy states the app never asks for keys"
+      - "T06 | Address reuse links a payee's deals | fresh address hint; warning when the same address appears in an earlier request in the vault"
+    abuse_controls:
+      - "Manual refresh limit of 3 per minute per observation and a global poll budget of 600 endpoint calls per hour per vault."
+      - "Request creation limit of 20 per day per vault; ingest limit 20 statements per hour per sender."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); endpoint latency, errors and reorg counts are kept in local diagnostics.
+      - Status updates are applied within one poll interval of the verifier reporting them.
+      - Verifier disagreement and reorg counts are visible to the user.
+    metrics:
+      - "Local diagnostics: classrup_commerce_chain_polls_total{chain,outcome=ok|error|disagreement}"
+      - "Local diagnostics: classrup_commerce_chain_reorgs_total{chain}"
+      - "Local diagnostics: classrup_commerce_chain_final_latency_s{chain} (histogram)"
+    logs:
+      - "info observation.status {claimId, from, to, chain, correlationId} — txid hash prefix only (first 8 chars), no addresses, no amounts."
+    budgets:
+      - "Observation update commit p95 ≤ 100 ms local; a poll cycle for 20 active observations ≤ 3 s excluding network."
+      - "Verifier timeout 8 s per call; 3 attempts."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Adapter behavior is tested against recorded Esplora and EVM JSON-RPC fixtures with no network access in CI.
+      - Reorg, underpayment, wrong asset and no-verifier scenarios are covered deterministically.
+    fixtures: "Recorded fixtures: Bitcoin tx with 0, 1, 5, 6 confirmations and an orphaned block; EVM tx pre-finalized and finalized, reverted tx, USDC transfer from correct and wrong contract; two-vault setup; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | create a request with valid and invalid addresses for each chain | valid request stored and signed; invalid returns COMMERCE_CRYPTO_ADDRESS_INVALID"
+      - "T02 | unit | 01.R03,02.R02 | inputs with a WIF key, an xprv string, and a 12-word phrase in note and txRef | COMMERCE_CRYPTO_SECRET_REJECTED, nothing stored or logged"
+      - "T03 | unit | 02.R03,03.R02 | no verifier configured and a crypto claim made | claim stays claimed, verification.source self, no observation, COMMERCE_CRYPTO_NO_VERIFIER on refresh"
+      - "T04 | integration | 02.R03 | underpaid, wrong address, wrong token contract and reverted transactions | matchResult recorded; claim never confirmed"
+      - "T05 | property | 03.R01 | random verifier answer sequences | only declared transitions occur; final is never followed by another state"
+      - "T06 | integration | 03.R03 | Bitcoin block orphaned at 2 confirmations then transaction re-included; and absent for 24 h | reorged then pending then confirmed; second case ends failed"
+      - "T07 | integration | 03.R02,03.R04 | Bitcoin at 5 then 6 confirmations; EVM below then at finalized tag; claim expiry at 14 days | finalized only at 6 and finalized tag; observation stopped at expiry"
+      - "T08 | contract | 04.R01,04.R02,09.R02 | execute each command and run an observation to final | outputs, envelopes and events validate against registry schemas"
+      - "T09 | integration | 04.R03,06.R01 | consumed events delivered twice; same command ID replayed | one request and one observation; original result returned"
+      - "T10 | abuse | 05.R01,05.R02,05.R03 | request signed by the payer; third-party statement; relay inspects traffic | quarantined or FORBIDDEN; relay sees only ciphertext"
+      - "T11 | chaos | 06.R02,06.R03 | endpoint timeouts, two endpoints disagreeing, endpoint returning lower height | claim status unchanged, disagreement flagged, no progress applied"
+      - "T12 | integration | 07.R01,07.R03 | inspect outbound endpoint requests and local logs | only txid or address lookups to the configured endpoint; no addresses or amounts in logs"
+      - "T13 | abuse | 07.R02 | 4 refreshes in one minute | 4th returns RATE_LIMITED"
+      - "T14 | integration | 06.R03 | app closed for 3 days with the transaction finalized meanwhile | on open the observation catches up and reaches final with checkedAt updated"
+      - "T15 | load | 08.R01,08.R02,08.R03 | 20 active observations polled for 10 minutes | commit p95 ≤ 100 ms, poll cycle ≤ 3 s, no telemetry sent"
+      - "T16 | unit | 09.R01,09.R03 | traceability tool run and fixture coverage check | every PS-068 requirement maps to a passing test"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, roll back one release | requests and observations round-trip; imported open observations restart as watching"
+    acceptance:
+      - All tests T01 to T17 pass in CI.
+      - With no verifier configured, no crypto claim ever leaves claimed.
+      - No code path reads, requests, stores or logs a private key or seed phrase, verified by input rejection tests and static analysis.
+      - A reorg is always visible to the user and never leaves a stale final state.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export contains the principal's crypto requests and observations with signed request statements in the section commerce.crypto.
+      - Import verifies signatures and re-validates addresses; open observations restart as watching and are re-verified rather than trusted.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section commerce.crypto in classrup-export/v1; one line per CryptoPaymentRequest and ChainObservation (schemas classrup.commerce.crypto_request/v1, classrup.commerce.chain_observation/v1). Verifier endpoint settings and API keys are excluded."
+    import: "Observations with final status import as read-only evidence marked imported-not-reverified; non-final observations import as watching; request statements are verified again and invalid ones are quarantined."
+    backup: "The vault export is the primary backup (IOX-6); relays hold no requests or observations."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields. A change to a finality policy requires a new policy identifier and never rewrites stored observations."

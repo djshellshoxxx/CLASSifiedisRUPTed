@@ -1,35 +1,36 @@
-# PS-143-02 — validation rules
+# PS-143-02 — Validation rules: Release gates
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-143-02. **Owner:** [17_Quality/03_release/mod_gates](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_gates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M02 Release gates](SPEC.md) · **Scope:** MVP · **Code:** `tools/gates` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for gates within 03_release. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-143-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-143-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-143-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-143-02.R01** Traceability is 100 percent: every requirement PS-NNN-PP.Rnn is covered by at least one passing test whose title starts with TEST-PS-NNN-PP.Tnn and whose spec row lists the requirement, or has a documented untested reason (CTR-TST-001 TST-4).
+- **PS-143-02.R02** The audit gate fails on any critical or high production vulnerability reported by pnpm audit --prod and fails closed when the audit cannot run.
+- **PS-143-02.R03** The a11y and budget gates fail when any report is missing, older than 24 hours, or shows a violation or exceeded budget.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | Every requirement has a passing test with a matching title and covers entry, or a documented untested reason | QUALITY_GATE_TRACE_GAP |
+| V02 | No test ID is used twice and every test title refers to an existing requirement | QUALITY_GATE_TRACE_DUPLICATE |
+| V03 | pnpm audit --prod reports zero critical and zero high findings | QUALITY_GATE_VULNERABLE |
+| V04 | Audit can run and returns a result | QUALITY_GATE_AUDIT_UNAVAILABLE |
+| V05 | Accessibility report shows zero serious and zero critical violations and is under 24 h old for this commit | QUALITY_GATE_A11Y |
+| V06 | Load and PWA budgets from OBS-4 and OBS-5 are met in reports for this commit | QUALITY_GATE_BUDGET |
+| V07 | CHANGELOG.md has a non-empty section for the release version | QUALITY_GATE_CHANGELOG |
+| V08 | Waivers are unexpired and at most 14 days long | QUALITY_GATE_WAIVER_EXPIRED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-143-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-143-09.T02 | unit | PS-143-01.R02, PS-143-02.R01, PS-143-09.R02 | synthetic repos: gap, skipped test, duplicate ID | QUALITY_GATE_TRACE_GAP and QUALITY_GATE_TRACE_DUPLICATE; skipped test not counted |
+| TEST-PS-143-09.T03 | unit | PS-143-02.R02, PS-143-09.R03 | recorded audit JSON: critical, high, moderate, unavailable | critical and high fail; moderate passes; unavailable fails closed |
+| TEST-PS-143-09.T04 | unit | PS-143-02.R03, PS-143-06.R02 | a11y and load reports: missing, 25 h old, other commit SHA, with violations | each fails with its code |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

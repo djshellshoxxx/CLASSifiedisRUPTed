@@ -1,35 +1,32 @@
-# PS-133-03 — workflow state machine
+# PS-133-03 — Workflow state machine: Security threat model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-133-03. **Owner:** [16_Security/03_assurance/mod_threats](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_threats. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M01 Security threat model](SPEC.md) · **Scope:** MVP · **Code:** `docs/security/threat_model` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for threats within 03_assurance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-133-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-133-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-133-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-133-03.R01** The review procedure is draft, peer-reviewed by two maintainers, merged and tagged, and the gate fails if the last tagged review is older than the previous release.
+- **PS-133-03.R02** A new or changed boundary, a new module that handles keys, money or location, or a security incident of severity SEV1 or SEV2 triggers an out-of-cycle review within 14 days.
+- **PS-133-03.R03** Residual risks are reviewed every 6 months with the owner and date recorded in the row.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** Documents have no application lifecycle; the review process is a release-time procedure described in requirements.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+### Timeouts and scheduled transitions
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-133-03`; scenarios and fixtures to be detailed in Prompt 3.
+- Review cadence: every release and at least every 6 months.
+- Out-of-cycle review within 14 days of a trigger.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-133-09.T04 | integration | PS-133-03.R01, PS-133-03.R02 | change a control module ID in a spec; add a module touching keys without register rows | dangling reference error; out-of-cycle review flag raised |
+| TEST-PS-133-09.T05 | integration | PS-133-03.R03, PS-133-08.R03 | residual risk with review date 7 months old | SECURITY_THREATMODEL_REVIEW_STALE and gate failed state shown in the report |
+| TEST-PS-133-09.T12 | manual | PS-133-03.R01, PS-133-04.R03, PS-133-10.R01 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request |
+
+## Dependencies
+
+Module depends on: F16.S01.M01, F16.S02.M02, F16.S02.M03, F12.S03.M03, CTR-PRV-001, CTR-CAP-001, CTR-FED-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

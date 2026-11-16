@@ -1,0 +1,309 @@
+import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
+import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
+import { mountBarter } from './barter.ts';
+import { mountNotifications } from './notifications.ts';
+import { drainNotificationDelivery } from './notification-delivery.ts';
+import { bindActionsToSession, createActionQueue } from './action-queue.ts';
+import { mountListingEditor } from './listing-editor.ts';
+import { localNotificationDefinitions, localNotificationBackupCodecs } from '../../../packages/notify/src/index.ts';
+import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
+import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
+import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
+import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
+import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord } from '../../../packages/bazaar/src/index.ts';
+import { discoveryDefinitions, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
+
+const codecs = [
+  ...localNotificationBackupCodecs(backupCodec),
+  ...barterCodecs,
+  {
+    ...backupCodec(listingRepo),
+    async restoreData(input: unknown, principal: string) {
+      const data = listingRepo.schema.parse(input);
+      if (data.ownerId !== principal) throw new Error('Backup listing belongs to another principal');
+      return data;
+    },
+  },
+  { ...backupCodec(publicationRepo), validate: (input: unknown) => validatePublicationRecord(input, verifyEnvelope) },
+  {
+    ...backupCodec(inventoryHoldRepo),
+    async restoreData(input: unknown, principal: string) {
+      const data = inventoryHoldRepo.schema.parse(input);
+      if (data.ownerId !== principal) throw new Error('Backup reservation belongs to another principal');
+      return data;
+    },
+  },
+  { ...backupCodec(retainedListingRepo), validate: (input: unknown) => validateRetainedRecord(input, verifyEnvelope) },
+];
+const CATEGORY = '0195aaaa-0000-7000-8000-000000000001';
+const ids = createUuidV7Generator();
+let unlocked: UnlockedVault | undefined;
+let bus: Bus | undefined;
+const queueAction = createActionQueue();
+let appliedPeerSearch = defaultPeerSearch();
+let barter: ReturnType<typeof mountBarter> | undefined;
+let notifications: ReturnType<typeof mountNotifications> | undefined;
+let notificationOutbox: OutboxDispatcher | undefined;
+let lastNotificationSweep = 0;
+let listingEditor: ReturnType<typeof mountListingEditor> | undefined;
+function element<T extends HTMLElement>(id: string): T {
+  const value = document.getElementById(id);
+  if (!value) throw new Error(`Missing interface element: ${id}`);
+  return value as T;
+}
+function message(text: string): void { element('status').textContent = text; }
+function report(error: unknown): void {
+  const output = element('error'); output.hidden = false;
+  output.textContent = error instanceof Error ? error.message : 'The operation failed. No success was recorded.';
+  output.focus();
+}
+function action(fn: () => Promise<void>): Promise<void> {
+  return queueAction(async () => {
+    element('error').hidden = true;
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')].map(button => ({ button, disabled: button.disabled }));
+    buttons.forEach(({ button }) => { button.disabled = true; });
+    try { await fn(); } catch (error) { report(error); }
+    finally { buttons.forEach(({ button, disabled }) => { button.disabled = disabled; }); }
+  });
+}
+const vaultAction = bindActionsToSession(action, () => unlocked);
+function current() {
+  if (!unlocked || !bus) throw new Error('Unlock your vault first.');
+  return { vault: unlocked, bus, context: { actor: { kind: 'user' as const, id: unlocked.principal, roles: ['member'] }, tenantId: unlocked.principal } };
+}
+async function command(name: string, input: unknown): Promise<unknown> {
+  const { bus, context } = current();
+  const result = await bus.dispatch(context, name, input, { idempotencyKey: ids.next() });
+  if (!result.ok) throw new Error(`${result.error.code}: the operation was not applied. Check your input and current listing state.`);
+  await syncNotifications();
+  return result.value.value;
+}
+async function syncNotifications(): Promise<void> {
+  if (!notificationOutbox) return;
+  try {
+    const { bus, context, vault } = current();
+    const now = Date.now();
+    if (lastNotificationSweep === 0 || now - lastNotificationSweep >= 3600000 || now < lastNotificationSweep) {
+      const swept = await bus.dispatch(context, 'notify.notification.sweep', {});
+      if (!swept.ok) throw new Error('Inbox maintenance failed');
+      lastNotificationSweep = now;
+    }
+    const pending = await drainNotificationDelivery(notificationOutbox, vault.storage, bus.registry);
+    await notifications?.refresh();
+    element('notification-delivery-status').textContent = pending
+      ? 'Some local updates could not be processed. Review barter coordination for the current state.' : '';
+  } catch {
+    // The domain command has already committed. An inbox failure must not report it as rolled back.
+    element('notification-delivery-status').textContent = 'Local notifications are unavailable. Your saved changes remain intact.';
+  }
+}
+async function query(name: string, input: unknown): Promise<unknown> {
+  const { bus, context } = current(); const result = await bus.query(context, name, input);
+  if (!result.ok) throw new Error(`${result.error.code}: could not read local data.`);
+  return result.value.value;
+}
+function download(name: string, content: unknown): void {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = name; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+async function readFile(file: File | undefined, maxBytes: number): Promise<unknown> {
+  if (!file) throw new Error('Choose a JSON file first.');
+  if (file.size > maxBytes) throw new Error('The selected file exceeds the import limit.');
+  return JSON.parse(await file.text()) as unknown;
+}
+function node<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string): HTMLElementTagNameMap[K] {
+  const output = document.createElement(tag); if (text !== undefined) output.textContent = text; return output;
+}
+function button(text: string, fn: () => Promise<void>) {
+  const output = node('button', text); output.addEventListener('click', () => { void vaultAction(fn); }); return output;
+}
+// The alpha editor declares CAD amounts in cents. Other signed currency codes may
+// be custom, so keep their exact minor units until the currency registry is available.
+const listingCurrency = { code: 'CAD', exponent: 2, kind: 'iso' } as const;
+function card(title: string, description: string, detail: string, value?: MoneyValue) {
+  const article = node('article'); article.className = 'card';
+  article.append(node('h3', title), node('p', description));
+  if (value) {
+    const formatted = value.currency === listingCurrency.code
+      ? formatMoney(value, listingCurrency, navigator.language, { display: 'code' })
+      : undefined;
+    const amount = formatted?.ok ? formatted.value : `${value.amount} minor units (${value.currency})`;
+    article.append(node('p', `Declared value: ${amount}`));
+  }
+  article.append(node('p', detail));
+  return article;
+}
+async function refresh(): Promise<void> {
+  const page = z.object({ items: z.array(z.object({ id: z.string(), revision: z.number(), data: listingSchema })) }).parse(await query('bazaar.listing.list', {}));
+  const list = element('listings'); list.replaceChildren();
+  if (!page.items.length) list.append(node('p', 'No listings yet. Save your first local draft above.'));
+  for (const item of page.items) {
+    const article = card(item.data.title, item.data.description, `${item.data.status} · revision ${item.revision} · ${item.data.barterOptIn ? 'barter enabled' : 'barter disabled'}`, item.data.value);
+    const actions = node('div'); actions.className = 'actions';
+    if (item.data.status === 'draft' || item.data.status === 'unpublished') actions.append(button('Edit listing', async () => { listingEditor?.open(item); }));
+    if (item.data.status === 'draft' || item.data.status === 'unpublished') actions.append(button('Publish signed file', async () => {
+      const response = z.object({ envelope: z.unknown() }).parse(await command('bazaar.listing.publish', { listingId: item.id, expectedRevision: item.revision }));
+      const verified = await verifyEnvelope(response.envelope);
+      download(`listing-${item.id}.json`, verified); message('Published locally. Save and share the signed file explicitly; nothing was sent.'); await refresh();
+    }));
+    if (item.data.status === 'published') actions.append(button('Unpublish', async () => {
+      const response = z.object({ envelope: z.unknown() }).parse(await command('bazaar.listing.unpublish', { listingId: item.id, expectedRevision: item.revision }));
+      download(`withdraw-listing-${item.id}.json`, response.envelope); message('Unpublished locally. Share the signed withdrawal with peers who retained your listing.'); await refresh();
+    }));
+    if (item.data.status === 'unpublished') actions.append(button('Archive', async () => {
+      await command('bazaar.listing.archive', { listingId: item.id, expectedRevision: item.revision }); message('Listing archived.'); await refresh();
+    }));
+    article.append(actions); list.append(article);
+  }
+  await refreshPeers();
+  await barter?.refresh();
+}
+async function refreshPeers(): Promise<void> {
+  const result = await query('discovery.listing.search', appliedPeerSearch);
+  const data = z.object({ items: z.array(z.unknown()), staleOrExcluded: z.number() }).parse(result);
+  const list = element('peers'); list.replaceChildren();
+  for (const value of data.items) {
+    const retained = value as RetainedListing;
+    const p = retained.projection;
+    if (!p) continue;
+    list.append(card(p.title, p.description, `Peer-signed · ${p.regionCell} · expires ${p.expiresAt} · observed ${retained.observedAt}`, p.value));
+  }
+  if (!data.items.length) list.append(node('p', 'No matching retained peer listings. Import a signed file to start.'));
+  element('peer-search-status').textContent = `${data.items.length} matching retained peer listing${data.items.length === 1 ? '' : 's'}.`;
+  if (data.staleOrExcluded) list.append(node('p', `${data.staleOrExcluded} expired, conflicted or filtered records excluded.`));
+}
+async function connect(session: UnlockedVault): Promise<void> {
+  resetPeerSearch();
+  unlocked = session;
+  const definitions = bazaarDefinitions({ categoryAllowed: id => id === CATEGORY,
+    signProjection: async (type, payload, seq, prev) => ({ ...await signEnvelope(session.identity, { type, payload, seq, prev, createdAt: new Date().toISOString() }) }),
+    verifyProjection: input => verifyEnvelope(input),
+  });
+  const barterRuntime = createBarterRuntime(session);
+  const notifyDefinitions = localNotificationDefinitions({ localPrincipal: () => session.principal, isBlocked: barterRuntime.isBlocked, isThreadMuted: () => false });
+  const registry = createRegistry().add(...definitions.all, ...discoveryDefinitions({ verifyEnvelope }).all, ...barterRuntime.definitions, ...notifyDefinitions.all);
+  bus = createBus({ registry, storage: session.storage,
+    clock: createSystemClock(), ids,
+    authz: { authorize: (actor, _capability, _resource, context) => context.tenantId === session.principal && actor.kind === 'user' && actor.id === session.principal && unlocked === session ? { allow: true } : { allow: false, code: 'FORBIDDEN' } },
+    origin: `vault:${session.principal}` });
+  element('access').hidden = true; element('workspace').hidden = false; element('principal').textContent = session.principal;
+  barter?.destroy();
+  barter = mountBarter({ container: element('barter'), session, command, query, action: vaultAction, message, download, refreshListings: refresh, setMatchingPolicy: barterRuntime.setMatchingPolicy });
+  notificationOutbox = createOutboxDispatcher({ registry, storage: session.storage, clock: createSystemClock(), ids, origin: `vault:${session.principal}` });
+  lastNotificationSweep = 0;
+  notifications?.destroy();
+  notifications = mountNotifications({ container: element('notifications'), command, query, action: vaultAction, message, synchronize: syncNotifications });
+  listingEditor?.destroy();
+  listingEditor = mountListingEditor({ container: element('listing-editor'), command, action: vaultAction, message, saved: refresh });
+  await syncNotifications();
+  await refresh(); message('Vault unlocked. Local changes are persisted in this browser.');
+}
+function clearLocalViews() {
+  listingEditor?.destroy(); listingEditor = undefined;
+  notifications?.destroy(); notifications = undefined; notificationOutbox = undefined; lastNotificationSweep = 0;
+  element('notification-delivery-status').textContent = '';
+}
+element<HTMLFormElement>('unlock-form').addEventListener('submit', event => {
+  event.preventDefault(); const form = event.currentTarget as HTMLFormElement;
+  const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
+  const data = new FormData(form); const name = String(data.get('vault')); const passphrase = String(data.get('passphrase'));
+  void action(async () => {
+    if (unlocked) {
+      (form.elements.namedItem('passphrase') as HTMLInputElement).value = '';
+      throw new Error('Lock the current vault before opening another one.');
+    }
+    let vault: Awaited<ReturnType<typeof openVault>> | undefined;
+    try {
+      if (!globalThis.isSecureContext || !crypto.subtle) throw new Error('Open this application on localhost or HTTPS to use browser cryptography.');
+      vault = await openVault({ name, codecs });
+      await connect(submitter?.value === 'create' ? await vault.create(passphrase) : await vault.unlock(passphrase));
+    }
+    catch (error) { await vault?.close(); barter?.destroy(); barter = undefined; clearLocalViews(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; throw error; }
+    finally { (form.elements.namedItem('passphrase') as HTMLInputElement).value = ''; }
+  });
+});
+element('lock').addEventListener('click', () => { void vaultAction(async () => {
+  const session = unlocked; barter?.destroy(); barter = undefined; unlocked = undefined; bus = undefined;
+  clearLocalViews();
+  element('workspace').hidden = true; element('access').hidden = false;
+  element('listings').replaceChildren(); element('peers').replaceChildren(); element('principal').textContent = '';
+  element<HTMLInputElement>('backup-password').value = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
+  if (session) await session.lock();
+  message('Vault locked.');
+}); });
+element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
+  event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const data = new FormData(form);
+  void vaultAction(async () => {
+    await command('bazaar.listing.create', { listingId: ids.next(), title: String(data.get('title')), description: String(data.get('description')),
+      kind: data.get('kind'), condition: data.get('condition'), categoryId: CATEGORY, regionCell: data.get('region'),
+      value: { amount: String(data.get('amount')), currency: listingCurrency.code }, barterOptIn: data.get('barter') === 'on' });
+    form.reset(); message('Draft saved locally. It has not been shared.'); await refresh();
+  });
+});
+element<HTMLInputElement>('peer-file').addEventListener('change', event => { const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+  const session = unlocked;
+  void vaultAction(async () => {
+    try {
+      if (!session || unlocked !== session) throw new Error('Unlock the original vault and select the file again.');
+      await command('discovery.listing.retain', { envelope: await readFile(file, MAX_ENVELOPE_BYTES) });
+      message('Peer statement verified and retained locally.'); await refreshPeers(); await barter?.refresh();
+    } finally { if (input.files?.[0] === file) input.value = ''; }
+  });
+});
+function resetPeerSearch(): void {
+  appliedPeerSearch = defaultPeerSearch();
+  element<HTMLFormElement>('peer-search-form').reset();
+  element('peer-search-status').textContent = '';
+}
+element<HTMLFormElement>('peer-search-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  void vaultAction(async () => {
+    const next = parsePeerSearch(new FormData(form));
+    const previous = appliedPeerSearch;
+    appliedPeerSearch = next;
+    try { await refreshPeers(); } catch (error) { appliedPeerSearch = previous; throw error; }
+  });
+});
+element('reset-peer-search').addEventListener('click', () => { void vaultAction(async () => {
+  resetPeerSearch(); await refreshPeers();
+}); });
+element('backup').addEventListener('click', () => { void vaultAction(async () => {
+  const password = element<HTMLInputElement>('backup-password');
+  try { download('classrup-encrypted-backup.json', await current().vault.exportBackup(password.value)); message('Encrypted backup downloaded. Keep its passphrase separately.'); }
+  finally { password.value = ''; }
+}); });
+element<HTMLFormElement>('restore-form').addEventListener('submit', event => {
+  event.preventDefault(); const form = event.currentTarget as HTMLFormElement;
+  const data = new FormData(form); const name = String(data.get('restore-name')); const passphrase = String(data.get('restore-password'));
+  const input = element<HTMLInputElement>('restore-file'); const file = input.files?.[0];
+  void action(async () => {
+    if (unlocked) {
+      if (input.files?.[0] === file) input.value = '';
+      (form.elements.namedItem('restore-password') as HTMLInputElement).value = '';
+      throw new Error('Lock the current vault before restoring a backup.');
+    }
+    let vault: Awaited<ReturnType<typeof openVault>> | undefined;
+    try {
+      vault = await openVault({ name, codecs });
+      const backup = await readFile(file, 24 * 1024 * 1024);
+      await connect(await vault.restoreBackup(backup, passphrase));
+      form.reset(); message('Backup restored into this new vault. Peer availability must be checked again.');
+    }
+    catch (error) { await vault?.close(); barter?.destroy(); barter = undefined; clearLocalViews(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; element('listings').replaceChildren(); element('peers').replaceChildren(); throw error; }
+    finally { if (input.files?.[0] === file) input.value = ''; (form.elements.namedItem('restore-password') as HTMLInputElement).value = ''; }
+  });
+});
+function networkStatus() { element('network').textContent = navigator.onLine ? 'Local mode · no relay configured. Files are shared only when you choose.' : 'Offline · local records remain available. Peer freshness cannot be confirmed.'; }
+window.addEventListener('online', networkStatus); window.addEventListener('offline', networkStatus); networkStatus();
+if ('serviceWorker' in navigator && globalThis.isSecureContext) {
+  void navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {
+    message('Offline asset installation failed. Local records are intact; reconnect to load the app again.');
+  });
+}
+
+// Install all vault form event handlers before revealing or enabling vault access.
+element('access').removeAttribute('inert');
+element('access').hidden = false;

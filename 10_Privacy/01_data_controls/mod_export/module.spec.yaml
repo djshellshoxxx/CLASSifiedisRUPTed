@@ -1,0 +1,257 @@
+# F10.S01.M03 Data export (ADR-0015, ADR-0016). Orchestrates classrup-export/v1 (CTR-IOX-001) over the user's vault.
+id: F10.S01.M03
+scope: MVP
+summary: >-
+  Builds the user's complete data export from their vault. The orchestrator asks every module that owns user data for its
+  export section, streams them into a single classrup-export/v1 JSON Lines bundle, writes a manifest as the first line with
+  counts and a SHA-256 per section, and signs the manifest with the user's device Ed25519 key. The finished bundle is stored
+  encrypted in the browser's private file storage and can be downloaded for 7 days, after which it is deleted and its key shredded.
+  The vault export is the primary backup (IOX-6), and nothing leaves the device unless the user saves the file somewhere.
+responsibilities:
+  - Own ExportJob: request, collect, ready, expired, failed and cancelled with per-section progress.
+  - Discover export sections through the ExportSectionPort registry (one section per owning module, IOX-5) and fail the build in CI when a module that owns user data has none.
+  - Produce the bundle as JSON Lines: manifest first {format, exportedAt, accountId, did, modules[], counts, sha256 per section}, then {schema, record} lines, with media as chunked blob records.
+  - Sign the manifest with the principal's device key and verify it before declaring the job ready.
+  - Store the bundle encrypted with a per-job key, serve it for 7 days, and delete it and shred the key at expiry or on user cancel.
+  - Include all P0 to P3 data the user owns and exclude other users' P2 and higher content except the user's own copies of shared messages and consents (IOX-1).
+non_responsibilities:
+  - Defining each module's section content; the module that owns a record owns its section (IOX-5).
+  - Importing bundles; the vault restore flow validates, dry-runs and commits (IOX-2).
+  - Relay backups (F15.S03.M02) and deletion (F10.S01.M04).
+  - "Future: scheduled automatic exports to a user-selected encrypted location and partial exports by module selection."
+depends_on: [F07.S01.M01, F10.S01.M01, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001]
+user_stories:
+  - As a user, I request my data and get one file I can keep as a backup, with a signature that proves it was not altered.
+  - As a user, I can choose to include my photos and see the size before I start.
+  - As a user about to delete my account, I am offered an export first and I can download it for 7 days.
+edge_cases:
+  - A module fails to produce its section after 3 retries; the whole job fails with PRIVACY_EXPORT_SECTION_FAILED naming the module, never a silent partial bundle.
+  - The bundle would exceed 2 GiB; the job asks the user to exclude media or export in two parts by media date and refuses to start otherwise.
+  - The device key used for signing is revoked mid-job; the job restarts the signature step with the current key and records the key ID.
+  - The user closes the PWA during collection; the job resumes from the last completed section on next open, within 24 h, otherwise it fails with EXPIRED.
+  - The download is requested on day 8; the bundle is gone, the job is expired, and a new request is required.
+  - Storage quota is insufficient for the encrypted bundle; the job fails early with PRIVACY_EXPORT_QUOTA and reports the bytes needed.
+  - The user requests a fourth export within 24 hours; refused with RATE_LIMITED.
+ux:
+  screens:
+    - "Export screen: explanation of what is included and what is not, include media toggle with estimated size, Request export button requiring a fresh unlock."
+    - "Progress list: one row per module section with state and counts, overall bytes written, Cancel button."
+    - "Ready card: file name, size, expiry date and time, Download button, signature fingerprint with Copy, and the sentence 'This file is not encrypted for transport; store it safely.'"
+  states: [idle, needs-unlock, collecting, ready, expired, failed, cancelled, quota-error]
+  a11y:
+    - Progress is exposed as a labelled progressbar with percentage text and polite announcements at 25 percent steps.
+    - Section states use text and icon, not color alone.
+    - Request, Cancel and Download buttons are at least 44 by 44 px with distinct accessible names.
+processes:
+  domain_schema:
+    requirements:
+      - An ExportJob stores status, include-media flag, per-section state and hash, totals, manifest hash, signing key ID, and expiry (readyAt plus 7 days).
+      - The bundle itself is not a database record; it is an encrypted file in origin-private storage identified by the job ID, and the job holds its size and SHA-256.
+      - ExportJob is P3, retained as RET-SHORT (30 days) after expiry as a record that an export happened, and never contains user content.
+    entities:
+      - name: ExportJob
+        schema: classrup.privacy.export_job/v1
+        storage: device
+        privacy: P3
+        retention: RET-SHORT
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "did: did — principal exported"
+          - "status: enum — requested | collecting | ready | failed | expired | cancelled"
+          - "includeMedia: boolean — default false"
+          - "sections: array — up to 64 {name, moduleId, state: pending|running|done|failed, count, bytes, sha256}"
+          - "estimatedBytes: int — ≥ 0; refused above 2147483648"
+          - "bundleBytes?: int — encrypted bundle size on disk"
+          - "bundleSha256?: string — sha256 of the plaintext JSON Lines stream"
+          - "manifestSha256?: string — sha256 of the manifest line"
+          - "signatureKeyId?: string — did:key fragment of the device key that signed"
+          - "errorCode?: string — module error code when failed"
+          - "downloadCount: int — ≥ 0"
+          - "startedAt: timestamp — local clock"
+          - "readyAt?: timestamp — local clock"
+          - "expiresAt?: timestamp — readyAt + 7 days"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one job in requested or collecting status per vault.
+          - status ready implies bundleSha256, manifestSha256 and signatureKeyId are set and the signature verified.
+          - expiresAt is exactly readyAt plus 7 days.
+          - The job record never stores user content or the bundle key.
+  validation_rules:
+    requirements:
+      - Requests are validated for recent unlock, limits and size estimate before collection starts.
+      - Each module section is validated against its registered schema list and its own line format before it is accepted.
+      - The manifest is validated and its signature verified before the job becomes ready.
+    rules:
+      - "V01 | principal unlocked the vault within the last 5 minutes | UNAUTHENTICATED"
+      - "V02 | no job is requested or collecting in this vault | PRECONDITION_FAILED"
+      - "V03 | at most 3 export requests per 24 hours per vault | RATE_LIMITED"
+      - "V04 | estimated size at most 2 GiB and free storage at least 1.2 times the estimate | PRIVACY_EXPORT_QUOTA"
+      - "V05 | every section line is valid JSON with schema from the module's registered list | PRIVACY_EXPORT_SECTION_FAILED"
+      - "V06 | no line contains another user's P2 or higher content outside the user's own shared copies | PRIVACY_EXPORT_SECTION_FAILED"
+      - "V07 | manifest sha256 per section matches the streamed bytes and the Ed25519 signature verifies | PRIVACY_EXPORT_SIGNATURE_INVALID"
+      - "V08 | download requested while status ready and not past expiresAt | EXPIRED"
+  workflow_state_machine:
+    requirements:
+      - Export jobs follow the declared machine; any transition not listed is refused with CONFLICT_STATE.
+      - A job is ready only after all sections are done, the manifest is signed and verified, and the bundle is stored.
+      - Expiry after 7 days deletes the bundle and shreds its key; failure and cancel delete partial files immediately.
+    machines:
+      - entity: ExportJob
+        initial: requested
+        terminal: [failed, expired, cancelled]
+        transitions:
+          - "requested -> collecting | privacy.export.request accepted | sections discovered; first section started"
+          - "collecting -> ready | all sections done, manifest signed and verified, bundle stored | sets expiresAt = readyAt + 7 days; emits privacy.export.ready"
+          - "collecting -> failed | a section fails after 3 attempts, quota exceeded, or 30 min job timeout | partial files deleted; emits privacy.export.failed"
+          - "requested -> cancelled | privacy.export.cancel | no files yet"
+          - "collecting -> cancelled | privacy.export.cancel | partial files deleted"
+          - "ready -> expired | expiry sweep at expiresAt, or account deletion completes | bundle deleted and key shredded; emits privacy.export.expired"
+    timeouts:
+      - "Section timeout 5 min with 3 attempts; job timeout 30 min; resume window after PWA close 24 h."
+      - "Bundle expiry 7 days after readyAt; expiry sweep every 5 min while open and at unlock."
+  commands_queries_events:
+    requirements:
+      - Request, cancel and open_download are vault commands (local, no signed statement to others, no relay command); the signature is a local artifact inside the bundle.
+      - ExportSectionPort is the contract each module implements; the orchestrator calls sections in parallel at most 4 at a time.
+      - State changes emit events into the vault outbox in the same IndexedDB transaction as the job update.
+    commands:
+      - name: privacy.export.request
+        capability: privacy.export.request
+        input: "[vault command, local] { includeMedia?: boolean (default false) }"
+        output: "{ jobId, status: requested, estimatedBytes, sections: string[] }"
+        errors: [UNAUTHENTICATED, PRECONDITION_FAILED, RATE_LIMITED, PRIVACY_EXPORT_QUOTA]
+        emits: []
+        idempotent: true
+      - name: privacy.export.cancel
+        capability: privacy.export.cancel
+        input: "[vault command, local] { jobId, expectedRevision }"
+        output: "{ jobId, revision, status: cancelled }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: privacy.export.open_download
+        capability: privacy.export.download
+        input: "[vault command, local] { jobId }"
+        output: "{ jobId, fileName, sizeBytes, expiresAt, handle (in-app file handle), signatureFingerprint }"
+        errors: [NOT_FOUND, EXPIRED, UNAUTHENTICATED, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+    queries:
+      - name: privacy.export.get
+        capability: privacy.export.read
+        input: "{ jobId }"
+        output: "{ job: ExportJob }"
+        errors: [NOT_FOUND]
+      - name: privacy.export.list_mine
+        capability: privacy.export.read
+        input: "{ cursor?, limit ≤ 20 }"
+        output: "{ items: ExportJob[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: privacy.export.ready, privacy: P3, payload: "{ jobId, bundleBytes, expiresAt, sectionCount }"}
+      - {type: privacy.export.failed, privacy: P3, payload: "{ jobId, errorCode, failedModule? }"}
+      - {type: privacy.export.expired, privacy: P3, payload: "{ jobId, reason: time|deletion }"}
+    events_consumed:
+      - {type: privacy.deletion.requested, effect: "offer the user an export before the grace period ends by showing the export prompt; no automatic export"}
+      - {type: privacy.deletion.completed, effect: "expire any ready bundle immediately and shred its key"}
+      - {type: identity.device_key.revoked, effect: "if the revoked key is the signing key of a collecting job, restart its signature step with the current key"}
+    errors:
+      - "PRIVACY_EXPORT_QUOTA | 507 | no | not enough storage for the export bundle; response includes bytes needed"
+      - "PRIVACY_EXPORT_SECTION_FAILED | 500 | yes | a module section failed validation or production after 3 attempts"
+      - "PRIVACY_EXPORT_SIGNATURE_INVALID | 500 | no | manifest hashes or signature did not verify"
+    example: |
+      vault command privacy.export.request { "includeMedia": false }
+      => { "jobId": "0192f3d0-…", "status": "requested", "estimatedBytes": 8420000, "sections": ["bazaar.listings", "commerce.deals", "privacy.consents", "…"] }
+      ready: manifest line { "format": "classrup-export/v1", "exportedAt": "2026-11-04T10:12:00.000Z", "accountId": "…", "did": "did:key:z6Mk…",
+        "modules": ["F01.S01.M01", "…"], "counts": { "bazaar.listings": 42 }, "sha256": { "bazaar.listings": "…" }, "sig": "…" }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked principal requests, cancels, reads or downloads its own export, and a fresh unlock within 5 minutes is required to start and to download.
+      - Suspension on any relay never affects export rights because the vault is local (CAP-5, CAP-9).
+      - Relays have no capability here and receive nothing from this module.
+    capabilities:
+      - "privacy.export.request | local-principal | vault unlocked within 5 minutes; limits met"
+      - "privacy.export.cancel | local-principal | job requested or collecting"
+      - "privacy.export.download | local-principal | vault unlocked within 5 minutes; job ready and not expired"
+      - "privacy.export.read | local-principal | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent per CTR-IDM-001 using vault command IDs; a repeated request returns the active job.
+      - Collection is resumable by section; a section either completes with its hash or is rerun from its start.
+      - A failed or cancelled job leaves no files and no key material behind.
+    idempotency: "Vault command ID recorded for 24 h; request while a job is active returns that job."
+    concurrency: "Partial unique index on active jobs per vault; Web Lock privacy-export; sections read a consistent IndexedDB snapshot per section (read-only transactions)."
+    retries: "Section production: 3 attempts with 1 s, 5 s, 30 s backoff, then job failed with the module named."
+    offline: "Export is fully offline; it reads local data only."
+    partial_failure: "No partial bundles: the stream is written to a temporary file and moved into place only after the manifest verifies; otherwise the temporary file and key are deleted."
+  privacy_retention_abuse:
+    requirements:
+      - The bundle contains P3 data and is encrypted at rest with a per-job key; the key is deleted at expiry, and the UI warns that the downloaded file is plain JSON Lines that the user must protect.
+      - The export excludes other users' P2 and higher content and all P4 secrets; device private keys are never exported, and recovery material is exported only as the user's own recovery hints (P3) and never as keys.
+      - Export abuse by someone with brief access to an unlocked device is limited by the fresh-unlock requirement, rate limit and an on-screen notification of every export.
+    data:
+      - "ExportJob: P3 metadata. Bundle: P0 to P3 user data, encrypted at rest for up to 7 days."
+      - "The manifest signature proves integrity and origin device, not truth of content."
+    retention:
+      - "Bundle 7 days after ready; ExportJob record RET-SHORT (30 days) after expiry; no copy leaves the device."
+    threats:
+      - "T01 | Device thief exports everything | fresh unlock within 5 minutes required, 3 exports per 24 h, local notification record, bundle encrypted at rest and deleted in 7 days"
+      - "T02 | Bundle tampered after export | manifest per-section SHA-256 and Ed25519 signature; import verifies (IOX-2)"
+      - "T03 | Export leaks other users' private content | schema-level exclusion and validation V06; sections must declare classification per field (F10.S02.M02) and CI rejects unclassified fields"
+      - "T04 | Private keys exfiltrated through export | P4 fields excluded by the classification model; test scans bundles for key material patterns"
+    abuse_controls:
+      - "3 requests per 24 hours per vault, one active job, and one open_download per minute."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); job timings, sizes and failures stay in local diagnostics.
+      - Export throughput meets the budget on a mid-range phone without freezing the UI.
+      - Failures name the failing module for support exports of diagnostics.
+    metrics:
+      - "Local diagnostics: classrup_privacy_export_jobs_total{status}"
+      - "Local diagnostics: classrup_privacy_export_duration_s (histogram)"
+      - "Local diagnostics: classrup_privacy_export_bytes (histogram)"
+    logs:
+      - "info export.status {jobId, from, to, correlationId} — no record contents."
+      - "warn export.section_failed {jobId, moduleId, errorCode, correlationId}."
+    budgets:
+      - "Export of 50 000 records and 200 MB media completes in ≤ 120 s on a 2022 mid-range Android device; main-thread blocks ≤ 50 ms."
+      - "Manifest build and signing ≤ 300 ms; verification ≤ 300 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Round-trip tests export a seeded vault and import it into a fresh one through the IOX-2 dry-run and commit path.
+      - Tamper, missing-section and over-limit scenarios are covered deterministically.
+    fixtures: "Seeded vault with records in every module section, 20 photos, two device keys; ExportSectionPort stubs per module; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | request an export with fresh and stale unlock | fresh creates job with sections; stale returns UNAUTHENTICATED"
+      - "T02 | integration | 01.R02,03.R02 | complete an export and inspect storage | bundle is an encrypted file, job holds only hashes and sizes, no content or key"
+      - "T03 | unit | 02.R02,02.R03 | rules V01 to V08 violated in turn | documented error code returned and no partial file left"
+      - "T04 | integration | 02.R02,03.R01 | module section throws after 3 attempts | job failed naming the module; no partial bundle; PRIVACY_EXPORT_SECTION_FAILED"
+      - "T05 | property | 03.R01 | random command and time sequences | only declared transitions succeed; terminal states have no exits"
+      - "T06 | integration | 03.R03,04.R03 | clock advanced 7 days and account deletion completes | bundle deleted, key shredded, privacy.export.expired emitted with the right reason"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | execute each command and read the bundle | outputs and events validate against registry schemas; manifest matches classrup-export/v1"
+      - "T08 | integration | 04.R03,06.R02 | PWA closed mid-collection and reopened within 24 h | resumes from the last completed section and produces identical hashes"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | locked vault; suspended relay; relay inspects traffic | request refused when locked; export unaffected by suspension; zero network traffic"
+      - "T10 | integration | 06.R01,06.R03 | repeated request with same command ID; cancel mid-job | active job returned; cancel leaves no files or keys"
+      - "T11 | chaos | 06.R03 | storage quota exhausted midway | job failed with PRIVACY_EXPORT_QUOTA and temporary file removed"
+      - "T12 | abuse | 07.R01,07.R03 | 4th export in 24 h; bundle scanned for another user's P2 content and private key patterns | 4th RATE_LIMITED; scan finds none"
+      - "T13 | integration | 07.R02,02.R02 | bundle scanned for P4 fields and other users' private content | none present; user's own shared copies present"
+      - "T14 | load | 08.R01,08.R02,08.R03 | 50 000 records and 200 MB media | ≤ 120 s, main-thread block ≤ 50 ms, manifest sign ≤ 300 ms, no telemetry"
+      - "T15 | unit | 09.R01,09.R03 | traceability tool run and tamper test of one byte | every PS-078 requirement maps to a passing test; tampered bundle fails import verification"
+      - "T16 | e2e | 01.R03,10.R01,10.R02,10.R03 | export, import into a fresh vault via IOX-2 dry-run and commit, roll back one release | all sections round-trip with identical counts; v1 bundle readable by the previous release; axe zero serious issues on export screens"
+      - "T17 | unit | 04.R03 | CI check that every module owning user data registers a section | build fails for a module without a section"
+    acceptance:
+      - All tests T01 to T17 pass in CI.
+      - A bundle from a seeded vault imports into a fresh vault with identical record counts and a verifying signature.
+      - No bundle contains P4 secrets or other users' private content.
+      - A ready bundle is unreachable after 7 days and its key is gone.
+  import_export_backup_rollback:
+    requirements:
+      - This module's own output format is classrup-export/v1; the module contributes a section privacy.exports listing past export jobs' metadata only.
+      - Import of a bundle is performed by the vault restore flow, which verifies the manifest signature and section hashes produced here before committing any record.
+      - The format follows expand/contract; a new major version keeps the previous major readable for 180 days.
+    export: "Section privacy.exports in classrup-export/v1: ExportJob metadata of the last 30 days (schema classrup.privacy.export_job/v1), no bundle content."
+    import: "Past export job metadata imports as read-only history with status expired; bundles are never imported as jobs."
+    backup: "The export bundle is the user's primary backup (IOX-6); the PWA warns when the last export is older than 30 days. Backups of bundles are the user's responsibility."
+    migration_rollback: "Section list and manifest fields are additive in v1; older readers ignore unknown sections; a rollback never changes bundles already written."

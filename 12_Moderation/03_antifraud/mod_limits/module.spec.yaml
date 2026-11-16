@@ -1,0 +1,236 @@
+id: F12.S03.M04
+scope: MVP
+summary: >-
+  Graduated per-key limits that a relay applies to what it hosts: listings per day, open offers, open cycle
+  proposals, bids per day and new conversations per day. Limits rise with the key's age on that relay and its
+  completed dealings, drop by a fixed factor at medium or high risk (friction, never a ban), and can be
+  overridden by that relay's moderators with a reason and an expiry. Limits exist only per relay; a key's
+  standing on one relay says nothing about another, and the vault never reports limits to anyone.
+responsibilities:
+  - Own the AccountLimit record per (relay, key, limit key) with tier, base value, multiplier, effective value and override.
+  - Derive tiers (new, established, trusted) from time first seen on this relay and completed dealings, using documented thresholds.
+  - Answer limit checks for the relay command bus, using F12.S03.M03 for flow limits and caller-supplied counts for stock limits.
+  - Apply the risk multiplier (medium 0.75, high 0.5, never below 1) and moderator overrides with reason, bound and expiry, and emit moderation.limit.changed.
+non_responsibilities:
+  - Rate limiting of requests (F12.S03.M03) and risk scoring (F12.S03.M01).
+  - Suspension and removal (F12.S02.M01).
+  - Reputation computation (F07.S03.M01); only completed-dealing counts are consumed.
+  - "Future: limits negotiated between relays by signed attestation; per-category limits."
+depends_on: [F12.S03.M01, F12.S03.M03, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a new member of a relay, I see exactly how many listings and offers I can have and how I move up (for example 'after 7 days and 3 completed deals').
+  - As a relay moderator, I can raise a trusted seller's limit for 30 days with a recorded reason.
+  - As a member whose limit was lowered by a risk level, I see the reason and when it is expected to recover.
+edge_cases:
+  - Moderator lowers a limit below the member's current open count; existing items stay, new ones are refused with ACCOUNT_LIMIT_REACHED until the count drops.
+  - Override expires while the member is at the higher count; nothing is deleted, new items are refused until under the lower limit.
+  - Member moves to a different relay; the new relay starts them at tier new, and says so on the limits screen.
+  - Risk level changes twice within a minute; the effective limit follows the latest assessment and emits one limit.changed event per distinct effective value.
+  - Tier thresholds change by operator policy; existing keys are re-tiered at the next daily sweep and never lose more than one tier per sweep.
+  - A key with no first-seen record (restored relay); the tier defaults to new and first-seen is set to restore time.
+ux:
+  screens:
+    - "My limits (relay member): table of limit, used, allowed, tier, active adjustments with reasons, and the next tier requirements."
+    - "Limit reached sheet: which limit, current usage, when it resets or what to do (finish or archive an item), no hidden penalty wording."
+    - "Moderator limit override form: key, limit, value (0..10 000), reason (10..500 characters), expiry (max 90 days)."
+  states: [loading, within-limit, near-limit, at-limit, adjusted-by-risk, overridden]
+  a11y:
+    - Usage is shown as text 'used of allowed' plus a progress element with an accessible name.
+    - Limit reached messages are announced in an aria-live assertive region once.
+    - Override form fields have labels and errors linked with aria-describedby.
+processes:
+  domain_schema:
+    requirements:
+      - An AccountLimit stores key, limit key, tier, base value, risk multiplier, override, effective value and the reasons for each adjustment, with tenant and revision per CTR-ID-001.
+      - Limits are P2 between the member and the relay's moderators and retained under RET-STANDARD with the membership record.
+      - Effective value is always computed as the override when active, otherwise floor(base × multiplier) with a minimum of 1.
+    entities:
+      - name: AccountLimit
+        schema: classrup.moderation.accountlimit/v1
+        storage: relay
+        privacy: P2
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — relay hosting scope"
+          - "subjectKey: did:key — member key on this relay"
+          - "limitKey: enum — listings_per_day | open_offers | open_cycle_proposals | bids_per_day | new_conversations_per_day"
+          - "tier: enum — new | established | trusted"
+          - "baseValue: int — from tier table, 0..10000"
+          - "riskMultiplier: number — 1.0, 0.75 or 0.5"
+          - "overrideValue?: int — 0..10000 set by a moderator"
+          - "overrideReason?: string — 10..500 code points"
+          - "overrideBy?: did:key — moderator key"
+          - "overrideExpiresAt?: timestamp — RFC 3339 UTC, at most 90 days after setting"
+          - "effectiveValue: int — computed, ≥ 0"
+          - "firstSeenAt: timestamp — RFC 3339 UTC, relay clock"
+          - "completedDeals: int — consumed count, capped at 1000"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - effectiveValue equals overrideValue when overrideExpiresAt is in the future, otherwise max(1, floor(baseValue × riskMultiplier)) unless baseValue is 0.
+          - overrideValue requires overrideReason, overrideBy and overrideExpiresAt.
+          - At most one AccountLimit exists per (tenantId, subjectKey, limitKey).
+    sql: |
+      CREATE TABLE moderation_account_limit (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_key TEXT NOT NULL, limit_key TEXT NOT NULL, tier TEXT NOT NULL,
+        effective_value INTEGER NOT NULL, override_expires_at TEXT, first_seen_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_account_limit_key ON moderation_account_limit(tenant_id, subject_key, limit_key);
+  validation_rules:
+    requirements:
+      - Override input is validated strictly with bounded value, reason and expiry.
+      - Limit checks validate the limit key and treat unknown keys as denied.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | limitKey is in the enum and overrideValue is an integer 0..10000 | VALIDATION_FAILED"
+      - "V02 | overrideReason 10..500 code points and expiry between 1 hour and 90 days | VALIDATION_FAILED"
+      - "V03 | the overriding moderator is not the subject key | FORBIDDEN"
+      - "V04 | expectedRevision matches the AccountLimit revision | CONFLICT_REVISION"
+      - "V05 | check for stock limits supplies currentCount ≥ 0 | VALIDATION_FAILED"
+      - "V06 | usage after the check would not exceed the effective value | ACCOUNT_LIMIT_REACHED"
+  workflow_state_machine:
+    note: "Limits are recomputed values without lifecycle states; tier and risk changes recompute effectiveValue and emit events."
+    machines: []
+    requirements:
+      - Tier derives from relay-clock age and completed dealings, and promotion is evaluated by the daily sweep and by deal completion events.
+      - A risk level change recomputes the multiplier immediately, and recovery to low restores the base value immediately.
+      - Overrides expire automatically at overrideExpiresAt and the recompute emits a limit.changed event.
+    timeouts:
+      - "Daily tier sweep at 03:15 UTC re-tiers keys; override expiry check every 60 s."
+  commands_queries_events:
+    requirements:
+      - The module exposes override set and clear commands and two queries, plus an in-process check used by the relay bus.
+      - Every effective value change emits moderation.limit.changed in the same transaction as the row.
+      - The module consumes risk, deal and account events to keep tier and multiplier current.
+    commands:
+      - name: moderation.accountlimit.override
+        mode: "relay command (moderator); audit-logged; no signed statement to others"
+        capability: moderation.accountlimit.override
+        input: "{ subjectKey, limitKey, overrideValue, reason, expiresInMs, expectedRevision? }"
+        output: "{ accountLimitId, effectiveValue, revision }"
+        errors: [VALIDATION_FAILED, CONFLICT_REVISION, FORBIDDEN]
+        emits: [moderation.limit.changed]
+        idempotent: true
+      - name: moderation.accountlimit.clear_override
+        mode: "relay command (moderator)"
+        capability: moderation.accountlimit.clear_override
+        input: "{ accountLimitId, expectedRevision }"
+        output: "{ accountLimitId, effectiveValue, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, FORBIDDEN]
+        emits: [moderation.limit.changed]
+        idempotent: true
+    queries:
+      - name: moderation.accountlimit.check
+        capability: moderation.accountlimit.check
+        input: "{ subjectKey, limitKey, currentCount?, cost?: 1 }"
+        output: "{ allowed, effectiveValue, used?, resetsAt?, reasons[] }"
+        errors: [VALIDATION_FAILED, ACCOUNT_LIMIT_REACHED]
+      - name: moderation.accountlimit.list_mine
+        capability: moderation.accountlimit.read_own
+        input: "{ includeAdjustments?: boolean }"
+        output: "{ items: { limitKey, tier, effectiveValue, used?, adjustments[], nextTier? }[] }"
+        errors: []
+    events_produced:
+      - {type: moderation.limit.changed, privacy: P2, payload: "{ accountLimitId, subjectKey, limitKey, previousValue, effectiveValue, cause: tier|risk|override|override_expired|policy }"}
+    events_consumed:
+      - {type: moderation.risk.elevated, effect: "set riskMultiplier 0.75 for medium and 0.5 for high on the subject's limits; recovery is recomputed by the daily sweep and signal events"}
+      - {type: commerce.deal.completed, effect: "increment completedDeals for both parties on this relay and re-evaluate tier"}
+      - {type: identity.account.created, effect: "set firstSeenAt for the key on this relay if not present"}
+      - {type: moderation.action.applied, effect: "restrict_feature actions naming a limit key set effectiveValue 0 for the action duration"}
+    errors:
+      - "ACCOUNT_LIMIT_REACHED | 429 | no | the key reached its limit; params.limitKey, params.effectiveValue and params.resetsAt where it applies"
+    example: |
+      query moderation.accountlimit.check  (relay bus call before bazaar.listing.publish)
+      { "subjectKey": "did:key:z6MkMemberExample", "limitKey": "listings_per_day" }
+      -> { "allowed": false, "effectiveValue": 5, "used": 5, "resetsAt": "2026-11-05T09:12:00Z", "reasons": ["tier new: 5 per day; becomes 20 after 7 days and 3 completed deals"] }
+      POST https://relay.example/api/v1/cmd/moderation.accountlimit.override  (moderator token)
+      { "subjectKey": "did:key:z6MkMemberExample", "limitKey": "listings_per_day", "overrideValue": 30, "reason": "Verified shop selling stock", "expiresInMs": 2592000000 }
+      -> 200 { "accountLimitId": "0192f410-aaaa-7000-8000-00000000000a", "effectiveValue": 30, "revision": 2 }
+  authorization_capabilities:
+    requirements:
+      - "Relay policy: moderators set and clear overrides within bounds and members read their own limits; the check capability is for the relay bus only."
+      - "Vault policy: not applicable beyond showing the relay's limit statement; the vault never enforces another party's limits."
+      - A moderator cannot override limits on their own key.
+    capabilities:
+      - "moderation.accountlimit.override | moderator, operator | relay role; subject key is not actor; value and expiry bounded"
+      - "moderation.accountlimit.clear_override | moderator, operator | relay role; override exists"
+      - "moderation.accountlimit.check | operator | in-process relay bus call; not routable over HTTP"
+      - "moderation.accountlimit.read_own | member | subjectKey = actor on this relay"
+  failure_recovery_idempotency:
+    requirements:
+      - Overrides are idempotent per CTR-IDM-001 and use expectedRevision.
+      - Checks never mutate stock-limit state and flow-limit consumption is atomic through F12.S03.M03.
+      - Recompute and event commit in one transaction.
+    idempotency: "Idempotency-Key required on override and clear; replay returns the stored response for 24 h."
+    concurrency: "expectedRevision on override; unique (tenant, key, limitKey) index; check reads the committed effective value; flow consumption is an atomic bucket consume."
+    retries: "Callers retry DEPENDENCY_UNAVAILABLE; ACCOUNT_LIMIT_REACHED is not retried until resetsAt."
+    offline: "Vaults queue commands in the outbox; the relay applies limits on replay and returns ACCOUNT_LIMIT_REACHED, which the UI shows with the reset time."
+    partial_failure: "If the rate store is unavailable, flow limits use the failMode of the class from F12.S03.M03; stock limits rely on counts the caller supplies and never fail open for sensitive classes."
+  privacy_retention_abuse:
+    requirements:
+      - Limits are P2 relay-side data visible to the member and the relay's moderators and never federated.
+      - Retention is RET-STANDARD with membership, and deletion removes the rows.
+      - Abuse (limit evasion by many keys, moderator favoritism) is limited by per-prefix rate scopes, bounded overrides and audit logs.
+    data:
+      - "AccountLimit: P2 (member, relay moderators)."
+      - "Override reasons: P2 free text, shown to the member."
+    retention:
+      - "Rows: RET-STANDARD, deleted 30 days after membership deletion."
+      - "Override history: kept in the audit log for RET-AUDIT (1 year)."
+    threats:
+      - "T01 | Sybil keys evade limits | new tier is deliberately low (5 listings per day, 10 open offers), prefix-scoped rate limits in F12.S03.M03 and tenant caps apply"
+      - "T02 | Moderator favoritism via unlimited overrides | override value bounded to 10 000, expiry max 90 days, reason required, weekly override report to operators, audit entries"
+      - "T03 | Hidden penalty via risk multiplier | multiplier visible on the member's limits screen with its reason; friction-only semantics, minimum limit 1"
+      - "T04 | Limit probing to learn thresholds of rivals | check capability not routable over HTTP; members read only their own limits"
+    abuse_controls:
+      - "Override command limited to 30 per day per moderator via F12.S03.M03."
+      - "Tier promotion requires both age and completed dealings, so farming one is insufficient."
+  observability_performance:
+    requirements:
+      - Check outcomes and tier distribution are measured per CTR-OBS-001 without keys.
+      - Check meets p95 ≤ 5 ms in-process on a relay.
+      - Override counts and denials are observable for abuse review.
+    metrics:
+      - "classrup_moderation_limit_checks_total{limit,outcome=allowed|denied}"
+      - "classrup_moderation_limit_keys{tier} (gauge)"
+      - "classrup_moderation_limit_overrides_total"
+    logs:
+      - "relay info limit.changed {accountLimitId, limitKey, cause, correlationId} — no keys."
+    budgets:
+      - "check p95 ≤ 5 ms; override p95 ≤ 300 ms; list_mine p95 ≤ 100 ms."
+      - "Daily tier sweep of 100 000 keys completes in ≤ 60 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Tier tables and multiplier math are covered by deterministic and property tests.
+      - Authorization and non-disclosure are covered by abuse tests.
+    fixtures: "Relay X, keys A (first seen 2 days ago, 0 deals), B (40 days, 5 deals), C (120 days, 12 deals), moderators M1, M2, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | tier table for A, B, C on all five limit keys | A new (5, 10, 3, 20, 20), B established (20, 50, 10, 100, 60), C trusted (100, 200, 25, 500, 200)"
+      - "T02 | property | 01.R03,03.R02 | random tiers, multipliers and overrides | effective value follows the documented formula; never below 1 unless base is 0 or override sets 0"
+      - "T03 | unit | 02.R01,02.R02,02.R03 | override with value 10001, short reason, expiry 91 days, self override | VALIDATION_FAILED, VALIDATION_FAILED, VALIDATION_FAILED, FORBIDDEN"
+      - "T04 | integration | 03.R01,03.R03,04.R03 | deal.completed events and 7-day sweep; override expiry | tier promoted once both conditions hold; limit.changed emitted on expiry"
+      - "T05 | integration | 03.R02,04.R03 | risk.elevated medium then high then recovery | effective value 0.75×, 0.5×, then base; one event per distinct value"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | commands, queries and event | validate against registry schemas; check output matches examples"
+      - "T07 | integration | 02.R03,06.R02 | 6th listing in a day for tier new; stock limit with currentCount 10 of 10 | ACCOUNT_LIMIT_REACHED with resetsAt for flow; without for stock"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | member overrides own limit; member checks another's limit over HTTP; moderator overrides own key | FORBIDDEN, no route, FORBIDDEN"
+      - "T09 | integration | 06.R01,06.R03 | same Idempotency-Key replayed; rate store down for flow limit | original response replayed; fail mode of class applies"
+      - "T10 | abuse | 07.R01,07.R03 | 31 overrides by one moderator in a day | 31st RATE_LIMITED; weekly report lists all"
+      - "T11 | integration | 07.R02 | membership deletion | rows deleted after 30 days; audit history kept 1 year"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 2 000 checks per second for 5 minutes; sweep 100 000 keys | p95 ≤ 5 ms; sweep ≤ 60 s"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-098 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export own limits, relay backup and restore | limits recomputed after restore; firstSeen set to restore time when absent"
+      - "T15 | e2e | 01.R02,04.R01 | mobile member hits the daily listing limit | limit sheet shows used, allowed, reset time and next tier; axe zero serious issues"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - No limit change is ever silent: each has a cause visible to the member on their limits screen.
+      - Effective values follow the published tier table and multipliers exactly.
+  import_export_backup_rollback:
+    requirements:
+      - A member's export includes the limits the relay reports for them as read-only context, without moderator override identity.
+      - Relay import of limits is only from its own backups; imports from other relays are ignored because standing is relay-local.
+      - Tier tables are configuration versioned with the relay policy and validated against bounds on import.
+    export: "Section moderation.limits in classrup-export/v1 (vault): last known limits per relay with fetched time; relay operator export lists AccountLimit rows without override reasons about others."
+    import: "Vault import stores limits as historical context only; relay restore recomputes tier and multiplier from first-seen, deals and latest risk level."
+    backup: "Covered by relay SQLite backup (CTR-IOX-001 IOX-3)."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown limit keys are not enforced but logged."

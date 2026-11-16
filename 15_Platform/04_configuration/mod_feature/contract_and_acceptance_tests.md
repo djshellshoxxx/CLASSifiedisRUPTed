@@ -1,35 +1,48 @@
-# PS-123-09 — contract and acceptance tests
+# PS-123-09 — Contract and acceptance tests: Feature registry
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-123-09. **Owner:** [15_Platform/04_configuration/mod_feature](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_feature. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S04.M01 Feature registry](SPEC.md) · **Scope:** MVP · **Code:** `packages/platform/src/configuration/feature` · **Contracts:** [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for feature within 04_configuration. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-123-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-123-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-123-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-123-09.R01** Every requirement of this module is covered by at least one automated test.
+- **PS-123-09.R02** Graph validation is tested with property tests over random graphs and with fixtures of every failure code.
+- **PS-123-09.R03** The generated file for the real catalog is checked in CI and compared with a fresh generation.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Fixture catalogs: valid 12-module DAG, cycle of 3, unknown dependency, MVP-on-FUTURE dependency, core module off; real planning/modules.yaml with all module specs.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-123-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-123-09.T01 | unit | PS-123-01.R01, PS-123-01.R02, PS-123-02.R02 | generate from the valid fixture twice | identical bytes, fields present on every record, hash equals sha256 of canonical JSON |
+| TEST-PS-123-09.T02 | unit | PS-123-02.R01, PS-123-02.R03 | each of V01-V07 violated in turn | documented code returned; query for unknown key returns NOT_FOUND |
+| TEST-PS-123-09.T03 | property | PS-123-03.R01, PS-123-02.R01 | random digraphs with and without injected back edges | cycle detected exactly when one exists; topological order places dependencies first |
+| TEST-PS-123-09.T04 | integration | PS-123-03.R02, PS-123-03.R03, PS-123-06.R02 | break validation in each pipeline step | generation fails, previous file untouched, nothing published |
+| TEST-PS-123-09.T05 | contract | PS-123-04.R01, PS-123-04.R02, PS-123-04.R03 | call all four queries in the vault and on a relay | identical results for the same release; no commands or events exist; response within 5 ms |
+| TEST-PS-123-09.T06 | abuse | PS-123-05.R01, PS-123-05.R02, PS-123-05.R03 | attempt to mutate the registry through the API and as a hostile client | no mutation path exists; relay ignores client-claimed flags |
+| TEST-PS-123-09.T07 | integration | PS-123-01.R03, PS-123-06.R01 | build twice from the same commit, then edit planning/modules.yaml without regenerating | identical bytes; stale check fails with PLATFORM_FEATURE_REGISTRY_STALE |
+| TEST-PS-123-09.T08 | integration | PS-123-06.R03, PS-123-02.R03 | vault of release N queries relay of release N+1 hash | mismatch reported informationally, work continues, unknown modules listed |
+| TEST-PS-123-09.T09 | abuse | PS-123-07.R01, PS-123-07.R02, PS-123-07.R03 | inspect registry and query payloads | contain no personal data or configuration values; client-claimed dependency satisfaction not trusted by relay |
+| TEST-PS-123-09.T10 | load | PS-123-08.R01, PS-123-08.R03 | generate for 148 modules and 5 000 synthetic modules; run 10 000 queries | generation ≤ 2 s for catalog, size within budgets, query p95 ≤ 5 ms |
+| TEST-PS-123-09.T11 | integration | PS-123-08.R02 | relay metrics scrape after queries | duration histogram exported per CTR-OBS-001 |
+| TEST-PS-123-09.T12 | unit | PS-123-09.R01 | traceability tool run | every PS-123 requirement maps to a passing test |
+| TEST-PS-123-09.T13 | integration | PS-123-09.R02, PS-123-09.R03 | generate the real catalog | 18 features, 148 modules, acyclic, defaults satisfy FLG-2, FUTURE modules off and unregistered, core F15 and F16 on |
+| TEST-PS-123-09.T14 | a11y | PS-123-04.R03 | Settings > Features scanned with axe | zero serious issues; dependency text is real list text |
+| TEST-PS-123-09.T15 | integration | PS-123-10.R01, PS-123-10.R02, PS-123-10.R03 | export, import and release rollback | registry not part of any export; older release regenerates its own registry; no data migration |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01-T15 pass in CI.
+- The real catalog generates an acyclic registry with defaults that satisfy the dependency rule.
+- Adding a cycle or an unknown dependency to any module spec fails CI with a stable code and a readable path.
+- The registry works fully offline and cannot be modified at runtime.
+
+## Dependencies
+
+Module depends on: CTR-FLG-001, CTR-ERR-001, CTR-ID-001, CTR-OBS-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

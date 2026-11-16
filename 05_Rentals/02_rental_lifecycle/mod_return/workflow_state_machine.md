@@ -1,35 +1,56 @@
-# PS-043-03 — workflow state machine
+# PS-043-03 — Workflow state machine: Rental return
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-043-03. **Owner:** [05_Rentals/02_rental_lifecycle/mod_return](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_return. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F05.S02.M02 Rental return](SPEC.md) · **Scope:** MVP · **Code:** `packages/rentals/src/rental_lifecycle/return` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for return within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-043-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-043-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-043-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-043-03.R01** Returns move due, optionally overdue, awaiting_owner, attested, closed; closed is terminal.
+- **PS-043-03.R02** Overdue and late fee follow only from the confirmed end time, grace and elapsed time; the owner can lower the fee but nothing raises it.
+- **PS-043-03.R03** Owner silence is recorded as renter_only_silent_owner after 72 hours, and closure still needs the damage window, open claims and deposit checks to pass.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### RentalReturn lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **due**; terminal **closed**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-043-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| due -> overdue | local sweep at graceUntil | no return recorded; emits rentals.rental.overdue |
+| due -> awaiting_owner | rentals.return.report by renter | report signed, late fee computed |
+| overdue -> awaiting_owner | rentals.return.report by renter | report signed, late fee computed on elapsed time |
+| awaiting_owner -> attested | rentals.return.attest by owner on the exact cid, or 72 h of owner silence | attestedBy both or renter_only_silent_owner; emits rentals.return.attested |
+| due -> attested | rentals.return.record_received by owner | attestedBy owner_only; emits rentals.return.attested |
+| overdue -> attested | rentals.return.record_received by owner | attestedBy owner_only; late fee to the receipt time; emits rentals.return.attested |
+| attested -> closed | closure rule satisfied by event or sweep | emits rentals.rental.closed |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> due
+  due --> overdue: local sweep at graceUntil
+  due --> awaiting_owner: rentals.return.report by renter
+  overdue --> awaiting_owner: rentals.return.report by renter
+  awaiting_owner --> attested: rentals.return.attest by owner on the exact cid, or 72 h of owner silence
+  due --> attested: rentals.return.record_received by owner
+  overdue --> attested: rentals.return.record_received by owner
+  attested --> closed: closure rule satisfied by event or sweep
+  closed --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- Overdue is detected at graceUntil by a vault sweep (app start, every command, every 60 s while the PWA is open) and by every read; owner silence is 72 h after the renter report; the damage window is 7 days after attestation; closure is evaluated on every related event and by the sweep.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-043-09.T03 | property | PS-043-02.R02, PS-043-03.R02 | random return times, rates, caps and adjustments against reference model | fee equals model, never above cap, adjustments only decrease |
+| TEST-PS-043-09.T04 | property | PS-043-03.R01 | random statement and event sequences | only declared transitions succeed; closed never changes |
+| TEST-PS-043-09.T05 | integration | PS-043-03.R03, PS-043-06.R01 | owner silent for 72 hours; owner records receipt only; owner attests exact cid | attestedBy renter_only_silent_owner, owner_only, both respectively; events once per vault |
+
+## Dependencies
+
+Module depends on: F05.S02.M01, F05.S01.M01, F05.S01.M02, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

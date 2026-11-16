@@ -1,35 +1,30 @@
-# PS-113-10 — import export backup rollback
+# PS-113-10 — Import, export, backup and rollback: Languages
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-113-10. **Owner:** [14_Accessibility/02_internationalization/mod_languages](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_languages. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S02.M01 Languages](SPEC.md) · **Scope:** MVP · **Code:** `packages/i18n/src/internationalization/languages` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for languages within 02_internationalization. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-113-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-113-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-113-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-113-10.R01** The only user data is the vault setting i18n.locale, which is part of the vault export owned by F10.
+- **PS-113-10.R02** Importing a locale that is not shipped in this release selects the negotiated fallback and keeps the imported value so a newer release can honour it.
+- **PS-113-10.R03** Catalog changes are additive; removing a key needs a deprecation period of one release.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** Setting i18n.locale in the vault settings export (classrup-export/v1, owned by F10); catalogs are not user data.
+- **import:** i18n.locale is validated as a BCP 47 tag; unsupported values are kept but the app uses the negotiated fallback.
+- **backup:** Nothing to back up beyond the vault setting; catalogs ship with the app bundle.
+- **migration rollback:** Catalogs are additive; rollback to a previous release restores its catalogs, and keys unknown to it simply do not appear; users on a locale dropped in rollback fall back to en.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-113-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-113-09.T14 | unit | PS-113-09.R02, PS-113-10.R01, PS-113-10.R02, PS-113-10.R03 | add a key and a locale; roll back a release | new keys fall back to en until translated; export and import of i18n.locale works; rollback keeps users on a shipped locale |
+
+## Dependencies
+
+Module depends on: CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

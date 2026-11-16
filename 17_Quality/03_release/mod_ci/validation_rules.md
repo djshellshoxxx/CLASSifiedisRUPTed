@@ -1,35 +1,33 @@
-# PS-141-02 — validation rules
+# PS-141-02 — Validation rules: Continuous integration
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-141-02. **Owner:** [17_Quality/03_release/mod_ci](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_ci. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M01 Continuous integration](SPEC.md) · **Scope:** MVP · **Code:** `.github/workflows` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for ci within 03_release. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-141-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-141-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-141-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-141-02.R01** The workflow lint rejects: any uses: outside actions/*, missing permissions block, permissions broader than contents: read (except documented artifact write), pull_request_target triggers, missing concurrency cancel-in-progress, and missing timeout-minutes.
+- **PS-141-02.R02** The fast gate must contain jobs in order install, spec-check, typecheck, test (unit, property, integration), build-pwa and e2e-smoke, where each depends on install.
+- **PS-141-02.R03** Branch protection requires the single check gate-summary, which fails if any required job failed or was cancelled.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | Every uses: references an action in the actions/ organization | QUALITY_CI_ACTION_FORBIDDEN |
+| V02 | Workflow has permissions contents: read, concurrency with cancel-in-progress true and timeout-minutes | QUALITY_CI_WORKFLOW_INVALID |
+| V03 | e2e job downloads the pwa-dist artifact and never runs the build | QUALITY_CI_ARTIFACT_MISSING |
+| V04 | Docs-only change skips test jobs and a change to a module.spec.yaml runs spec-check | QUALITY_CI_PATH_FILTER_WRONG |
+| V05 | Fast gate p95 duration is at most 10 min on a warm cache | QUALITY_CI_GATE_TOO_SLOW |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-141-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-141-09.T02 | unit | PS-141-02.R01 | lint 8 bad fixtures: third-party action, missing permissions, broad permissions, pull_request_target, no concurrency, no timeout | each rejected with its code |
+| TEST-PS-141-09.T03 | unit | PS-141-02.R02, PS-141-03.R03, PS-141-04.R01 | parse ci.yml job graph and triggers | install precedes all; e2e-smoke needs build-pwa; triggers include push, pull_request, workflow_dispatch, schedule for nightly |
+| TEST-PS-141-09.T04 | integration | PS-141-02.R03, PS-141-03.R01 | simulate run with one failed and one skipped-by-filter job | gate-summary fails for failure and passes for path-filter skip |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S03.M02, F16.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

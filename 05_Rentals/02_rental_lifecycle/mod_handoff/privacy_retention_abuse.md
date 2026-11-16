@@ -1,35 +1,47 @@
-# PS-042-07 — privacy retention abuse
+# PS-042-07 — Privacy, retention and abuse: Rental handoff
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-042-07. **Owner:** [05_Rentals/02_rental_lifecycle/mod_handoff](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_handoff. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F05.S02.M01 Rental handoff](SPEC.md) · **Scope:** MVP · **Code:** `packages/rentals/src/rental_lifecycle/handoff` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for handoff within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-042-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-042-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-042-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-042-07.R01** Reports and photos are P2, travel only as end-to-end encrypted envelopes and attachments to the two parties, and never appear in logs, notifications or public projections.
+- **PS-042-07.R02** Photos are re-encoded with all metadata stripped before hashing; GPS tags are never stored (PRV-4); faces and plates are not detected or processed.
+- **PS-042-07.R03** Fake or doctored photos and one-sided reports are limited by hashes, explicit exact-cid attestation and the dispute path; no condition truth is claimed.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- RentalHandoff: P2 in both vaults.
+- Photos: P2 encrypted attachments; hashes in the signed report.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Terminal handoffs and statements: RET-EVIDENCE (2 years after last related activity).
+- Quarantined statements: RET-SHORT (30 days).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-042-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Owner edits the report after the renter attested | attestation binds the exact cid; any edit is a new revision and clears attestations |
+| T02 | Renter attests without inspecting | the UI shows a diff and per-item review but cannot force inspection; attestation is evidence of assertion only, stated in the UI |
+| T03 | Doctored or reused photos | hashes recorded at signing, takenAt is a claim, metadata stripped; disputes can compare against both parties' copies |
+| T04 | Forged attestation | signature over JCS bytes and signer role check; non-party keys quarantined |
+| T05 | Location leak through photos or readings | metadata stripped; no GPS fields exist; exact address is never in the report |
+
+**Abuse controls**
+- Local quarantine and a per-sender quota of 100 inbound handoff statements per day per counterparty.
+- Attachment size limit 10 MB per photo and 50 MB per report (PAYLOAD_TOO_LARGE).
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-042-09.T10 | abuse | PS-042-07.R01, PS-042-07.R02, PS-042-07.R03 | inspect logs, notifications, relay payloads; 101 inbound statements in a day | no item text or photos outside encrypted envelopes; 101st dropped and counted |
+
+## Dependencies
+
+Module depends on: F05.S01.M01, F05.S01.M02, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,35 +1,46 @@
-# PS-140-07 — privacy retention abuse
+# PS-140-07 — Privacy, retention and abuse: Offline testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-140-07. **Owner:** [17_Quality/02_performance/mod_offline](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M03 Offline testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/offline` · **Contracts:** [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for offline within 02_performance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-140-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-140-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-140-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-140-07.R01** Cached and queued data are synthetic; tests assert that authenticated responses are never stored in Cache Storage and that P3 values are not written to the outbox in plain text beyond what the command requires.
+- **PS-140-07.R02** Logout and account switch clear caches and outbox for the previous account.
+- **PS-140-07.R03** Browser traces from offline tests redact Authorization headers.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Synthetic outbox entries and cached public listings (P0/P1).
+- No real credentials; test tokens are random and short-lived.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Reports 14 days as CI artifacts; browser contexts are discarded after each test.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-140-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Authenticated response cached and exposed to the next user on a shared device | test asserts network-only routes and cache emptiness after logout |
+| T02 | Replay applies a command twice and double-charges a claim | exactly-once assertions with idempotency keys across resets |
+| T03 | Queued command with stale authority executes after privilege revocation | replay re-checks authorization; test expects FORBIDDEN |
+
+**Abuse controls**
+- Quota-filling attempts: the test fills storage to 95 percent and expects a visible error rather than silent drop.
+- Outbox size is limited to 500 entries; the 501st enqueue is refused with a visible message.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-140-09.T08 | e2e | PS-140-05.R02, PS-140-07.R02 | logout then inspect IndexedDB and caches | all empty for the previous account |
+| TEST-PS-140-09.T10 | e2e | PS-140-07.R01, PS-140-09.R02 | plant an authenticated response in cache | QUALITY_OFFLINE_AUTH_CACHED and suite fails |
+| TEST-PS-140-09.T11 | abuse | PS-140-07.R03, PS-140-09.R02 | fill storage to 95 percent and enqueue; plant replay with a new key | visible quota error; the new-key bug fails with QUALITY_OFFLINE_DUPLICATE_EFFECT |
+
+## Dependencies
+
+Module depends on: CTR-IDM-001, CTR-ERR-001, CTR-UX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M04, F15.S01.M01, F15.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,0 +1,36 @@
+{
+  "name": "@classrup/vault",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "dependencies": {
+    "@classrup/kernel": "workspace:*",
+    "zod": "4.6.7",
+    "@classrup/security": "workspace:*",
+    "@classrup/privacy": "workspace:*",
+    "@classrup/platform": "workspace:*",
+    "@classrup/i18n": "workspace:*",
+    "@classrup/governance": "workspace:*",
+    "@classrup/identity": "workspace:*",
+    "@classrup/commerce": "workspace:*",
+    "@classrup/discovery": "workspace:*",
+    "@classrup/comms": "workspace:*",
+    "@classrup/notify": "workspace:*",
+    "@classrup/moderation": "workspace:*",
+    "@classrup/federation": "workspace:*",
+    "@classrup/bazaar": "workspace:*",
+    "@classrup/mutiny": "workspace:*",
+    "@classrup/services": "workspace:*",
+    "@classrup/auctions": "workspace:*",
+    "@classrup/rentals": "workspace:*"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.6"
+  }
+}

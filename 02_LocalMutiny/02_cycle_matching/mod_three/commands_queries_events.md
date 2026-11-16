@@ -1,35 +1,66 @@
-# PS-020-04 — commands queries events
+# PS-020-04 — Commands, queries and events: Three-party cycles
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-04. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S02.M01 Three-party cycles](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/cycle_matching/three` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the commands queries events process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-020-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-020-04.R01** The module exposes two read-only queries and no commands because it carries no state and produces no statements.
+- **PS-020-04.R02** The catalog lists mutiny.cycle.suggested for this module, but the single producer is the engine F02.S02.M03; this module emits nothing itself.
+- **PS-020-04.R03** Queries run in the vault for the local principal and on a relay only for the relay's public profile description.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Query | Capability | Input | Output | Errors |
+|---|---|---|---|---|
+| `mutiny.cycle3.get_profile` | mutiny.cycle3.read_profile | { tenantId? default current } | { length: 3, toleranceBps, absoluteMinMajor, maxPairBucket, imbalanceQuantumPermille, minWantAgeMinutes, version, overridden: boolean } |  |
+| `mutiny.cycle3.explain` | mutiny.cycle3.read_explanation | { suggestionId } | { suggestionId, profileVersion, participants: { actorId, gives, receives, gap, tolerance, withinTolerance, distanceBucket, bases[] }[3], summaryKey } | NOT_FOUND, MUTINY_PROFILE_LENGTH_MISMATCH |
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+| Type | Effect |
+|---|---|
+| `mutiny.cycle.suggested` | pre-compute and cache the explanation for length-3 suggestions so the detail screen opens within 100 ms |
+| `mutiny.matching_profile.updated` | invalidate cached explanations for the affected participant |
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| MUTINY_PROFILE_LENGTH_MISMATCH | 422 | no | the subject is not a 3-party suggestion |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+### Example
+
+```
+# 3-party explanation (values EUR minor units): Alice gives guitar 12000, Bob gives bike 11800, Carol gives desk 11500
+mutiny.cycle3.explain { "suggestionId": "0192f3c0-…" }
+-> { "profileVersion": "p3.1", "participants": [
+     { "actorId": "did:key:z6MkAlice", "gives": "12000", "receives": "11500", "gap": "500", "tolerance": "600", "withinTolerance": true, "distanceBucket": 1 },
+     { "actorId": "did:key:z6MkBob",   "gives": "11800", "receives": "12000", "gap": "200", "tolerance": "600", "withinTolerance": true, "distanceBucket": 2 },
+     { "actorId": "did:key:z6MkCarol", "gives": "11500", "receives": "11800", "gap": "300", "tolerance": "590", "withinTolerance": true, "distanceBucket": 1 } ] }
+# tolerance = max(500 bps of the larger side, 500 minor units): Alice max(600, 500)=600, Carol max(590, 500)=590.
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-020-09.T04 | unit | PS-020-02.R02, PS-020-04.R03 | explain a 4-party suggestion | MUTINY_PROFILE_LENGTH_MISMATCH |
+| TEST-PS-020-09.T05 | contract | PS-020-04.R01, PS-020-04.R02, PS-020-09.R03 | queries and engine events | outputs validate against registry; module emits no events and sends no statement |
+
+## Dependencies
+
+Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

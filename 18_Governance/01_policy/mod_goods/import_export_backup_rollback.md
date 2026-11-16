@@ -1,35 +1,30 @@
-# PS-144-10 — import export backup rollback
+# PS-144-10 — Import, export, backup and rollback: Goods taxonomy
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-144-10. **Owner:** [18_Governance/01_policy/mod_goods](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_goods. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F18.S01.M03 Goods taxonomy](SPEC.md) · **Scope:** MVP · **Code:** `packages/governance/src/policy/goods` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the import export backup rollback process for goods within 01_policy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-144-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-144-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-144-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-144-10.R01** The user export contains the applied Category mirror with provenance and the trusted publisher list; publisher vaults also export staged changes and their signing history.
+- **PS-144-10.R02** Import re-verifies the pack signature and tree invariants; categories failing verification are not applied.
+- **PS-144-10.R03** Schema changes follow expand/contract and keep v1 readable for 180 days; the last 3 packs allow reverting by applying an older signed snapshot re-released with a higher version.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **export:** Sections governance.categories and governance.trusted_publishers in classrup-export/v1, one line per Category (schema classrup.governance.category/v1) and the latest pack statement.
+- **import:** Pack signature and publisher are re-verified; untrusted publishers import as pending; id reuse or tree violations reject the pack; the dry-run lists changed categories.
+- **backup:** Vault export is the primary backup (IOX-6); relays hold only signed public packs and are recoverable from the publisher's vault.
+- **migration rollback:** Additive optional fields only in v1; rollback to the previous app release is safe because the mirror is readable; to undo a taxonomy change the publisher re-releases the earlier content under a higher version.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-144-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-144-09.T14 | integration | PS-144-10.R01, PS-144-10.R02, PS-144-10.R03 | export, import to fresh vault, import pack with id reuse | categories round-trip with provenance; id reuse rejected |
+
+## Dependencies
+
+Module depends on: F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

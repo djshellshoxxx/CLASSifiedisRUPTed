@@ -1,35 +1,45 @@
-# PS-097-09 — contract and acceptance tests
+# PS-097-09 — Contract and acceptance tests: Spam detection
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-097-09. **Owner:** [12_Moderation/02_policy/mod_spam](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_spam. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F12.S02.M02 Spam detection](SPEC.md) · **Scope:** MVP · **Code:** `packages/moderation/src/policy/spam` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for spam within 02_policy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-097-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-097-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-097-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-097-09.R01** Every requirement of this module is covered by at least one automated test.
+- **PS-097-09.R02** Heuristics are covered by deterministic fixtures with expected scores.
+- **PS-097-09.R03** Event payloads are validated against the schema registry.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Corpus of 200 labelled texts (100 clean, 100 spam) in 6 scripts, fixed clock 2026-11-04T10:00:00Z, index snapshots with 0, 1 and 4 prior duplicates.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-097-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-097-09.T01 | unit | PS-097-01.R03, PS-097-02.R01, PS-097-02.R02 | oversized text; out-of-range thresholds | PAYLOAD_TOO_LARGE; VALIDATION_FAILED; operator cannot set all heuristics off |
+| TEST-PS-097-09.T02 | unit | PS-097-01.R02, PS-097-03.R01 | duplicate window and simhash distance 3 and 4 | distance 3 flagged duplicate_near, distance 4 not |
+| TEST-PS-097-09.T03 | property | PS-097-01.R01, PS-097-03.R02 | random texts evaluated twice with the same index snapshot | identical output; no exceptions; bounded runtime |
+| TEST-PS-097-09.T04 | unit | PS-097-02.R03, PS-097-04.R02 | link density on zero-length and unspaced scripts; score 49 and 50 | no division by zero; event only at score ≥ 50 |
+| TEST-PS-097-09.T05 | contract | PS-097-04.R01, PS-097-04.R02, PS-097-09.R02 | evaluate and event emission | port output and moderation.spam.detected validate against registry schemas |
+| TEST-PS-097-09.T06 | integration | PS-097-04.R03 | listing.published, account.created and rate.exceeded events delivered twice | counters updated once; one event per (targetCid, rulesVersion) |
+| TEST-PS-097-09.T07 | abuse | PS-097-05.R01, PS-097-05.R02, PS-097-05.R03 | HTTP request to evaluator; non-operator changes thresholds | no route exists; FORBIDDEN |
+| TEST-PS-097-09.T08 | chaos | PS-097-06.R01, PS-097-06.R02, PS-097-06.R03, PS-097-03.R03 | index lost mid-run; signal store down | degraded true with exact-hash mode; recovery within 5 minutes; events delivered later |
+| TEST-PS-097-09.T09 | abuse | PS-097-07.R01, PS-097-07.R03 | hostile regex-like text of 20000 code points | evaluation under 50 ms; no text in logs |
+| TEST-PS-097-09.T10 | integration | PS-097-03.R02, PS-097-07.R02 | throttle recommended then 61 minutes pass | throttle expired; no persistent penalty from this module |
+| TEST-PS-097-09.T11 | load | PS-097-08.R01, PS-097-08.R02, PS-097-08.R03 | 200 evaluations per second for 5 minutes at 20000 code points; rebuild 100 000 entries | p95 ≤ 20 ms relay, rebuild ≤ 5 minutes, metrics exported |
+| TEST-PS-097-09.T12 | unit | PS-097-09.R01, PS-097-09.R03 | traceability tool run | every PS-097 requirement maps to a passing test |
+| TEST-PS-097-09.T13 | integration | PS-097-10.R01, PS-097-10.R02, PS-097-10.R03 | export, import and backup restore | index absent from export and rebuilt after restore; configuration round-trips |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All tests T01–T13 pass in CI.
+- On the labelled corpus, recall ≥ 80% and false-positive rate ≤ 2% at score threshold 50.
+- No heuristic result ever causes removal, suspension or ban without a human or published rule in F12.S02.M01.
+
+## Dependencies
+
+Module depends on: F12.S03.M02, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

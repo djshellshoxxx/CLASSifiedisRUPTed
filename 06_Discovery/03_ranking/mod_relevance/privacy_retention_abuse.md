@@ -1,35 +1,46 @@
-# PS-051-07 — privacy retention abuse
+# PS-051-07 — Privacy, retention and abuse: Relevance ranking
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-07. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F06.S03.M01 Relevance ranking](SPEC.md) · **Scope:** MVP · **Code:** `packages/discovery/src/ranking/relevance` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-051-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-051-07.R01** Ranking uses only public document fields, query text and the coarse distance bucket; it uses no user identity, history or click data.
+- **PS-051-07.R02** Promotion is shown honestly with a 'Promoted' label and a capped multiplier, and is relay-local policy, never claimed as global.
+- **PS-051-07.R03** Config publication is auditable and rate limited to prevent silent manipulation.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- RankingConfig: P0 public; signed statement published by the relay.
+- Scores: computed on demand, not stored; explain components contain no personal data.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- RankingConfig versions kept 12 months for transparency (RET-STANDARD) on the relay; vault keeps the bundled version only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Operator quietly boosts own or paying listings | promotion cap 1.25, mandatory label, signed publication statement with version history of 20 visible to clients, per-page promoted share limit in F06.S03.M02 |
+| T02 | Backdated or future claimedPublishedAt manipulates recency | recency anchored on min(claim, firstSeenAt), never on claims alone |
+| T03 | Keyword stuffing to raise BM25 | bm25 saturation k, body length normalisation in FTS5 bm25, title weight bounded to 10, index caps body at 2000 code points |
+| T04 | Config tampering in transit | Ed25519 signature over JCS bytes with the relay key and client verification before display |
+
+**Abuse controls**
+- 10 publications per 24 h per relay; every change logged with version and operator role only.
+- Weights and caps validated by hard ranges so no setting can make promotion dominate (promotion boost at most 0.25).
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-051-09.T09 | abuse | PS-051-07.R01, PS-051-07.R02, PS-051-01.R03 | document with future claimedPublishedAt and expired promotion flag | recency uses firstSeenAt; no multiplier and no label |
+| TEST-PS-051-09.T10 | abuse | PS-051-07.R03, PS-051-02.R03 | 11th publication in 24 h and tampered signed config | RATE_LIMITED; client rejects the tampered statement |
+
+## Dependencies
+
+Module depends on: F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,0 +1,170 @@
+id: F12.S02.M02
+scope: MVP
+summary: >-
+  Deterministic spam heuristics that run in two places: on a relay when a signed public projection is
+  submitted for indexing, and in a user's vault as a local filter over incoming statements. Heuristics are
+  duplicate content hash, link density, posting velocity and new-key limits. Results are explainable signals
+  with a score from 0 to 100, never automatic bans. The only automatic effect is a short velocity throttle on
+  the relay's own intake, which expires within 1 hour and is labelled automated. Local use only labels or
+  folds content for that user.
+responsibilities:
+  - Evaluate submitted text and metadata with fixed, versioned heuristics and return a score, matched heuristic names and evidence values.
+  - Emit moderation.spam.detected with score, heuristics and an optional recommended throttle, from relay intake and from the vault filter.
+  - Maintain a derived, rebuildable fingerprint index (normalized SHA-256 and 64-bit simhash) with a 30-day window for duplicate checks.
+  - Keep the heuristic set deterministic: same input and same state give the same output, with the rule version recorded in every result.
+non_responsibilities:
+  - Banning, removing or suspending anything (F12.S02.M01 decides from signals; relays throttle only through F12.S03.M03).
+  - Signal storage and decay (F12.S03.M02) and risk levels (F12.S03.M01).
+  - Prohibited goods detection (F18.S01.M02).
+  - "Future: language-specific classifiers; image perceptual hashing; shared fingerprint feeds between relays."
+depends_on: [F12.S03.M02, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a relay operator, I see why a submission was flagged (for example 'identical text posted 4 times in 10 minutes') and can tune thresholds for my relay.
+  - As a member, I can fold likely spam in my own feed without any relay deciding for me.
+  - As a new member posting my first listings, I am not blocked by heuristics that only apply above stated limits.
+edge_cases:
+  - A legitimate seller posts 12 near-identical listings for variants of one product; duplicate score rises but the result is a signal and a throttle of at most 1 hour, not removal.
+  - Text in a script without spaces (for example Chinese); word-based link density uses character counts so the ratio stays defined and never divides by zero.
+  - Normalization collisions: two different texts normalize to the same hash; the result records both content ids so moderators see the difference.
+  - Clock changes or replayed old statements make velocity look huge; velocity uses the relay's receipt clock and ignores statements whose own timestamp is older than 24 h.
+  - Fingerprint index lost after restart; it is rebuilt from the index within 5 minutes and duplicate checks run in degraded mode (exact hash only) meanwhile.
+  - Many different new keys posting the same text in 24 h; coordinated flag is raised with the number of distinct keys but no key is penalized beyond signals.
+ux:
+  notes: "Headless library. Visible surfaces are the relay moderator case view (heuristic names and values for flagged submissions) and an optional local feed filter setting 'Fold likely spam' (off by default) showing a 'Folded: likely spam, show' row."
+  screens:
+    - "Relay moderator case view: spam panel listing heuristic, threshold, measured value and score contribution."
+    - "Settings > Safety: toggle 'Fold likely spam in my feed' with a short explanation and list of recently folded items."
+  states: [off, on, folded-item, shown-anyway]
+  a11y:
+    - Folded rows are announced as 'Folded: likely spam' with an accessible button to show the item.
+    - Toggle has a visible label and is operable by keyboard.
+    - Scores are conveyed as text, not color alone.
+processes:
+  domain_schema:
+    note: "Owns no catalog entities. A derived fingerprint index (tenant, actor key hash, normalized sha256, simhash64, observedAt) is kept per store for 30 days (RET-SHORT), is rebuilt from the index or vault, and is never exported."
+    entities: []
+    requirements:
+      - The module owns no persistent entities; all inputs are signed projections or local records and results are events carrying the evidence values.
+      - The derived fingerprint index stores only hashes and counters, never text, and expires entries after 30 days.
+      - Every result records the heuristic set version and thresholds used so decisions can be reproduced.
+  validation_rules:
+    requirements:
+      - Inputs are validated for size and encoding before evaluation, and oversized input is rejected rather than truncated.
+      - Thresholds are configuration with hard minimum and maximum values so an operator cannot disable all heuristics.
+      - Evaluation never throws on hostile text and always returns a bounded result.
+    rules:
+      - "V01 | text is valid UTF-8 and at most 20000 code points after NFKC normalization | PAYLOAD_TOO_LARGE"
+      - "V02 | thresholds are within allowed ranges (duplicate window 1..30 days, link density 0.05..0.50, velocity 3..100 per 10 minutes) | VALIDATION_FAILED"
+      - "V03 | caller supplies a key hash (not a raw key) and a receipt time from the store clock | VALIDATION_FAILED"
+  workflow_state_machine:
+    note: "Stateless evaluation; no entity lifecycle. Throttle windows are owned by F12.S03.M03."
+    machines: []
+    requirements:
+      - Evaluation is a pure function of input, fingerprint index snapshot and configured thresholds, and has no lifecycle.
+      - A throttle recommendation expires after at most 1 hour and is renewed only by new evidence.
+      - A degraded mode with exact-hash checks only is used while the index rebuilds, and results record degraded true.
+    timeouts:
+      - "Fingerprint index entries expire after 30 days; an hourly sweep removes expired entries."
+  commands_queries_events:
+    note: "Library module with no commands or queries. It is invoked by relay intake and by the vault filter through the SpamEvaluator port and publishes events."
+    commands: []
+    queries: []
+    requirements:
+      - The SpamEvaluator port is evaluate(input) returning score, heuristics[], throttle? and degraded flag, and has no side effects except the fingerprint index and the event.
+      - moderation.spam.detected is emitted only when score ≥ 50, with throttle only when the velocity heuristic matched.
+      - The module consumes listing publication and account creation events to feed duplicate and new-key heuristics.
+    events_produced:
+      - {type: moderation.spam.detected, privacy: P2, payload: "{ subjectKeyHash, targetType, targetId, targetCid, score, heuristics: string[], throttle?: { capability, windowMs, ttlMs }, rulesVersion, degraded }"}
+    events_consumed:
+      - {type: bazaar.listing.published, effect: "evaluate the published projection for duplicate hash, link density and velocity on the relay that indexes it, or in the vault for incoming listings"}
+      - {type: identity.account.created, effect: "start the new-key window (first seen time) used by the new-key heuristic on this store"}
+      - {type: moderation.rate.exceeded, effect: "count as a velocity observation for the key hash"}
+    errors:
+      - "SPAM_EVALUATION_DEGRADED | 200 | no | evaluation ran in exact-hash mode while the index rebuilds; informational"
+    example: |
+      SpamEvaluator.evaluate({ storeClock: "2026-11-04T10:00:00Z", keyHash: "k_9a3f…", targetType: "listing", targetCid: "sha256-aa01…", text: "BUY NOW http://a.example http://b.example …" })
+      -> { score: 72, heuristics: ["link_density:0.31", "duplicate_exact:3_in_24h"], throttle: null, rulesVersion: "spam/1.2", degraded: false }
+      event moderation.spam.detected { subjectKeyHash: "k_9a3f…", score: 72, heuristics: [...] }
+  authorization_capabilities:
+    note: "No commands or queries are exposed. Heuristic configuration is changed through relay operator configuration owned by F15.S04.M02; thresholds are read by this module."
+    requirements:
+      - The evaluator is an in-process port and is not reachable over HTTP, so it has no member-facing capability.
+      - Configuration changes to thresholds require the relay operator role and are written to the audit log of F16.S01.M01.
+      - Results visible to a member are limited to their own folded items in their own vault.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Evaluation is idempotent for the same input and index snapshot, and events are deduplicated on (targetCid, rulesVersion).
+      - Index updates and the detection event commit in one store transaction.
+      - Index loss degrades to exact-hash mode and recovers automatically without operator action.
+    idempotency: "Event dedupe key (targetCid, rulesVersion); repeated evaluation of the same projection updates no counters twice because the index records targetCid."
+    concurrency: "Index writes use upsert on (tenant, keyHash, targetCid); velocity counters use the F12.S03.M03 atomic increment; parallel evaluations of one projection are safe."
+    retries: "Event delivery follows CTR-EVT-001 retry rules; evaluation itself is not retried."
+    offline: "The vault filter works fully offline over locally held statements; relay-side heuristics need no vault."
+    partial_failure: "If the signal store is unavailable the event still fires from the outbox later; if the index is unavailable evaluation returns degraded true rather than failing intake."
+  privacy_retention_abuse:
+    requirements:
+      - Only hashes, counters and heuristic names are stored; text is processed in memory and never logged.
+      - Fingerprint entries are RET-SHORT (30 days) and keyed by a salted key hash so they cannot be joined across relays.
+      - Heuristic gaming and false positives are limited by explainable results, no automatic bans and operator-tunable bounded thresholds.
+    data:
+      - "Fingerprint index: P2 derived hashes, per store."
+      - "moderation.spam.detected: P2, consumed by F12.S03.M02, F12.S02.M01 and F12.S03.M03 only."
+    retention:
+      - "Fingerprints: 30 days (RET-SHORT)."
+      - "Events: per signal retention in F12.S03.M02."
+    threats:
+      - "T01 | Spammer evades exact-hash checks by small edits | simhash with Hamming distance ≤ 3 on 64-bit hashes catches near duplicates"
+      - "T02 | Attacker triggers throttles against a competitor by posting from lookalike keys | throttle applies only to the posting key's own intake and expires in 1 hour; no signal is attributed to other keys"
+      - "T03 | Heuristics used to censor legitimate sellers of many similar items | results are signals with visible evidence, throttles are short, removal needs a human or a published deterministic rule"
+      - "T04 | Regex or hash complexity attacks with hostile text | input capped at 20000 code points; linear-time heuristics only; evaluation timeout 50 ms"
+    abuse_controls:
+      - "Velocity throttle maximum 1 hour; renewable only with fresh evidence."
+      - "Operator thresholds are clamped to allowed ranges (V02)."
+  observability_performance:
+    requirements:
+      - Evaluation outcomes and timing are measured per CTR-OBS-001 on relays and kept as local diagnostics in the vault.
+      - Evaluation meets p95 ≤ 20 ms for 20000 code points on a relay and ≤ 50 ms on a Moto G-class device.
+      - Degraded mode and index size are observable.
+    metrics:
+      - "classrup_moderation_spam_evaluations_total{outcome=clean|detected|degraded}"
+      - "classrup_moderation_spam_score_bucket (histogram 0..100)"
+      - "classrup_moderation_spam_index_entries (gauge)"
+    logs:
+      - "relay info spam.detected {targetCid, score, heuristics, correlationId} — no text, no raw keys."
+    budgets:
+      - "evaluate p95 ≤ 20 ms (relay) and ≤ 50 ms (Moto G profile) for 20000 code points."
+      - "Index rebuild of 100 000 entries completes in ≤ 5 minutes."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Heuristics are covered by deterministic fixtures with expected scores.
+      - Event payloads are validated against the schema registry.
+    fixtures: "Corpus of 200 labelled texts (100 clean, 100 spam) in 6 scripts, fixed clock 2026-11-04T10:00:00Z, index snapshots with 0, 1 and 4 prior duplicates."
+    tests:
+      - "T01 | unit | 01.R03,02.R01,02.R02 | oversized text; out-of-range thresholds | PAYLOAD_TOO_LARGE; VALIDATION_FAILED; operator cannot set all heuristics off"
+      - "T02 | unit | 01.R02,03.R01 | duplicate window and simhash distance 3 and 4 | distance 3 flagged duplicate_near, distance 4 not"
+      - "T03 | property | 01.R01,03.R02 | random texts evaluated twice with the same index snapshot | identical output; no exceptions; bounded runtime"
+      - "T04 | unit | 02.R03,04.R02 | link density on zero-length and unspaced scripts; score 49 and 50 | no division by zero; event only at score ≥ 50"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | evaluate and event emission | port output and moderation.spam.detected validate against registry schemas"
+      - "T06 | integration | 04.R03 | listing.published, account.created and rate.exceeded events delivered twice | counters updated once; one event per (targetCid, rulesVersion)"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | HTTP request to evaluator; non-operator changes thresholds | no route exists; FORBIDDEN"
+      - "T08 | chaos | 06.R01,06.R02,06.R03,03.R03 | index lost mid-run; signal store down | degraded true with exact-hash mode; recovery within 5 minutes; events delivered later"
+      - "T09 | abuse | 07.R01,07.R03 | hostile regex-like text of 20000 code points | evaluation under 50 ms; no text in logs"
+      - "T10 | integration | 03.R02,07.R02 | throttle recommended then 61 minutes pass | throttle expired; no persistent penalty from this module"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 200 evaluations per second for 5 minutes at 20000 code points; rebuild 100 000 entries | p95 ≤ 20 ms relay, rebuild ≤ 5 minutes, metrics exported"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-097 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import and backup restore | index absent from export and rebuilt after restore; configuration round-trips"
+    acceptance:
+      - All tests T01–T13 pass in CI.
+      - On the labelled corpus, recall ≥ 80% and false-positive rate ≤ 2% at score threshold 50.
+      - No heuristic result ever causes removal, suspension or ban without a human or published rule in F12.S02.M01.
+  import_export_backup_rollback:
+    requirements:
+      - The fingerprint index is derived data and is excluded from user exports and from backups.
+      - Operator threshold configuration is exported with relay configuration and validated on import against allowed ranges.
+      - Heuristic changes are versioned in rulesVersion and old versions stay readable for audit for 180 days.
+    export: "No user data is exported; relay configuration export contains thresholds and rulesVersion."
+    import: "Thresholds import only within allowed ranges; out-of-range values are rejected with VALIDATION_FAILED."
+    backup: "Index excluded from backup (rebuilt); configuration covered by relay backup (CTR-IOX-001 IOX-3)."
+    migration_rollback: "A new rulesVersion runs in shadow mode for 7 days comparing scores before activation; rollback restores the previous version by configuration without data migration."

@@ -1,35 +1,33 @@
-# PS-005-06 — failure recovery idempotency
+# PS-005-06 — Failure recovery and idempotency: Giveaway listing type
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-005-06. **Owner:** [01_LocalBazaar/02_listing_types/mod_giveaway](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S02.M03 Giveaway listing type](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/listing_types/giveaway` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for giveaway within 02_listing_types. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-005-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-005-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-005-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-005-06.R01** Commands are idempotent per CTR-IDM-001; inbound statements are idempotent by requestCid.
+- **PS-005-06.R02** Selection, inventory hold and request update commit in one transaction; the signed statement is queued in the same transaction and sent afterwards.
+- **PS-005-06.R03** Each sync step states only what is known: prepared, transport_acknowledged by relay receipt, peer_accepted by the peer's signed acknowledgement.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Idempotency-Key required on commands, kept 24 h; inbound statements deduplicated by cid; replayed selection returns the stored selection statement.
+- **concurrency:** expectedRevision on select and decline; the unique index allows one live request per requester; the hold uses F01.S03.M01 serialization; two tabs selecting different requests for the last unit give one success and one BAZAAR_GIVEAWAY_NOT_SELECTABLE.
+- **retries:** Transport retries follow IDM-4 (base 500 ms, cap 30 s, 6 attempts per burst); quarantined statements are never retried.
+- **offline:** Requester can queue a request offline; it stays prepared and is not shown as sent. The giver processes the queue after unlock; selections made offline are final locally and sent when online.
+- **partial failure:** If the selection statement cannot be signed (key locked), the whole select is rolled back including the hold; if transport fails after commit, the selection stands locally and the requester sees pending until delivery.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-005-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-005-09.T05 | integration | PS-005-03.R02, PS-005-06.R02 | two tabs select different requests for last unit | one selected, other BAZAAR_GIVEAWAY_NOT_SELECTABLE |
+| TEST-PS-005-09.T10 | integration | PS-005-06.R01, PS-005-06.R03 | replay select with same key; fail signing | one selection; failure rolls back hold |
+| TEST-PS-005-09.T11 | chaos | PS-005-06.R03 | giver offline 3 days, relay mailbox holds requests | processed in receipt order on unlock; requester sees pending until signed receipt |
+
+## Dependencies
+
+Module depends on: F01.S01.M01, F01.S03.M01, F07.S02.M02, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

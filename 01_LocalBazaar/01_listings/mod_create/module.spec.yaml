@@ -1,0 +1,276 @@
+id: F01.S01.M01
+scope: MVP
+summary: >-
+  Creates and owns the Listing record in the principal's local vault. A listing starts as a private draft
+  (P3, vault only) with kind, title, description, category, condition, media references and a coarse region
+  (L1 or L2 geohash). It never stores an exact address. Later lifecycle changes (publish, expire, archive)
+  are applied by sibling modules through narrow system commands on this module, so Listing keeps a single owner.
+  Publishing to relays is done by F01.S01.M03 as a signed statement; this module never talks to a relay.
+responsibilities:
+  - Own the Listing record: creation, validation, draft deletion and the status field changed only through bazaar.listing.apply_status.
+  - Enforce draft limits (50 drafts per vault), field limits and the location ceiling of L2 (geohash length 5).
+  - Expose the vault-local commands apply_status and apply_edit that F01.S01.M02, F01.S01.M03 and F01.S01.M04 use inside their own transactions.
+  - Purge drafts untouched for 180 days after a 14-day in-app warning.
+non_responsibilities:
+  - Revision history and material-change detection (F01.S01.M02).
+  - Policy checks, signing and relay submission of the public projection (F01.S01.M03).
+  - Expiry, archive, restore and sold/given/traded marking (F01.S01.M04).
+  - Kind-specific terms: price (F01.S02.M01), wanted spec (F01.S02.M02), giveaway terms (F01.S02.M03).
+  - Storing listings authored by other principals; verified mirrors of them are kept by F11.S01.M02.
+  - "Future: photo upload pipeline owner; this module only holds content-addressed media references."
+depends_on: [F18.S01.M03, F15.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001, CTR-FLG-001, CTR-IOX-001]
+user_stories:
+  - As a seller, I can start a listing offline, add photos and a coarse region, and finish it later; nothing leaves my device until I publish.
+  - As a seller without location permission, I can pick my region by name and the app stores only a 5-character area cell, never coordinates.
+  - As a member, I can delete a draft I no longer want and know it is gone from my vault.
+edge_cases:
+  - Client sends latitude/longitude or a street address field; the whole command is rejected with BAZAAR_LISTING_LOCATION_TOO_PRECISE and nothing is stored.
+  - A photo still carries GPS EXIF data; the media reference is rejected with BAZAAR_LISTING_MEDIA_INVALID until the image is re-encoded.
+  - The category was retired by a newer policy pack between picking and saving; creation fails with BAZAAR_LISTING_CATEGORY_INVALID and the UI offers the replacement category.
+  - The same create command is replayed after a crash with the same Idempotency-Key; the original result is returned and one draft exists.
+  - The 51st draft is created; BAZAAR_LISTING_DRAFT_LIMIT is returned and the UI offers to delete old drafts.
+  - Two devices of the same principal edit the same draft; the second apply_edit gets CONFLICT_REVISION and is never auto-merged.
+ux:
+  screens:
+    - "Create listing wizard: kind chooser, title (3-120), description (up to 5000, counter), category picker (tree, depth 4), condition, up to 10 photos, region picker (name search or map snapped to 5-character cell, shows the approximate area size)."
+    - "Drafts list: sorted by last edit, shows days until automatic purge when under 14, delete with confirm dialog."
+  states: [loading, empty, saving-local, saved-local, error, conflict, over-limit]
+  a11y:
+    - Every field has a visible label; character counters are announced politely (aria-live polite) at 90 percent and 100 percent of the limit.
+    - Region picker is operable by keyboard and offers a text search alternative to the map.
+    - Delete draft uses an accessible confirm dialog with buttons of at least 44x44 px.
+processes:
+  domain_schema:
+    requirements:
+      - A Listing stores owner principal, kind, title, description, category, condition, media references, tags, locale, coarse region cell, status and revision; it has no field that can hold an exact address or coordinates.
+      - Drafts are P3 and live only in the owner's vault (IndexedDB); the public projection is a signed statement produced by F01.S01.M03 and the Listing record itself is never uploaded.
+      - Kind and ownerId are immutable after creation; every other mutation goes through apply_edit or apply_status with expectedRevision.
+    entities:
+      - name: Listing
+        schema: classrup.bazaar.listing/v1
+        storage: device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key, writer-generated (client)"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "ownerId: did:key — local principal; immutable"
+          - "kind: enum — sell | wanted | giveaway | service | rental | auction; immutable"
+          - "subtypeRef?: object — {slug: services|rentals|auctions, entity: string, id: uuidv7}; required for service, rental, auction"
+          - "title: string — 3..120 code points, NFC, no control characters"
+          - "description: string — 0..5000 code points (publication requires >= 10)"
+          - "categoryId: uuidv7 — ref F18.S01.M03 Category; active leaf"
+          - "condition?: enum — new | like_new | good | fair | poor | for_parts; required for sell, giveaway, rental"
+          - "mediaRefs: string[] — <= 10 items, each blob:sha256-<base64url>, image/jpeg|png|webp, <= 5 MiB, EXIF/GPS stripped"
+          - "tags?: string[] — <= 10 items, each 2..30 code points lowercase"
+          - "locale: string — BCP 47, default vault locale"
+          - "regionCell?: string — geohash length 4 (L1) or 5 (L2), lowercase base32; never longer"
+          - "status: enum — draft | published | unpublished | expired | closed | archived | deleted"
+          - "closeReason?: enum — sold | given | traded | fulfilled | sold_out | other; set only with status closed"
+          - "currentPublicationId?: uuidv7 — ref F01.S01.M03 PublicationRecord"
+          - "publishedAt?: timestamp — RFC 3339 UTC"
+          - "expiresAt?: timestamp — set while published"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - No persisted field holds latitude, longitude, street address or a geohash longer than 5 characters.
+          - status published implies currentPublicationId and expiresAt are set; status draft implies publishedAt is unset.
+          - kind and ownerId never change; at most 50 listings with status draft per vault.
+    sql: |
+      CREATE TABLE bazaar_listing (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_id TEXT NOT NULL, kind TEXT NOT NULL,
+        category_id TEXT NOT NULL, status TEXT NOT NULL, region_cell TEXT, expires_at TEXT,
+        revision INTEGER NOT NULL, updated_at TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX bazaar_listing_owner ON bazaar_listing(tenant_id, owner_id, status, updated_at);
+      CREATE INDEX bazaar_listing_expiry ON bazaar_listing(tenant_id, status, expires_at);
+  validation_rules:
+    requirements:
+      - Input is parsed strictly against classrup.bazaar.listing/v1; unknown keys are rejected and location keys are rejected with a dedicated code.
+      - Referenced category, media and subtype must resolve locally before the draft is stored.
+      - Every violation maps to one stable error code with a localized message key.
+    rules:
+      - "V01 | payload has no unknown keys and no keys named lat, lon, latitude, longitude, address, street, postcode | BAZAAR_LISTING_LOCATION_TOO_PRECISE"
+      - "V02 | regionCell is lowercase geohash base32 of length 4 or 5 | BAZAAR_LISTING_LOCATION_TOO_PRECISE"
+      - "V03 | title 3..120 code points after NFC trim, no control or zero-width characters | VALIDATION_FAILED"
+      - "V04 | description <= 5000 code points; tags <= 10 items of 2..30 code points | VALIDATION_FAILED"
+      - "V05 | kind in enum and subtypeRef present iff kind is service, rental or auction | VALIDATION_FAILED"
+      - "V06 | categoryId resolves to an active leaf category (depth 1..4, no children) in the active policy pack | BAZAAR_LISTING_CATEGORY_INVALID"
+      - "V07 | condition present when kind is sell, giveaway or rental | VALIDATION_FAILED"
+      - "V08 | mediaRefs <= 10; each blob exists locally, is jpeg/png/webp, <= 5 MiB and has no GPS tag | BAZAAR_LISTING_MEDIA_INVALID"
+      - "V09 | vault holds fewer than 50 drafts | BAZAAR_LISTING_DRAFT_LIMIT"
+      - "V10 | delete is requested only for status draft | CONFLICT_STATE"
+  workflow_state_machine:
+    requirements:
+      - Listing status follows the declared machine; any other transition is refused with CONFLICT_STATE and nothing changes.
+      - Only the sibling modules F01.S01.M03 and F01.S01.M04 may request status changes, and only through apply_status in their own transaction.
+      - Deleted is terminal; the tombstone keeps id, type and deletedAt for 180 days as required by CTR-PRV-001.
+    machines:
+      - entity: Listing
+        initial: draft
+        terminal: [deleted]
+        transitions:
+          - "draft -> published | apply_status by F01.S01.M03 after a signed projection is committed | sets currentPublicationId, publishedAt, expiresAt"
+          - "draft -> deleted | bazaar.listing.delete by owner, or 180-day draft purge | tombstone written; emits bazaar.listing.deleted"
+          - "published -> unpublished | apply_status by F01.S01.M03 (owner, policy or relay notice) | clears expiresAt"
+          - "published -> expired | apply_status by F01.S01.M04 expiry sweep | expiresAt <= now"
+          - "unpublished -> published | apply_status by F01.S01.M03 republish | requires new PublicationRecord"
+          - "unpublished -> closed | apply_status by F01.S01.M04 close | closeReason required"
+          - "unpublished -> archived | apply_status by F01.S01.M04 archive | restorableUntil = now + 90 d"
+          - "expired -> published | apply_status by F01.S01.M03 renew | new expiresAt"
+          - "expired -> archived | apply_status by F01.S01.M04 | automatic 30 days after expiry"
+          - "closed -> archived | apply_status by F01.S01.M04 | automatic 30 days after close"
+          - "archived -> unpublished | apply_status by F01.S01.M04 restore | within 90 days of archiving"
+          - "archived -> deleted | apply_status by F01.S01.M04 purge | after 90 days or owner deletion; emits bazaar.listing.deleted"
+    timeouts:
+      - "Draft purge sweep every 24 h and at app start: drafts with updatedAt older than 166 days raise a warning notification; older than 180 days move to deleted."
+  commands_queries_events:
+    requirements:
+      - "Commands are vault commands run by the unlocked local principal; none contacts a relay, and none produces a signed statement (publication is F01.S01.M03)."
+      - Every command writes its state change and its outbox event in one IndexedDB transaction (EVT-8).
+      - Query results contain only the owner's own listings; other principals' listings arrive as verified mirrors owned by F11.S01.M02.
+    commands:
+      - name: bazaar.listing.create
+        capability: bazaar.listing.create
+        input: "[vault-local] { id? (uuidv7), kind, title, description?, categoryId, condition?, mediaRefs?, tags?, locale?, regionCell?, subtypeRef? }"
+        output: "{ listingId, revision: 1, status: draft }"
+        errors: [VALIDATION_FAILED, BAZAAR_LISTING_LOCATION_TOO_PRECISE, BAZAAR_LISTING_CATEGORY_INVALID, BAZAAR_LISTING_MEDIA_INVALID, BAZAAR_LISTING_DRAFT_LIMIT, FEATURE_DISABLED]
+        emits: [bazaar.listing.created]
+        idempotent: true
+      - name: bazaar.listing.delete
+        capability: bazaar.listing.delete
+        input: "[vault-local] { listingId, expectedRevision }"
+        output: "{ listingId, deletedAt }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: [bazaar.listing.deleted]
+        idempotent: true
+      - name: bazaar.listing.apply_status
+        capability: bazaar.listing.apply_status
+        input: "[vault-local, internal port] { listingId, expectedRevision, to, expiresAt?, publicationId?, closeReason?, reason }"
+        output: "{ listingId, revision, status }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
+      - name: bazaar.listing.apply_edit
+        capability: bazaar.listing.apply_edit
+        input: "[vault-local, internal port] { listingId, expectedRevision, patch: { title?, description?, categoryId?, condition?, mediaRefs?, tags?, regionCell? } }"
+        output: "{ listingId, revision, changedFields }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, BAZAAR_LISTING_LOCATION_TOO_PRECISE, BAZAAR_LISTING_CATEGORY_INVALID, BAZAAR_LISTING_MEDIA_INVALID]
+        emits: []
+        idempotent: true
+    queries:
+      - name: bazaar.listing.get
+        capability: bazaar.listing.read
+        input: "{ listingId }"
+        output: "{ listing: Listing }"
+        errors: [NOT_FOUND]
+      - name: bazaar.listing.list_mine
+        capability: bazaar.listing.read_own
+        input: "{ status?, kind?, cursor?, limit <= 50 }"
+        output: "{ items: Listing[], nextCursor? }"
+        errors: [VALIDATION_FAILED]
+    events_produced:
+      - {type: bazaar.listing.created, privacy: P3, payload: "{ listingId, ownerId, kind, categoryId, status: draft }"}
+      - {type: bazaar.listing.deleted, privacy: P1, payload: "{ listingId, ownerId, reason: owner|draft_purge|archive_purge }"}
+    events_consumed: []
+    errors:
+      - "BAZAAR_LISTING_LOCATION_TOO_PRECISE | 422 | no | payload contains coordinates, address fields or a region cell finer than L2"
+      - "BAZAAR_LISTING_CATEGORY_INVALID | 422 | no | category missing, retired or not a leaf"
+      - "BAZAAR_LISTING_MEDIA_INVALID | 422 | no | media reference missing, wrong type, over 5 MiB or carrying GPS metadata"
+      - "BAZAAR_LISTING_DRAFT_LIMIT | 409 | no | vault already holds 50 drafts"
+    example: |
+      vault.dispatch("bazaar.listing.create", { "kind": "sell", "title": "Road bike, 54 cm", "categoryId": "0192f3a4-1111-7000-8000-0000000000c1",
+        "condition": "good", "regionCell": "u33db", "mediaRefs": ["blob:sha256-Qm9..."] }, idempotencyKey: "0192f3a4-0000-7000-8000-000000000011")
+      => { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "revision": 1, "status": "draft" }
+      vault.dispatch("bazaar.listing.create", { "kind": "sell", "title": "x", "lat": 52.5, "lon": 13.4 })
+      => 422 BAZAAR_LISTING_LOCATION_TOO_PRECISE
+  authorization_capabilities:
+    requirements:
+      - Vault policy (CAP-8) allows only the unlocked local principal to run create, delete and read capabilities; there is no server role.
+      - apply_status and apply_edit are internal ports callable only by the named sibling modules inside the vault; the UI and relays cannot invoke them.
+      - No relay policy row exists for this module because it never calls a relay.
+    capabilities:
+      - "bazaar.listing.create | owner | vault unlocked; principal is the listing author"
+      - "bazaar.listing.delete | owner | listing.ownerId = local principal and status draft"
+      - "bazaar.listing.apply_status | system | caller module is F01.S01.M03 or F01.S01.M04; transition allowed by the machine"
+      - "bazaar.listing.apply_edit | system | caller module is F01.S01.M02 or the owner draft autosave; listing status draft, published or unpublished"
+      - "bazaar.listing.read | owner | listing.ownerId = local principal"
+      - "bazaar.listing.read_own | owner | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - Commands are idempotent per CTR-IDM-001 using a local command-key table kept for 24 h.
+      - Concurrent writers inside one vault (two tabs, two devices after sync) are resolved by expectedRevision and never merged silently.
+      - A crash mid-command leaves either the full change with its outbox event or nothing.
+    idempotency: "Idempotency-Key (UUIDv7) required on create and delete; the vault stores key and request hash for 24 h and replays the stored result; a different body with the same key returns IDEMPOTENCY_KEY_REUSED."
+    concurrency: "One IndexedDB readwrite transaction per command; apply_* use expectedRevision; a second tab gets CONFLICT_REVISION. Forked histories from a second device of the same principal are detected by revision mismatch on sync and surface a resolve-or-discard prompt."
+    retries: "Local commands are retried only after transaction aborts (max 3, 100 ms apart); user-visible errors are never retried automatically."
+    offline: "Fully offline: create, edit and delete work with no network and are committed locally at once; no relay acknowledgement exists or is claimed for this module."
+    partial_failure: "If the media blob check fails after a successful category check, nothing is written; a draft with an unreadable blob stays editable and the field is flagged."
+  privacy_retention_abuse:
+    requirements:
+      - "Drafts are P3 and never enter logs, events with payload content, exports to others or relay storage."
+      - Records are retained RET-STANDARD until the owner deletes them; deletion writes a tombstone and purges content and blob keys within 30 days.
+      - Location precision is capped at L2 in the schema and re-checked before any projection leaves the vault.
+    data:
+      - "Listing draft: P3 (owner only); published fields are copied into a signed P0 projection by F01.S01.M03."
+      - "regionCell: at most geohash 5 (about 4.9 km x 4.9 km); coordinates are never stored."
+    retention:
+      - "Listing: RET-STANDARD; deleted listings keep a tombstone {id, type, deletedAt} for 180 days."
+      - "Command-key table: RET-SHORT 24 h."
+    threats:
+      - "T01 | Location leak through precise region or EXIF | schema rejects cells longer than 5 and any coordinate key; media check rejects GPS tags (PRV-4); region picker snaps to the cell before the command is built"
+      - "T02 | Draft content exposed to a relay or third party | drafts have no statement type and no sync-outbox destination; contract test asserts no network call during create/edit/delete"
+      - "T03 | Draft flooding exhausting device storage | 50-draft cap, 10 media per listing, 5 MiB per image, storage quota warning at 80 percent"
+      - "T04 | Malicious imported listing carrying another owner's id | import re-validates ownerId equals local principal, else records are kept only as read-only mirrors by F11.S01.M02"
+    abuse_controls:
+      - "Local-only rate guard: at most 30 create commands per hour per vault to stop runaway scripts."
+      - "Text fields are stored as plain text; HTML is never interpreted."
+  observability_performance:
+    requirements:
+      - "The PWA sends no telemetry (OBS-7); counters are kept in the local diagnostics store and are exportable by the user."
+      - Vault command and query latency budgets are measured on a Moto G-class device profile.
+      - Sweep duration is observable locally.
+    metrics:
+      - "classrup_bazaar_listing_commands_total{outcome} (local diagnostics counter)"
+      - "classrup_bazaar_draft_purge_total (local)"
+      - "classrup_bazaar_listing_command_duration_ms (local histogram)"
+    logs:
+      - "info listing.created {listingId, correlationId} in the local diagnostics log; no titles, descriptions or regions."
+    budgets:
+      - "create/apply_edit p95 <= 50 ms and list_mine p95 <= 100 ms for 2 000 listings on Moto G-class hardware."
+      - "Draft purge sweep over 2 000 listings <= 500 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Contract tests validate command results and event payloads against the schema registry.
+      - Location and privacy rules have negative tests that fail the build when weakened.
+    fixtures: "Vault with principal P1 (did:key), fixed clock 2026-11-04T10:00:00Z, policy pack with 3 categories (one retired), blob store with one clean jpeg and one jpeg with GPS EXIF."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | create a valid sell draft | Listing stored with status draft, revision 1; unknown field rejected"
+      - "T02 | unit | 02.R02,02.R03 | violate each rule V01-V10 in turn | the documented error code is returned and nothing is stored"
+      - "T03 | property | 03.R01,03.R02 | random sequences of apply_status calls | only declared transitions succeed; others return CONFLICT_STATE"
+      - "T04 | integration | 03.R03,07.R02 | delete draft | tombstone with id, type, deletedAt exists; content and blob keys purged after 30 days (clock advance)"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | each command runs | outputs and bazaar.listing.created/deleted payloads validate against registry schemas"
+      - "T06 | integration | 04.R03,05.R01 | query another principal's listing id | NOT_FOUND; list_mine returns only own listings"
+      - "T07 | abuse | 05.R02,05.R03 | UI-context dispatch of apply_status and a network spy during create | FORBIDDEN for non-sibling callers; zero network requests"
+      - "T08 | integration | 06.R01,06.R02 | replay create with same key (same and different body) and two tabs editing | original result replayed; IDEMPOTENCY_KEY_REUSED; second tab CONFLICT_REVISION"
+      - "T09 | chaos | 06.R03 | abort the IndexedDB transaction after the outbox write | neither the listing nor the outbox event persists"
+      - "T10 | abuse | 07.R01,07.R03,09.R03 | create with lat/lon, region of 6 characters and GPS jpeg | all rejected; log scan finds no P3 values"
+      - "T11 | load | 08.R02,08.R03 | 2 000 listings on Moto G profile | create p95 <= 50 ms, list p95 <= 100 ms, purge sweep <= 500 ms"
+      - "T12 | unit | 08.R01 | run commands with diagnostics on | counters increment locally and no network request is made"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-002 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import into a fresh vault, then import a record with foreign ownerId | owned listings round-trip identical; foreign record kept read-only"
+      - "T15 | a11y | 01.R02 | axe run on wizard and drafts list | zero serious or critical issues; keyboard-only region selection works"
+    acceptance:
+      - All tests T01-T15 pass in CI.
+      - No draft or listing payload leaves the device from this module (network spy test).
+      - No stored Listing field can hold coordinates or an address, and region cells never exceed 5 characters.
+  import_export_backup_rollback:
+    requirements:
+      - The user export contains every own Listing in section bazaar.listings of classrup-export/v1.
+      - Import validates schema version, id collisions and ownerId; foreign-owned records are never made editable.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section bazaar.listings in classrup-export/v1, one JSON line per Listing (schema classrup.bazaar.listing/v1); drafts are included because the export is P3 and goes only to the user."
+    import: "Skip identical ids, reject conflicting ids with a dry-run report; listings whose ownerId differs from the importing principal are stored as read-only history."
+    backup: "The vault export is the primary backup (IOX-6); the app warns when the last export is older than 30 days; no relay holds drafts."
+    migration_rollback: "Additive optional fields only within v1; older app builds ignore unknown optional fields; rollback is by reinstalling the previous release and re-importing the last export."

@@ -1,0 +1,269 @@
+id: F08.S02.M02
+scope: MVP
+summary: >-
+  The shared signed consent record used by bazaar offers, mutiny proposals and cycles, service bookings and
+  rental reservations. A ConsentStatement binds a signer (did:key), a subject reference, the SHA-256 of the
+  RFC 8785 JCS bytes of the exact subject revision, a statement key naming the displayed wording, and a signing
+  time claim under an Ed25519 signature with a domain-separated context. It is produced in the signer's vault,
+  sent as a signed statement through any transport, verified by every receiving vault and kept as evidence. A
+  consent evidences that a key holder asserted agreement with that exact revision; it is not evidence of
+  delivery, payment or that the other party will perform. Revocation is a second signed statement and never
+  rewrites history.
+responsibilities:
+  - Own the ConsentStatement record and its canonical signing bytes (domain-separated Ed25519 over JCS).
+  - Provide the reusable vault command comms.consent.sign that other modules call after showing the user the exact revision and wording, and the pure verify query comms.consent.verify.
+  - Accept inbound consent statements through comms.consent.accept, verify signer key, signature, subject hash and status, and store them with provenance or quarantine them with a reason.
+  - Provide comms.consent.revoke which signs a revocation statement, and report conflicts (consent and decline, or consent and revocation, for one subject hash) so owning modules freeze instead of resolving by timestamp.
+  - Maintain the registry of statement keys with versions and text hashes so the wording the signer saw can be proven later.
+non_responsibilities:
+  - Deciding what a consent means for a trade, cycle or booking; the owning modules (F01, F02, F03, F05) decide and call this module.
+  - Computing the canonical subject bytes; each owning module provides a SubjectCanonicalizerPort that returns JCS bytes of its revision.
+  - Key generation, storage and revocation of device keys (F07.S01.M01, F16.S02.M01, F16.S02.M03 signatures primitives).
+  - Message transport (F08.S01.M01) and relay forwarding (F11 federation).
+  - "Future: threshold and multi-device co-signing, time-stamping authority anchoring, hardware-key attestation of the signing device."
+depends_on: [F07.S01.M01, F16.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001]
+user_stories:
+  - As a cycle participant, I confirm one exact revision of a proposal and my signature is bound to that revision so a later edit cannot reuse it.
+  - As a buyer, I can look at a stored consent and see who signed what wording on which revision, and whether the signature verifies.
+  - As a signer, I can withdraw a consent before the owning module commits, and the withdrawal is itself signed and visible.
+  - As a counterparty, my device rejects a consent statement signed by someone who is not a party to the subject.
+edge_cases:
+  - Subject is revised after the consent was signed; the stored hash no longer equals the current revision hash, so verify returns stale and the owning module asks again.
+  - Signer signs consent on device A, then device A is revoked; consents signed before the revocation statement time stay valid, those claimed after it are rejected, and the signing time is only a claim from the signer.
+  - Two devices of one signer sign the same consent; both verify and are stored as duplicates with the same dedupe key, one is kept.
+  - Consent statement arrives before the subject revision it refers to; it waits in quarantine for up to 7 days for the subject and then expires as unverifiable.
+  - Signer's clock is wrong by a day; signedAtClaim outside the plus or minus 24 hour window from the receiver clock is accepted but flagged clockSuspect and never used to order consent against revocation.
+  - A consent and a decline from the same signer exist for one subject hash; verify returns conflicted and owning modules freeze instead of picking the later one.
+  - Statement key unknown or retired; signing is refused, but stored consents with retired keys remain verifiable with the stored text hash.
+ux:
+  screens:
+    - "Confirm sheet: shows the subject summary, revision number and short hash, the full statement wording for the statement key, a checkbox I have read this, and a Sign button."
+    - "Consent detail: signer pseudonym, key fingerprint, subject revision hash, statement wording version, signed time claim, verification result, provenance."
+    - "Revoke sheet: explains that revocation is signed and visible and that it does not undo a commitment already made."
+  states: [loading, ready-to-sign, signing, signed, verified, stale, revoked, conflicted, quarantined, offline-queued]
+  a11y:
+    - The statement wording is real text in the accessibility tree and the Sign button is disabled until the I have read this checkbox is checked.
+    - Verification result is announced as text such as Signature valid for revision 3, not only by icon.
+    - Sign and Revoke are buttons of at least 44 by 44 px with accessible names that include the subject kind.
+processes:
+  domain_schema:
+    requirements:
+      - A ConsentStatement stores signer DID and device key ID, subject type and reference, subject revision number and the SHA-256 hex of the JCS bytes of that revision, statement key and version, the SHA-256 of the exact rendered wording, a signing time claim and the Ed25519 signature, with tenant and revision per CTR-ID-001.
+      - The signed bytes are the UTF-8 string classrup.consent.v1 followed by a zero byte followed by the RFC 8785 JCS serialization of the payload fields, so a signature made for consent can never validate as another statement type (CTR-FED-001 FED-2 domain separation).
+      - ConsentStatements are P2 evidence kept under RET-EVIDENCE, are immutable after storage apart from the derived status, and carry provenance for statements received from other vaults.
+    entities:
+      - name: ConsentStatement
+        schema: classrup.comms.consent/v1
+        storage: device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: string — sha256 cid of the signed statement envelope, content addressed"
+          - "tenantId: uuidv7 — tenant scope"
+          - "signerDid: did:key — principal that signed"
+          - "signerKeyId: string — device Ed25519 key that produced the signature, listed in the signer's device list"
+          - "subjectType: enum — bazaar_offer | bazaar_negotiation | mutiny_proposal | mutiny_cycle | services_booking | rentals_reservation | rentals_deposit | comms_meetup"
+          - "subjectRef: uuidv7 — record ID in the owning module"
+          - "subjectRevision: int — revision of the subject at signing"
+          - "subjectRevisionHash: string — SHA-256 hex (64 chars) of the JCS bytes of the subject at that revision"
+          - "statementKey: string — registry key such as consent.mutiny.cycle.commit.v1; lowercase dotted, ≤ 80 chars"
+          - "statementTextHash: string — SHA-256 hex of the exact wording shown to the signer in the signer's locale"
+          - "signedAtClaim: timestamp — signer clock, RFC 3339 UTC, a claim"
+          - "signature: bytes — Ed25519 64 bytes base64url over classrup.consent.v1 NUL JCS(payload)"
+          - "kind: enum — consent | decline | revocation"
+          - "revokes?: string — id of the consent this revocation refers to; required when kind is revocation"
+          - "status: enum — valid | revoked | quarantined"
+          - "clockSuspect: boolean — signedAtClaim differs from receivedAt by more than 24 h"
+          - "provenance: object — { originRelay?, via[], receivedAt, verifiedAt } stored for statements received from others"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - id equals the SHA-256 cid of the envelope, so two statements with equal content are the same record.
+          - status valid implies the signature verified against signerKeyId, signerKeyId belonged to signerDid, and subjectRevisionHash was computed by the owning module's canonicalizer.
+          - A revocation is stored as its own record with revokes set; the original consent row only has its status changed to revoked, never deleted.
+          - At most 20 records per (signerDid, subjectRef) are stored to bound abuse.
+  validation_rules:
+    requirements:
+      - Signing validates the subject, the signer's role, the wording and the hash before any signature is made.
+      - Inbound statements are validated for structure, signature, key membership, role and hash before storage as valid.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | payload matches the schema, hashes are 64-char lowercase hex, signature decodes to 64 bytes, statementKey matches the key grammar | VALIDATION_FAILED"
+      - "V02 | statementKey exists in the registry, is active for the subjectType, and statementTextHash equals the hash of the registered wording for the signer's locale | COMMS_CONSENT_STATEMENT_UNKNOWN"
+      - "V03 | subject exists in the local vault and subjectRevisionHash equals SHA-256 of the JCS bytes returned by the owning module's canonicalizer for subjectRevision | COMMS_CONSENT_SUBJECT_MISMATCH"
+      - "V04 | subjectRevision equals the current revision of the subject when signing locally | COMMS_CONSENT_STALE"
+      - "V05 | signer is a party to the subject with the role the statement key requires (for example participant of the cycle) | FORBIDDEN"
+      - "V06 | signature verifies for classrup.consent.v1 NUL JCS(payload) with signerKeyId and the key is not revoked as of the statement's first-seen time | COMMS_CONSENT_SIGNATURE_INVALID"
+      - "V07 | revocation refers to an existing valid consent of the same signer and the subject is not yet committed by its owning module | COMMS_CONSENT_NOT_REVOCABLE"
+      - "V08 | the signer has fewer than 20 records on the subject and signs at most 60 statements per hour | RATE_LIMITED"
+      - "V09 | the confirmation flag read is true in the sign request | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - A stored ConsentStatement of kind consent is valid until revoked; revoked is terminal and a new consent needs a new statement.
+      - Quarantined statements become valid when the missing subject or key arrives and verification succeeds, or are erased after 7 days.
+      - Conflicts between consent and decline or revocation for one subject hash are reported by verify as conflicted and are never resolved by comparing claimed times.
+    machines:
+      - entity: ConsentStatement
+        initial: valid
+        terminal: [revoked]
+        transitions:
+          - "valid -> revoked | verified revocation statement of the same signer for this consent | revocation record linked; emits comms.consent.revoked"
+      - entity: ConsentStatement (inbound waiting)
+        initial: quarantined
+        terminal: [valid, erased]
+        transitions:
+          - "quarantined -> valid | missing subject revision or signer key arrives and verification passes | provenance stored; emits comms.consent.received"
+          - "quarantined -> erased | 7 days without successful verification | raw statement deleted, counter incremented"
+    timeouts:
+      - "Quarantined inbound statements are retried on every new statement or key arrival and erased 7 days after first receipt."
+  commands_queries_events:
+    requirements:
+      - The vault commands sign and revoke produce signed statements and are called by owning modules or the UI; accept is a vault command invoked by the transport layer for inbound statements.
+      - Each command emits its event in the same IndexedDB transaction as the stored record (CTR-EVT-001 EVT-8).
+      - Verify and list are pure vault queries with no side effects, so any module can call them at any time.
+    commands:
+      - name: comms.consent.sign
+        capability: comms.consent.sign
+        input: "[vault command; produces signed statement classrup.comms.consent/v1] { subjectType, subjectRef, subjectRevision, subjectRevisionHash, statementKey, statementTextHash, kind: consent|decline, readConfirmed: true }"
+        output: "{ consentId, signedAtClaim, revision: 1, statement }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, FORBIDDEN, COMMS_CONSENT_STATEMENT_UNKNOWN, COMMS_CONSENT_SUBJECT_MISMATCH, COMMS_CONSENT_STALE, RATE_LIMITED]
+        emits: [comms.consent.signed]
+        idempotent: true
+      - name: comms.consent.revoke
+        capability: comms.consent.revoke
+        input: "[vault command; produces signed statement classrup.comms.consent/v1 with kind revocation] { consentId, expectedRevision }"
+        output: "{ consentId, revision, revocationId }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, COMMS_CONSENT_NOT_REVOCABLE]
+        emits: [comms.consent.revoked]
+        idempotent: true
+      - name: comms.consent.accept
+        capability: comms.consent.accept
+        input: "[vault command, internal; verifies a signed statement received from another party] { statement, provenance }"
+        output: "{ consentId, status: valid|quarantined }"
+        errors: [VALIDATION_FAILED, COMMS_CONSENT_SIGNATURE_INVALID, COMMS_CONSENT_SUBJECT_MISMATCH, FORBIDDEN, RATE_LIMITED]
+        emits: [comms.consent.received]
+        idempotent: true
+    queries:
+      - name: comms.consent.verify
+        capability: comms.consent.verify
+        input: "[vault query, pure] { subjectType, subjectRef, subjectRevisionHash, signerDid, statementKey }"
+        output: "{ result: valid|stale|revoked|conflicted|missing, consentId?, signedAtClaim?, clockSuspect? }"
+        errors: [VALIDATION_FAILED]
+      - name: comms.consent.list_for_subject
+        capability: comms.consent.read
+        input: "[vault query] { subjectType, subjectRef, limit ≤ 100 }"
+        output: "{ items: ConsentStatement[] }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: comms.consent.signed, privacy: P2, payload: "{ consentId, signerDid, subjectType, subjectRef, subjectRevision, subjectRevisionHash, statementKey, kind }"}
+      - {type: comms.consent.revoked, privacy: P2, payload: "{ consentId, revocationId, signerDid, subjectType, subjectRef }"}
+      - {type: comms.consent.received, privacy: P2, payload: "{ consentId, signerDid, subjectType, subjectRef, subjectRevisionHash, kind, provenance }"}
+    events_consumed:
+      - {type: identity.device_key.revoked, effect: "record the revocation time; consents first seen after it and signed by that key are rejected"}
+      - {type: identity.device_key.added, effect: "add the key to the signer device list so its signatures verify"}
+      - {type: privacy.deletion.completed, effect: "erase consent statements of the local vault after export prompts; evidence copies in other vaults remain"}
+    errors:
+      - "COMMS_CONSENT_STATEMENT_UNKNOWN | 422 | no | statement key is not in the registry or its text hash does not match"
+      - "COMMS_CONSENT_SUBJECT_MISMATCH | 409 | no | subject revision hash does not match the canonical bytes of the subject"
+      - "COMMS_CONSENT_STALE | 409 | no | subject has a newer revision than the one being signed"
+      - "COMMS_CONSENT_SIGNATURE_INVALID | 422 | no | signature does not verify or the signing key is not valid for the signer"
+      - "COMMS_CONSENT_NOT_REVOCABLE | 409 | no | consent is already revoked or the owning module has committed the subject"
+    example: |
+      vault command comms.consent.sign
+      { "subjectType": "mutiny_cycle", "subjectRef": "0192f3a4-5b6c-7d8e-9f01-23456789abcd", "subjectRevision": 3,
+        "subjectRevisionHash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "statementKey": "consent.mutiny.cycle.commit.v1", "statementTextHash": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
+        "kind": "consent", "readConfirmed": true }
+      -> { "consentId": "sha256-3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b", "signedAtClaim": "2026-11-04T10:00:00.000Z", "revision": 1 }
+      vault query comms.consent.verify  { "subjectType": "mutiny_cycle", "subjectRef": "…", "subjectRevisionHash": "9f86…", "signerDid": "did:key:z6Mk…", "statementKey": "consent.mutiny.cycle.commit.v1" }
+      -> { "result": "valid", "consentId": "sha256-3a7b…" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal sign or revoke, and only as a party of the subject; the private key never leaves the device or the platform key store.
+      - Inbound statements are accepted only when signed by a key in the signer's device list and the signer holds the role required by the statement key in the subject; others are quarantined with a reason.
+      - Verify and list are local reads with no network access; relays hold no consent data except as opaque encrypted envelopes and cannot create or alter a consent.
+    capabilities:
+      - "comms.consent.sign | local principal | vault policy; party of the subject with the role required by the statement key; readConfirmed true"
+      - "comms.consent.revoke | local principal | consent.signerDid is the local principal"
+      - "comms.consent.accept | local principal | internal; invoked by the transport layer; statement verified before storage"
+      - "comms.consent.verify | local principal | any local module; pure read"
+      - "comms.consent.read | local principal | party of the subject"
+  failure_recovery_idempotency:
+    requirements:
+      - Signing is idempotent on the content address, so signing the same payload again returns the stored statement unchanged.
+      - Inbound acceptance is idempotent on cid and order-insensitive with subject and key arrival.
+      - There is no distributed lock; conflicting statements are stored side by side, flagged conflicted, and handled by explicit renegotiation in the owning module.
+    idempotency: "Statement id is the sha256 cid, so duplicates collapse; sign with the same payload but a different signedAtClaim creates a different cid and is rejected as duplicate by the dedupe key (signerDid, subjectRef, subjectRevisionHash, statementKey, kind) with the original returned."
+    concurrency: "Each command runs in one IndexedDB transaction; revoke uses expectedRevision on the consent row; a consent and revocation racing from two devices of one signer both store and verify returns revoked because revocation of a valid consent is monotonic."
+    retries: "Delivery of the signed statement to other parties uses the sync outbox with states prepared, transport acknowledged and peer accepted (signed acknowledgement by the counterparty vault); retries use backoff base 1 s, factor 2, cap 15 min for 14 days."
+    offline: "Signing, revoking and verifying work fully offline; the UI shows signed on this device until the peer acknowledgement arrives and never claims the counterparty has seen it."
+    partial_failure: "If the process stops between signing and storing, nothing is stored and no event is emitted; if delivery fails the record stays and the outbox keeps retrying; quarantined inbound statements never produce a valid state until verification passes."
+  privacy_retention_abuse:
+    requirements:
+      - Consents are P2 evidence; they contain DIDs, hashes and wording keys, never the subject content, so sending them reveals only that a key holder agreed to a hash.
+      - Retention is RET-EVIDENCE (2 years after last related activity) and deletion of a vault does not delete copies held by counterparties, which the UI states before signing.
+      - Pseudonymity is not anonymity because the signer DID is linkable across statements, and the sign sheet says so.
+    data:
+      - "ConsentStatement: P2, visible to parties of the subject and the signer."
+      - "Statement key registry and wording texts: P0, shipped with the app and versioned."
+    retention:
+      - "Consent statements: RET-EVIDENCE; legal hold per F10.S01.M02 prevents purge."
+      - "Quarantined inbound statements: erased after 7 days."
+    threats:
+      - "T01 | Replay of a consent on a modified subject | signature covers the exact JCS hash of the revision; a changed subject has a different hash so verify returns stale"
+      - "T02 | Cross-protocol signature reuse | domain-separated context classrup.consent.v1 NUL prefix; login and other signatures use different prefixes (CTR-CAP-001 login string)"
+      - "T03 | Forged consent by non-party | role check against the subject and key membership check against the signer's device list; failure quarantines"
+      - "T04 | Backdated signing time to win an ordering dispute | signedAtClaim is only a claim; ordering between consent and revocation is never decided by it and relay receipt time is evidence of the relay clock only"
+      - "T05 | Coerced or accidental signature | explicit read confirmation, wording displayed with the exact revision, revocation available until commit, and the UI explains that consent is not delivery or payment"
+      - "T06 | Compromised device signs consents | device key revocation statements invalidate later claims; consents signed before revocation stay valid, which is disclosed"
+    abuse_controls:
+      - "Limits of 20 records per signer and subject and 60 signatures per hour per vault bound spam and DoS."
+      - "Inbound statements from blocked signers are dropped silently; others from unknown signers wait in quarantine."
+  observability_performance:
+    requirements:
+      - The PWA keeps local diagnostics only (OBS-7) with counters for signed, accepted, quarantined and rejected statements, and no statement content is logged.
+      - Signing including canonicalization meets a vault budget of p95 ≤ 100 ms and verification p95 ≤ 20 ms on a mid-range phone.
+      - Verification of 1 000 stored statements completes within 5 s.
+    metrics:
+      - "classrup_comms_consents_total{outcome=signed|accepted|quarantined|rejected|revoked} (local diagnostics)"
+      - "classrup_comms_consent_verify_ms (histogram, local diagnostics)"
+    logs:
+      - "local info consent.signed {consentId, subjectType} — no wording and no subject content."
+      - "local warn consent.rejected {code, subjectType}."
+    budgets:
+      - "sign p95 ≤ 100 ms; verify p95 ≤ 20 ms; accept p95 ≤ 50 ms."
+      - "Batch verification of 1 000 statements ≤ 5 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests verify signed statements, command inputs and outputs and events against the schema registry, using fixed known-answer vectors for JCS and Ed25519.
+      - Owning modules reuse a shared conformance suite that exercises sign and verify against their own canonicalizer.
+    fixtures: "Vaults P1, P2, P3 with Ed25519 device keys from fixed seeds, mutiny cycle subject at revisions 1..3, statement key registry with consent.mutiny.cycle.commit.v1 and consent.comms.meetup.agree.v1, fixed clock 2026-11-04T10:00:00Z, RFC 8785 test vectors."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | sign consent for cycle revision 3 and recompute bytes independently with JCS and the domain prefix | signature equals known-answer vector and verifies; payload fields complete"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V09 violated in turn | documented error code returned and nothing stored"
+      - "T03 | property | 01.R03,03.R01 | random sequences of sign, revoke, accept, subject revisions | revoked never returns to valid; id equals cid; verify result depends only on stored statements"
+      - "T04 | unit | 01.R02,07.R01 | cross-protocol attempt using a login challenge signature as a consent and a consent signature as a login proof | both rejected by domain separation"
+      - "T05 | integration | 03.R02,03.R03 | consent arrives before subject; later subject arrives; and a decline plus consent by one signer | first becomes valid after subject; second returns verify conflicted and neither wins by claimed time"
+      - "T06 | contract | 04.R01,04.R02,04.R03,09.R02 | each command and query executes | outputs, statements and event payloads validate against registry schemas"
+      - "T07 | abuse | 05.R01,05.R02,05.R03 | non-party signs; statement signed by key not in device list; relay tries to store or alter a consent | FORBIDDEN or quarantine; relay holds only encrypted envelopes"
+      - "T08 | integration | 06.R01,06.R02,06.R03 | sign twice, accept the same statement five times in shuffled order with subject arriving late | one record, one event per origin, same verify result"
+      - "T09 | integration | 06.R03,03.R01 | two signer devices sign and revoke concurrently | both stored, verify returns revoked, no overwrite"
+      - "T10 | abuse | 07.R01,07.R02,07.R03 | clock claim 3 days off; 21st statement on one subject; inspect exported records | clockSuspect true, RATE_LIMITED, no subject content in any record"
+      - "T11 | load | 08.R01,08.R02,08.R03 | sign 200 statements and verify 1 000 | budgets met"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run and shared conformance suite for bazaar, mutiny, services, rentals canonicalizers | every PS-062 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore from backup | statements round trip byte identical and re-verify; tampered file entries are rejected"
+      - "T14 | a11y | 04.R01 | confirm sheet with screen reader and keyboard | wording readable, Sign disabled until confirmation, verification result announced, zero serious axe issues"
+    acceptance:
+      - All tests T01 to T14 pass in CI.
+      - Known-answer vectors for JCS bytes and Ed25519 signatures pass on all supported browsers and Node.
+      - No code path orders consent against revocation or decline by claimed time.
+      - The sign sheet states that consent evidences assertion, not delivery or payment, and that pseudonymity is not anonymity.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export contains all consent statements they signed or received with provenance.
+      - Import re-verifies every statement against keys and subjects present in the target vault and quarantines those that cannot be verified.
+      - Schema changes follow expand and contract; the signed payload field set is frozen in v1 and any change creates classrup.comms.consent/v2 with v1 readable for 180 days.
+    export: "Section comms.consents in classrup-export/v1; one JSON line per ConsentStatement (schema classrup.comms.consent/v1) including the full signed envelope and provenance."
+    import: "Each statement is re-verified; existing cids are skipped; statements failing verification are quarantined with a reason and never marked valid; statements are never re-signed."
+    backup: "The vault export is the backup (IOX-6); relays hold no consent data."
+    migration_rollback: "The signed payload is never migrated in place; new versions are new schemas; rollback is safe because v1 statements remain valid and unknown future kinds are stored quarantined."

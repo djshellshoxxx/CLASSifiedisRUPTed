@@ -1,35 +1,65 @@
-# PS-110-04 — commands queries events
+# PS-110-04 — Commands, queries and events: Screen reader support
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-04. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F14.S01.M02 Screen reader support](SPEC.md) · **Scope:** MVP · **Code:** `apps/pwa/src/a11y/screenreader` · **Contracts:** [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
 
-## Purpose and scope
-Define the commands queries events process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-110-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-110-04.R01** The module exposes component and helper APIs and no vault or relay commands or queries.
+- **PS-110-04.R02** It emits DOM events only and no domain events.
+- **PS-110-04.R03** Failures are developer-facing lint and test codes and never shown to end users.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| I18N_A11Y_LANDMARKS | 400 | no | landmark or heading structure rule failed |
+| I18N_A11Y_FORM_LABEL | 400 | no | form control lacks a name or error association |
+| I18N_A11Y_NAME_MISSING | 400 | no | interactive element without accessible name |
+| I18N_A11Y_ALT_TEXT | 400 | no | photo alt text missing or longer than 140 characters |
+| I18N_A11Y_LIVE_REGION | 400 | no | live region misuse or announcement flood |
+| I18N_A11Y_SPOKEN_VALUE | 400 | no | value displayed without a spoken name |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** API: <PageShell/>, <Field/> with label hint error, <ErrorSummary/>, announce(message, { priority, region }), spokenMoney(money, locale, opts), spokenDistance(bucket, locale), spokenTime(instant, now, locale), spokenSync(state, locale), <Photo alt/>.
+
+### Example
+
+```
+spokenMoney({ amount: "4500", currency: "EUR" }, "en") // "45 euros"
+spokenMoney({ amount: "4210", currency: "EUR" }, "en", { approximate: { source: "ECB", asOf: "2026-11-04T10:15:00Z" } })
+  // "approximately 42 euros 10 cents, quote from ECB at 10:15"
+spokenDistance("<5km", "en") // "less than 5 kilometres away"
+announce(t("offer.saved_local"), { priority: "polite", region: "status" })
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-110-09.T05 | contract | PS-110-04.R01, PS-110-04.R02, PS-110-04.R03, PS-110-01.R03 | inspect exports and run spoken helpers on typed inputs | no vault or network access; pure typed functions; Result for invalid input |
+| TEST-PS-110-09.T11 | e2e | PS-110-03.R02, PS-110-04.R01 | VoiceOver on iPhone 14 and TalkBack on Pixel 7 manual-assisted run of listing create and offer flows | landmarks navigable, values spoken in full, status announced without focus loss |
+
+## Dependencies
+
+Module depends on: F14.S02.M01, F14.S02.M02, CTR-UX-001, CTR-MNY-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

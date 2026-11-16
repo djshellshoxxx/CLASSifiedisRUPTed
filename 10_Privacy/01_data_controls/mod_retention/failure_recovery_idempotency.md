@@ -1,35 +1,32 @@
-# PS-079-06 — failure recovery idempotency
+# PS-079-06 — Failure recovery and idempotency: Retention and legal hold
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-079-06. **Owner:** [10_Privacy/01_data_controls/mod_retention](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_retention. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F10.S01.M02 Retention and legal hold](SPEC.md) · **Scope:** MVP · **Code:** `packages/privacy/src/data_controls/retention` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for retention within 01_data_controls. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-079-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-079-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-079-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-079-06.R01** Policy changes and hold steps are idempotent with Idempotency-Key on the relay and vault command IDs in the vault, and use expectedRevision.
+- **PS-079-06.R02** Sweeps commit in batches with a persisted cursor and resume after interruption without double counting.
+- **PS-079-06.R03** Hold checks fail closed, so if the hold table cannot be read, relay purges of that subject are skipped.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** Relay commands require Idempotency-Key with replay for 24 h; vault commands record a command ID for 24 h; purge batches are keyed by (runId, kind, cursor).
+- **concurrency:** expectedRevision on hold transitions; unique constraint prevents two active holds per subject; a sweep takes a single-flight lock (Web Lock in the vault, SQLite advisory row on the relay); purge re-checks hold state inside the same transaction that deletes.
+- **retries:** A failed sweep batch is retried 3 times with 1 s, 5 s and 30 s backoff, then the run is marked partial and resumes at the next schedule.
+- **offline:** Vault sweeps run offline. Relay holds require the relay; the console shows relay unreachable.
+- **partial failure:** A partial run records which kinds completed; unfinished kinds are retried next run. Records are never half-purged because each batch is one transaction.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-079-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-079-09.T10 | chaos | PS-079-06.R02, PS-079-06.R03 | kill sweep mid-run and corrupt the hold table read | resume from cursor without double count; purge of affected subjects skipped |
+| TEST-PS-079-09.T11 | integration | PS-079-06.R01 | replay of Idempotency-Key and vault command ID; vault offline sweep | original results; offline sweep completes |
+
+## Dependencies
+
+Module depends on: F18.S01.M01, F16.S01.M01, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,35 +1,36 @@
-# PS-140-02 — validation rules
+# PS-140-02 — Validation rules: Offline testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-140-02. **Owner:** [17_Quality/02_performance/mod_offline](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M03 Offline testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/offline` · **Contracts:** [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for offline within 02_performance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-140-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-140-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-140-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-140-02.R01** Every offline test must assert exactly-once delivery: the receiving vault or relay mailbox sees each statement once, identified by its statement ID and Idempotency-Key.
+- **PS-140-02.R02** Conflict tests must assert that CONFLICT_REVISION never produces a silent overwrite and the prompt offers keep mine, take theirs and merge.
+- **PS-140-02.R03** A queued command older than 7 days must be marked stale and not replayed automatically.
+- **PS-140-02.R04** The UI status for a statement never exceeds the sync state reached (local committed, prepared, transport_acknowledged, peer_accepted); a test fails with QUALITY_OFFLINE_OVERCLAIM when the UI shows delivered before peer_accepted.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | Receiving vault or relay mailbox sees each queued statement exactly once per statement ID | QUALITY_OFFLINE_DUPLICATE_EFFECT |
+| V02 | CONFLICT_REVISION after reconnect shows the three-way prompt and never overwrites silently | QUALITY_OFFLINE_SILENT_OVERWRITE |
+| V03 | Authenticated API responses are not present in Cache Storage | QUALITY_OFFLINE_AUTH_CACHED |
+| V04 | Queued commands older than 7 days are not replayed automatically | QUALITY_OFFLINE_STALE_REPLAYED |
+| V05 | Backoff schedule matches 1 s doubling to 60 s with jitter of 20 percent | QUALITY_OFFLINE_BACKOFF_INVALID |
+| V06 | UI status never exceeds the reached sync state | QUALITY_OFFLINE_OVERCLAIM |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-140-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-140-09.T02 | integration | PS-140-02.R01, PS-140-06.R02 | replay one command across 10 connection resets | server-side effect count is exactly 1 |
+| TEST-PS-140-09.T03 | integration | PS-140-02.R02, PS-140-03.R01 | two devices edit the same entity offline then reconnect | second gets CONFLICT_REVISION and the three-action prompt appears; no overwrite |
+| TEST-PS-140-09.T04 | integration | PS-140-02.R03, PS-140-06.R03 | advance fake clock 8 days with a queued command | command marked stale and not sent; non-retryable error is not retried |
+| TEST-PS-140-09.T17 | e2e | PS-140-02.R04 | drive a statement through each sync state | UI label matches the state; delivered shown only at peer_accepted; plant an overclaim bug and see QUALITY_OFFLINE_OVERCLAIM |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-IDM-001, CTR-ERR-001, CTR-UX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M04, F15.S01.M01, F15.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

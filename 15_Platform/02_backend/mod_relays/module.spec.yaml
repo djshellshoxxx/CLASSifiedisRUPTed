@@ -1,0 +1,252 @@
+# F15.S02.M01 Relay service (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
+id: F15.S02.M01
+scope: MVP
+summary: >-
+  The relay process (apps/relay) is an optional, self-hostable service that a user or community may choose to
+  run and others may choose to use (ADR-0016). It is a Node >=22.18 program using node:http and node:sqlite that
+  hosts relay commands only: indexing signed public projections, end-to-end encrypted mailboxes, content-free
+  push, auction hosting and federation. It has an Ed25519 relay identity used to sign receipts and
+  announcements, loads configuration from environment variables, drains in-flight requests for 10 s on
+  shutdown, and runs a transactional outbox dispatcher for relay-local consumers. It is never authoritative
+  for a user's private records, never sees plaintext P2 or higher data, and stopping it leaves every vault
+  intact. The static PWA host cannot be a relay; the relay is a separate deployment.
+responsibilities:
+  - Start, serve and stop the relay process: HTTP/1.1 server on node:http with request, header and body limits, CORS allowlist, /healthz and /readyz routing to the observability module, and graceful shutdown with a 10 s drain.
+  - Own the RelayIdentity record: generate an Ed25519 key pair on first start, keep the private seed in a 0600 key file outside the database, publish the public key and relay id at /.well-known/classrup-relay.json, and support rotation with the previous key kept for verification.
+  - Load and validate configuration from RELAY_* environment variables once at startup, failing fast with exit code 78 and a message that lists offending variable names but never values.
+  - Run the outbox dispatcher: deliver relay-local events at least once in (aggregate.id, revision) order to relay-local consumers, retry with CTR-IDM-001 backoff, dead-letter after 8 attempts, and append every dispatched event to the hourly outbox archive used by recovery.
+  - Sign relay receipts (statement cid, relay id, receipt time) so vaults can use them as evidence of delivery to this relay and of this relay's clock only.
+  - Record and publish the runtime risk that node:sqlite is stability 1.1 (active development) and keep the SQLite access behind the repository port of F15.S02.M03.
+non_responsibilities:
+  - Command and query registry, validation, idempotency, rate limits and error mapping (F15.S02.M02 mod_api).
+  - SQLite repository, migrations and the in-memory test adapter (F15.S02.M03 mod_storage).
+  - Logging, metrics registry and health handlers (F15.S03.M01 mod_observability).
+  - Backups and restore (F15.S03.M02, F15.S03.M03).
+  - User accounts, passwords or any server-held user secret; the relay has no account database (ADR-0016).
+  - Moderation decisions and relay access tokens (relay policy modules in F12 and F16 use this process but own their logic).
+  - "Future: clustering several relay processes behind one database with a shared dispatcher lease; Future: HTTP/2 and built-in TLS termination (MVP expects a reverse proxy)."
+depends_on: [F15.S02.M02, F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-OBS-001, CTR-PRV-001, CTR-IOX-001]
+user_stories:
+  - As a community organizer, I can start my own relay with a handful of environment variables, share its address, and my members' vaults can use it for discovery and mailboxes while keeping their records on their own devices.
+  - As a relay operator, I can stop the relay for maintenance without dropping in-flight requests, and members see their deliveries as pending rather than lost.
+  - As a member, I can verify a relay's identity and see that a receipt was signed by the relay I selected, understanding that its timestamp only proves that relay's clock.
+  - As an operator, I can rotate the relay signing key without invalidating receipts issued earlier.
+edge_cases:
+  - Required configuration is missing or malformed (for example RELAY_PUBLIC_URL is http in production); the process exits with code 78 before opening the port and names the variable, never its value.
+  - The key file is missing but the database holds a RelayIdentity; startup refuses with PLATFORM_RELAY_IDENTITY_MISSING instead of silently generating a new identity that would break receipts, unless the operator passes --accept-new-identity.
+  - SIGTERM arrives while a long request is in flight; the process stops accepting connections, finishes in-flight requests within 10 s, closes the rest, checkpoints the WAL and exits 0 (1 if requests were cut).
+  - A second SIGTERM or SIGINT arrives during drain; the process exits immediately with code 130 after closing the database handle.
+  - Node version below 22.18 or without node:sqlite; startup exits 78 with the required version rather than failing later.
+  - An event consumer throws repeatedly; after 8 attempts the event moves to dead_letter with an error code and the dispatcher continues with other aggregates.
+  - Two relay processes are started on one database file; the second fails to acquire the dispatcher lease (30 s TTL) and exits with PLATFORM_RELAY_DUPLICATE_INSTANCE.
+  - A request arrives during drain; it is answered 503 PLATFORM_RELAY_DRAINING with Retry-After 5 and Connection close.
+ux:
+  notes: "Headless service with an operator CLI. CLI commands: relay start, relay check-config, relay identity show, relay identity rotate. The PWA shows relay name, identity fingerprint (first 16 hex of SHA-256 of the public key) and reachability in Settings > Relays (owned by the client relay-selection module)."
+processes:
+  domain_schema:
+    requirements:
+      - A RelayIdentity record stores the stable relayId, the key id, public key, status and timestamps for each signing key; the private seed is never stored in the database or logged.
+      - The relayId is derived once from the first public key and stays stable across rotations so vaults keep their relay selection.
+      - Rotated-out keys remain published with status retired for at least 400 days so older receipts stay verifiable.
+    entities:
+      - name: RelayIdentity
+        schema: classrup.platform.relay_identity/v1
+        storage: relay
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key, key id"
+          - "relayId: string — 'relay:' + first 26 chars of lowercase base32 of SHA-256(first public key); stable across rotations"
+          - "publicKey: string — base64url Ed25519 public key, 32 bytes"
+          - "status: enum — active | retired"
+          - "displayName: string — operator label, 1..80 chars"
+          - "publicUrl: string — https origin where the relay is reachable"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "retiredAt?: timestamp — set when rotated out"
+          - "rotationStatement?: string — base64url signature by the previous key over 'classrup-relay-rotate:v1:<relayId>:<newPublicKey>:<rotatedAt>'"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - Exactly one RelayIdentity row has status active at any time.
+          - The private seed is stored only in the key file (mode 0600, optionally wrapped with scrypt N=2^17, r=8, p=1) and never in SQLite, logs or events.
+          - relayId never changes after the first key is created.
+    sql: |
+      CREATE TABLE platform_relay_identity (
+        id TEXT PRIMARY KEY, relay_id TEXT NOT NULL, public_key TEXT NOT NULL, status TEXT NOT NULL,
+        created_at TEXT NOT NULL, retired_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX platform_relay_identity_active ON platform_relay_identity(relay_id) WHERE status = 'active';
+  validation_rules:
+    requirements:
+      - Configuration is validated strictly at startup against a typed schema with defaults and ranges; unknown RELAY_* variables are warned about, invalid ones abort startup.
+      - Every HTTP request is bounded by size and time limits before it reaches the command bus.
+      - Violations map to stable codes; configuration failures use exit code 78 (EX_CONFIG).
+    rules:
+      - "V01 | process.versions.node ≥ 22.18.0 and node:sqlite loads | PLATFORM_RELAY_RUNTIME_UNSUPPORTED"
+      - "V02 | RELAY_DATA_DIR and RELAY_DB_PATH are set, writable, and the key file mode is 0600 | PLATFORM_RELAY_CONFIG_INVALID"
+      - "V03 | RELAY_PUBLIC_URL is an https origin (http allowed only when RELAY_ENV=development) | PLATFORM_RELAY_CONFIG_INVALID"
+      - "V04 | RELAY_ALLOWED_ORIGINS is a comma list of https origins, no wildcard, ≤ 20 entries | PLATFORM_RELAY_CONFIG_INVALID"
+      - "V05 | RELAY_PORT 1..65535, RELAY_BODY_LIMIT_BYTES 1024..8388608, RELAY_DRAIN_MS 1000..30000, RELAY_OUTBOX_BATCH 1..500 | PLATFORM_RELAY_CONFIG_INVALID"
+      - "V06 | request body ≤ RELAY_BODY_LIMIT_BYTES (default 1048576) | PAYLOAD_TOO_LARGE"
+      - "V07 | relay is not draining when the request is accepted | PLATFORM_RELAY_DRAINING"
+      - "V08 | key file present when RelayIdentity exists, and its public key equals the stored active key | PLATFORM_RELAY_IDENTITY_MISSING"
+      - "V09 | dispatcher lease acquired (holder = instance uuid, TTL 30 s) | PLATFORM_RELAY_DUPLICATE_INSTANCE"
+  workflow_state_machine:
+    requirements:
+      - The process follows starting, ready, draining, stopped, and /readyz is true only in ready.
+      - Shutdown is ordered, meaning stop accepting, drain in-flight requests for up to 10 s, stop the dispatcher after its current batch, checkpoint and close the database.
+      - A RelayIdentity key moves from active to retired only through an authorized rotation, never back.
+    machines:
+      - entity: RelayProcess
+        initial: starting
+        terminal: [stopped]
+        transitions:
+          - "starting -> ready | configuration valid, migrations current, identity loaded, dispatcher lease held, port bound | /readyz returns 200"
+          - "starting -> stopped | configuration or runtime check fails | exit code 78 or 1; no port opened"
+          - "ready -> draining | SIGTERM or SIGINT | /readyz returns 503, server.close() called, idle connections closed, new requests get PLATFORM_RELAY_DRAINING"
+          - "draining -> stopped | in-flight requests finished or RELAY_DRAIN_MS (default 10000) elapsed | dispatcher stopped after current batch, remaining connections closed, wal_checkpoint(TRUNCATE), database closed, exit 0 (1 if requests were cut, 130 on second signal)"
+      - entity: RelayIdentity
+        initial: active
+        terminal: [retired]
+        transitions:
+          - "active -> retired | platform.relay_identity.rotate by operator | new key generated and signed rotation statement stored; old key published as retired"
+    timeouts:
+      - "Drain deadline RELAY_DRAIN_MS default 10000 ms (range 1000..30000)."
+      - "Request timeout 30000 ms, headers timeout 10000 ms, keep-alive 5000 ms."
+      - "Dispatcher lease TTL 30000 ms renewed every 10000 ms."
+  commands_queries_events:
+    requirements:
+      - The module registers two relay commands or queries for identity and status through the shared command bus; vault commands and signed statements are not defined here.
+      - Rotation is the only relay command that changes identity, and it emits one extra event for relay-local consumers.
+      - The dispatcher consumes no domain events; it delivers events produced by other modules to their consumers.
+    commands:
+      - name: platform.relay_identity.rotate
+        capability: platform.relay_identity.rotate
+        input: "{ reason (≤ 200 chars) } — relay command, operator only"
+        output: "{ keyId, publicKey, retiredKeyId }"
+        errors: [FORBIDDEN, PLATFORM_RELAY_IDENTITY_MISSING, RATE_LIMITED]
+        emits: [platform.relay_identity.rotated]
+        idempotent: false
+    queries:
+      - name: platform.relay_identity.get
+        capability: platform.relay_identity.read_public
+        input: "{ includeRetired?: boolean } — relay query, public"
+        output: "{ relayId, displayName, publicUrl, keys: [{ keyId, publicKey, status, createdAt, retiredAt? }], software: { name, version }, features: string[] }"
+        errors: []
+      - name: platform.relay.get_status
+        capability: platform.relay.read_status
+        input: "{ } (no input) — relay query, operator only"
+        output: "{ state, uptimeMs, nodeVersion, sqliteDriver: 'node:sqlite', dispatcher: { lagMs, deadLetters, lastBatchAt }, draining }"
+        errors: [FORBIDDEN]
+    events_produced:
+      - {type: platform.relay_identity.rotated, privacy: P0, payload: "{ relayId, newKeyId, retiredKeyId, rotatedAt }"}
+    events_consumed: []
+    errors:
+      - "PLATFORM_RELAY_RUNTIME_UNSUPPORTED | 500 | no | Node version below 22.18 or node:sqlite unavailable (startup exit 78)"
+      - "PLATFORM_RELAY_CONFIG_INVALID | 500 | no | environment configuration failed validation (startup exit 78)"
+      - "PLATFORM_RELAY_DRAINING | 503 | yes | relay is shutting down; retry after the Retry-After seconds"
+      - "PLATFORM_RELAY_IDENTITY_MISSING | 500 | no | key file absent or does not match the stored active key"
+      - "PLATFORM_RELAY_DUPLICATE_INSTANCE | 500 | no | another process holds the dispatcher lease for this database"
+    example: |
+      # minimal environment
+      RELAY_ENV=production RELAY_PUBLIC_URL=https://relay.example.org RELAY_DATA_DIR=/var/lib/classrup
+      RELAY_DB_PATH=/var/lib/classrup/relay.sqlite RELAY_ALLOWED_ORIGINS=https://app.example.org RELAY_PORT=8787
+      $ node apps/relay/src/main.ts      # Node >=22.18 strips types natively, no build step
+      GET /.well-known/classrup-relay.json -> 200 { "relayId": "relay:7k3mqx...", "keys": [{ "keyId": "0192...", "publicKey": "Zk3...", "status": "active" }], "software": { "name": "classrup-relay", "version": "0.1.0" } }
+      kill -TERM <pid>  -> /readyz 503, in-flight finish within 10 s, exit 0
+  authorization_capabilities:
+    requirements:
+      - Relay policy applies, so identity and status reads are public or operator-only, and rotation requires the relay operator role, a per-relay role that governs nothing beyond this relay (CTR-CAP-001 CAP-9).
+      - The relay holds no user credentials; operator actions are authorized by signed requests from a device key registered as operator in the relay's own configuration, or by the local CLI with filesystem access to the key file.
+      - Receipts and announcements are signed with the relay key under context strings, so a relay signature never authorizes any action on a vault.
+    capabilities:
+      - "platform.relay_identity.read_public | anonymous, member, moderator, operator, admin | none; response contains only public data"
+      - "platform.relay.read_status | operator, admin | signed request by a registered relay operator device key"
+      - "platform.relay_identity.rotate | operator | signed request by a registered relay operator device key, or local CLI with access to the key file; at most 1 rotation per 24 h"
+  failure_recovery_idempotency:
+    requirements:
+      - Startup is repeatable, so migrations, identity creation and lease acquisition are idempotent, and a crash during startup leaves a state from which the next start succeeds.
+      - Event delivery is at least once and consumers are idempotent through the inbox (CTR-EVT-001 EVT-3); the dispatcher can be killed at any point without losing events.
+      - The relay is stateless toward vaults beyond the data it hosts; losing it never loses user-owned private data.
+    idempotency: "Identity creation happens inside one transaction that also writes the key file atomically (write temp, fsync, rename); rerunning finds the existing identity. Rotation takes an expectedRevision from the operator tool and is rejected if a rotation completed in the last 24 h. Event delivery is deduplicated by (consumer, eventId) in the inbox."
+    concurrency: "One relay process per database: the dispatcher lease row (IDM-8, local to this relay) with TTL 30 s prevents a second instance. Within the process, aggregates are delivered sequentially per aggregate.id and with concurrency 8 across aggregates; SQLite writes serialize through BEGIN IMMEDIATE."
+    retries: "Consumer failures retry with CTR-IDM-001 IDM-4 backoff (base 500 ms, cap 30 s, full jitter); after 8 attempts the event is moved to dead_letter with its error code and replayed by an operator through F15.S03.M03."
+    offline: "The relay may be offline at any time; vault commands and sync outbox entries wait and show status unknown. On start the dispatcher resumes from the first undelivered outbox row. Delivered rows stay 7 days."
+    partial_failure: "A crash mid-batch re-delivers the batch after restart and the inbox suppresses duplicate side effects. If the archive write fails the batch is not marked delivered. If SQLite is locked (SQLITE_BUSY) commands return DEPENDENCY_UNAVAILABLE (retryable) and readyz fails after 10 s."
+  privacy_retention_abuse:
+    requirements:
+      - The relay stores only signed public projections, encrypted envelopes and relay-local operational data; it sees ciphertext plus minimal routing metadata for P2 data (CTR-PRV-001 PRV-5) and never plaintext P2 or higher.
+      - Logs omit tokens, bodies and personal data, truncate IPs to /24 or /48 and are kept 1 year as RET-AUDIT (CTR-OBS-001 OBS-1).
+      - Operators can read only what the relay holds; seizure of a relay reveals no vault private records, keys or plaintext messages.
+    data:
+      - "RelayIdentity: P0 public key and metadata; private seed P4 in the key file only."
+      - "Outbox archive: relay-local events, P0 to P1 payloads only (IDs and minimal fields per EVT-5)."
+      - "Access logs: truncated IP, route, status, duration, correlationId."
+    retention:
+      - "RelayIdentity rows: kept while the relay exists; retired keys at least 400 days."
+      - "Delivered outbox rows 7 days; outbox archive segments 90 days; dead letters 30 days."
+    threats:
+      - "T01 | Relay private key theft allows forged receipts | key file 0600, optional scrypt wrapping, never logged or stored in SQLite, rotation command, receipts only evidence delivery to this relay so forged receipts cannot authorize vault actions"
+      - "T02 | Operator or attacker reads private user data on the relay | design: relay holds only public projections and E2E ciphertext; no plaintext P2+ endpoint exists; tests grep stored rows for plaintext markers"
+      - "T03 | Slowloris and oversized body denial of service | headersTimeout 10 s, requestTimeout 30 s, body limit 1 MiB default, per-connection cap 256, reverse proxy rate limits"
+      - "T04 | Cross-origin abuse from a malicious page | CORS allowlist without wildcard, no cookies, bearer tokens only in Authorization headers, preflight cache 600 s"
+      - "T05 | Malicious relay impersonates another | relayId derived from public key; PWA pins the selected relay's key and shows fingerprint, rotation requires signature by previous key"
+      - "T06 | Config secrets leak through logs or crash dumps | config printer redacts names matching KEY|SECRET|PASSPHRASE|TOKEN; *_FILE variants for secrets; startup errors list names only"
+    abuse_controls:
+      - "Request limits per connection and per IP are enforced by the mod_api rate limiter with relay policy values; this module sets the transport limits (256 connections, 100 requests per keep-alive connection)."
+      - "Rotation limited to 1 per 24 h; status endpoint operator-only."
+  observability_performance:
+    requirements:
+      - The relay exports logs and metrics per CTR-OBS-001 OBS-1 to OBS-4 and OBS-6 through the observability module, including dispatcher lag and drain duration.
+      - The relay meets the reference budget on 2 vCPU / 4 GB with read p95 ≤ 150 ms and write p95 ≤ 300 ms at 50 req/s.
+      - Startup and shutdown times are bounded and measured.
+    metrics:
+      - "classrup_platform_relay_uptime_seconds"
+      - "classrup_platform_relay_drain_duration_ms (gauge of last shutdown)"
+      - "classrup_platform_dispatcher_lag_ms (now - oldest undelivered outbox row)"
+      - "classrup_platform_dispatcher_events_total{outcome=delivered|retried|dead_lettered}"
+      - "classrup_platform_relay_requests_rejected_total{code=PLATFORM_RELAY_DRAINING|PAYLOAD_TOO_LARGE}"
+    logs:
+      - "info relay.started {relayId, version, node, port}; info relay.draining {inflight}; info relay.stopped {exitCode, cut} — never configuration values or secrets."
+      - "warn dispatcher.dead_letter {eventType, consumer, code, attempts}."
+    budgets:
+      - "Cold start to ready ≤ 3 s with an empty database and ≤ 10 s with 1 GiB database and migrations current."
+      - "Dispatcher processes 1 000 events/s sustained on the reference machine; lag p95 ≤ 1 s under 50 req/s."
+      - "Graceful shutdown completes within RELAY_DRAIN_MS (10 s) + 2 s for checkpoint."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Configuration, identity, shutdown and dispatcher behavior are tested against a real node:http server and a real node:sqlite database in CI.
+      - A canary suite runs the node:sqlite adapter on the pinned Node version and on the latest 22.x to detect behavior changes in the stability 1.1 API early.
+    fixtures: "Temp data dir per test; Node 22.18.0 pinned in .nvmrc and Docker image plus latest 22.x canary; stub consumers (ok, flaky, always-failing); fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03 | first start, restart, rotate twice | one active key, stable relayId, retired keys published, seed only in key file"
+      - "T02 | unit | 02.R01,02.R02 | each config rule V01-V05 violated in turn plus an unknown RELAY_* variable | exit code 78, names listed, values absent from output; unknown variable only warned"
+      - "T03 | integration | 02.R03,02.R02 | send 2 MiB body, slow headers, request during drain | PAYLOAD_TOO_LARGE, connection closed after 10 s headers timeout, PLATFORM_RELAY_DRAINING with Retry-After 5"
+      - "T04 | integration | 03.R01,03.R02 | SIGTERM with 5 requests in flight (3 s) and a running dispatcher batch | readyz 503 immediately, requests finish, dispatcher stops after batch, WAL checkpointed, exit 0 within 10 s"
+      - "T05 | integration | 03.R02,03.R01 | SIGTERM with a request lasting 20 s, then a second SIGTERM | request cut at 10 s with exit 1, second signal exits 130"
+      - "T06 | property | 03.R03,01.R03 | random sequences of rotate requests and clock changes | active to retired only, never back, rotation rate limit respected"
+      - "T07 | contract | 04.R01,04.R02 | well-known document, identity query, status query, rotate | payloads validate against registry schemas, rotated event emitted once"
+      - "T08 | integration | 04.R03,06.R01,06.R03 | flaky consumer fails 3 times then succeeds; always-failing consumer; kill -9 mid-batch | ordered at-least-once delivery, dead letter after 8 attempts, no lost events after restart, inbox suppresses duplicates"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | non-operator rotates and reads status; relay signature presented as vault authorization | FORBIDDEN; relay signature ignored by vault verification test"
+      - "T10 | integration | 06.R02,06.R03 | start two processes on one database | second exits with PLATFORM_RELAY_DUPLICATE_INSTANCE; first unaffected"
+      - "T11 | abuse | 07.R01,07.R03 | scan database and logs after a full workload with canary plaintext in encrypted envelopes | no plaintext canary present, IPs truncated, no tokens in logs"
+      - "T12 | abuse | 07.R02,07.R03 | delete key file while identity row exists, then start | refuses with PLATFORM_RELAY_IDENTITY_MISSING; --accept-new-identity creates a new key id and keeps relayId only if operator supplies the seed"
+      - "T13 | load | 08.R02,08.R03 | 50 req/s mixed for 5 minutes on 2 vCPU container, then cold start timing | read p95 ≤ 150 ms, write p95 ≤ 300 ms, ready ≤ 3 s empty, dispatcher lag p95 ≤ 1 s"
+      - "T14 | integration | 08.R01 | metrics scrape and logs | metrics named per CTR-OBS-001 present, no user ids as labels, log lines match schema"
+      - "T15 | chaos | 06.R02,09.R03 | node:sqlite canary on pinned and latest 22.x with SQLITE_BUSY injection | adapter behavior identical, DEPENDENCY_UNAVAILABLE returned, readyz fails after 10 s"
+      - "T16 | unit | 09.R01 | traceability tool run | every PS-118 requirement maps to a passing test"
+      - "T17 | integration | 10.R01,10.R02,10.R03 | export relay-hosted data section, restore from backup to a new directory, roll back one release | identity and archive intact, receipts still verify, N-1 binary starts"
+      - "T18 | integration | 09.R02,01.R01 | run on Node 22.17 and 22.18 | 22.17 exits 78 with PLATFORM_RELAY_RUNTIME_UNSUPPORTED; 22.18 starts without flags"
+    acceptance:
+      - All tests T01-T18 pass in CI.
+      - The relay starts from environment variables alone, serves its identity, and shuts down within 10 s without losing in-flight committed work.
+      - No plaintext private user data and no private key material is ever stored in the database or logs.
+      - Stopping or losing the relay loses no vault data; vault tests still pass with the relay stopped.
+  import_export_backup_rollback:
+    requirements:
+      - RelayIdentity public records are included in the relay's operational export; the private seed is excluded and backed up only by the operator in a separate secret store.
+      - A restored relay must present the same relayId and active key, otherwise members' vaults treat it as a different relay and show a fingerprint warning.
+      - Application rollback redeploys the previous release (CTR-IOX-001 IOX-4); schema changes are expand/contract so N-1 starts.
+    export: "Relay operational export (not a user export): table platform_relay_identity as JSON Lines with schema classrup.platform.relay_identity/v1; the key file is never exported."
+    import: "Import of a RelayIdentity row requires the matching key file; otherwise the import is refused with PLATFORM_RELAY_IDENTITY_MISSING."
+    backup: "Database covered by F15.S03.M02 (CTR-IOX-001 IOX-3, IOX-7). The key file is backed up by the operator separately and never inside the same artifact as the database backup."
+    migration_rollback: "Identity rows are additive; rollback to N-1 is safe because new optional fields are ignored. The RelayProcess has no persistent migration of its own. Key rotation is not rolled back; to undo, rotate again."

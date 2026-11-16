@@ -1,0 +1,166 @@
+id: F11.S01.M01
+scope: MVP
+summary: >-
+  Library that maps locally owned P0 records (listings, public profiles, service offerings) to unsigned
+  federation envelope drafts and maps verified inbound envelope payloads back to read-only mirror views.
+  Each record type has a field allowlist; anything not on the allowlist, anything above class P0 and any
+  location finer than L2 (geohash 5) is stripped or the export is refused. Signing is done by
+  F11.S01.M03 and storage by F11.S01.M02. It runs in the user's browser vault (ADR-0016) where the principal
+  drafts statements locally, and in relays for validating inbound public projections. It also holds the registry
+  that says which signer role each statement type requires, which vaults use to accept or quarantine statements.
+responsibilities:
+  - Define versioned field allowlists for classrup.bazaar.listing/v1, classrup.identity.profile/v1 and classrup.services.offering/v1 payloads.
+  - Build an unsigned envelope draft (v, type, author, createdAt, seq, prev, payload, ext) from a local record plus the author head supplied by the caller.
+  - Reject export of records whose owner has not enabled federation for that record (opt-in flag from F01.S01.M03 or profile setting) and of any field classified above P0.
+  - Maintain the statement-type registry mapping each envelope type to the signer role it requires (for example listing author for classrup.bazaar.listing/v1 and listing acceptance statements, proposal participant for consent statements) and expose roleFor(type, context).
+  - Validate inbound payloads against the same allowlist and map them to a mirror view that the UI marks as remote and read-only.
+non_responsibilities:
+  - Signing and verification (F11.S01.M03 mod_signatures).
+  - Persisting, deduplicating or ordering envelopes (F11.S01.M02 mod_records, F11.S02.M02 mod_dedup).
+  - Choosing which peers receive a record (F11.S02.M01 mod_delivery and F11.S03.M01 mod_trust).
+  - "Future: ActivityPub Note/Offer and AT Protocol lexicon mappings (documented in F11.S03.M03, not implemented)."
+  - "Future: federating reviews, offers, proposals or any P1-P4 data; excluded permanently from MVP by CTR-FED-001 FED-1."
+depends_on: [F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001]
+user_stories:
+  - As a seller, I can opt one listing in to federation and see exactly which fields will be shared before confirming.
+  - As a service provider, I can federate my public offering with a coarse region only, never my address.
+  - As a remote reader, I see a mirrored listing labelled with its origin relay and a notice that it cannot be edited here.
+edge_cases:
+  - Listing contains a photo with GPS EXIF still present; export is refused with FEDERATION_EXPORT_FORBIDDEN_FIELD and nothing is drafted.
+  - Listing location is stored at geohash 7; the draft carries only the first 5 characters and records locationLevel L2.
+  - Inbound payload carries an extra field "homeAddress"; the whole payload is rejected rather than silently trimmed.
+  - Seller revokes opt-in after drafting but before signing; the draft builder refuses with FEDERATION_NOT_OPTED_IN.
+  - Payload exceeds 65536 bytes after serialization; rejected with PAYLOAD_TOO_LARGE.
+  - Record type version unknown (classrup.bazaar.listing/v2); rejected with UNSUPPORTED_SCHEMA_VERSION.
+ux:
+  notes: "Headless library. The consent preview screen that shows the allowlisted fields is owned by F10.S01.M01 and F01.S01.M03 and calls previewDraft(record) from this module."
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no stored entity; it defines allowlist tables and draft value types keyed by envelope type string.
+      - Allowed payload fields per type are listed in code and in the schema registry and each is annotated P0 by F10.S02.M02; a field without an annotation is not exportable.
+      - Location is carried only as a geohash string of length ≤ 5 plus locationLevel L1 or L2, never coordinates.
+      - The statement-type registry is static versioned data that names, for every registered envelope type, the signer role a receiving vault must verify before acting on the statement.
+    entities: []
+    note: "Pure mapping library; allowlists are static data versioned with the schema registry and nothing is persisted here."
+  validation_rules:
+    requirements:
+      - Outbound mapping is default-deny, so a new local field is never exported until it is added to an allowlist and reviewed.
+      - Inbound payload validation uses the same allowlist and rejects unknown fields instead of ignoring them.
+      - Every rejection returns a stable code that the calling module surfaces without echoing field values.
+    rules:
+      - "V01 | envelope type is one of the registered portable types and version major is supported | UNSUPPORTED_SCHEMA_VERSION"
+      - "V02 | source record has federation opt-in true for this record at draft time | FEDERATION_NOT_OPTED_IN"
+      - "V03 | every outbound field is on the allowlist for the type and classified P0 | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "V04 | location geohash length ≤ 5 and no latitude/longitude members present | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "V05 | media references are content hashes of metadata-stripped images; no image reports GPS tags | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "V06 | inbound payload has no members outside the allowlist, serialized size ≤ 65536 bytes, strings ≤ 10000 code points | FEDERATION_PAYLOAD_INVALID"
+      - "V07 | inbound payload does not exceed 65536 bytes | PAYLOAD_TOO_LARGE"
+  workflow_state_machine:
+    requirements:
+      - The mapper is stateless and the draft/mirror conversion is a pure function of its inputs.
+      - The only sequencing rule is that a draft must be signed and ingested through F11.S01.M02 before it is visible to any peer.
+      - No lifecycle is stored here, so there is no state machine.
+    machines: []
+    timeouts: []
+    note: "Stateless mapper; record lifecycle states belong to F11.S01.M02 (FederatedRecord) and the source modules."
+  commands_queries_events:
+    requirements:
+      - The module exposes TypeScript functions only and no network commands or queries.
+      - Functions return Result<T, AppError> and never include rejected field values in error params.
+      - The module emits no events; draft building is a local pure step.
+    commands: []
+    queries: []
+    note: "API: buildDraft(record, head{seq,prev}, now) -> UnsignedEnvelope; previewDraft(record) -> {fields[], excluded[]}; toMirrorView(verifiedEnvelope) -> MirrorView; allowlistFor(type) -> string[]; roleFor(type, context) -> RoleRule (signer role resolver used by F11.S01.M02 V14). Participant-audience statements are encrypted by their source modules and only wrapped, never mapped, here."
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "FEDERATION_NOT_OPTED_IN | 403 | no | the owner has not enabled federation for this record"
+      - "FEDERATION_EXPORT_FORBIDDEN_FIELD | 422 | no | the record contains a field or precision that must not be exported"
+      - "FEDERATION_PAYLOAD_INVALID | 422 | no | inbound payload has unknown members, wrong types or exceeds string limits"
+    example: |
+      buildDraft({ type: "classrup.bazaar.listing/v1", id: "0192f3a4-...", title: "Road bike", geohash: "u33db", federate: true }, { seq: 4, prev: "sha256-9fQ..." }, now)
+      -> { v: 1, type: "classrup.bazaar.listing/v1", author: "did:key:z6Mk...", createdAt: "2026-11-04T10:00:00.000Z", seq: 5, prev: "sha256-9fQ...", payload: { id: "0192f3a4-...", title: "Road bike", region: { geohash: "u33db", level: "L2" } }, ext: {} }
+  authorization_capabilities:
+    requirements:
+      - The library performs no authorization; callers (listing publication, profile settings, delivery) decide who may federate which record.
+      - The opt-in flag is read from the source record at draft time and re-checked by F11.S01.M02 at ingest of local envelopes.
+      - Mirror views contain only P0 data and may be shown to anonymous readers when the tenant has public browse enabled.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Draft building is deterministic for identical record, head and clock, so retries cannot create divergent drafts.
+      - A failed draft leaves no state; the caller retries after fixing the record.
+      - The caller, not this module, supplies seq and prev, so a lost response never skips a sequence number.
+    idempotency: "buildDraft is a pure function; identical inputs give identical drafts (same payload and canonical bytes)."
+    concurrency: "No shared state. Two concurrent drafts for the same author use the same head and one will fail the seq/prev check in F11.S01.M02 with CONFLICT_STATE; the loser re-reads the head and rebuilds."
+    retries: "Callers retry after refreshing the author head; no automatic retry inside the library."
+    offline: "Runs fully offline on-device; drafts are queued in the outbox (F15.S01.M01) and signed locally when the device key is available."
+    partial_failure: "A draft either validates entirely or returns an error; there is no partially mapped payload."
+  privacy_retention_abuse:
+    requirements:
+      - Only owner-opted-in P0 data at maximum precision L2 can leave the relay; every other field is dropped or the export refused.
+      - Exact home address (P3), contact details and anything P1-P4 can never appear in a draft; tests assert this on every release.
+      - Pseudonymity is not anonymity, so the consent preview states that all records of one did:key are linkable and that deletion propagates by tombstone but cannot recall copies.
+    data:
+      - "Drafts: P0 only, transient, not stored by this module."
+      - "Mirror views: P0 copies of remote content; stored by F11.S01.M02."
+    retention:
+      - "No retention in this module; stored mirrors follow F11.S01.M02 (RET-STANDARD with tombstone 180 days)."
+    threats:
+      - "T01 | New local field silently leaking into federation | default-deny allowlist; CI test fails if a record type has a field without a classification annotation"
+      - "T02 | Location refinement attack (geohash 7 or coordinates leaked in ext) | V04 truncates to 5 and refuses coordinates; ext must be empty object or registered key"
+      - "T03 | Metadata leakage through images (EXIF GPS, device serial) | V05 only references stripped media hashes; relay rejects GPS tags per PRV-4"
+      - "T04 | Remote payload with executable or HTML content | inbound strings are plain text; mirror view escapes at render; links shown as text"
+    abuse_controls:
+      - "Per-author draft rate cap 60 drafts/hour enforced by the caller through F12.S03.M03 rate limits."
+      - "Inbound payloads over 65536 bytes are rejected before parsing members."
+  observability_performance:
+    requirements:
+      - Mapping outcomes are counted per rejection code without recording field values.
+      - Building one draft takes under 1 ms p95 for a typical 4 KiB listing.
+      - Allowlist coverage is reported as a build artifact on every CI run.
+    metrics:
+      - "classrup_federation_draft_total{outcome=ok|not_opted_in|forbidden_field|invalid}"
+      - "classrup_federation_inbound_payload_total{outcome=ok|invalid|too_large}"
+    logs:
+      - "info federation.draft.refused {type, code, correlationId} — never field values or record contents."
+    budgets:
+      - "buildDraft p95 ≤ 1 ms for records ≤ 4 KiB; ≤ 10 ms for 65536 byte payloads."
+      - "Allowlist coverage check completes in ≤ 5 s in CI."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - A privacy test suite enumerates every field of every source record type and proves non-allowlisted fields never appear in a draft.
+      - Round-trip tests prove that a draft payload maps back to an equal mirror view.
+    fixtures: "Listing, profile and offering fixtures with P0..P3 fields populated including a home address, exact lat/lon, geohash 7 and a GPS-tagged image; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01,09.R02 | build drafts for the three record types | payload members equal the allowlist subset; classification annotations present"
+      - "T02 | property | 01.R03,02.R01,07.R01,09.R03 | random records with random extra fields and geohash lengths 1-12 | no draft contains a non-allowlisted member; geohash length ≤ 5"
+      - "T03 | unit | 02.R01,07.R02,09.R02 | record with homeAddress, email, exact lat/lon, geohash 7 | export refused or truncated per V03/V04 and codes returned"
+      - "T04 | unit | 02.R03,02.R01 | record with opt-in false, then opt-in revoked between preview and build | FEDERATION_NOT_OPTED_IN"
+      - "T05 | unit | 02.R02,02.R03 | inbound payload with extra member, 65537 bytes, unknown type version | FEDERATION_PAYLOAD_INVALID, PAYLOAD_TOO_LARGE, UNSUPPORTED_SCHEMA_VERSION"
+      - "T06 | unit | 01.R03,02.R01 | image referenced with GPS tag present | FEDERATION_EXPORT_FORBIDDEN_FIELD"
+      - "T07 | contract | 03.R01,03.R02,04.R01,04.R02 | exercise each exported function | signatures and Result shapes match the schema registry; error params contain no values"
+      - "T08 | unit | 04.R03,05.R01 | inspect module for event emission and authorization calls | none present; opt-in read happens at build time"
+      - "T09 | integration | 03.R03,05.R02,05.R03 | draft then sign then ingest then toMirrorView | mirror view equals source P0 fields, labelled remote, no private fields"
+      - "T10 | unit | 06.R01,06.R02,06.R03 | identical inputs twice; concurrent builds with same head; missing head | identical drafts; second ingest returns CONFLICT_STATE; missing head returns VALIDATION_FAILED"
+      - "T11 | a11y | 07.R03 | open consent preview with screen reader and keyboard only | every field and the linkability notice are announced, controls ≥ 44 px"
+      - "T12 | abuse | 07.R02,07.R03 | inbound payload with script tag and long link text | stored as plain text and rendered escaped"
+      - "T13 | load | 08.R02,08.R01 | 10 000 draft builds of 4 KiB records | p95 ≤ 1 ms, counters exported"
+      - "T14 | unit | 08.R03,09.R01 | coverage and traceability tools run | allowlist report produced; every PS-083 requirement maps to a passing test"
+      - "T16 | unit | 01.R04,02.R01 | roleFor for listing, acceptance and consent statement types with correct and wrong signers | correct signer accepted; wrong signer yields a rule that makes F11.S01.M02 quarantine"
+      - "T15 | unit | 10.R01,10.R02,10.R03 | upgrade allowlist v1 to v1 plus optional field; read older drafts | older mirror views still validate; rollback keeps v1 behavior"
+    acceptance:
+      - All tests T01–T15 pass in CI.
+      - No P1-P4 field, exact coordinate or home address appears in any draft (privacy suite on fixtures).
+      - A record whose owner has not opted in can never produce a draft.
+  import_export_backup_rollback:
+    requirements:
+      - The library stores nothing, so user export and import of federated content is handled by F11.S01.M02 and F11.S03.M03.
+      - Allowlists are versioned data; adding a field is a schema minor change and removing one is a major change with a 180-day dual-read period.
+      - Rollback to a previous release must never widen an allowlist, so a downgrade fails closed.
+    export: "Allowlist tables are exported as a build artifact (allowlists.json) with each release for audit; no user data."
+    import: "No user data is imported by this module; inbound payload validation uses the allowlist bundled with the running release."
+    backup: "Nothing to back up; allowlists are versioned in source control with the schema registry."
+    migration_rollback: "Expand/contract: new optional fields are added to the allowlist in a release before any producer uses them; rollback restores the earlier narrower allowlist, which rejects newer payload members as FEDERATION_PAYLOAD_INVALID."

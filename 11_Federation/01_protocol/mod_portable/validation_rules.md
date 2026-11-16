@@ -1,35 +1,39 @@
-# PS-083-02 — validation rules
+# PS-083-02 — Validation rules: Portable record packaging
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-083-02. **Owner:** [11_Federation/01_protocol/mod_portable](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S01.M01 Portable record packaging](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/protocol/portable` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the validation rules process for portable within 01_protocol. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-083-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-083-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-083-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-083-02.R01** Outbound mapping is default-deny, so a new local field is never exported until it is added to an allowlist and reviewed.
+- **PS-083-02.R02** Inbound payload validation uses the same allowlist and rejects unknown fields instead of ignoring them.
+- **PS-083-02.R03** Every rejection returns a stable code that the calling module surfaces without echoing field values.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | envelope type is one of the registered portable types and version major is supported | UNSUPPORTED_SCHEMA_VERSION |
+| V02 | source record has federation opt-in true for this record at draft time | FEDERATION_NOT_OPTED_IN |
+| V03 | every outbound field is on the allowlist for the type and classified P0 | FEDERATION_EXPORT_FORBIDDEN_FIELD |
+| V04 | location geohash length ≤ 5 and no latitude/longitude members present | FEDERATION_EXPORT_FORBIDDEN_FIELD |
+| V05 | media references are content hashes of metadata-stripped images; no image reports GPS tags | FEDERATION_EXPORT_FORBIDDEN_FIELD |
+| V06 | inbound payload has no members outside the allowlist, serialized size ≤ 65536 bytes, strings ≤ 10000 code points | FEDERATION_PAYLOAD_INVALID |
+| V07 | inbound payload does not exceed 65536 bytes | PAYLOAD_TOO_LARGE |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-083-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-083-09.T01 | unit | PS-083-01.R01, PS-083-01.R02, PS-083-02.R01, PS-083-09.R02 | build drafts for the three record types | payload members equal the allowlist subset; classification annotations present |
+| TEST-PS-083-09.T02 | property | PS-083-01.R03, PS-083-02.R01, PS-083-07.R01, PS-083-09.R03 | random records with random extra fields and geohash lengths 1-12 | no draft contains a non-allowlisted member; geohash length ≤ 5 |
+| TEST-PS-083-09.T03 | unit | PS-083-02.R01, PS-083-07.R02, PS-083-09.R02 | record with homeAddress, email, exact lat/lon, geohash 7 | export refused or truncated per V03/V04 and codes returned |
+| TEST-PS-083-09.T04 | unit | PS-083-02.R03, PS-083-02.R01 | record with opt-in false, then opt-in revoked between preview and build | FEDERATION_NOT_OPTED_IN |
+| TEST-PS-083-09.T05 | unit | PS-083-02.R02, PS-083-02.R03 | inbound payload with extra member, 65537 bytes, unknown type version | FEDERATION_PAYLOAD_INVALID, PAYLOAD_TOO_LARGE, UNSUPPORTED_SCHEMA_VERSION |
+| TEST-PS-083-09.T06 | unit | PS-083-01.R03, PS-083-02.R01 | image referenced with GPS tag present | FEDERATION_EXPORT_FORBIDDEN_FIELD |
+| TEST-PS-083-09.T16 | unit | PS-083-01.R04, PS-083-02.R01 | roleFor for listing, acceptance and consent statement types with correct and wrong signers | correct signer accepted; wrong signer yields a rule that makes F11.S01.M02 quarantine |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

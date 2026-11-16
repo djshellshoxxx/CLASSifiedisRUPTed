@@ -1,0 +1,174 @@
+id: F17.S02.M03
+scope: MVP
+summary: 'Test suite for client offline behavior under ADR-0016: the PWA is local-first, so offline is the normal state and a relay is optional. It verifies that the core works with no relay configured, that the sync outbox moves statements through local committed, prepared, transport_acknowledged and peer_accepted without the UI claiming more, that conflicts and forks surface as prompts rather than silent overwrites, and that service worker caching never stores authenticated relay responses. It runs partly as vitest tests with a fake network and IndexedDB shim and partly through Playwright network emulation.'
+responsibilities:
+- Provide a controllable fake network (online, offline, latency 2 s, 30 percent packet loss, connection reset mid-request) for unit and integration tests of the outbox.
+- 'Verify outbox behavior from CTR-IDM-001: queue order per entity, same Idempotency-Key on replay, backoff 1 s doubling to 60 s with jitter, and maximum 7 days before a queued command is marked stale.'
+- 'Verify conflict handling (IDM-5): CONFLICT_REVISION after reconnect surfaces a prompt offering keep mine, take theirs or merge, with no silent overwrite.'
+- 'Verify cache behavior: app shell available offline after first visit, authenticated APIs never served from cache, versioned cache cleanup on update.'
+non_responsibilities:
+- The outbox and service worker implementations (F15.S01.M01 and F15.S01.M02).
+- General e2e journeys (F17.S01.M04).
+- Server-side fault injection (F17.S02.M02).
+- 'Future: background sync on iOS when the platform supports it.'
+depends_on:
+- CTR-IDM-001
+- CTR-ERR-001
+- CTR-UX-001
+- CTR-TST-001
+- CTR-OBS-001
+- F17.S01.M01
+- F17.S01.M04
+- F15.S01.M01
+- F15.S01.M02
+user_stories:
+- As a user on a train, I create an offer offline, see it pending, and it is delivered once when I reconnect.
+- As a user whose listing was edited on another device, I get a clear choice when my queued edit conflicts.
+- As a developer, I run one command that proves cache and outbox behavior under flaky networks.
+edge_cases:
+- Connection drops after the server committed but before the response arrived; the replay returns the stored response and no duplicate is created.
+- Two queued commands target the same entity; order is preserved and the second uses the revision from the first response.
+- A queued command is older than 7 days; it is marked stale and the user is asked to review instead of replaying.
+- The service worker caches an authenticated API response by mistake; the test asserts network-only for such routes.
+- Storage quota is exceeded when queuing; the user is told and the command is not silently dropped.
+- Browser reloads during replay; the outbox resumes from persisted state without double send.
+ux:
+  notes: 'Headless tests that assert user-visible states: pending badge, retry banner, conflict dialog with three actions, stale-command review list, offline shell. They check accessible names and aria-live announcements.'
+processes:
+  domain_schema:
+    requirements:
+    - The module owns no persisted entities; it reads the OutboxEntry shape owned by F15.S01.M01 through the public API and never defines its own copy.
+    - Test fixtures create outbox entries through the production enqueue function so the schema is exercised as shipped.
+    - Network scenarios are described as data (sequence of online, offline, latency, loss steps) in tests/offline/scenarios/.
+    - 'The core must work with no relay configured: create, edit and search local records and sign statements offline; the sync status shows local committed and never sent or delivered without a transport acknowledgement.'
+    entities: []
+    note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
+  validation_rules:
+    requirements:
+    - 'Every offline test must assert exactly-once delivery: the receiving vault or relay mailbox sees each statement once, identified by its statement ID and Idempotency-Key.'
+    - Conflict tests must assert that CONFLICT_REVISION never produces a silent overwrite and the prompt offers keep mine, take theirs and merge.
+    - A queued command older than 7 days must be marked stale and not replayed automatically.
+    - The UI status for a statement never exceeds the sync state reached (local committed, prepared, transport_acknowledged, peer_accepted); a test fails with QUALITY_OFFLINE_OVERCLAIM when the UI shows delivered before peer_accepted.
+    rules:
+    - V01 | Receiving vault or relay mailbox sees each queued statement exactly once per statement ID | QUALITY_OFFLINE_DUPLICATE_EFFECT
+    - V02 | CONFLICT_REVISION after reconnect shows the three-way prompt and never overwrites silently | QUALITY_OFFLINE_SILENT_OVERWRITE
+    - V03 | Authenticated API responses are not present in Cache Storage | QUALITY_OFFLINE_AUTH_CACHED
+    - V04 | Queued commands older than 7 days are not replayed automatically | QUALITY_OFFLINE_STALE_REPLAYED
+    - V05 | Backoff schedule matches 1 s doubling to 60 s with jitter of 20 percent | QUALITY_OFFLINE_BACKOFF_INVALID
+    - V06 | UI status never exceeds the reached sync state | QUALITY_OFFLINE_OVERCLAIM
+  workflow_state_machine:
+    requirements:
+    - There is no entity lifecycle for the module; tests walk the sync outbox states local committed, prepared, transport_acknowledged, peer_accepted, quarantined and stale as defined by F15.S01.M01 and CTR-IDM-001 IDM-7.
+    - Transitions are asserted in both unit tests with the fake network and a browser run with Playwright network emulation.
+    - A test ends only after the outbox is empty or in an explicit expected terminal state.
+    machines: []
+    note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
+    timeouts: []
+  commands_queries_events:
+    requirements:
+    - The module exposes pnpm test:offline (fake network, no browser, under 30 s) and pnpm test:offline:browser (Playwright, Pixel 7 profile).
+    - The scenarios are offline_queue, flaky_replay, conflict_prompt, stale_command, cache_shell, quota_full and reload_during_replay.
+    - 'Exit codes: 0 pass, 1 assertion failure, 2 configuration failure.'
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors:
+    - QUALITY_OFFLINE_DUPLICATE_EFFECT | 422 | no | a queued command had its effect applied more than once (exit 1)
+    - QUALITY_OFFLINE_SILENT_OVERWRITE | 422 | no | a conflict was resolved without user choice (exit 1)
+    - QUALITY_OFFLINE_AUTH_CACHED | 422 | no | authenticated API response found in cache (exit 1)
+    - QUALITY_OFFLINE_STALE_REPLAYED | 422 | no | a command older than 7 days was replayed automatically (exit 1)
+    - QUALITY_OFFLINE_BACKOFF_INVALID | 422 | no | retry schedule outside the documented backoff (exit 1)
+    - QUALITY_OFFLINE_OVERCLAIM | 422 | no | UI claimed more certainty than the reached sync state (exit 1)
+    note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
+    example: |-
+      $ pnpm test:offline
+        TEST-PS-140-09.T03 flaky_replay: 10 resets, 1 effect   OK
+        TEST-PS-140-09.T05 cache_shell: auth responses cached = 0   OK
+      $ pnpm test:offline:browser --grep conflict_prompt
+  authorization_capabilities:
+    requirements:
+    - 'Offline tests use real authorization: a queued statement signed by a key revoked while offline is quarantined by the receiving vault on arrival of the revocation and shown with a reason.'
+    - Cached data for signed-out users is cleared on logout; a test asserts IndexedDB and caches are empty after logout.
+    - No test uses elevated service accounts.
+    capabilities: []
+    notes: 'No runtime capabilities of its own: this module runs only in developer shells and CI jobs. Under ADR-0016 (CTR-CAP-001 CAP-8) the tests exercise two layers: vault policy (local principal mutates only its records; incoming signed statements accepted only from a key authorized for the role, else quarantined) and relay policy (relay-signed requests or relay access tokens). Tests never ship in the PWA or relay bundles.'
+  failure_recovery_idempotency:
+    requirements:
+    - Replay uses backoff 1 s doubling to 60 s with jitter of plus or minus 20 percent; tests assert the schedule with a fake clock.
+    - Replay is idempotent by construction (same Idempotency-Key); the test replays 1, 3 and 10 times with identical results.
+    - A command that fails with a non-retryable error is not retried and is surfaced to the user.
+    idempotency: The suite proves replay idempotency by sending each queued command up to 10 times across resets and asserting a single server-side effect.
+    concurrency: Two devices edit the same entity offline; the second replay receives CONFLICT_REVISION and the prompt appears; both orders are tested.
+    retries: Tests use the fake clock to advance backoff instead of waiting; real-time sleeps over 50 ms are forbidden.
+    offline: 'This module is about offline: the network is toggled by the fake network or Playwright setOffline.'
+    partial_failure: If replay stops midway (page reload), the outbox resumes from persisted state; the test verifies no lost and no duplicated commands.
+  privacy_retention_abuse:
+    requirements:
+    - Cached and queued data are synthetic; tests assert that authenticated responses are never stored in Cache Storage and that P3 values are not written to the outbox in plain text beyond what the command requires.
+    - Logout and account switch clear caches and outbox for the previous account.
+    - Browser traces from offline tests redact Authorization headers.
+    data:
+    - Synthetic outbox entries and cached public listings (P0/P1).
+    - No real credentials; test tokens are random and short-lived.
+    retention:
+    - Reports 14 days as CI artifacts; browser contexts are discarded after each test.
+    threats:
+    - T01 | Authenticated response cached and exposed to the next user on a shared device | test asserts network-only routes and cache emptiness after logout
+    - T02 | Replay applies a command twice and double-charges a claim | exactly-once assertions with idempotency keys across resets
+    - T03 | Queued command with stale authority executes after privilege revocation | replay re-checks authorization; test expects FORBIDDEN
+    abuse_controls:
+    - 'Quota-filling attempts: the test fills storage to 95 percent and expects a visible error rather than silent drop.'
+    - Outbox size is limited to 500 entries; the 501st enqueue is refused with a visible message.
+  observability_performance:
+    requirements:
+    - 'The suite records replay latency after reconnect: first command delivered at most 2 s after connectivity returns on the fake network.'
+    - 'OBS-5 offline budget is asserted: the app shell loads offline after the first visit in at most 2.5 s on the 4G profile.'
+    - Fake network tests finish in at most 30 s; browser tests in at most 3 min on 2 vCPU.
+    metrics:
+    - classrup_quality_offline_tests_total{outcome}
+    - classrup_quality_offline_replay_latency_ms
+    - classrup_quality_offline_duplicate_effects_total
+    logs:
+    - JSON line per scenario {ts, level, msg, module, scenario, durationMs, code?} with no payloads.
+    budgets:
+    - Fake network suite at most 30 s; browser suite at most 3 min on 2 vCPU.
+    - First replayed command delivered at most 2 s after reconnect; app shell offline load at most 2.5 s.
+  contract_and_acceptance_tests:
+    requirements:
+    - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+    - Planted bugs (replay with a new key, authenticated response cached) must fail the suite.
+    - The suite runs on every pull request touching apps/pwa.
+    fixtures: FakeNetwork scenario files, FakeClock 2026-11-04T10:00:00Z, in-memory IndexedDB shim, Pixel 7 profile for browser tests, relay test double that counts effects per Idempotency-Key.
+    tests:
+    - T01 | unit | 01.R01,01.R02,01.R03 | enqueue through production function with a scenario file | entry matches the OutboxEntry schema; scenario parses
+    - T02 | integration | 02.R01,06.R02 | replay one command across 10 connection resets | server-side effect count is exactly 1
+    - T03 | integration | 02.R02,03.R01 | two devices edit the same entity offline then reconnect | second gets CONFLICT_REVISION and the three-action prompt appears; no overwrite
+    - T04 | integration | 02.R03,06.R03 | advance fake clock 8 days with a queued command | command marked stale and not sent; non-retryable error is not retried
+    - T05 | integration | 03.R02,03.R03 | walk local committed, prepared, transport_acknowledged, peer_accepted, quarantined and stale states with both harnesses | every state reached and outbox ends empty or in expected terminal state
+    - T06 | unit | 04.R01,04.R02,04.R03 | run the scripts and read exit codes | fake-network suite under 30 s; browser variant runs scenario list; exit codes as documented
+    - T07 | e2e | 05.R01,05.R03 | revoke signing key while offline then reconnect | receiver quarantines the statement; sender sees quarantined with reason
+    - T08 | e2e | 05.R02,07.R02 | logout then inspect IndexedDB and caches | all empty for the previous account
+    - T09 | unit | 06.R01 | fake clock backoff schedule over 10 failures | delays 1,2,4,8,16,32,60,60,60,60 s with jitter within 20 percent
+    - T10 | e2e | 07.R01,09.R02 | plant an authenticated response in cache | QUALITY_OFFLINE_AUTH_CACHED and suite fails
+    - T11 | abuse | 07.R03,09.R02 | fill storage to 95 percent and enqueue; plant replay with a new key | visible quota error; the new-key bug fails with QUALITY_OFFLINE_DUPLICATE_EFFECT
+    - T12 | e2e | 08.R01,08.R02,08.R03 | reconnect on Pixel 7 4G profile and load shell offline | first replay within 2 s, shell within 2.5 s, browser suite within 3 min
+    - T13 | integration | 09.R01,09.R03 | traceability tool run and check CI path filter | every requirement maps to a passing test; suite runs on apps/pwa changes
+    - T14 | integration | 10.R01,10.R02,10.R03 | export report and reuse scenario files in e2e | reports contain no user data; scenarios load in both harnesses
+    - T15 | e2e | 03.R01 | reload the page during replay | outbox resumes, no lost and no duplicate commands
+    - 'T16 | e2e | 01.R04 | no relay configured, network blocked: create and search records, sign a statement | works; status local committed'
+    - T17 | e2e | 02.R04 | drive a statement through each sync state | UI label matches the state; delivered shown only at peer_accepted; plant an overclaim bug and see QUALITY_OFFLINE_OVERCLAIM
+    acceptance:
+    - A command created offline is applied exactly once after reconnect, even across repeated connection resets.
+    - A stale revision conflict always shows the keep mine, take theirs and merge prompt and never overwrites silently.
+    - Authenticated API responses are never present in Cache Storage and caches are empty after logout.
+    - The app shell loads offline after first visit within the OBS-5 budget.
+  import_export_backup_rollback:
+    requirements:
+    - Reports are JUnit XML and reports/offline.json; no user data.
+    - Scenarios are plain data files and can be reused by the e2e module.
+    - Rollback is a git revert; no persistent state.
+    export: reports/offline.json and JUnit XML; scenario data files in tests/offline/scenarios/.
+    backup: Scenario files in git; reports 14 days in CI.
+    migration_rollback: Outbox schema changes are covered by F15.S01.M01; this module updates scenarios in the same pull request; rollback by git revert.
+    import: The suite imports scenario data files (JSON) that describe network steps; other inputs are rejected.

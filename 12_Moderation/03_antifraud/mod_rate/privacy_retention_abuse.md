@@ -1,35 +1,48 @@
-# PS-099-07 — privacy retention abuse
+# PS-099-07 — Privacy, retention and abuse: Rate limiting
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-099-07. **Owner:** [12_Moderation/03_antifraud/mod_rate](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_rate. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F12.S03.M03 Rate limiting](SPEC.md) · **Scope:** MVP · **Code:** `packages/moderation/src/antifraud/rate` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for rate within 03_antifraud. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-099-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-099-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-099-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-099-07.R01** No raw IP address, actor key or user identifier is stored; keys are HMAC hashes with a daily salt, destroyed after 24 hours, and logs contain at most /24 or /48 truncated prefixes per CTR-OBS-001.
+- **PS-099-07.R02** Bucket state is ephemeral under RET-EPHEMERAL (24 hours) and never exported.
+- **PS-099-07.R03** Abuse (distributed low-rate attacks, limit evasion by key rotation, limit-based harassment) is addressed by layered scopes and tenant caps.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- RateBucket: P3 ephemeral hashed state.
+- RatePolicy: P1 configuration visible to operators and, as published limits, to members.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- Buckets: 24 hours maximum (RET-EPHEMERAL); daily salt destroyed after 24 hours.
+- Policies: RET-STANDARD with revision history kept 1 year in the audit log.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-099-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Credential-stuffing or challenge flooding on relay access | relay.access class: 10 per minute per IP prefix, 5 per minute per key, failMode closed |
+| T02 | Evasion by creating many new keys | per-IP-prefix scope with multiplier 5, tenant global cap per class, and a new-key stricter policy from F12.S03.M04 |
+| T03 | Proximity query trilateration | read.search class token bucket 60 per minute per key and 120 per minute per /24, minimum search radius enforced elsewhere (CTR-PRV-001 PRV-2) |
+| T04 | Privacy leak through rate-limit logs | only hashed keys and truncated prefixes; daily salt destroyed; no raw IPs in storage |
+| T05 | Operator disables limits | bounded ranges (V01), locked fail modes (V03), all policy changes audit-logged and visible in the public relay policy |
+
+**Abuse controls**
+- Tenant-wide cap per capability class (default 2 000 requests per minute per class on a 2 vCPU relay) protects availability when many keys act together.
+- Spam velocity penalties apply factor 0.25 for at most 1 hour and are labelled automated.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-099-09.T10 | abuse | PS-099-07.R01, PS-099-07.R03 | 20 keys from one /24 hammering write.offer; attacker rotates 50 keys | prefix limit reached at 5× actor limit; tenant cap holds |
+| TEST-PS-099-09.T11 | integration | PS-099-07.R02 | buckets after 24 hours | purged; export contains none |
+
+## Dependencies
+
+Module depends on: F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

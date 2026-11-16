@@ -1,0 +1,154 @@
+id: F11.S02.M02
+scope: MVP
+summary: >-
+  Pure decision library, used by vaults and relays through F11.S01.M02, that implements cid deduplication,
+  per-author seq/prev chain ordering and the 24 h gap buffer of CTR-FED-001 FED-3. Given a verified envelope
+  and the stored head of its author chain it returns exactly one decision: duplicate, next, buffer, release
+  order, fork or reject. It stores nothing; buffered envelopes are rows of FederatedRecord owned by
+  F11.S01.M02. A hash chain shows that records belong to one author's sequence, not that the author is honest.
+responsibilities:
+  - Decide per envelope between duplicate (cid already known), next (seq = head+1 and prev = head cid, or seq 1 without prev), buffer (seq > head+1), fork (seq ≤ head with unknown cid, or prev mismatch) and reject (gap too large).
+  - Bound the gap buffer: window 24 h, at most 100 missing seq numbers ahead of head, 50 buffered envelopes per author and 5000 per tenant or vault.
+  - Compute the drain order when a missing predecessor arrives so buffered envelopes are released in ascending seq with prev verified at each step.
+  - Report which buffered envelopes have expired and which seq numbers to fetch from the origin before they are dropped.
+non_responsibilities:
+  - Persisting envelopes, buffer rows or heads (F11.S01.M02).
+  - Signature verification and cid computation (F11.S01.M03).
+  - Quarantine, origin-wins policy and operator review after a fork decision (F11.S02.M03).
+  - Fetching missing envelopes from the origin (F11.S02.M01 pull catch-up).
+  - "Future: multi-device authors with per-device sub-chains; MVP assumes one chain per did:key."
+depends_on: [F11.S01.M03, CTR-FED-001, CTR-ERR-001, CTR-OBS-001, CTR-TST-001]
+user_stories:
+  - As a user whose relay delivers listing updates out of order, I see them applied in the author's order without manual action.
+  - As a relay operator, I can see that an envelope was held for a missing predecessor and when it will be dropped.
+  - As a developer, I can run a property test that any permutation of a valid chain converges to the same accepted order.
+edge_cases:
+  - The same envelope arrives from two relays; the second decision is duplicate and nothing changes.
+  - Envelope seq 9 arrives when head is 6 and seq 8 is already buffered; it is buffered, and draining waits for seq 7.
+  - Gap of 101 or more seq numbers; rejected with FEDERATION_GAP_TOO_LARGE so one forged high seq cannot pin buffer memory.
+  - An author floods 51 future seq numbers; the 51st is refused with FEDERATION_BUFFER_FULL.
+  - Envelope seq 7 with prev pointing to a different cid than the stored seq 6; decision fork, never accepted silently.
+  - Clock changes on the device between buffering and sweep; expiry uses the stored bufferedUntil and an injected monotonic-checked clock.
+ux:
+  notes: "Headless pure library; vault diagnostics show 'waiting for earlier update' for buffered statements using messageKey federation.status.buffered."
+processes:
+  domain_schema:
+    requirements:
+      - The module owns no entity; its inputs are an Envelope, a ChainHead {seq, cid} and a set of known cids, and its output is a Decision value type.
+      - The chain rule is fixed by CTR-FED-001 (seq starts at 1, prev is the cid of the previous seq of the same author and is absent only at seq 1).
+      - The buffer limits are constants of this module (24 h, 100 ahead, 50 per author, 5000 total) so every relay and vault behaves identically.
+    entities: []
+    note: "Stateless decision functions; buffered rows and chain heads are persisted as FederatedRecord by F11.S01.M02, so no entity is owned here."
+  validation_rules:
+    requirements:
+      - Decisions are deterministic functions of (envelope, head, known cids, buffer counts, now).
+      - Out-of-range inputs are rejected before any state is considered.
+      - Each rejection maps to one stable code so peers and users see consistent reasons.
+    rules:
+      - "V01 | envelope seq is an integer ≥ 1 and prev is absent iff seq = 1 | VALIDATION_FAILED"
+      - "V02 | seq - head.seq - 1 ≤ 100 (gap size) | FEDERATION_GAP_TOO_LARGE"
+      - "V03 | buffered count for the author < 50 and total buffered < 5000 | FEDERATION_BUFFER_FULL"
+      - "V04 | bufferedUntil = receivedAt + 86400 s exactly; expiry compares against the injected clock | VALIDATION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - The library has no state of its own; the lifecycle of a buffered envelope is the FederatedRecord machine of F11.S01.M02.
+      - Decision precedence is fixed as duplicate, then reject, then fork, then next, then buffer.
+      - The decision for a given input never depends on arrival order of unrelated authors.
+    machines: []
+    timeouts: []
+    note: "Stateless; the 24 h buffer timeout is enforced by the sweep in F11.S01.M02 using expired() from this module."
+  commands_queries_events:
+    requirements:
+      - The module exposes pure functions only and no vault, relay or network commands.
+      - Functions return Result<Decision, AppError> and never throw for bad input.
+      - No events are emitted; the caller turns decisions into events.
+    commands: []
+    queries: []
+    note: "API: decide(env, head, known, counts, now) -> Decision; drain(buffered[], head) -> Envelope[] in release order; expired(buffered[], now) -> {drop[], fetch[]}; verifyChain(envelopes[]) -> Result<void>."
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "FEDERATION_GAP_TOO_LARGE | 422 | no | the envelope is more than 100 sequence numbers ahead of the stored head"
+      - "FEDERATION_BUFFER_FULL | 429 | yes | the gap buffer for this author or tenant is full"
+    example: |
+      decide(env{seq:8, prev:"sha256-c7"}, head{seq:6, cid:"sha256-a2"}, known, counts, now) -> { kind: "buffer", missing: [7], until: "2026-11-05T10:00:00.000Z" }
+      decide(env{seq:7, prev:"sha256-a2"}, head{seq:6, cid:"sha256-a2"}, known, counts, now) -> { kind: "next" }
+      decide(env{seq:7, prev:"sha256-ff"}, head{seq:6, cid:"sha256-a2"}, known, counts, now) -> { kind: "fork", reason: "prev_mismatch" }
+  authorization_capabilities:
+    requirements:
+      - The library has no roles; it is called by F11.S01.M02 after authorization and signature checks.
+      - It never reads secrets and holds no keys.
+      - Callers must not call decide() on unverified envelopes; the API requires a VerifiedEnvelope type so this is enforced by types.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - Calling decide() repeatedly with the same inputs returns the same decision, so retries are safe.
+      - Draining is idempotent since releasing an envelope already accepted yields duplicate.
+      - Failures leave no partial state because the library writes nothing.
+    idempotency: "Pure and deterministic; the same envelope delivered N times yields one next/buffer decision followed by N-1 duplicate decisions."
+    concurrency: "No shared state; the caller serializes decisions per author inside one storage transaction, and this module's unit tests assert order independence of drain()."
+    retries: "Not applicable; callers retry delivery, not decisions."
+    offline: "Runs offline in the vault and in workers; the 24 h window is measured with the device clock plus a monotonic check, and a backwards clock jump never extends the window."
+    partial_failure: "A decision either returns a full Decision or an error; there is no partial result."
+  privacy_retention_abuse:
+    requirements:
+      - The module reads only cids, authors, seq and prev, never payloads, so it cannot leak content.
+      - Buffer limits cap the memory and storage an attacker can pin with forged future seq numbers.
+      - Retention of buffered envelopes is at most 24 h and is enforced through bufferedUntil.
+    data:
+      - "Cids, did:key authors, seq numbers: P0 identifiers."
+    retention:
+      - "No data kept; buffered rows follow F11.S01.M02 and are dropped after 24 h."
+    threats:
+      - "T01 | Memory or storage exhaustion by many forged future seq numbers | gap ≤ 100, 50 per author, 5000 total (V02, V03)"
+      - "T02 | Replay of delivered envelopes to cause repeated side effects | duplicate decision by cid; callers emit no event on duplicate"
+      - "T03 | Equivocation: two different histories for the same seq | fork decision, never accepted; handed to F11.S02.M03"
+      - "T04 | Hash-chain splice: valid envelope with prev pointing at an unrelated cid | prev must equal the stored cid at seq-1, else fork prev_mismatch"
+    abuse_controls:
+      - "Buffer-full and gap-too-large counts per peer are reported to F11.S03.M01 health score; 100 per hour marks the peer degraded."
+  observability_performance:
+    requirements:
+      - Decision counts are exposed per kind so operators can see duplicate ratios and buffer pressure.
+      - decide() has a p95 budget of 0.2 ms excluding storage lookups.
+      - Buffer occupancy is a gauge and alerts when above 80 percent of 5000.
+    metrics:
+      - "classrup_federation_dedup_decisions_total{outcome=duplicate|next|buffer|fork|reject}"
+      - "classrup_federation_gap_buffer_size (gauge)"
+      - "classrup_federation_gap_buffer_age_ms (gauge: age of oldest buffered envelope)"
+    logs:
+      - "debug federation.dedup.decision {kind, authorPrefix(16), seq, correlationId} — no payload; the PWA writes this only to local diagnostics."
+    budgets:
+      - "decide() p95 ≤ 0.2 ms; drain() of 100 buffered envelopes ≤ 5 ms."
+      - "expired() over 5000 buffered envelopes ≤ 10 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Property tests prove convergence of any arrival permutation of a valid chain and rejection of every splice.
+      - Boundary tests cover each numeric limit at limit and limit plus one.
+    fixtures: "Chain of 120 valid envelopes for author X from fixed seeds; second author Y; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 09.R02,01.R01,01.R02,02.R01 | decide for next, duplicate, buffer, fork, reject cases from the example | decision kinds as documented"
+      - "T02 | property | 01.R02,03.R01,03.R02,09.R03 | random permutations and duplicates of a 50-envelope chain through decide and drain | final accepted order equals seq order; every arrival yields at most one next per seq"
+      - "T03 | unit | 02.R02,02.R03,01.R03 | gap of 100 and 101; 50th and 51st buffered for one author; 5000th and 5001st total | boundary accepted at limit, FEDERATION_GAP_TOO_LARGE or FEDERATION_BUFFER_FULL above"
+      - "T04 | property | 01.R01,02.R01,07.R03 | random splices of prev values and duplicated seq with different cid | never next; always fork or reject"
+      - "T05 | unit | 02.R01,03.R03,04.R01 | order of unrelated authors permuted | each author's decision identical regardless of order"
+      - "T06 | unit | 05.R03,09.R02,04.R02,04.R03,05.R01 | inspect exports and signatures | only pure functions; no events; Result type; VerifiedEnvelope required by type"
+      - "T07 | unit | 03.R01,06.R01,06.R02 | expired() with buffer rows at 23 h 59 min and 24 h 00 min; backwards clock jump | only the 24 h row expires; jump does not extend the window"
+      - "T08 | unit | 06.R03,05.R02 | repeat decide 1000 times and drain twice | identical results; second drain returns duplicates; no state written"
+      - "T09 | abuse | 07.R01,07.R02,07.R03 | forge 10 000 future seq numbers for one author | at most 50 buffered; counters and peer report recorded; payload never read"
+      - "T10 | load | 08.R01,08.R02,08.R03 | 100 000 decisions and 5000-row expiry scan | decide p95 ≤ 0.2 ms, expired ≤ 10 ms, metrics exported"
+      - "T11 | unit | 09.R01 | traceability tool run | every PS-087 requirement maps to a passing test"
+      - "T12 | unit | 10.R01,10.R02,10.R03 | decisions on golden chains from the previous release | identical decisions after upgrade; constants are exported for audit"
+    acceptance:
+      - All tests T01–T12 pass in CI.
+      - Any arrival order of a valid chain converges to the same accepted order (property test).
+      - No input can make the buffer exceed 50 per author or 5000 total.
+  import_export_backup_rollback:
+    requirements:
+      - The library stores no data, so export, import and backup of chain heads and buffers belong to F11.S01.M02.
+      - Importing a vault or relay backup must rebuild each chain head by running verifyChain() over stored envelopes before ingest resumes.
+      - The limits are constants of the envelope v=1 protocol; changing them requires a new release note and does not alter stored data.
+    export: "Nothing is exported by this module; the constants (24 h, 100, 50, 5000) are published in the build artifact federation-limits.json for audit."
+    import: "On import F11.S01.M02 calls verifyChain() per author; chains that fail are quarantined and reported."
+    backup: "Nothing to back up; chain state is part of the F11.S01.M02 backup (CTR-IOX-001)."
+    migration_rollback: "Pin to library version; rollback is a dependency revert because decisions are pure and no data format is owned here."

@@ -1,0 +1,240 @@
+id: F12.S03.M02
+scope: MVP
+summary: >-
+  Append-only ingestion of fraud and trust signals about a counterparty key, with weights and exponential
+  decay. The same module runs in a user's vault (signals derived from that user's own verified dealings,
+  such as no-shows and disputes) and on a relay (signals derived from what that relay hosts, such as spam
+  detections and shill suspicions). Signals are observations, not findings: weights are small, sources are
+  recorded, and corrections are new compensating signals. Nothing here is shared as a global reputation;
+  each store keeps its own view.
+responsibilities:
+  - Own the Signal record, append-only, with kind, weight, half-life, source event reference and expiry.
+  - Map consumed events from other modules to signals through a fixed, versioned table, deduplicated by source event ID.
+  - Compute decayed totals per subject key on request and provide a read model for F12.S03.M01.
+  - Accept manual signals from relay moderators or from the local user, always labelled manual with an author.
+  - Never edit or delete signals before expiry; corrections are compensating signals that reference the corrected one.
+non_responsibilities:
+  - Combining signals into risk levels (F12.S03.M01).
+  - Deciding or applying consequences (F12.S02.M01 and F12.S03.M04).
+  - Producing the underlying events (auctions, commerce, comms, mutiny modules).
+  - "Future: signed signal exchange between cooperating relays; privacy-preserving aggregate sharing."
+depends_on: [F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a user, I see on a counterparty's profile that 'two no-shows in the last 60 days are recorded in your own history', not a global score.
+  - As a relay moderator, I see the signals behind a case with their sources and decayed weights.
+  - As a user, I can add a private note-signal about a counterparty and remove its effect by adding a compensating signal.
+edge_cases:
+  - The same source event is delivered twice; the unique source index makes the second ingestion a no-op.
+  - A dispute opened by a party is later resolved in the other party's favor; a compensating signal cancels the original weight and both stay visible.
+  - A counterparty rotates keys; signals stay on the old key and are linked through the rotation statement, but only when the vault holds a verified rotation statement.
+  - The device clock is wrong; signal observedAt uses the store clock at ingestion and the event's claimed time is stored as a claim without affecting decay.
+  - A flood of signals about one key from a malicious relay feed; only signals derived from local verified events count, and manual or imported ones have a per-source weight cap of 20.
+  - Signal volume exceeds 5 000 per subject key; older signals beyond decayed weight below 0.5 are summarized into a rollup signal and the originals are purged after expiry.
+ux:
+  notes: "Headless service; surfaces are the profile trust panel (counts and categories of local signals, no scores shown here) and the relay moderator case view (signal list with source, kind, weight and decayed weight)."
+  screens:
+    - "Trust panel on a counterparty profile: categories with counts for the last 90 days, an 'only based on your own history on this device' note, link to see details."
+    - "Relay signal list for moderators: kind, source module, observed time (store clock), weight, decayed weight, compensating links."
+  states: [loading, empty, populated, forbidden]
+  a11y:
+    - Categories and counts are text lists with no meaning carried by color alone.
+    - The list is a table with headers and sortable columns operable by keyboard.
+    - Explanatory notes are available to screen readers via aria-describedby.
+processes:
+  domain_schema:
+    requirements:
+      - A Signal stores subject key, kind, signed integer weight, half-life in days, source module and event ID, evidence reference, observed time from the store clock and expiry, with tenant and revision per CTR-ID-001.
+      - Signals are P3 in a vault and P3 on a relay, retained for the shorter of expiry and 365 days under RET-STANDARD, and are never exported to other users.
+      - Signals are append-only; the only mutable field is none, and corrections are new signals that reference the corrected one.
+    entities:
+      - name: Signal
+        schema: classrup.moderation.signal/v1
+        storage: relay+device
+        privacy: P3
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — store scope (vault scope or relay hosting scope)"
+          - "subjectKey: did:key — counterparty key the signal concerns"
+          - "kind: enum — shill_suspected | spam_detected | dispute_opened | dispute_lost | no_show | payment_claim_expired | payment_claim_disputed | cycle_dropout | auction_voided | damage_claimed | report_actioned | report_dismissed_bad_faith | deal_completed | manual_concern | manual_positive | compensation"
+          - "weight: int — -100..100, positive increases risk, negative reduces it, defaults from the kind table"
+          - "halfLifeDays: int — 7..180, default from the kind table"
+          - "sourceModule: string — module ID that produced the source event, or manual"
+          - "sourceEventId: string — unique per (tenantId, kind) except manual"
+          - "evidenceRef?: string — id of snapshot, deal, dispute or case, never content"
+          - "supersedesSignalId?: uuidv7 — set only on kind compensation"
+          - "observedAt: timestamp — RFC 3339 UTC, store clock at ingestion"
+          - "claimedAt?: timestamp — RFC 3339 UTC, time claimed by the source event, advisory only"
+          - "expiresAt: timestamp — observedAt + 5 half-lives, at most 365 days"
+          - "revision: int — CTR-ID-001 ID-4, always 1"
+        invariants:
+          - Signal rows are never updated or deleted before expiresAt.
+          - At most one signal exists per (tenantId, kind, sourceEventId) for non-manual kinds.
+          - A compensation signal has weight equal to minus the weight of the signal it supersedes and references it.
+    sql: |
+      CREATE TABLE moderation_signal (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_key TEXT NOT NULL, kind TEXT NOT NULL, weight INTEGER NOT NULL,
+        half_life_days INTEGER NOT NULL, source_event_id TEXT, observed_at TEXT NOT NULL, expires_at TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX moderation_signal_source ON moderation_signal(tenant_id, kind, source_event_id) WHERE source_event_id IS NOT NULL;
+      CREATE INDEX moderation_signal_subject ON moderation_signal(tenant_id, subject_key, observed_at);
+      CREATE TRIGGER moderation_signal_no_update BEFORE UPDATE ON moderation_signal BEGIN SELECT RAISE(ABORT, 'append-only'); END;
+  validation_rules:
+    requirements:
+      - Manual signal input is validated strictly with bounded weight and a required reason.
+      - Ingestion from events validates the mapping table and ignores events lacking a verified signature in the vault case.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | weight is an integer in -100..100 and halfLifeDays in 7..180 | VALIDATION_FAILED"
+      - "V02 | kind is in the enum and manual kinds are only manual_concern, manual_positive or compensation | VALIDATION_FAILED"
+      - "V03 | supersedesSignalId exists in this store, belongs to the same subject and is not itself a compensation | NOT_FOUND"
+      - "V04 | a signal with the same (kind, sourceEventId) does not exist | SIGNALS_DUPLICATE_SOURCE"
+      - "V05 | manual signals carry a reason of 10..500 code points and the author is the local principal or a relay moderator | FORBIDDEN"
+      - "V06 | total manual weight per subject within 30 days is at most 20 in absolute value | SIGNALS_MANUAL_CAP"
+  workflow_state_machine:
+    note: "Signals are immutable records without a lifecycle; expiry is time-based and does not change stored fields."
+    machines: []
+    requirements:
+      - A signal has no transitions; it is valid from observedAt until expiresAt and read with decay applied.
+      - Decay is exponential, weight times 0.5 to the power of age over half-life, evaluated at read time in the store clock.
+      - Expired signals are purged by a daily sweep and a rollup keeps only counts per kind for 365 days.
+    timeouts:
+      - "Daily purge sweep at 04:00 UTC (relay) or on app idle once per 24 h (vault) removes rows past expiresAt and writes counts per kind to a rollup row."
+  commands_queries_events:
+    requirements:
+      - The module exposes a manual record command and three queries; automated ingestion happens through event consumers.
+      - Every recorded signal emits moderation.signal.recorded in the same transaction as the row.
+      - The consumed event table below is fixed per rulesVersion and uses only events that exist in the module catalog.
+    commands:
+      - name: moderation.signal.record_manual
+        mode: "vault-local (local principal) or relay command (moderator); no signed statement"
+        capability: moderation.signal.record_manual
+        input: "{ subjectKey, kind: manual_concern|manual_positive|compensation, weight, halfLifeDays?, reason, supersedesSignalId? }"
+        output: "{ signalId, expiresAt }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, SIGNALS_MANUAL_CAP, FORBIDDEN]
+        emits: [moderation.signal.recorded]
+        idempotent: true
+    queries:
+      - name: moderation.signal.list_for_subject
+        capability: moderation.signal.read_as_reviewer
+        input: "{ subjectKey, since?, kind?, cursor?, limit ≤ 100 }"
+        output: "{ items: Signal[] with decayedWeight, nextCursor? }"
+        errors: []
+      - name: moderation.signal.summarize
+        capability: moderation.signal.read_summary
+        input: "{ subjectKey, asOf? }"
+        output: "{ totalDecayedWeight, byKind: { kind: { count, decayedWeight } }, computedAt }"
+        errors: []
+      - name: moderation.signal.categories_own
+        capability: moderation.signal.read_categories
+        input: "{ subjectKey, windowDays ≤ 90 }"
+        output: "{ byKind: { kind: count } } for the local vault only"
+        errors: []
+    events_produced:
+      - {type: moderation.signal.recorded, privacy: P3, payload: "{ signalId, subjectKey, kind, weight, halfLifeDays, sourceModule, sourceEventId?, observedAt }"}
+    events_consumed:
+      - {type: moderation.spam.detected, effect: "record spam_detected, weight 5 per 10 score points above 50, half-life 14 days"}
+      - {type: auctions.shill.suspected, effect: "record shill_suspected, weight 40, half-life 90 days, against the suspected bidder key"}
+      - {type: auctions.result.voided, effect: "record auction_voided, weight 25, half-life 90 days, against the party named in the event"}
+      - {type: commerce.dispute.opened, effect: "record dispute_opened, weight 10 against the respondent, half-life 60 days"}
+      - {type: commerce.dispute.resolved, effect: "record dispute_lost weight 20 against the losing party or compensation of the opened signal when the respondent prevailed"}
+      - {type: commerce.payment.disputed, effect: "record payment_claim_disputed, weight 15 against the claimant, half-life 60 days"}
+      - {type: commerce.payment.expired, effect: "record payment_claim_expired, weight 6 against the claimant, half-life 30 days"}
+      - {type: commerce.deal.completed, effect: "record deal_completed, weight -4 for both parties, half-life 120 days"}
+      - {type: comms.meetup.no_show, effect: "record no_show, weight 10 against the party who did not check in, half-life 60 days"}
+      - {type: mutiny.cycle.participant_dropped, effect: "record cycle_dropout, weight 12 against the dropper when the drop happened after consent, half-life 60 days"}
+      - {type: rentals.damage.claimed, effect: "record damage_claimed, weight 8 against the renter, half-life 90 days"}
+      - {type: moderation.action.applied, effect: "relay only: record report_actioned, weight by severity 10, 20, 40 for warn, restrict, suspend, half-life 180 days"}
+    errors:
+      - "SIGNALS_DUPLICATE_SOURCE | 409 | no | a signal for this source event already exists; ingestion is a no-op"
+      - "SIGNALS_MANUAL_CAP | 422 | no | manual signals for this subject exceed the 30-day cap"
+    example: |
+      vault command moderation.signal.record_manual (local, Idempotency-Key 0192f3e0-0000-7000-8000-000000000f01)
+      { "subjectKey": "did:key:z6MkCounterpartyExample", "kind": "manual_concern", "weight": 8, "reason": "Asked to move the payment outside the app twice." }
+      -> { "signalId": "0192f3e0-7777-7000-8000-000000000007", "expiresAt": "2027-01-23T10:00:00Z" }
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: only the local principal can read and add signals in its vault, and signals derive only from events produced by verified local state or verified signed statements."
+      - "Relay policy: moderators read signals on that relay for open cases, operators read summaries, and subjects can read category counts about themselves on that relay."
+      - Signals about a subject are never returned to other members or federated.
+    capabilities:
+      - "moderation.signal.record_manual | local principal, moderator | vault unlocked, or relay moderator with open case; subject differs from actor"
+      - "moderation.signal.read_as_reviewer | local principal, moderator | vault unlocked, or relay moderator with open case on the subject"
+      - "moderation.signal.read_summary | local principal, moderator, operator | vault unlocked, or relay role; used by F12.S03.M01 in-process"
+      - "moderation.signal.read_categories | local principal, member | vault unlocked, or subject reading own categories on a relay"
+  failure_recovery_idempotency:
+    requirements:
+      - Ingestion is idempotent through the unique source index and the inbox table of CTR-EVT-001 EVT-3.
+      - A row and its event commit in one transaction.
+      - Consumer failures retry with CTR-IDM-001 backoff and dead-letter after 8 attempts.
+    idempotency: "Unique (tenantId, kind, sourceEventId); manual command uses a local Idempotency-Key replayed for 24 h."
+    concurrency: "Append-only inserts need no locking; summarize reads a consistent snapshot; the manual cap is enforced inside the insert transaction."
+    retries: "Event retries per EVT-6; callers of the manual command retry DEPENDENCY_UNAVAILABLE only."
+    offline: "The vault records signals from local events while offline; relay signals require the relay."
+    partial_failure: "If the event insert succeeds but outbox dispatch fails, the dispatcher retries; summarize never reads partial transactions."
+  privacy_retention_abuse:
+    requirements:
+      - Signals are P3 in their store, contain no content, and are never federated, never shown to other members and never merged across stores.
+      - Retention is bounded by expiry (at most 365 days) with a counts-only rollup, and subject deletion removes vault signals immediately and pseudonymizes relay signals for the case duration.
+      - Signal poisoning (fake disputes to damage a rival) is limited by small weights, decay, source verification and a per-source cap.
+    data:
+      - "Signal: P3 (vault owner; relay moderators with case)."
+      - "Rollup counts: P3 counts per kind without sources."
+    retention:
+      - "Signals: until expiresAt, at most 365 days (RET-STANDARD)."
+      - "Rollup counts: 365 days."
+    threats:
+      - "T01 | Fake disputes or no-shows to smear a rival | single events have bounded weights (≤ 40), decay, and need verified source events; repeated signals from one counterparty are capped at 3 per 30 days"
+      - "T02 | Hidden permanent blacklist | maximum lifetime 365 days; counts shown to the subject; no global sharing"
+      - "T03 | Moderator planting manual signals | manual weight capped at 20 per subject per 30 days and audited"
+      - "T04 | Tampering with stored signals | append-only trigger, hash of rows in daily audit digest on the relay"
+      - "T05 | Re-identification through signal queries | queries return categories and counts to non-moderators and only for own history"
+    abuse_controls:
+      - "Per-source cap: signals from one source key for one subject count at most 3 times in 30 days."
+      - "Manual signals limited to 10 per day per author via F12.S03.M03."
+  observability_performance:
+    requirements:
+      - Relay ingestion lag and outcomes are measured per CTR-OBS-001 without subject keys in logs; the vault keeps local diagnostics only.
+      - Summarize meets p95 ≤ 50 ms for subjects with up to 5 000 signals.
+      - Dead-lettered ingestion events are alerting on the relay.
+    metrics:
+      - "classrup_moderation_signals_total{kind,outcome=recorded|duplicate|capped}"
+      - "classrup_moderation_signal_ingest_lag_ms"
+      - "classrup_moderation_signal_summarize_ms (histogram)"
+    logs:
+      - "relay info signal.recorded {signalId, kind, sourceModule, correlationId} — no subject key."
+    budgets:
+      - "record and ingest p95 ≤ 100 ms; summarize p95 ≤ 50 ms for 5 000 signals; list p95 ≤ 150 ms for 100 items."
+      - "Daily purge of 100 000 expired rows completes in ≤ 30 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Decay math and cap logic are covered by deterministic and property tests.
+      - Consumer mapping is covered by contract tests per consumed event.
+    fixtures: "Store with subject key B, fixed clock 2026-11-04T10:00:00Z, events from catalog modules, half-life 60 days example weight 10."
+    tests:
+      - "T01 | unit | 01.R01,02.R01,02.R02 | record valid manual signals; invalid weight and kind | stored with expiry = observedAt + 5 half-lives; documented errors otherwise"
+      - "T02 | property | 01.R03,03.R01,03.R02 | random signal sets and times | decayed weight equals w × 0.5^(age/h); order of ingestion does not change totals"
+      - "T03 | unit | 02.R03 | compensation referencing a missing signal, another subject, or a compensation | NOT_FOUND"
+      - "T04 | integration | 04.R03,06.R01 | each consumed event delivered twice | exactly one signal per source event with documented weight"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | command, queries and event | validate against registry schemas"
+      - "T06 | abuse | 05.R01,05.R02,05.R03 | other member queries signals; relay moderator without case; subject reads own categories | NOT_FOUND, FORBIDDEN, categories only"
+      - "T07 | abuse | 07.R03,02.R03 | 4th signal from the same source in 30 days; manual weight above cap | 4th ignored for scoring; SIGNALS_MANUAL_CAP"
+      - "T08 | integration | 01.R02,03.R03,07.R02 | daily sweep at expiry and subject deletion | rows purged, rollup counts kept; vault signals removed on deletion"
+      - "T09 | integration | 06.R02,06.R03 | transaction aborted mid-ingest; outbox dispatcher down | no partial row; event delivered after recovery"
+      - "T10 | abuse | 07.R01,07.R03 | UPDATE and DELETE on signal rows | aborted by trigger"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 200 ingests per second for 5 minutes; summarize 5 000-signal subject; purge 100 000 rows | p95 targets met, purge ≤ 30 s"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-101 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | vault export, import into fresh vault, relay backup restore | signals round-trip with original observedAt; imported signals marked source import with weight cap"
+    acceptance:
+      - All tests T01–T13 pass in CI.
+      - No signal row is ever modified or deleted before expiry.
+      - Decayed totals match the closed-form formula within 1e-9 in property tests.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export includes the signals recorded in their vault; relay signals about a subject are exported only to relay operators under legal hold.
+      - Imported signals are marked with source import, capped at weight 20 per source and never inflate decay.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section moderation.signals in classrup-export/v1 (vault only): one line per unexpired signal including reason text for manual ones."
+    import: "Signals import with sourceModule import and weight clamped to ±20; duplicates by (kind, sourceEventId) are skipped; expired ones are dropped."
+    backup: "Vault export is the backup; relay SQLite backup (CTR-IOX-001 IOX-3) covers relay signals."
+    migration_rollback: "Additive fields only in v1; rollback is safe because older readers ignore new optional fields and unknown kinds count as manual_concern with weight 0."

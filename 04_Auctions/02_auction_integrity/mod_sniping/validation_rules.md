@@ -1,35 +1,34 @@
-# PS-038-02 — validation rules
+# PS-038-02 — Validation rules: Anti-sniping soft close
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-02. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F04.S02.M02 Anti-sniping soft close](SPEC.md) · **Scope:** MVP · **Code:** `packages/auctions/src/auction_integrity/sniping` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
-## Purpose and scope
-Define the validation rules process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-038-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-038-02.R01** The qualification test uses only host-side data - host time, currentEndsAt, extensionCount and the kind of the triggering entry - never client-claimed times.
+- **PS-038-02.R02** Extension application is a compare-and-set against extensionCount so concurrent paths cannot exceed the cap.
+- **PS-038-02.R03** Every violation maps to one stable error code; non-qualifying bids are not errors for the bidder.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | triggering entry is a bidder-submitted manual or proxy bid that the host accepted | AUCTIONS_EXTENSION_NOT_QUALIFIED |
+| V02 | host time is strictly before currentEndsAt and at most 120000 ms before it | AUCTIONS_EXTENSION_NOT_QUALIFIED |
+| V03 | extensionCount is below 30 | AUCTIONS_EXTENSION_LIMIT |
+| V04 | expectedExtensionCount equals the stored extensionCount at write time | CONFLICT_REVISION |
+| V05 | auction status is open | CONFLICT_STATE |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-038-09.T01 | unit | PS-038-01.R01, PS-038-01.R02, PS-038-02.R01, PS-038-02.R02 | bids with 120001, 120000, 1 and 0 ms remaining | 120001 no; 120000 yes; 1 yes; 0 refused by bid path with AUCTIONS_NOT_OPEN, no extension |
+| TEST-PS-038-09.T02 | unit | PS-038-02.R03, PS-038-01.R03 | extensionCount 29 then 30 and a bid in window | 30th extension created; next qualifying bid accepted without extension; constants equal softclose-v1 |
+| TEST-PS-038-09.T04 | unit | PS-038-02.R01, PS-038-03.R01 | proxy auto entry, retraction, rejected bid and manual bid in window | only the manual bid extends |
+| TEST-PS-038-09.T07 | integration | PS-038-02.R03, PS-038-06.R03, PS-038-04.R01 | two bids 50 ms apart inside the window | two sequential extensions; second counts from the moved end; unique seq holds |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F04.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

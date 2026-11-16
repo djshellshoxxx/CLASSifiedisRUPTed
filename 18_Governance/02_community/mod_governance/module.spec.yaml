@@ -1,0 +1,355 @@
+id: F18.S02.M01
+scope: MVP
+summary: >-
+  Operator-run policy change proposals with a public comment period, a recorded decision and a changelog. A
+  publisher (typically a relay operator, or the project for the bundled packs) drafts a proposal in its own
+  vault, signs and publishes it as classrup.governance.policy_proposal/v1, collects signed comments from members
+  through its relay, and later signs a decision statement (classrup.governance.policy_decision/v1). Other modules
+  and vaults verify an approved decision before applying restricted-flag, prohibited-rule or jurisdiction-profile
+  changes. This is not a vote and not a global authority: a proposal binds only the vaults and relays that choose
+  to trust that publisher.
+responsibilities:
+  - Own PolicyProposal: draft, open for comment (default 14 days, minimum 72 hours, expedited minimum 24 hours with reason), decision pending, approved, rejected, withdrawn.
+  - Collect and display signed member comments (PolicyComment) with relay-side hiding for abuse, up to 5 comments of 2 000 code points per member per proposal.
+  - Sign and publish the decision with rationale and changelog entry; require a decider key different from the proposer key.
+  - Provide verification of a decision (governance.policy_proposal.verify) valid for 30 days for the exact targets it names.
+  - Publish a public changelog of approved proposals per publisher.
+non_responsibilities:
+  - Applying the approved change (F18.S01.M01 profiles, F18.S01.M02 rules, F18.S01.M03 categories); they verify the decision and apply it themselves.
+  - Voting, reputation-weighted decisions or any claim of global legitimacy.
+  - Moderation of listings or users (F12); only comment hiding on the publisher's own relay.
+  - Legal review of proposals; content is configuration, not legal advice.
+  - "Future: delegated decider groups with threshold signatures and member polls."
+depends_on: [F16.S02.M03, F11.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001]
+user_stories:
+  - As a relay operator, I propose adding a prohibited keyword set, give members two weeks to comment, and publish my decision with reasons.
+  - As a member, I read open proposals of the relay I use and post a signed comment under my pseudonym.
+  - As a user, I can see the changelog of policy decisions of the publishers I trust and verify they are signed.
+edge_cases:
+  - Proposer tries to decide their own proposal; GOVERNANCE_PROPOSAL_SELF_DECISION is returned.
+  - Comment period is shorter than 72 hours without the expedited flag and two co-signers; rejected with GOVERNANCE_PROPOSAL_PERIOD_INVALID.
+  - A member posts a sixth comment on one proposal; GOVERNANCE_COMMENT_LIMIT is returned.
+  - A comment signature is valid but the key is not registered on the publisher's relay; the relay refuses it under its policy and the member sees the reason.
+  - A decision is published twice with different outcomes (equivocation); receivers keep both statements, mark the proposal conflicted for that publisher and refuse to verify either.
+  - The approved decision is older than 30 days when a consumer tries to use it; verify returns valid false with reason expired.
+  - Publisher vault is offline when the comment period ends; the proposal stays open_for_comment locally until the next unlock, and the public page shows the planned end time as a claim.
+ux:
+  screens:
+    - "Proposals list per publisher: status chips, comment period end, target type; changelog tab of approved decisions."
+    - "Proposal detail: summary, proposed change (structured diff), comments with relay-hidden marker, decision and rationale, signature fingerprint of publisher and decider."
+    - "Operator composer: draft, preview, period selector (72 h to 30 d), expedited switch with reason, publish and decide actions with confirmation."
+  states: [loading, empty, draft, open-for-comment, decision-pending, approved, rejected, withdrawn, conflicted, offline-cached]
+  a11y:
+    - Status is conveyed by text and icon; the comment form has a visible label, character counter announced politely and 44x44 px submit button.
+    - Diff view is a table with headers; signature fingerprints are available as text.
+    - Dates use Intl.DateTimeFormat with timezone shown.
+processes:
+  domain_schema:
+    requirements:
+      - "A PolicyProposal records publisher, target type and references, structured proposed change (at most 16 KiB), summary, comment period, status, decision and changelog entry."
+      - "Proposals, decisions and comments are public to the publisher's community (P1 comments, P0 proposals and decisions) and are signed statements verified by every receiving vault."
+      - "Decisions bind exact target references and expire for use after 30 days; they are evidence retained under RET-EVIDENCE."
+    entities:
+      - name: PolicyProposal
+        schema: classrup.governance.policy_proposal/v1
+        storage: relay+device
+        privacy: P0
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "publisherId: did:key — proposer and origin; canonical owner"
+          - "title: string — 3..120 code points"
+          - "summary: string — 10..2000 code points, plain text"
+          - "targetType: enum — jurisdiction_profile | prohibited_rule | category | platform_policy | other"
+          - "targetRefs: string[] — 1..20 ids or keys of the targets"
+          - "proposedChange: object — structured change, <= 16 KiB JCS"
+          - "changelogEntry: string — 10..1000 code points, public"
+          - "commentPeriodHours: int — 72..720, default 336; 24..72 only when expedited"
+          - "expedited: boolean — default false; requires expeditedReason and coSignerId"
+          - "expeditedReason?: string — 10..500 code points"
+          - "coSignerId?: did:key — second operator key for expedited proposals, differs from publisherId"
+          - "status: enum — draft | open_for_comment | decision_pending | approved | rejected | withdrawn"
+          - "openedAt?: timestamp — publisher clock, a claim"
+          - "commentEndsAt?: timestamp — openedAt + commentPeriodHours"
+          - "commentCount: int — derived, visible comments"
+          - "outcome?: enum — approved | rejected"
+          - "rationale?: string — 10..2000 code points"
+          - "deciderId?: did:key — signer of the decision, differs from publisherId"
+          - "decidedAt?: timestamp — publisher clock, a claim"
+          - "validUntil?: timestamp — decidedAt + 30 d"
+          - "statementCid?: string — sha256- of the latest signed statement"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - deciderId differs from publisherId for approved and rejected outcomes.
+          - status approved or rejected implies rationale, deciderId, decidedAt and a verified decision statement exist.
+          - commentPeriodHours >= 72 unless expedited with reason and a co-signer; commentEndsAt = openedAt + commentPeriodHours.
+      - name: PolicyComment
+        schema: classrup.governance.policy_comment/v1
+        storage: relay+device
+        privacy: P1
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key, generated by the commenter"
+          - "tenantId: uuidv7 — fixed local-vault tenant (ID-6)"
+          - "proposalId: uuidv7 — ref PolicyProposal"
+          - "authorId: did:key — signer, pseudonymous"
+          - "body: string — 1..2000 code points, plain text"
+          - "status: enum — visible | hidden"
+          - "hiddenReasonKey?: string — i18n key, set by the relay moderator"
+          - "statementCid: string — sha256- over JCS of the signed envelope"
+          - "relayReceiptAt?: timestamp — relay clock, evidence of that relay only"
+          - "createdAt: timestamp — commenter clock, a claim"
+        invariants:
+          - At most 5 visible comments per (proposalId, authorId).
+          - Comments are accepted only while the proposal is open_for_comment according to the relay clock.
+          - A hidden comment keeps its signed statement for audit but is not displayed.
+    sql: |
+      CREATE TABLE governance_policy_proposal (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, publisher_id TEXT NOT NULL, status TEXT NOT NULL,
+        target_type TEXT NOT NULL, comment_ends_at TEXT, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX governance_policy_proposal_status ON governance_policy_proposal(tenant_id, publisher_id, status);
+      CREATE TABLE governance_policy_comment (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, proposal_id TEXT NOT NULL, author_id TEXT NOT NULL,
+        status TEXT NOT NULL, data TEXT NOT NULL);
+      CREATE INDEX governance_policy_comment_proposal ON governance_policy_comment(tenant_id, proposal_id, status);
+  validation_rules:
+    requirements:
+      - "Proposals are validated for length, target references, comment period and signer roles before publication."
+      - "Comments and decisions are validated against the proposal state and signer keys on the relay and again in every receiving vault."
+      - "Every violation maps to one stable error code."
+    rules:
+      - "V01 | title 3..120, summary 10..2000, changelogEntry 10..1000 code points, plain text | VALIDATION_FAILED"
+      - "V02 | targetRefs 1..20 and proposedChange <= 16 KiB JCS and matches targetType schema | VALIDATION_FAILED"
+      - "V03 | commentPeriodHours 72..720, or 24..71 only with expedited true, expeditedReason and distinct coSignerId | GOVERNANCE_PROPOSAL_PERIOD_INVALID"
+      - "V04 | decider key differs from the proposer key and is in the publisher's authority list | GOVERNANCE_PROPOSAL_SELF_DECISION"
+      - "V05 | decision only when status is decision_pending (comment period ended) | CONFLICT_STATE"
+      - "V06 | comment body 1..2000 code points; author has fewer than 5 visible comments on the proposal | GOVERNANCE_COMMENT_LIMIT"
+      - "V07 | comment arrives while proposal is open_for_comment per the relay clock | EXPIRED"
+      - "V08 | every statement signature verifies and author matches the stated role | VALIDATION_FAILED"
+      - "V09 | publisher has fewer than 20 proposals in draft, open_for_comment or decision_pending | GOVERNANCE_PROPOSAL_LIMIT"
+      - "V10 | verify target refs equal the approved decision's targetRefs and validUntil has not passed | GOVERNANCE_PROPOSAL_NOT_VALID"
+  workflow_state_machine:
+    requirements:
+      - "PolicyProposal follows the declared machine; approved, rejected and withdrawn are terminal."
+      - "The comment period ends by the publisher's clock and by the relay clock for accepting comments; both are claims and are shown as such."
+      - "A decision cannot be reversed; a new proposal is required to change policy again."
+    machines:
+      - entity: PolicyProposal
+        initial: draft
+        terminal: [approved, rejected, withdrawn]
+        transitions:
+          - "draft -> open_for_comment | governance.policy_proposal.open by publisher | statement classrup.governance.policy_proposal/v1 signed and queued; emits governance.policy_proposal.opened"
+          - "draft -> withdrawn | withdraw by publisher | local only, nothing was published"
+          - "open_for_comment -> decision_pending | comment period elapsed | publisher vault clock or sweep at app start"
+          - "open_for_comment -> withdrawn | withdraw by publisher | signed withdrawal statement queued"
+          - "decision_pending -> approved | governance.policy_proposal.decide by decider with outcome approved | decision statement signed; emits governance.policy_proposal.decided"
+          - "decision_pending -> rejected | decide with outcome rejected | decision statement signed; emits governance.policy_proposal.decided"
+          - "decision_pending -> withdrawn | withdraw by publisher, or 60 days without decision | signed withdrawal statement queued"
+    timeouts:
+      - "open_for_comment moves to decision_pending at commentEndsAt (sweep every 60 s while the publisher vault is open, and at start)."
+      - "decision_pending becomes withdrawn after 60 days without a decision."
+      - "An approved decision is usable for verification for 30 days after decidedAt."
+  commands_queries_events:
+    requirements:
+      - "Publisher commands (draft, open, decide, withdraw) are vault commands in the publisher's vault; open, decide and withdraw produce signed statements (policy_proposal, policy_decision, policy_withdrawal)."
+      - "post_comment is a vault command in the commenting member's vault that produces classrup.governance.policy_comment/v1; accept_comment and hide_comment are relay commands on the publisher's relay."
+      - "receive is a vault command in any vault that verifies and stores proposal, decision and withdrawal statements from trusted publishers; verify is a pure query used by F18.S01.* before applying changes."
+    commands:
+      - name: governance.policy_proposal.draft
+        capability: governance.policy_proposal.author
+        input: "[vault-local, publisher] { proposalId?, expectedRevision?, title, summary, targetType, targetRefs, proposedChange, changelogEntry, commentPeriodHours?, expedited?, expeditedReason?, coSignerId? }"
+        output: "{ proposalId, revision, status: draft }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, GOVERNANCE_PROPOSAL_PERIOD_INVALID, GOVERNANCE_PROPOSAL_LIMIT]
+        emits: []
+        idempotent: true
+      - name: governance.policy_proposal.open
+        capability: governance.policy_proposal.publish
+        input: "[vault-local, publisher + statement classrup.governance.policy_proposal/v1] { proposalId, expectedRevision, relayIds[] }"
+        output: "{ proposalId, revision, commentEndsAt, statementCid, syncState: prepared }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, GOVERNANCE_PROPOSAL_PERIOD_INVALID]
+        emits: [governance.policy_proposal.opened]
+        idempotent: true
+      - name: governance.policy_proposal.decide
+        capability: governance.policy_proposal.decide
+        input: "[vault-local, decider + statement classrup.governance.policy_decision/v1] { proposalId, expectedRevision, outcome: approved|rejected, rationale }"
+        output: "{ proposalId, revision, status, validUntil, statementCid }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, VALIDATION_FAILED, GOVERNANCE_PROPOSAL_SELF_DECISION]
+        emits: [governance.policy_proposal.decided]
+        idempotent: true
+      - name: governance.policy_proposal.withdraw
+        capability: governance.policy_proposal.publish
+        input: "[vault-local, publisher + statement classrup.governance.policy_withdrawal/v1] { proposalId, expectedRevision }"
+        output: "{ proposalId, revision }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: governance.policy_proposal.receive
+        capability: governance.policy_proposal.receive
+        input: "[vault-local, inbound statement] { envelope, provenance }"
+        output: "{ proposalId?, accepted: boolean, quarantineReason?, conflicted?: boolean }"
+        errors: [VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION]
+        emits: [governance.policy_proposal.decided]
+        idempotent: true
+      - name: governance.policy_comment.post
+        capability: governance.policy_comment.create
+        input: "[vault-local + statement classrup.governance.policy_comment/v1] { proposalId, body }"
+        output: "{ commentId, syncState: prepared }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, EXPIRED, GOVERNANCE_COMMENT_LIMIT, RATE_LIMITED]
+        emits: []
+        idempotent: true
+      - name: governance.policy_comment.accept
+        capability: governance.policy_comment.relay_accept
+        input: "[relay command] { envelope }"
+        output: "{ commentId, relayReceipt: signed receipt by relay key }"
+        errors: [VALIDATION_FAILED, EXPIRED, GOVERNANCE_COMMENT_LIMIT, RATE_LIMITED, FORBIDDEN]
+        emits: []
+        idempotent: true
+      - name: governance.policy_comment.hide
+        capability: governance.policy_comment.relay_hide
+        input: "[relay command] { commentId, reasonKey }"
+        output: "{ commentId, status: hidden }"
+        errors: [NOT_FOUND, FORBIDDEN]
+        emits: []
+        idempotent: true
+    queries:
+      - name: governance.policy_proposal.get
+        capability: governance.policy_proposal.read
+        input: "{ proposalId }"
+        output: "{ proposal: PolicyProposal }"
+        errors: [NOT_FOUND]
+      - name: governance.policy_proposal.list
+        capability: governance.policy_proposal.read
+        input: "{ publisherId?, status?, cursor?, limit <= 50 }"
+        output: "{ items: PolicyProposal[], nextCursor? }"
+        errors: [VALIDATION_FAILED]
+      - name: governance.policy_proposal.changelog
+        capability: governance.policy_proposal.read
+        input: "{ publisherId?, targetType?, cursor?, limit <= 50 }"
+        output: "{ items: [{ proposalId, changelogEntry, decidedAt, targetType, targetRefs }], nextCursor? }"
+        errors: [VALIDATION_FAILED]
+      - name: governance.policy_proposal.verify
+        capability: governance.policy_proposal.verify
+        input: "{ proposalId, targetType, targetRefs }"
+        output: "{ valid: boolean, reason?: not_approved|expired|target_mismatch|untrusted_publisher|conflicted, validUntil? }"
+        errors: [NOT_FOUND, GOVERNANCE_PROPOSAL_NOT_VALID]
+      - name: governance.policy_comment.list
+        capability: governance.policy_proposal.read
+        input: "{ proposalId, cursor?, limit <= 100 }"
+        output: "{ items: PolicyComment[], nextCursor? }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: governance.policy_proposal.decided, privacy: P0, payload: "{ proposalId, publisherId, outcome, targetType, targetRefs, changelogEntry, validUntil, statementCid }"}
+      - {type: governance.policy_proposal.opened, privacy: P0, payload: "{ proposalId, publisherId, targetType, commentEndsAt, statementCid }"}
+    events_consumed: []
+    errors:
+      - "GOVERNANCE_PROPOSAL_PERIOD_INVALID | 422 | no | comment period outside 72 to 720 hours without a valid expedited justification"
+      - "GOVERNANCE_PROPOSAL_SELF_DECISION | 403 | no | decider key equals proposer key or is not in the authority list"
+      - "GOVERNANCE_PROPOSAL_LIMIT | 409 | no | publisher already has 20 active proposals"
+      - "GOVERNANCE_PROPOSAL_NOT_VALID | 412 | no | decision is missing, expired, for other targets or from an untrusted publisher"
+      - "GOVERNANCE_COMMENT_LIMIT | 409 | no | member already has 5 visible comments on this proposal"
+    example: |
+      publisher vault: dispatch("governance.policy_proposal.open", { "proposalId": "0192f3b2-...", "expectedRevision": 3, "relayIds": ["relay:berlin.example"] })
+      => { "proposalId": "0192f3b2-...", "revision": 4, "commentEndsAt": "2026-11-18T10:00:00.000Z", "statementCid": "sha256-Zm9v...", "syncState": "prepared" }
+      member vault: dispatch("governance.policy_comment.post", { "proposalId": "0192f3b2-...", "body": "Please add an appeal path." })
+      => { "commentId": "0192f3b3-...", "syncState": "prepared" }
+      decider vault: dispatch("governance.policy_proposal.decide", { "proposalId": "0192f3b2-...", "expectedRevision": 5, "outcome": "approved", "rationale": "Comments addressed in v2." })
+      => { "proposalId": "0192f3b2-...", "revision": 6, "status": "approved", "validUntil": "2026-12-19T10:00:00.000Z", "statementCid": "sha256-Yg1b..." }
+  authorization_capabilities:
+    requirements:
+      - "Vault policy: authoring and publishing require the publisher key; deciding requires a different key from the publisher's authority list; commenting requires any local principal; receiving verifies signer roles (CAP-8)."
+      - "Relay policy (CAP-9): the publisher's relay accepts comments from registered device keys within its quota and lets its own moderator hide comments; a relay role has no power over other relays or vaults."
+      - "There is no global governance role; trust is per publisher and chosen by each user."
+    capabilities:
+      - "governance.policy_proposal.author | owner | local principal holds the publisher key; proposal status draft"
+      - "governance.policy_proposal.publish | owner | local principal is the proposal publisher; status draft, open_for_comment or decision_pending"
+      - "governance.policy_proposal.decide | owner | local key is in the publisher's authority list and differs from publisherId; status decision_pending"
+      - "governance.policy_proposal.receive | peer | statement signed by a trusted publisher or decider key; signature and role verified"
+      - "governance.policy_proposal.read | owner | vault unlocked; reads proposals from trusted publishers and public changelog"
+      - "governance.policy_proposal.verify | system | caller is F18.S01.M01, F18.S01.M02 or F18.S01.M03 inside the vault"
+      - "governance.policy_comment.create | owner | vault unlocked; proposal open_for_comment; fewer than 5 visible comments"
+      - "governance.policy_comment.relay_accept | relay-member | relay policy: request signed by a registered device key; 10 comments per hour per key"
+      - "governance.policy_comment.relay_hide | relay-moderator | relay policy: moderator of the publisher's relay; reason key required; affects only that relay"
+  failure_recovery_idempotency:
+    requirements:
+      - "All commands are idempotent per CTR-IDM-001 and statements are deduplicated by cid."
+      - "State change, signed statement and outbox entry commit in one IndexedDB transaction; transport is retried separately."
+      - "Equivocation (two different decisions for one proposal) is detected, marked conflicted and never resolved by last writer."
+    idempotency: "Idempotency-Key required on commands, kept 24 h; relay accept deduplicates by statement cid; verify and receive are naturally idempotent."
+    concurrency: "expectedRevision on draft, open, decide, withdraw; a decision racing a withdrawal is settled by the publisher vault's single transaction; two decisions with different outcomes seen by a receiver mark the proposal conflicted for that publisher."
+    retries: "Transport retries follow IDM-4 (base 500 ms, cap 30 s, 6 attempts); comment posting retries only network errors and RATE_LIMITED after retryAfterMs."
+    offline: "Drafting, deciding and posting a comment can be prepared offline; sync state is prepared until a relay receipt exists, and peer_accepted is shown only after the relay's signed acceptance."
+    partial_failure: "A failed relay upload leaves the local state committed and retries; a relay refusing a comment returns a signed refusal reason and the comment stays local with state relay_rejected."
+  privacy_retention_abuse:
+    requirements:
+      - "Proposals and decisions are public signed statements; comments are visible to the relay's community and are linkable to pseudonyms; the UI says pseudonymity is not anonymity."
+      - "Decisions and proposals are retained as evidence (RET-EVIDENCE); comments follow RET-STANDARD and hidden comments keep their signed statement for audit."
+      - "No comment or proposal content is sent through notification channels beyond a reference and a template key."
+    data:
+      - "PolicyProposal: P0 signed statements."
+      - "PolicyComment: P1 signed statements, pseudonymous author."
+    retention:
+      - "PolicyProposal and decision: RET-EVIDENCE."
+      - "PolicyComment: RET-STANDARD; deleted by the author on request except for audit copy of hidden ones for 1 year (RET-AUDIT)."
+    threats:
+      - "T01 | Operator pushes a harmful rule without notice | mandatory 72 h comment period, expedited path needs reason and co-signer, changelog public, users choose which publishers to trust"
+      - "T02 | Self-approval by one operator | decider must be a different authority key"
+      - "T03 | Equivocation or backdated decision | signatures over JCS, statementCid, conflict detection, decidedAt is a publisher claim and relay receipt time is separate evidence"
+      - "T04 | Comment flooding or harassment | 5 comments per member per proposal, 10 per hour per key, relay moderator can hide, local block applies"
+      - "T05 | Replay of an old approved decision for new targets | verify compares exact targetRefs and the 30-day validity"
+    abuse_controls:
+      - "Publisher limit of 20 active proposals; comments rate limited by relay policy."
+      - "Hidden comments carry a reason key shown to the author."
+  observability_performance:
+    requirements:
+      - "No telemetry leaves the device (OBS-7); counters are local diagnostics."
+      - "Relay comment acceptance follows OBS-1 to OBS-4."
+      - "Verification must be fast because other modules call it before applying changes."
+    metrics:
+      - "classrup_governance_proposals_total{outcome} (local)"
+      - "classrup_governance_comments_total{outcome} (relay and local)"
+      - "classrup_governance_verify_duration_ms (local histogram)"
+    logs:
+      - "info policy_proposal.decided {proposalId, outcome, correlationId} in local diagnostics."
+    budgets:
+      - "verify p95 <= 20 ms; receive p95 <= 80 ms including signature verification on Moto G-class hardware."
+      - "Relay comment accept p95 <= 300 ms at 50 req/s."
+      - "Proposal list of 50 items p95 <= 100 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - "Every requirement is covered by at least one automated test."
+      - "Contract tests validate statements, commands and events against the registry and verify signatures."
+      - "Time-based behaviour is tested with injected clocks for vault and relay separately."
+    fixtures: "Publisher vault P (key KP), decider vault D (key KD in authority list), member vaults M1 and M2, relay stub with its own clock, clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,02.R01,02.R02 | draft a proposal with valid and invalid fields | stored with revision 1; invalid length or target gives documented error"
+      - "T02 | unit | 01.R02,01.R03,02.R03 | violate each rule V01-V10 | documented error code returned; no statement produced or accepted"
+      - "T03 | property | 03.R01,03.R03 | random command and clock sequences | only declared transitions; terminal states never leave; decision cannot be reversed"
+      - "T04 | integration | 03.R02,02.R03 | comment accepted by relay clock after publisher clock ended | relay clock decides acceptance; UI labels times as claims"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | open, decide, post comment, receive | statements validate and verify; decided event payload valid"
+      - "T06 | integration | 04.R03,02.R03 | verify with exact targets, other targets, after 31 days | valid true only for exact targets within 30 days"
+      - "T07 | abuse | 05.R01,05.R03 | proposer decides own proposal; untrusted publisher decision; third key signs | GOVERNANCE_PROPOSAL_SELF_DECISION; statements quarantined"
+      - "T08 | abuse | 05.R02,07.R03 | non-registered key comments; sixth comment; 11 comments in an hour; moderator hides | relay refuses; GOVERNANCE_COMMENT_LIMIT; RATE_LIMITED; hide affects that relay only"
+      - "T09 | integration | 06.R01,06.R02 | replay decide with same key; crash after signing | one decision statement; consistent state after restart"
+      - "T10 | integration | 06.R03 | two conflicting decisions delivered to a receiver | proposal marked conflicted; verify returns false with reason conflicted"
+      - "T11 | chaos | 06.R03 | relay down while comment posted and decision queued | states prepared then transport_acknowledged only on receipt; local state intact"
+      - "T12 | abuse | 07.R01,07.R02,07.R03 | scan notifications, logs and exports | no comment content in notifications or logs; retention classes as specified; hidden comment kept for audit"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 1 000 comments on Moto G profile, relay at 50 req/s | verify p95 <= 20 ms, receive p95 <= 80 ms, relay p95 <= 300 ms, no telemetry"
+      - "T14 | unit | 09.R01,09.R03 | traceability tool run | every PS-147 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import to fresh vault, import tampered decision | proposals and decisions round-trip; tampered statement quarantined"
+      - "T16 | a11y | 01.R01 | axe run on proposal detail and comment form | zero serious or critical issues; keyboard-only commenting works"
+    acceptance:
+      - All tests T01-T16 pass in CI.
+      - No policy change is applied by a consuming module without a verified, unexpired, exact-target approved decision signed by a key different from the proposer.
+      - The UI never presents a proposal decision as binding beyond the publishers a user trusts, and times from other parties are labelled as claims.
+  import_export_backup_rollback:
+    requirements:
+      - "The user export contains proposals and decisions from trusted publishers, own comments and, for publishers, their drafts and signing history."
+      - "Import re-verifies every signature, role and the equivocation check; failing statements are quarantined."
+      - "Schema changes follow expand/contract and keep v1 readable for 180 days."
+    export: "Sections governance.policy_proposals and governance.policy_comments in classrup-export/v1, one line per record (schemas classrup.governance.policy_proposal/v1 and classrup.governance.policy_comment/v1) plus signed statements."
+    import: "Signatures and authority-list membership re-verified; decisions older than 30 days import as evidence but verify returns expired; conflicting statements import flagged conflicted."
+    backup: "Vault export is the primary backup (IOX-6); the publisher's relay holds public copies that can be re-fetched by any vault."
+    migration_rollback: "Additive optional fields only in v1; rollback is by reinstalling the previous release; published statements stay valid because their schemas are unchanged."

@@ -1,35 +1,33 @@
-# PS-140-06 — failure recovery idempotency
+# PS-140-06 — Failure recovery and idempotency: Offline testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-140-06. **Owner:** [17_Quality/02_performance/mod_offline](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M03 Offline testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/offline` · **Contracts:** [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the failure recovery idempotency process for offline within 02_performance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-140-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-140-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-140-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-140-06.R01** Replay uses backoff 1 s doubling to 60 s with jitter of plus or minus 20 percent; tests assert the schedule with a fake clock.
+- **PS-140-06.R02** Replay is idempotent by construction (same Idempotency-Key); the test replays 1, 3 and 10 times with identical results.
+- **PS-140-06.R03** A command that fails with a non-retryable error is not retried and is surfaced to the user.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+- **idempotency:** The suite proves replay idempotency by sending each queued command up to 10 times across resets and asserting a single server-side effect.
+- **concurrency:** Two devices edit the same entity offline; the second replay receives CONFLICT_REVISION and the prompt appears; both orders are tested.
+- **retries:** Tests use the fake clock to advance backoff instead of waiting; real-time sleeps over 50 ms are forbidden.
+- **offline:** This module is about offline: the network is toggled by the fake network or Playwright setOffline.
+- **partial failure:** If replay stops midway (page reload), the outbox resumes from persisted state; the test verifies no lost and no duplicated commands.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-140-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-140-09.T02 | integration | PS-140-02.R01, PS-140-06.R02 | replay one command across 10 connection resets | server-side effect count is exactly 1 |
+| TEST-PS-140-09.T04 | integration | PS-140-02.R03, PS-140-06.R03 | advance fake clock 8 days with a queued command | command marked stale and not sent; non-retryable error is not retried |
+| TEST-PS-140-09.T09 | unit | PS-140-06.R01 | fake clock backoff schedule over 10 failures | delays 1,2,4,8,16,32,60,60,60,60 s with jitter within 20 percent |
+
+## Dependencies
+
+Module depends on: CTR-IDM-001, CTR-ERR-001, CTR-UX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M04, F15.S01.M01, F15.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

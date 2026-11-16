@@ -1,35 +1,68 @@
-# PS-143-04 — commands queries events
+# PS-143-04 — Commands, queries and events: Release gates
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-143-04. **Owner:** [17_Quality/03_release/mod_gates](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_gates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S03.M02 Release gates](SPEC.md) · **Scope:** MVP · **Code:** `tools/gates` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the commands queries events process for gates within 03_release. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-143-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-143-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-143-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-143-04.R01** The module exposes pnpm gates:release, pnpm gates:trace, pnpm gates:audit and pnpm gates:report.
+- **PS-143-04.R02** Exit codes: 0 GO, 1 at least one gate failed, 2 evidence missing or stale, 3 configuration failure.
+- **PS-143-04.R03** The release workflow of F17.S03.M01 calls gates:release and attaches reports/gates.md to the release.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+_None._
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-143-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+_None._
+
+### Events produced
+
+_None._
+
+### Events consumed
+
+_None._
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| QUALITY_GATE_TRACE_GAP | 422 | no | requirement without a passing test (exit 1) |
+| QUALITY_GATE_TRACE_DUPLICATE | 422 | no | duplicate or dangling test ID (exit 1) |
+| QUALITY_GATE_VULNERABLE | 422 | no | critical or high production vulnerability (exit 1) |
+| QUALITY_GATE_AUDIT_UNAVAILABLE | 503 | yes | audit could not run; gate fails closed (exit 2) |
+| QUALITY_GATE_A11Y | 422 | no | serious or critical accessibility violation or stale report (exit 1) |
+| QUALITY_GATE_BUDGET | 422 | no | a performance budget was exceeded or its report is stale (exit 1) |
+| QUALITY_GATE_CHANGELOG | 422 | no | no changelog entry for the version (exit 1) |
+| QUALITY_GATE_WAIVER_EXPIRED | 422 | no | a waiver is expired or longer than 14 days (exit 1) |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+**Note:** Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.
+
+### Example
+
+```
+$ pnpm gates:release --version 0.3.0
+  traceability  1432/1432 requirements covered (2 waived)  PASS
+  audit         0 critical, 0 high, 3 moderate  PASS
+  a11y          serious 0, critical 0  PASS
+  budgets       relay OBS-4 PASS, PWA OBS-5 PASS
+  changelog     0.3.0 present  PASS
+  verdict GO  (reports/gates.json)
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-143-09.T07 | integration | PS-143-04.R01, PS-143-04.R02, PS-143-04.R03 | run each script and the release workflow dry-run | documented exit codes; gates.md attached |
+
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01. Predecessor: [domain_schema.md](domain_schema.md).

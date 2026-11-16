@@ -1,35 +1,65 @@
-# PS-011-01 — domain schema
+# PS-011-01 — Domain schema: Purchase offers
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-011-01. **Owner:** [01_LocalBazaar/04_pricing/mod_offers](SPEC.md). **Implementing module:** 01_LocalBazaar/04_pricing/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F01.S04.M01 Purchase offers](SPEC.md) · **Scope:** MVP · **Code:** `packages/bazaar/src/pricing/offers` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md)
 
-## Purpose and scope
-Define the domain schema process for offers within 04_pricing. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-011-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-011-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-011-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-011-01.R01** An Offer stores listing, variant, buyer, seller, amount as integer minor units, currency, optional note, expiry and status, with tenant and revision per CTR-ID-001.
+- **PS-011-01.R02** Offer records are P2 (visible to buyer and seller only) and retained under RET-EVIDENCE because accepted offers form commerce evidence.
+- **PS-011-01.R03** The offer amount is immutable after creation; changing the price requires a new offer or a negotiation round.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Offer
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Schema `classrup.bazaar.offer/v1` · storage **relay+device** · privacy **P2** · retention **RET-EVIDENCE**
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-011-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Type and constraints |
+|---|---|
+| id | uuidv7 — primary key |
+| tenantId | uuidv7 — tenant scope |
+| listingId | uuidv7 — ref F01.S01.M01 Listing; must be published |
+| variantId? | uuidv7 — ref F01.S03.M02 Variant; required when listing has variants |
+| buyerId | actorId — offer maker |
+| sellerId | actorId — copied from listing owner at creation |
+| amount | Money — CTR-MNY-001; > 0; ≤ 1 000 000 000 000 minor units |
+| note? | string — ≤ 280 code points, plain text |
+| expiresAt | timestamp — createdAt + 1 h..7 d |
+| status | enum — made \| accepted \| rejected \| withdrawn \| expired |
+| decisionReason? | enum — seller_rejected \| blocked \| listing_unavailable \| superseded \| timeout |
+| listingRevisionAtOffer | int — listing revision seen by buyer |
+| listingChangedSinceOffer | boolean — set by consumer of bazaar.listing.edited |
+| dealId? | uuidv7 — ref F09.S01.M01 Deal, set on accept |
+| revision | int — CTR-ID-001 ID-4 |
+| createdAt | timestamp — RFC 3339 UTC |
+| updatedAt | timestamp — RFC 3339 UTC |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Invariants**
+- At most one offer with status made per (buyerId, listingId, variantId).
+- status accepted implies dealId is set and an inventory hold exists for the same quantity.
+- buyerId differs from sellerId.
+
+### Storage DDL
+
+```sql
+CREATE TABLE bazaar_offer (
+  id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, listing_id TEXT NOT NULL, variant_id TEXT,
+  buyer_id TEXT NOT NULL, seller_id TEXT NOT NULL, amount_minor TEXT NOT NULL, currency TEXT NOT NULL,
+  status TEXT NOT NULL, expires_at TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+CREATE UNIQUE INDEX bazaar_offer_open ON bazaar_offer(tenant_id, buyer_id, listing_id, ifnull(variant_id,''))
+  WHERE status = 'made';
+CREATE INDEX bazaar_offer_listing ON bazaar_offer(tenant_id, listing_id, status);
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-011-09.T01 | unit | PS-011-01.R01, PS-011-01.R03, PS-011-02.R01 | make offer with valid input | Offer stored with status made, revision 1, amount unchanged |
+| TEST-PS-011-09.T17 | e2e | PS-011-01.R02, PS-011-04.R01 | mobile buyer makes offer, seller accepts on another device | both see accepted state; screen passes axe with zero serious issues |
+
+## Dependencies
+
+Module depends on: F01.S01.M03, F01.S02.M01, F01.S03.M01, F09.S01.M01, F09.S03.M03, F07.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-IDM-001, CTR-PRV-001. Predecessor: [module SPEC](SPEC.md).

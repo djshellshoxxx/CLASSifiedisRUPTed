@@ -1,35 +1,26 @@
-# PS-133-01 — domain schema
+# PS-133-01 — Domain schema: Security threat model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-133-01. **Owner:** [16_Security/03_assurance/mod_threats](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_threats. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M01 Security threat model](SPEC.md) · **Scope:** MVP · **Code:** `docs/security/threat_model` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md)
 
-## Purpose and scope
-Define the domain schema process for threats within 03_assurance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-133-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-133-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-133-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-133-01.R01** Each register row has ID THR-<boundary>-<NN>, boundary, STRIDE category, threat statement, control reference (module ID and requirement ID), test reference, residual risk text and review date.
+- **PS-133-01.R02** Boundaries are fixed identifiers B1 static distributor and PWA host, B2 vault on device, B3 relay, B4 federation peers, B5 wallets and chains, B6 physical exchange, plus cross-cutting X1 forked vaults and X2 offline revocation lag.
+- **PS-133-01.R03** The register is retained in the repository history indefinitely and each release tags the version of the model reviewed.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Note:** No catalog entities. The register is a versioned document (YAML front matter plus markdown tables) validated by the traceability tool; rows are not stored in application databases.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-133-01`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-133-09.T01 | unit | PS-133-01.R01, PS-133-01.R02, PS-133-02.R01 | parse the valid fixture register | 42 rows parsed with all required fields; boundaries B1–B6, X1, X2 recognized |
+| TEST-PS-133-09.T03 | unit | PS-133-01.R03, PS-133-02.R01 | boundary with all STRIDE letters, and one with a not-applicable reason of 10 characters | accepted for the full set; reason under 20 characters rejected |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F16.S01.M01, F16.S02.M02, F16.S02.M03, F12.S03.M03, CTR-PRV-001, CTR-CAP-001, CTR-FED-001, CTR-COM-001. Predecessor: [module SPEC](SPEC.md).

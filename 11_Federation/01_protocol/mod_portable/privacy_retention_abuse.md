@@ -1,35 +1,48 @@
-# PS-083-07 — privacy retention abuse
+# PS-083-07 — Privacy, retention and abuse: Portable record packaging
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-083-07. **Owner:** [11_Federation/01_protocol/mod_portable](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F11.S01.M01 Portable record packaging](SPEC.md) · **Scope:** MVP · **Code:** `packages/federation/src/protocol/portable` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for portable within 01_protocol. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-083-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-083-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-083-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-083-07.R01** Only owner-opted-in P0 data at maximum precision L2 can leave the relay; every other field is dropped or the export refused.
+- **PS-083-07.R02** Exact home address (P3), contact details and anything P1-P4 can never appear in a draft; tests assert this on every release.
+- **PS-083-07.R03** Pseudonymity is not anonymity, so the consent preview states that all records of one did:key are linkable and that deletion propagates by tombstone but cannot recall copies.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- Drafts: P0 only, transient, not stored by this module.
+- Mirror views: P0 copies of remote content; stored by F11.S01.M02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- No retention in this module; stored mirrors follow F11.S01.M02 (RET-STANDARD with tombstone 180 days).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-083-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | New local field silently leaking into federation | default-deny allowlist; CI test fails if a record type has a field without a classification annotation |
+| T02 | Location refinement attack (geohash 7 or coordinates leaked in ext) | V04 truncates to 5 and refuses coordinates; ext must be empty object or registered key |
+| T03 | Metadata leakage through images (EXIF GPS, device serial) | V05 only references stripped media hashes; relay rejects GPS tags per PRV-4 |
+| T04 | Remote payload with executable or HTML content | inbound strings are plain text; mirror view escapes at render; links shown as text |
+
+**Abuse controls**
+- Per-author draft rate cap 60 drafts/hour enforced by the caller through F12.S03.M03 rate limits.
+- Inbound payloads over 65536 bytes are rejected before parsing members.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-083-09.T02 | property | PS-083-01.R03, PS-083-02.R01, PS-083-07.R01, PS-083-09.R03 | random records with random extra fields and geohash lengths 1-12 | no draft contains a non-allowlisted member; geohash length ≤ 5 |
+| TEST-PS-083-09.T03 | unit | PS-083-02.R01, PS-083-07.R02, PS-083-09.R02 | record with homeAddress, email, exact lat/lon, geohash 7 | export refused or truncated per V03/V04 and codes returned |
+| TEST-PS-083-09.T11 | a11y | PS-083-07.R03 | open consent preview with screen reader and keyboard only | every field and the linkability notice are announced, controls ≥ 44 px |
+| TEST-PS-083-09.T12 | abuse | PS-083-07.R02, PS-083-07.R03 | inbound payload with script tag and long link text | stored as plain text and rendered escaped |
+
+## Dependencies
+
+Module depends on: F10.S02.M02, CTR-FED-001, CTR-PRV-001, CTR-ERR-001, CTR-SCH-001, CTR-TST-001. Predecessor: [domain_schema.md](domain_schema.md).

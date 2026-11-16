@@ -1,0 +1,303 @@
+id: F08.S03.M02
+scope: MVP
+summary: >-
+  Check-in around an agreed meetup. Each party taps "I have arrived" inside the agreed window, which produces a
+  signed check-in statement that carries no location and is delivered to the other parties through encrypted
+  messages. A party who checked in can report the other as a no-show after a grace period; the report is a
+  signed claim by the reporter, not a fact, and receiving vaults label it that way. Optionally a member shares
+  a trusted-contact link that shows place, window and check-in status to a person without the app, as an
+  end-to-end encrypted snapshot hosted on the member's chosen relay with a key that stays in the link fragment
+  and a lifetime of at most 24 hours.
+responsibilities:
+  - Own the MeetupCheckin record per party and meetup (pending, checked in, no-show claim, void) in each vault.
+  - Accept check-ins only inside the window from 15 minutes before windowStart to 30 minutes after windowEnd and sign them as classrup.comms.checkin/v1 statements without any coordinates.
+  - Allow a checked-in party to report another party as no-show from 30 minutes after windowEnd until 24 hours after, as a signed claim classrup.comms.no_show_report/v1 that the accused sees and may answer in the thread.
+  - Own the MeetupShare record for user-initiated trusted-contact links, create the encrypted snapshot on the chosen relay, update it on check-in, and revoke it on request or at expiry.
+  - Never read device location, never request live location, and never store anything but the pseudonym-level state of check-ins.
+non_responsibilities:
+  - Time and place agreement (F08.S03.M03) and curated spots (F08.S03.M01).
+  - Reputation effects of no-shows (F07.S03.M01 consumes comms.meetup.no_show as a claim and decides its weight).
+  - Live location sharing (F06.S02.M02 owns discovery.location_share.* which is a separate, user-initiated feature with L4 rules).
+  - Emergency services contact or monitoring; the module is not a safety monitoring service.
+  - "Future: scheduled safety reminders pushed through a relay, check-out confirmation, check-in by scanning the other party's QR code."
+depends_on: [F08.S03.M03, F08.S01.M01, F08.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001]
+user_stories:
+  - As a buyer, I tap I have arrived at the meetup and the seller's app shows that I checked in at the time my phone claims.
+  - As a seller waiting alone, I can report that the other party did not show up after the grace period, knowing it is recorded as my claim.
+  - As a member, I can send a link to a friend that shows where and when I am meeting and whether I checked in, and it stops working after at most 24 hours or when I revoke it.
+  - As a member accused of no-show, I can see the report and reply in the thread.
+edge_cases:
+  - A party taps arrive 20 minutes before the window; the app refuses and shows when check-in opens.
+  - Both parties check in but only one verified statement reaches the other vault; each vault shows its own state and the other's as waiting until the statement arrives, never both checked in on the strength of one signature.
+  - No-show is reported while the accused's check-in statement is still in transit; when it arrives the report is marked contradicted and both are shown.
+  - Trusted-contact link opened after revocation or expiry; the relay returns NOT_FOUND and the page shows the link has ended.
+  - The member shares a link and the relay later goes offline; the contact sees an unavailable page and the member's local state is unaffected.
+  - Meetup is cancelled after check-ins; open check-ins are voided and any share link is revoked automatically.
+  - Device clock is wrong; check-in window is judged on the local clock and the statement time is a claim, shown to others with a clock warning when it is more than 10 minutes off their own.
+ux:
+  screens:
+    - "Meetup day card: countdown to window, big I have arrived button enabled only inside the check-in window, party check-in list with text status, Report no-show (after grace period), Share with a trusted contact."
+    - "Share sheet: explains that the link shows place, window and check-in status, expires in 24 hours at most, is readable by anyone who has the whole link, and that the relay cannot read it; buttons Create link, Copy, Revoke."
+    - "No-show report sheet: states that the report is your claim, lists what the other party will see, and Send report."
+  states: [loading, before-window, check-in-open, checked-in, waiting-for-others, grace-period, no-show-reportable, no-show-reported, contradicted, void, share-active, share-revoked, offline-queued]
+  a11y:
+    - The arrive button has a persistent accessible name and live announcements state when check-in opens and when others check in.
+    - Time values are text with the zone label; countdown does not auto-announce more often than once a minute.
+    - Share link actions are buttons of at least 44 by 44 px and the copied confirmation is announced politely.
+processes:
+  domain_schema:
+    requirements:
+      - A MeetupCheckin stores, per meetup and party, the status, the claimed check-in time, the local receive time, the signed statement ID and for no-show claims the reporter and report statement, with tenant and revision per CTR-ID-001; no coordinates and no device identifiers are stored.
+      - Check-in times from other parties are claims; the vault stores its own receivedAt and, if a relay receipt exists, the relay-signed time as evidence of that relay's clock only.
+      - A MeetupShare stores the relay ID, share ID, expiry, revoked flag and the hash of the share key (never the key), is P3 on the owner's device, and the relay holds only an encrypted snapshot of at most 2 KiB.
+    entities:
+      - name: MeetupCheckin
+        schema: classrup.comms.meetup_checkin/v1
+        storage: device
+        privacy: P2
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "tenantId: uuidv7 — tenant scope"
+          - "meetupId: uuidv7 — ref F08.S03.M03 Meetup in agreed state"
+          - "proposalHash: string — SHA-256 hex of the agreed proposal this check-in belongs to"
+          - "partyDid: did:key — party the record is about"
+          - "status: enum — pending | checked_in | no_show | void"
+          - "checkedInAtClaim?: timestamp — party clock, a claim, set when status is checked_in"
+          - "receivedAt?: timestamp — local clock when a remote check-in statement was verified"
+          - "relayReceiptAt?: timestamp — relay-signed receipt time, evidence of that relay clock only"
+          - "checkinStatementCid?: string — sha256 cid of the signed check-in statement"
+          - "reportedByDid?: did:key — reporter when status is no_show"
+          - "reportStatementCid?: string — sha256 cid of the signed no-show report"
+          - "contradicted: boolean — true when a check-in statement for the same party arrived after a no-show report"
+          - "voidReason?: enum — meetup_cancelled | window_elapsed | not_applicable"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - One record per (meetupId, partyDid, proposalHash); records are created pending when the agreed event is consumed.
+          - status checked_in implies a verified signature by partyDid on the check-in statement and no coordinates in any field.
+          - status no_show is always a claim by reportedByDid, who must have status checked_in, and is never shown without the label reported by the reporter name.
+      - name: MeetupShare
+        schema: classrup.comms.meetup_share/v1
+        storage: relay+device
+        privacy: P3
+        retention: RET-EPHEMERAL
+        fields:
+          - "id: uuidv7 — primary key, also the share path ID"
+          - "meetupId: uuidv7 — ref Meetup"
+          - "ownerDid: did:key — member who created the link"
+          - "relayId: string — relay hosting the encrypted snapshot"
+          - "keyHash: string — SHA-256 hex of the 256-bit share key held only in the link fragment"
+          - "snapshotRevision: int — increments each time the snapshot is re-encrypted (create, check-in, revoke)"
+          - "ciphertext?: bytes — relay only, ≤ 2 048 bytes, XChaCha20-Poly1305 of { placeLabel, windowStart, windowEnd, checkInStates, updatedAt }"
+          - "expiresAt: timestamp — createdAt + at most 24 hours and not later than windowEnd + 6 hours"
+          - "revoked: boolean — true after revoke"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - The relay never stores the share key and the key never appears in a request path or query string, only in the URL fragment.
+          - expiresAt is at most 24 hours after createdAt and a revoked or expired share has ciphertext erased on the relay.
+          - A share exposes place label, window and check-in status only, never names, DIDs, phone numbers or coordinates.
+  validation_rules:
+    requirements:
+      - Check-in, no-show and share inputs are validated against meetup state and time windows on the local clock before any statement is signed.
+      - Inbound check-in and report statements are validated for signature, party role and proposal hash.
+      - Every violation maps to one stable error code.
+    rules:
+      - "V01 | meetup is agreed and proposalHash matches the current agreed proposal | CONFLICT_STATE"
+      - "V02 | local clock is between windowStart minus 15 minutes and windowEnd plus 30 minutes for a check-in | COMMS_CHECKIN_OUTSIDE_WINDOW"
+      - "V03 | actor is a party of the meetup and has status pending | FORBIDDEN"
+      - "V04 | input contains no coordinates, accuracy, device identifiers or free text location fields | VALIDATION_FAILED"
+      - "V05 | no-show report is made between windowEnd plus 30 minutes and windowEnd plus 24 hours by a party with status checked_in about a party with status pending | COMMS_NO_SHOW_NOT_ALLOWED"
+      - "V06 | inbound statement signature verifies against a device key of the signer and the signer is a party | COMMS_CHECKIN_SIGNATURE_INVALID"
+      - "V07 | share expiry is at most 24 hours ahead and not after windowEnd plus 6 hours; at most 3 active shares per meetup | COMMS_SHARE_LIMIT"
+      - "V08 | a vault reports at most 5 no-shows per day | RATE_LIMITED"
+      - "V09 | share snapshot plaintext is at most 1 024 bytes before encryption and ciphertext at most 2 048 bytes | PAYLOAD_TOO_LARGE"
+  workflow_state_machine:
+    requirements:
+      - Each MeetupCheckin starts pending and ends in exactly one of checked_in, no_show or void, which are terminal; a contradiction is a flag and not a state change.
+      - A MeetupShare is active until it expires or is revoked; both end states are terminal and erase relay ciphertext.
+      - Check-in states advance only from verified statements and never from timers alone, except void for elapsed windows.
+    machines:
+      - entity: MeetupCheckin
+        initial: pending
+        terminal: [checked_in, no_show, void]
+        transitions:
+          - "pending -> checked_in | comms.meetup.check_in by the party or verified check-in statement from the party | signature verified; emits comms.meetup.checked_in"
+          - "pending -> no_show | comms.meetup.report_no_show by a checked-in party after grace period, or verified report statement | marked as claim of reporter; emits comms.meetup.no_show"
+          - "pending -> void | meetup cancelled, or windowEnd plus 24 hours elapsed without activity | reason stored"
+      - entity: MeetupShare
+        initial: active
+        terminal: [expired, revoked]
+        transitions:
+          - "active -> active | check-in event or state change | snapshot re-encrypted, snapshotRevision + 1"
+          - "active -> revoked | comms.meetup_share.revoke by owner, or meetup cancelled | relay ciphertext deleted; emits comms.meetup_share.revoked"
+          - "active -> expired | expiresAt reached | relay ciphertext deleted"
+    timeouts:
+      - "Relay deletes expired share ciphertext within 5 minutes of expiresAt (sweep every 60 s)."
+      - "Local sweep voids pending check-ins 24 hours after windowEnd."
+  commands_queries_events:
+    requirements:
+      - Check-in and no-show report are vault commands that produce signed statements; share creation and revocation are vault commands that call relay commands put and delete for the encrypted snapshot, and view is a public relay query returning ciphertext only.
+      - Each state-changing vault command emits its event in the same IndexedDB transaction as the change.
+      - The module consumes meetup agreement and cancellation events to create and void check-in records.
+    commands:
+      - name: comms.meetup.check_in
+        capability: comms.meetup.check_in
+        input: "[vault command; produces signed statement classrup.comms.checkin/v1] { meetupId, expectedRevision }"
+        output: "{ checkinId, status: checked_in, checkedInAtClaim, revision }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_STATE, CONFLICT_REVISION, COMMS_CHECKIN_OUTSIDE_WINDOW, VALIDATION_FAILED]
+        emits: [comms.meetup.checked_in]
+        idempotent: true
+      - name: comms.meetup.report_no_show
+        capability: comms.meetup.report_no_show
+        input: "[vault command; produces signed statement classrup.comms.no_show_report/v1] { meetupId, targetDid, expectedRevision }"
+        output: "{ checkinId, status: no_show, revision }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_STATE, CONFLICT_REVISION, COMMS_NO_SHOW_NOT_ALLOWED, RATE_LIMITED]
+        emits: [comms.meetup.no_show]
+        idempotent: true
+      - name: comms.meetup_share.create
+        capability: comms.meetup_share.create
+        input: "[vault command; calls relay command comms.meetup_share.put] { meetupId, expiresInMs (default 21600000, max 86400000) }"
+        output: "{ shareId, url (includes key in fragment), expiresAt }"
+        errors: [NOT_FOUND, FORBIDDEN, COMMS_SHARE_LIMIT, PAYLOAD_TOO_LARGE, DEPENDENCY_UNAVAILABLE, FEATURE_DISABLED]
+        emits: [comms.meetup_share.created]
+        idempotent: true
+      - name: comms.meetup_share.put
+        capability: comms.meetup_share.put
+        input: "[relay command, relay access token] { shareId, snapshotRevision, ciphertext (≤ 2 048 bytes), keyHash, expiresAt }"
+        output: "{ shareId, snapshotRevision }"
+        errors: [VALIDATION_FAILED, PAYLOAD_TOO_LARGE, COMMS_SHARE_LIMIT, CONFLICT_REVISION, RATE_LIMITED, FEATURE_DISABLED]
+        emits: []
+        idempotent: true
+      - name: comms.meetup_share.revoke
+        capability: comms.meetup_share.revoke
+        input: "[vault command; calls relay delete with the owner device signature] { shareId, expectedRevision }"
+        output: "{ shareId, revision, revoked: true }"
+        errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE]
+        emits: [comms.meetup_share.revoked]
+        idempotent: true
+    queries:
+      - name: comms.meetup_share.view
+        capability: comms.meetup_share.view
+        input: "[relay query, public by unguessable share ID] { shareId }"
+        output: "{ ciphertext, snapshotRevision, expiresAt } (the viewer page decrypts with the key in the fragment)"
+        errors: [NOT_FOUND, RATE_LIMITED]
+      - name: comms.meetup.list_checkins
+        capability: comms.meetup.read_checkin
+        input: "[vault query] { meetupId }"
+        output: "{ items: MeetupCheckin[], shares: MeetupShare[] }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: comms.meetup.checked_in, privacy: P2, payload: "{ meetupId, partyDid, checkedInAtClaim, origin: local|federated }"}
+      - {type: comms.meetup.no_show, privacy: P2, payload: "{ meetupId, targetDid, reportedByDid, claim: true, origin: local|federated }"}
+      - {type: comms.meetup_share.created, privacy: P3, payload: "{ shareId, meetupId, expiresAt }"}
+      - {type: comms.meetup_share.revoked, privacy: P3, payload: "{ shareId, meetupId, reason: owner|cancelled|expired }"}
+    events_consumed:
+      - {type: comms.meetup.agreed, effect: "create pending MeetupCheckin records for every party for the agreed proposalHash"}
+      - {type: comms.meetup.cancelled, effect: "void pending check-ins and revoke active shares of the meetup"}
+      - {type: comms.meetup.proposed, effect: "if an agreed meetup is rescheduled, void its pending check-ins for the old hash and revoke shares"}
+      - {type: identity.block.added, effect: "drop inbound check-in and no-show statements from the blocked DID"}
+    errors:
+      - "COMMS_CHECKIN_OUTSIDE_WINDOW | 409 | no | check-in is allowed only from 15 minutes before the window to 30 minutes after it ends"
+      - "COMMS_CHECKIN_SIGNATURE_INVALID | 422 | no | inbound check-in or report signature or signer role is invalid; statement quarantined"
+      - "COMMS_NO_SHOW_NOT_ALLOWED | 409 | no | reporter has not checked in, grace period of 30 minutes not over, 24 hour report period ended, or target already checked in"
+      - "COMMS_SHARE_LIMIT | 409 | no | more than 3 active shares for the meetup or expiry beyond 24 hours"
+    example: |
+      vault command comms.meetup.check_in  { "meetupId": "0192f3a8-4444-7000-8000-000000000001", "expectedRevision": 4 }
+      -> { "checkinId": "0192f3a9-5555-7000-8000-000000000001", "status": "checked_in", "checkedInAtClaim": "2026-11-07T13:52:10.000Z", "revision": 2 }
+      vault command comms.meetup_share.create  { "meetupId": "0192f3a8-4444-7000-8000-000000000001", "expiresInMs": 21600000 }
+      -> { "shareId": "0192f3a9-6666-7000-8000-000000000001", "url": "https://relay.example/s/0192f3a9-6666-7000-8000-000000000001#k=Zm9v…", "expiresAt": "2026-11-04T16:00:00.000Z" }
+  authorization_capabilities:
+    requirements:
+      - Vault policy lets only the unlocked local principal check in as itself, report no-show about another party, and create or revoke its own shares.
+      - Relay policy lets a relay-registered device put its own shares and delete only shares it created, while view is open to anyone holding the unguessable share ID but returns ciphertext only.
+      - Inbound check-in and no-show statements are accepted only when signed by a key of a party of the meetup.
+    capabilities:
+      - "comms.meetup.check_in | local principal | vault policy; party of the meetup with status pending; inside the check-in window"
+      - "comms.meetup.report_no_show | local principal | vault policy; checked-in party; target pending; after the 30 minute grace period"
+      - "comms.meetup.read_checkin | local principal | party of the meetup"
+      - "comms.meetup_share.create | local principal | vault policy; party of the meetup; at most 3 active shares"
+      - "comms.meetup_share.revoke | local principal | share.ownerDid is the local principal"
+      - "comms.meetup_share.put | registered relay device | relay policy; valid relay access token; shares limited to 3 per meetup and 20 per device"
+      - "comms.meetup_share.view | anonymous | relay public read by share ID; 30 requests per minute per IP and share"
+  failure_recovery_idempotency:
+    requirements:
+      - Check-in and report commands commit locally first and statements travel through the sync outbox with states prepared, transport acknowledged and peer accepted; the UI shows exactly the reached state.
+      - Statement handling is idempotent on cid; share put is idempotent on (shareId, snapshotRevision) and revoke is idempotent on shareId.
+      - There is no distributed lock; a no-show claim and a late check-in from the accused are both kept and flagged contradicted.
+    idempotency: "Vault commands idempotent on (meetupId, partyDid, proposalHash); relay put uses Idempotency-Key with 24 h window and is naturally idempotent on (shareId, snapshotRevision)."
+    concurrency: "expectedRevision on check-in and report; each vault command is one IndexedDB transaction; relay put rejects an older snapshotRevision with CONFLICT_REVISION; a no-show report racing a check-in statement ends with both stored and contradicted true."
+    retries: "Outbox retries statements with backoff base 1 s, factor 2, cap 15 min for 14 days; share put retries up to 6 times and then shows the share as unavailable while keeping local state."
+    offline: "Check-in works offline and shows saved on this device; statements are sent when online; share creation requires a relay connection and says so."
+    partial_failure: "If the relay is down at check-in time the check-in is still recorded locally and sent later, and the share snapshot is updated when the relay returns; if the share put fails after the local record is created the share shows unavailable and can be retried."
+  privacy_retention_abuse:
+    requirements:
+      - Check-in never reads or records location; the signature only evidences that a key holder asserted arrival at a time they claim, not that they were at the place.
+      - Trusted-contact links are user-initiated, expire in at most 24 hours, show place label, window and check-in status only, and are encrypted so the relay operator cannot read them; anyone holding the full link can read it, which the UI states.
+      - No-show reports are claims, labelled as the reporter's claim, rate limited, and carry no automatic penalties in this module.
+    data:
+      - "MeetupCheckin: P2, parties only; no coordinates."
+      - "MeetupShare: P3 on the owner's device; relay holds only encrypted snapshot ≤ 2 048 bytes and share ID."
+    retention:
+      - "Check-ins: RET-STANDARD, purged locally with the thread."
+      - "Share ciphertext on the relay and share records: RET-EPHEMERAL (24 h) and erased at expiry or revocation."
+    threats:
+      - "T01 | False no-show claim to harm reputation | claim label, reporter must have checked in, grace period, 24 hour limit, 5 reports per day, accused sees it and can contradict, consuming modules weigh it as a claim"
+      - "T02 | Check-in spoofed from home | signature proves assertion only and the UI says so; no location is collected, so no false precision is implied"
+      - "T03 | Share link leaked to a stalker | link expires in 24 hours at most, shows no names or exact addresses, owner can revoke, UI warns that anyone with the link can read it"
+      - "T04 | Relay operator reads share content | snapshot encrypted with a key only in the URL fragment, which browsers do not send to servers"
+      - "T05 | Forged check-in by a third party | statements need a party key signature, otherwise quarantined"
+      - "T06 | Enumerating share IDs | UUIDv7 plus 256-bit key requirement for readable content, 30 requests per minute per IP, NOT_FOUND for unknown IDs"
+    abuse_controls:
+      - "Reports of abuse of no-show claims go to the relay operator or advisory feed with the signed statements attached (F12.S01.M01)."
+      - "Blocked parties' statements are dropped silently."
+  observability_performance:
+    requirements:
+      - Relay share commands are measured per CTR-OBS-001; the PWA keeps local diagnostics only (OBS-7).
+      - Check-in and report commands meet p95 ≤ 50 ms in the vault; share view meets p95 ≤ 100 ms on the relay.
+      - The relay expiry sweep keeps lag under 5 minutes.
+    metrics:
+      - "classrup_comms_meetup_shares_total{outcome=created|updated|revoked|expired|viewed} (relay)"
+      - "classrup_comms_meetup_share_sweep_lag_ms (gauge, relay)"
+      - "classrup_comms_checkins_total{status=checked_in|no_show|void} (local diagnostics)"
+    logs:
+      - "relay info meetup_share.put {shareIdHash, size, correlationId} — no content, no key, no IP retained beyond rate-limit counters."
+      - "local info checkin.recorded {meetupId} — local diagnostics only."
+    budgets:
+      - "check_in and report_no_show p95 ≤ 50 ms; relay put p95 ≤ 300 ms; relay view p95 ≤ 100 ms at 50 req/s."
+      - "Share sweep deletes 10 000 expired shares in ≤ 10 s."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Contract tests verify commands, signed statements and event payloads against the schema registry.
+      - A privacy test asserts that no location data and no share key reach any server.
+    fixtures: "Vaults A and B with agreed meetup M (window 2026-11-07T14:00Z to 15:00Z), in-memory relay R, fixed clock set per test, share key generator seeded for vectors."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01,02.R03 | A checks in at 13:50 and with coordinates in the request | first stored checked_in with signed statement; second refused VALIDATION_FAILED; no coordinates stored"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V09 violated in turn | documented error code returned and nothing stored"
+      - "T03 | property | 03.R01,03.R02,03.R03 | random sequences of check-in, report, cancel, expiry and clock jumps | terminal states never change; no_show only after checked-in reporter; share states only active to expired or revoked"
+      - "T04 | contract | 04.R01,04.R02,09.R02 | each command and query executes | outputs, statements and event payloads validate against registry schemas"
+      - "T05 | integration | 04.R03,03.R01 | agreed event, cancellation event and reschedule event delivered | pending records created, then voided with shares revoked"
+      - "T06 | abuse | 05.R01,05.R02,05.R03 | check-in signed by non-party; delete share with another device key; view with random share ID | quarantine, FORBIDDEN, NOT_FOUND"
+      - "T07 | integration | 06.R01,06.R03 | check-in offline then reconnect; relay down at share update | local check-in kept; sync states advance prepared to transport acknowledged to peer accepted; share shows unavailable then updates"
+      - "T08 | integration | 06.R02,06.R03 | no-show report and the accused's check-in arrive in both orders | both stored, contradicted true, no overwrite"
+      - "T09 | abuse | 01.R03,07.R01,07.R02 | capture all traffic during check-in and share creation | no location, no share key outside the fragment, relay stores ciphertext only ≤ 2 048 bytes"
+      - "T10 | abuse | 07.R03,02.R03 | 6th no-show report in a day; report before grace period ends | RATE_LIMITED and COMMS_NO_SHOW_NOT_ALLOWED; reports labelled as claims in UI"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 50 share views per second for 2 minutes and sweep of 10 000 expired shares | budgets met"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-065 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore relay from backup | check-ins round trip; shares import as expired; expired relay shares are not restored"
+      - "T14 | a11y | 04.R01 | check-in and share flows with screen reader | statuses announced as text, buttons reachable, zero serious axe issues"
+    acceptance:
+      - All tests T01 to T14 pass in CI.
+      - Network and storage captures show no location data and no share key reaching a server.
+      - No UI text states that someone was at the place; it states that they reported arriving.
+      - A no-show is always displayed as a claim of its reporter.
+  import_export_backup_rollback:
+    requirements:
+      - A user's vault export contains their check-in records and statements, and share records without keys.
+      - Import re-verifies statements; records whose meetup is missing become void history and shares always import as expired.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section comms.checkins in classrup-export/v1; one line per MeetupCheckin (schema classrup.comms.meetup_checkin/v1) plus MeetupShare metadata without keys."
+    import: "Signatures re-verified; existing IDs skipped; no-show claims import with their claim label; shares import as expired and are never re-created."
+    backup: "Vault export is the backup (IOX-6); relay share ciphertext is RET-EPHEMERAL, is covered by relay SQLite backup only for operational recovery and is not restored after expiry (IOX-7)."
+    migration_rollback: "Additive fields only in v1; rollback is safe because statements are immutable and derived status is recomputed; shares are short-lived so no migration is needed."

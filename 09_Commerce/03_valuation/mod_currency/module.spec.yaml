@@ -1,0 +1,229 @@
+# F09.S03.M01 Currency registry (ADR-0015).
+id: F09.S03.M01
+scope: MVP
+summary: >-
+  The registry of currencies a vault can use in Money values: the ISO 4217 table with its minor-unit exponents plus
+  principal-registered crypto assets (BTC 8, ETH 18, USDC 6 by default) with explicit decimals and chain binding. Each vault
+  has an allowed-currency list that every local price, offer, deal and quote must respect; relays publish their own accepted
+  list as a hosting policy row. The registry lives in the vault (ADR-0016) and is seeded from the bundled signed snapshot. Decimals are immutable once registered
+  because Money amounts are stored as minor units.
+responsibilities:
+  - Seed each new vault with the bundled ISO 4217 snapshot and the default crypto assets, with a local allowed-currency list.
+  - Own CurrencyDef records (code, kind, decimals, chain binding, enabled state) and answer lookups for every other module.
+  - Let the local principal register additional crypto assets, enable and disable currencies in the vault, and retire withdrawn codes; relay operators set the relay's accepted list through relay policy rows, not through this module's records.
+  - Guarantee that decimals never change after registration and that unknown currencies fail with COMMERCE_CURRENCY_UNKNOWN (MNY-2).
+non_responsibilities:
+  - Money arithmetic, rounding and formatting (F09.S03.M03 precision).
+  - FX rates and quotes (F09.S03.M02 rates).
+  - Verifying on-chain payments (F09.S01.M03 crypto); this module only records which chain and contract an asset maps to.
+  - Relay-side enforcement of accepted currencies for indexed listings (relay hosting policy in F11 and F15).
+  - "Future: per-listing allowed-currency overrides are held by the listing modules; Future: automatic ISO table updates fetched from the network (MVP ships a signed snapshot with each release)."
+depends_on: [F09.S03.M03, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001]
+user_stories:
+  - As a seller, I can only price my listing in currencies enabled in my vault, with the right number of decimals.
+  - As a user, I can enable a new stablecoin in my vault by registering its chain, contract and decimals, and I see its checksummed contract before using it.
+  - As a developer, I can look up the minor-unit exponent of any currency from one authoritative place.
+edge_cases:
+  - The principal tries to change decimals of USDC from 6 to 18 after deals exist; refused with COMMERCE_CURRENCY_IMMUTABLE.
+  - A currency is disabled while open offers use it; existing Money values stay valid and readable, but new use is refused with COMMERCE_CURRENCY_DISABLED.
+  - A code is registered twice with different decimals in two concurrent requests; the unique index lets exactly one succeed.
+  - ISO code withdrawn by the standard (for example a replaced currency) is retired only when no open deal references it.
+  - A signed statement from a peer uses a currency code missing from the local registry; the statement is quarantined with COMMERCE_CURRENCY_UNKNOWN and the user may register the asset after reviewing it.
+  - Crypto asset registered with a contract address on an unconfigured chain is refused with COMMERCE_CURRENCY_CHAIN_UNSUPPORTED.
+  - A client holding an older snapshot sends a currency that the relay has just retired; the relay rejects it and the client refreshes its list.
+ux:
+  screens:
+    - "Currency settings list: table with code, name, decimals, kind, enabled switch, and a Register crypto asset form (code, name, decimals, chain, contract)."
+    - "Currency picker in price inputs: only enabled currencies, recently used first, shows decimals in the helper text."
+  states: [loading, empty, enabled, disabled, retired, error]
+  a11y:
+    - Enable switches are labelled with the currency code and name and announce state changes politely.
+    - The picker is a listbox with type-ahead and visible focus; options are at least 44 px high.
+processes:
+  domain_schema:
+    requirements:
+      - A CurrencyDef stores code, kind (fiat or crypto), name, decimals, optional chain binding, status and revision per CTR-ID-001, scoped per vault.
+      - Currency definitions are P0 reference data retained as RET-STANDARD; they hold no personal data.
+      - Decimals, kind and chain binding are immutable after registration; only status and display name can change.
+    entities:
+      - name: CurrencyDef
+        schema: classrup.commerce.currency_def/v1
+        storage: device
+        privacy: P0
+        retention: RET-STANDARD
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "code: string — ISO 4217 alpha-3 uppercase, or crypto code 2..10 chars A-Z0-9; unique per vault"
+          - "kind: enum — fiat | crypto"
+          - "name: string — 1..60 code points"
+          - "decimals: int — 0..18 for fiat (ISO list), 0..36 for crypto; immutable"
+          - "chainId?: string — required for crypto; one of the configured chains (bitcoin-mainnet, ethereum-mainnet)"
+          - "contract?: string — token contract address for ERC-20 style assets; absent for native assets"
+          - "status: enum — active | disabled | retired"
+          - "snapshotVersion?: string — ISO table snapshot date for fiat rows, e.g. 2026-01-01"
+          - "revision: int — CTR-ID-001 ID-4"
+          - "createdAt: timestamp — RFC 3339 UTC"
+          - "updatedAt: timestamp — RFC 3339 UTC"
+        invariants:
+          - code is unique per vault and never reused after retirement.
+          - decimals never change after creation.
+          - A crypto row has chainId; a fiat row has neither chainId nor contract.
+    sql: |
+      CREATE TABLE commerce_currency_def (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL /* vault id */, code TEXT NOT NULL, kind TEXT NOT NULL,
+        decimals INTEGER NOT NULL, chain_id TEXT, status TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX commerce_currency_code ON commerce_currency_def(tenant_id, code);
+  validation_rules:
+    requirements:
+      - Registration is validated against the schema and the configured chain list before persistence.
+      - Every lookup of an unknown code returns COMMERCE_CURRENCY_UNKNOWN with the offending code in params.
+      - Status changes check for dependent open records through the CurrencyUsagePort.
+    rules:
+      - "V01 | fiat code is exactly 3 uppercase letters and present in the bundled ISO 4217 snapshot | COMMERCE_CURRENCY_UNKNOWN"
+      - "V02 | crypto code matches 2 to 10 characters of A-Z and 0-9 and does not collide with an ISO code | VALIDATION_FAILED"
+      - "V03 | decimals is within the allowed range for the kind | VALIDATION_FAILED"
+      - "V04 | crypto asset chainId is configured and contract address is valid for that chain | COMMERCE_CURRENCY_CHAIN_UNSUPPORTED"
+      - "V05 | code not already registered in this vault | COMMERCE_CURRENCY_EXISTS"
+      - "V06 | decimals, kind and chain binding equal the stored values on update | COMMERCE_CURRENCY_IMMUTABLE"
+      - "V07 | currency used in a new Money value is active | COMMERCE_CURRENCY_DISABLED"
+      - "V08 | retirement only when no open deal, offer or quote references the code | PRECONDITION_FAILED"
+  workflow_state_machine:
+    requirements:
+      - Currencies move between active and disabled freely; retirement is permanent.
+      - Disabling never alters existing records; it only blocks new use.
+      - Retirement requires the usage check to show zero open references.
+    machines:
+      - entity: CurrencyDef
+        initial: active
+        terminal: [retired]
+        transitions:
+          - "active -> disabled | commerce.currency.set_status by operator | emits commerce.currency.status_changed"
+          - "disabled -> active | commerce.currency.set_status by operator | emits commerce.currency.status_changed"
+          - "disabled -> retired | commerce.currency.set_status by operator | CurrencyUsagePort reports zero open references; emits commerce.currency.status_changed"
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - Register and set_status are vault commands (local, actor is the unlocked principal, no signed statement and no relay command); get and list are vault queries.
+      - Registration and status changes emit events into the vault outbox in the same IndexedDB transaction as the state change.
+      - Other modules resolve currencies through the query or the in-process CurrencyRegistry cache, refreshed within 30 s of a change.
+    commands:
+      - name: commerce.currency.register
+        capability: commerce.currency.register
+        input: "[vault command] { code, kind: crypto, name, decimals, chainId, contract? }"
+        output: "{ currencyId, revision: 1 }"
+        errors: [VALIDATION_FAILED, COMMERCE_CURRENCY_EXISTS, COMMERCE_CURRENCY_CHAIN_UNSUPPORTED]
+        emits: [commerce.currency.registered]
+        idempotent: true
+      - name: commerce.currency.set_status
+        capability: commerce.currency.set_status
+        input: "[vault command] { currencyId, status: active|disabled|retired, expectedRevision }"
+        output: "{ currencyId, revision, status }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, PRECONDITION_FAILED, COMMERCE_CURRENCY_IMMUTABLE]
+        emits: [commerce.currency.status_changed]
+        idempotent: true
+    queries:
+      - name: commerce.currency.list
+        capability: commerce.currency.read
+        input: "{ status?: active|disabled|retired|all, kind?: fiat|crypto, cursor?, limit ≤ 200 }"
+        output: "{ items: CurrencyDef[], nextCursor? }"
+        errors: []
+      - name: commerce.currency.get
+        capability: commerce.currency.read
+        input: "{ code }"
+        output: "CurrencyDef"
+        errors: [COMMERCE_CURRENCY_UNKNOWN]
+    events_produced:
+      - {type: commerce.currency.registered, privacy: P0, payload: "{ currencyId, code, kind, decimals, chainId? }"}
+      - {type: commerce.currency.status_changed, privacy: P0, payload: "{ currencyId, code, from, to }"}
+    events_consumed: []
+    errors:
+      - "COMMERCE_CURRENCY_UNKNOWN | 422 | no | currency code is not registered (MNY-2)"
+      - "COMMERCE_CURRENCY_EXISTS | 409 | no | code already registered for this tenant"
+      - "COMMERCE_CURRENCY_IMMUTABLE | 422 | no | decimals, kind or chain binding cannot change"
+      - "COMMERCE_CURRENCY_DISABLED | 422 | no | currency exists but is not enabled for new use"
+      - "COMMERCE_CURRENCY_CHAIN_UNSUPPORTED | 422 | no | chain is not configured or contract is invalid"
+    example: |
+      POST /api/v1/cmd/commerce.currency.register
+      Idempotency-Key: 0192f3a4-0000-7000-8000-0000000000c1
+      { "code": "USDC", "kind": "crypto", "name": "USD Coin", "decimals": 6, "chainId": "ethereum-mainnet", "contract": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" }
+      201 { "currencyId": "0192f3a5-…", "revision": 1 }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked local principal reads, registers or changes currencies in its vault.
+      - A relay may expose its accepted-currency list read-only to anonymous clients as a relay policy row; relay operators change that row under relay policy, outside this module's records.
+      - Every state-changing decision is written to the vault's local audit log with no payload content.
+    capabilities:
+      - "commerce.currency.read | local-principal, anonymous | local principal reads all vault rows; anonymous reads only a relay's published accepted list"
+      - "commerce.currency.register | local-principal | vault unlocked; feature flag commerce.crypto not disabled for crypto kind"
+      - "commerce.currency.set_status | local-principal | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - Registration and status changes are idempotent under CTR-IDM-001 (vault command IDs) and use expectedRevision where applicable.
+      - The unique (vault, code) index serializes concurrent registrations from several tabs so exactly one wins.
+      - The in-memory cache falls back to IndexedDB if invalidation messages between tabs are lost.
+    idempotency: "Command ID recorded in the vault inbox; replay within 24 h returns the stored response."
+    concurrency: "Unique index on (vault id, code) in IndexedDB; set_status uses expectedRevision; multi-tab writers serialize through a Web Lock named commerce-currency."
+    retries: "No network involved; cache refresh retries every 5 s up to 6 times, then reads through to IndexedDB."
+    offline: "Fully offline; the registry is local."
+    partial_failure: "Seeding a new vault runs in one IndexedDB transaction; failure rolls back to zero rows and is retried at next vault open."
+  privacy_retention_abuse:
+    requirements:
+      - Currency data is public reference data and contains no personal information.
+      - Local changes are recorded in the vault's local audit log (RET-AUDIT, 1 year).
+      - Crypto contract addresses are validated and shown with a checksum so users can verify the asset they are paying with.
+    data:
+      - "CurrencyDef: P0 reference data."
+    retention:
+      - "RET-STANDARD for definitions; local change audit RET-AUDIT (1 year)."
+    threats:
+      - "T01 | A scam link or imported statement prompts the user to register a look-alike token | contract address displayed with checksum and chain name; registration is an explicit local action with a warning; only BTC, ETH and USDC exist by default"
+      - "T02 | Decimals change corrupts stored amounts | decimals immutable, enforced in domain and by a SQL trigger"
+    abuse_controls:
+      - "Register is limited to 20 calls per hour per vault and requires a confirmation dialog; a relay may refuse to index listings priced in assets outside its accepted list."
+  observability_performance:
+    requirements:
+      - Lookups are cached and meet a very low latency budget.
+      - The PWA sends no telemetry (OBS-7); counters stay in local diagnostics and relay metrics follow CTR-OBS-001 where a relay hosts the list.
+      - Cache staleness is observable.
+    metrics:
+      - "Local diagnostics: classrup_commerce_currency_lookups_total{result=hit|miss|unknown}"
+      - "classrup_commerce_currency_cache_age_ms (gauge)"
+    logs:
+      - "info currency.status_changed {currencyId, code, from, to, correlationId}"
+    budgets:
+      - "get/list p95 ≤ 20 ms on IndexedDB; in-process cached resolve p99 ≤ 0.1 ms."
+      - "Vault seed of 190 rows completes within 500 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Contract tests validate command outputs and event payloads against the registry schemas.
+      - Immutability is covered by property and migration tests.
+    fixtures: "Vault seeded from ISO snapshot 2026-01-01 with BTC, ETH, USDC; local principal P and a peer statement fixture."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | register a crypto asset with valid data | row stored with revision 1, decimals and chain binding intact"
+      - "T02 | unit | 02.R01,02.R02 | lookup of XXX9 and of a withdrawn code | COMMERCE_CURRENCY_UNKNOWN with code in params"
+      - "T03 | unit | 01.R03,02.R03,09.R03 | update attempt on decimals and chain binding | COMMERCE_CURRENCY_IMMUTABLE and nothing stored"
+      - "T04 | property | 03.R01,03.R02 | random status transitions | only active, disabled, retired transitions succeed; retired is final; existing Money stays readable"
+      - "T05 | integration | 03.R03,02.R03 | retire a currency referenced by an open offer | PRECONDITION_FAILED until references are closed"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | execute each command and query | outputs and events validate against the registry"
+      - "T07 | integration | 04.R03,06.R03 | vault seeding interrupted halfway and reopened twice | exactly one complete set of rows exists, second open is a no-op"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | peer statement with unknown currency; anonymous reads relay accepted list; attempt to call register without unlocking | statement quarantined with COMMERCE_CURRENCY_UNKNOWN; only the relay's published list visible; locked vault refuses; local audit entry written"
+      - "T09 | integration | 06.R01,06.R02 | two tabs concurrently registering the same code | one succeeds, one COMMERCE_CURRENCY_EXISTS"
+      - "T10 | integration | 07.R01,07.R02,07.R03 | register USDC and read via query | contract shown with EIP-55 checksum; audit retained"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 1 000 lookups per second for 2 minutes | p95 ≤ 20 ms and metrics exported"
+      - "T12 | unit | 09.R01 | traceability tool run | every PS-073 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export and re-import the registry into a fresh vault; roll back one release | rows identical; v1 rows readable by previous release"
+    acceptance:
+      - All tests T01–T13 pass in CI.
+      - Decimals of an existing currency can never change through any API or migration.
+      - A tenant seeded from the snapshot offers exactly the configured allowed list to price inputs.
+  import_export_backup_rollback:
+    requirements:
+      - The registry is included in the vault export as a configuration section so a restored vault keeps custom assets.
+      - Import validates codes, decimals and chain binding and rejects rows that conflict with existing immutable fields.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section commerce.currencies in the vault export classrup-export/v1; one line per CurrencyDef (schema classrup.commerce.currency_def/v1)."
+    import: "Rows with a code already present must match decimals, kind and chain binding exactly; otherwise the import fails with COMMERCE_CURRENCY_IMMUTABLE."
+    backup: "The vault export is the primary backup (IOX-6); relays keep no per-user registry."
+    migration_rollback: "ISO snapshot updates add rows or mark them retired only; no decimals change. Rollback to the previous release is safe because the older snapshot rows remain valid."

@@ -1,35 +1,35 @@
-# PS-127-02 — validation rules
+# PS-127-02 — Validation rules: Secrets handling
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-02. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S01.M02 Secrets handling](SPEC.md) · **Scope:** MVP · **Code:** `packages/security/src/authz/secrets` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md)
 
-## Purpose and scope
-Define the validation rules process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-127-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-127-02.R01** Startup validates that every secret in the manifest is present exactly once with correct size and permissions.
+- **PS-127-02.R02** Token and secret formats are validated before use, and failures return generic errors that do not reveal which character differed.
+- **PS-127-02.R03** Every violation maps to one stable error code.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | each required secret in the manifest is present and non-empty | SECURITY_SECRET_MISSING |
+| V02 | not both the variable and the _FILE form are set | SECURITY_SECRET_AMBIGUOUS |
+| V03 | secret file mode is 0400 or 0600, owner is the process user, not a symlink, size at most 4096 bytes | SECURITY_SECRET_PERMISSIONS |
+| V04 | secret length meets manifest minimum (32 bytes for keys, 16 characters for passwords) | SECURITY_SECRET_WEAK |
+| V05 | relay access token is exactly 43 base64url characters (256 bits) before hashing | UNAUTHENTICATED |
+| V06 | CI scanner finds no unallowed secret pattern in the diff or history | SECURITY_SECRET_LEAK_DETECTED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-127-09.T01 | unit | PS-127-01.R01, PS-127-02.R01, PS-127-02.R03 | manifest with all secrets present once | all loaded; names match pattern; minimum sizes enforced |
+| TEST-PS-127-09.T02 | unit | PS-127-02.R01, PS-127-02.R02 | missing, ambiguous, permissive, symlinked, short secrets | documented SECURITY_SECRET_* code each; relay does not start |
+| TEST-PS-127-09.T05 | unit | PS-127-01.R03, PS-127-02.R03 | hashToken for 43-character token and malformed tokens | SHA-256 of decoded bytes for valid; UNAUTHENTICATED for malformed |
+| TEST-PS-127-09.T07 | integration | PS-127-04.R03, PS-127-02.R02, PS-127-09.R02 | scanner on corpus and on a pull request adding a key | exit 1 with rule, path, line and no value on positives; exit 0 on negatives; allow-list requires reviewed file |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: CTR-OBS-001, CTR-PRV-001, CTR-CAP-001. Predecessor: [domain_schema.md](domain_schema.md).

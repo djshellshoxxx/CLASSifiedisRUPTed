@@ -1,35 +1,33 @@
-# PS-093-02 — validation rules
+# PS-093-02 — Validation rules: Moderation evidence
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-093-02. **Owner:** [12_Moderation/01_reporting/mod_evidence](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_evidence. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F12.S01.M02 Moderation evidence](SPEC.md) · **Scope:** MVP · **Code:** `packages/moderation/src/reporting/evidence` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for evidence within 01_reporting. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-093-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-093-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-093-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-093-02.R01** Capture input is validated strictly and the caller must hold the target with a verifiable author signature, except for a labelled reporter claim.
+- **PS-093-02.R02** Size limits are enforced before any storage so evidence is never truncated.
+- **PS-093-02.R03** Verification and read requests are validated against the accessor's purpose and case context.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | targetType is in the allowed list and targetId is a uuidv7 | VALIDATION_FAILED |
+| V02 | the store holds the target envelope for targetCid and targetRevision | MODERATION_EVIDENCE_SOURCE_MISSING |
+| V03 | canonical body is at most 262144 bytes and at most 5 media items of at most 2097152 bytes each | PAYLOAD_TOO_LARGE |
+| V04 | the author signature over the envelope verifies against authorKey, or the capture is explicitly a labelled reporter claim | MODERATION_EVIDENCE_SIGNATURE_INVALID |
+| V05 | relay read purpose case_review or appeal_review carries a caseId the moderator is assigned to | FORBIDDEN |
+| V06 | snapshot integrity is not purged | EXPIRED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-093-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-093-09.T01 | unit | PS-093-01.R01, PS-093-02.R01 | capture signed listing revision 3 in a vault | snapshot stored with canonical body, SHA-256 equal to independent recomputation, signature status valid |
+| TEST-PS-093-09.T03 | unit | PS-093-02.R02, PS-093-02.R03 | each rule V02–V06 violated in turn | documented error code and no row stored; forged author signature refused |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

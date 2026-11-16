@@ -1,0 +1,222 @@
+# F09.S02.M03 Settlement reconciliation (ADR-0015, ADR-0016). Read-only checks over the local vault; never repairs or moves money.
+id: F09.S02.M03
+scope: MVP
+summary: >-
+  Periodically compares, inside the user's vault, the Deals, payment claims, chain observations, receipts and sync state that
+  belong together, and reports where they disagree or have gone stale: a completed Deal without a settled claim, a final
+  crypto claim without an observation, a claim silent for 10 days, a statement that never left the device, an unresolved fork.
+  The report is advice for the user; the module reads other modules through ports, changes nothing in them and never moves money.
+responsibilities:
+  - Own ReconciliationReport: a derived, recomputable snapshot with counts and a list of mismatches, produced daily, on demand and incrementally after key events.
+  - Detect ten mismatch kinds with severities and emit commerce.reconciliation.mismatch_found once per new mismatch.
+  - Let the user dismiss a mismatch with a note so it is not re-announced, while it stays visible in the report.
+  - Keep scanning cost bounded (500 records per tick, yielding to the UI) so large vaults stay responsive.
+non_responsibilities:
+  - Correcting or repairing records; each owning module (F09.S01.M01, F09.S01.M03, F09.S02.M01) changes its own data.
+  - Accounting, tax and bookkeeping reports.
+  - Relay-side reconciliation of relay-held data (relay operators use their own tooling under F15).
+  - "Future: scheduled export of reconciliation reports to a user-selected location and cross-vault comparison of signed state digests with a counterparty."
+depends_on: [F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a seller, I see a daily note that two claims have been waiting for my acknowledgement for 10 days before they expire.
+  - As a buyer paying in BTC, I see that my claim has no verifier configured and what to do about it.
+  - As a user with many deals, I can run a check and see only the items that need action.
+edge_cases:
+  - A mismatch disappears because the owning module fixed it; the next report marks it resolved and does not emit again.
+  - The same mismatch persists across daily runs; it is emitted once and shown in every report until dismissed or resolved.
+  - A run is interrupted by closing the PWA at 40 percent; the report is marked failed and the next run restarts from scratch with the same result.
+  - A vault with 20 000 claims; the scan is chunked and finishes within the budget without blocking input.
+  - Clock set backwards by a day; stale-claim detection uses the monotonic lastProgressAt differences and never produces negative ages.
+  - A dismissed mismatch becomes worse (a claim goes from stale to expired); a new mismatch of a different kind is emitted.
+ux:
+  screens:
+    - "Settlement check card on the Deals screen: last run time, count of items needing action, Run check button."
+    - "Mismatch list: grouped by severity with plain-language explanation, deep link to the deal or claim, Dismiss with note."
+  states: [loading, no-issues, issues-found, running, failed, dismissed]
+  a11y:
+    - Severity is conveyed by text label and icon, not color alone.
+    - Run progress is announced politely at 25 percent steps.
+    - Dismiss buttons have names containing the mismatch summary and are at least 44 px high.
+processes:
+  domain_schema:
+    requirements:
+      - A ReconciliationReport stores scope, time window, record counts, a list of at most 500 mismatches and a status, and is derived data that can always be recomputed.
+      - Each mismatch has a stable key made of kind and subject IDs so repeated runs recognize it.
+      - Reports are P2 because they reference deals and claims, are kept in the vault only for 30 days, and never leave the device except in the user's own export.
+    entities:
+      - name: ReconciliationReport
+        schema: classrup.commerce.reconciliation_report/v1
+        storage: device
+        privacy: P2
+        retention: RET-SHORT
+        fields:
+          - "id: uuidv7 — primary key"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
+          - "trigger: enum — daily | manual | event"
+          - "scope: object — {type: all|deal, dealId?}"
+          - "startedAt: timestamp — local clock"
+          - "completedAt?: timestamp — local clock"
+          - "status: enum — running | completed | failed"
+          - "counts: object — {deals, claims, observations, receipts, statementsPending}"
+          - "mismatches: array — up to 500 {key, kind, severity: info|warn|action, dealId?, claimId?, detailKey, firstSeenAt, dismissedAt?, dismissNote? ≤ 280, resolved: boolean}"
+          - "truncated: boolean — true when more than 500 mismatches were found"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - mismatch keys are unique within a report.
+          - A completed report has completedAt and counts; a failed report keeps no partial mismatch list.
+          - The module writes only ReconciliationReport rows; it never writes to Deal, PaymentClaim, ChainObservation or Receipt.
+  validation_rules:
+    requirements:
+      - Run requests are validated for scope and rate before scanning starts.
+      - Each mismatch kind has an explicit, testable detection rule evaluated over read-only snapshots.
+      - Dismiss input is validated and attributable to the local principal only.
+    rules:
+      - "V01 | scope.type is all or deal and a deal scope names an existing Deal | VALIDATION_FAILED"
+      - "V02 | at most 1 manual run per 5 minutes per vault | RATE_LIMITED"
+      - "V03 | no other run is currently running in this vault | CONFLICT_STATE"
+      - "V04 | dismiss targets a mismatch key present in the report and the report is the latest completed one | NOT_FOUND"
+      - "V05 | dismiss note is at most 280 code points | VALIDATION_FAILED"
+      - "V06 | report with more than 500 mismatches keeps the 500 highest severity and sets truncated | COMMERCE_RECON_TRUNCATED"
+  workflow_state_machine:
+    requirements:
+      - A run is running until it completes or fails; reports are immutable after that except for dismiss marks.
+      - The ten mismatch kinds and their rules are fixed by this spec and listed in the mismatch catalog below.
+      - Runs are restartable; a failed run leaves no partial effects.
+    machines:
+      - entity: ReconciliationReport
+        initial: running
+        terminal: [completed, failed]
+        transitions:
+          - "running -> completed | scan finished | counts and mismatches stored; emits commerce.reconciliation.mismatch_found for each new mismatch key"
+          - "running -> failed | interruption, storage error or 120 s timeout | partial results discarded"
+    timeouts:
+      - "Daily run at the first vault unlock after 24 h since the last completed run; incremental runs 30 s after relevant events, coalesced; run timeout 120 s."
+      - "Mismatch catalog. M01 deal_completed_without_settled_claim (action); M02 crypto_claim_final_without_observation (action); M03 observation_final_but_claim_not_final (action); M04 claim_acknowledged_without_ack_statement (warn); M05 stale_claim older than 10 days without progress (warn); M06 amount_or_currency_mismatch including overpayment (action); M07 receipt_without_matching_claim_state (warn); M08 statement_stuck prepared for over 24 h (info); M09 unresolved_fork (action); M10 crypto_claim_without_verifier older than 24 h (warn)."
+  commands_queries_events:
+    requirements:
+      - Run and dismiss are vault commands (local, no signed statement, no relay command); queries return the latest and past reports.
+      - A completed run emits one commerce.reconciliation.mismatch_found event per new mismatch key into the vault outbox in the same IndexedDB transaction as the report update.
+      - The module consumes settlement events only to schedule coalesced incremental runs and never to change data.
+    commands:
+      - name: commerce.reconciliation.run
+        capability: commerce.reconciliation.run
+        input: "[vault command, local] { scope?: {type: all|deal, dealId?} (default all) }"
+        output: "{ reportId, status: running }"
+        errors: [VALIDATION_FAILED, NOT_FOUND, RATE_LIMITED, CONFLICT_STATE]
+        emits: [commerce.reconciliation.mismatch_found]
+        idempotent: true
+      - name: commerce.reconciliation.dismiss
+        capability: commerce.reconciliation.dismiss
+        input: "[vault command, local] { reportId, key, note? }"
+        output: "{ reportId, key, dismissedAt }"
+        errors: [VALIDATION_FAILED, NOT_FOUND]
+        emits: []
+        idempotent: true
+    queries:
+      - name: commerce.reconciliation.latest
+        capability: commerce.reconciliation.read
+        input: "{ severity?: info|warn|action }"
+        output: "{ report: ReconciliationReport | null }"
+        errors: []
+      - name: commerce.reconciliation.list
+        capability: commerce.reconciliation.read
+        input: "{ cursor?, limit ≤ 30 }"
+        output: "{ items: ReconciliationReport[], nextCursor? }"
+        errors: []
+    events_produced:
+      - {type: commerce.reconciliation.mismatch_found, privacy: P2, payload: "{ reportId, key, kind, severity, dealId?, claimId? }"}
+    events_consumed:
+      - {type: commerce.deal.completed, effect: "schedule a coalesced incremental run for that deal 30 s later"}
+      - {type: commerce.payment.finalized, effect: "schedule an incremental run for the claim's deal"}
+      - {type: commerce.payment.reorged, effect: "schedule an incremental run for the claim's deal"}
+      - {type: commerce.receipt.issued, effect: "schedule an incremental run for the claim's deal"}
+      - {type: commerce.payment.expired, effect: "mark the matching stale-claim mismatch resolved on the next run"}
+    errors:
+      - "COMMERCE_RECON_TRUNCATED | 200 | no | more than 500 mismatches were found and the report was truncated"
+    example: |
+      vault command commerce.reconciliation.run {}
+      => { "reportId": "0192f3ac-…", "status": "running" }
+      completed report excerpt: { "counts": { "deals": 12, "claims": 15, "observations": 4, "receipts": 9, "statementsPending": 1 },
+        "mismatches": [ { "key": "M05:0192f3a7-…", "kind": "stale_claim", "severity": "warn", "claimId": "0192f3a7-…", "detailKey": "recon.stale_claim", "resolved": false } ] }
+  authorization_capabilities:
+    requirements:
+      - Under vault policy (CAP-8) only the unlocked principal runs, dismisses or reads reports in its vault.
+      - The module has read-only access to other modules' records through ports and no write access to them.
+      - No relay role has any capability over reports; they never leave the device.
+    capabilities:
+      - "commerce.reconciliation.run | local-principal | vault unlocked; at most 1 manual run per 5 minutes"
+      - "commerce.reconciliation.dismiss | local-principal | vault unlocked; mismatch present in the latest completed report"
+      - "commerce.reconciliation.read | local-principal | vault unlocked"
+  failure_recovery_idempotency:
+    requirements:
+      - Runs are idempotent for identical vault state, so the same mismatch keys are produced and events are emitted only for keys not seen before.
+      - An interrupted run is marked failed and restarted from scratch; there is nothing to roll back because the scan is read-only.
+      - Two tabs cannot run concurrently; the second joins the first.
+    idempotency: "Vault command ID recorded for 24 h; mismatch events are deduplicated by key against the previous completed report."
+    concurrency: "Single-flight through the Web Lock commerce-recon; unique running report per vault."
+    retries: "A failed daily run is retried at the next unlock and after 1 h while the PWA stays open, at most 3 times a day."
+    offline: "Fully offline; reconciliation reads local data only."
+    partial_failure: "Failure discards partial mismatches and marks the report failed; previous completed report remains the latest."
+  privacy_retention_abuse:
+    requirements:
+      - Reports reference P2 records and stay in the vault; they contain IDs and kinds only, never amounts, notes or addresses.
+      - Reports are kept 30 days and are regenerated on demand, so deletion of source data removes the underlying subject at the next run.
+      - Alert fatigue and misleading alarms are limited by severity levels, dedupe by key and dismissal.
+    data:
+      - "ReconciliationReport: P2, IDs and kinds only."
+    retention:
+      - "RET-SHORT (30 days); derived and recomputable."
+    threats:
+      - "T01 | Report used to infer a counterparty's data | reports contain only the principal's own records and IDs, no cross-vault data"
+      - "T02 | False reassurance from a clean report | UI states the check only compares local records and cannot see the counterparty or the money"
+    abuse_controls:
+      - "Manual run limited to 1 per 5 minutes; incremental runs coalesced to at most 1 per 30 s per deal."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); run duration and mismatch counts stay in local diagnostics.
+      - Scans are chunked so the main thread is blocked no longer than 50 ms at a time.
+      - Run duration meets the budget for large vaults.
+    metrics:
+      - "Local diagnostics: classrup_commerce_recon_runs_total{status}"
+      - "Local diagnostics: classrup_commerce_recon_mismatches{kind}"
+      - "Local diagnostics: classrup_commerce_recon_duration_ms (histogram)"
+    logs:
+      - "info recon.completed {reportId, mismatchCount, durationMs, correlationId} — no record contents."
+    budgets:
+      - "20 000 claims scanned in ≤ 10 s in chunks of 500 with no main-thread block over 50 ms."
+      - "Incremental run for one deal ≤ 200 ms."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement is covered by at least one automated test.
+      - Each of the ten mismatch kinds has a fixture that triggers it and a fixture that does not.
+      - The read-only guarantee is verified by a write-spy test on other modules' stores.
+    fixtures: "Seeded vault with 12 Deals, 15 claims, 4 observations, 9 receipts crafted to trigger M01 to M10 individually; fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R01 | run on the seeded vault | report has counts and keys for M01 to M10 as expected, scope validated"
+      - "T02 | unit | 02.R02,03.R02 | each kind fixture and its clean twin | mismatch present only for the triggering fixture"
+      - "T03 | unit | 02.R03,02.R01 | dismiss with valid and invalid key and over-long note | valid stored; invalid return NOT_FOUND or VALIDATION_FAILED"
+      - "T04 | unit | 01.R03,03.R01,03.R03 | interrupt a run at 40 percent and rerun | first report failed with no partial list; second identical to a fresh run"
+      - "T05 | integration | 03.R01 | complete a run twice with no changes | second run emits no new events; report keys identical"
+      - "T06 | contract | 04.R01,04.R02,09.R02 | execute commands and queries | outputs and event payloads validate against registry schemas"
+      - "T07 | integration | 04.R03 | deliver deal completed and receipt issued events within 10 s | one coalesced incremental run starts after 30 s"
+      - "T08 | abuse | 05.R01,05.R02,05.R03 | write-spy on Deal, PaymentClaim, ChainObservation and Receipt stores during a run; relay traffic check | zero writes; no network traffic"
+      - "T09 | integration | 06.R01,06.R02,06.R03 | two tabs run simultaneously | single report; second tab joins"
+      - "T10 | abuse | 07.R03,02.R02 | 2 manual runs within 5 minutes | second returns RATE_LIMITED"
+      - "T11 | integration | 07.R01,07.R02 | inspect report contents and age 31 days | IDs and kinds only; report purged after 30 days"
+      - "T12 | load | 08.R01,08.R02,08.R03 | 20 000 claims | duration ≤ 10 s; longest main-thread block ≤ 50 ms; no telemetry"
+      - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-072 requirement maps to a passing test"
+      - "T14 | integration | 10.R01,10.R02,10.R03 | export, import to a fresh vault, roll back one release | latest report exports; import marks it imported and triggers a fresh run"
+      - "T15 | e2e | 01.R03,09.R03 | open the Deals screen with issues | card lists action items with accessible severity text; axe zero serious issues"
+    acceptance:
+      - All tests T01 to T15 pass in CI.
+      - The module never writes to another module's records (write-spy test).
+      - Each mismatch kind is detected exactly when its rule holds.
+  import_export_backup_rollback:
+    requirements:
+      - The vault export includes only the latest completed report in the section commerce.reconciliation for reference.
+      - Import never trusts an imported report; it is stored as imported and a fresh run is scheduled.
+      - Schema changes follow expand/contract and keep v1 readable for 180 days.
+    export: "Section commerce.reconciliation in classrup-export/v1; one line with the latest completed ReconciliationReport (schema classrup.commerce.reconciliation_report/v1)."
+    import: "Imported report is stored with status completed and an imported flag, never merged; a new run is scheduled immediately after import."
+    backup: "Derived data; recomputable from Deals, claims, observations and receipts, so the vault export of those is the backup."
+    migration_rollback: "Additive fields only; reports older than 30 days are purged on rollback or upgrade because they are recomputable."

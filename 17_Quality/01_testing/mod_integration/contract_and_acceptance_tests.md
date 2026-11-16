@@ -1,35 +1,56 @@
-# PS-135-09 — contract and acceptance tests
+# PS-135-09 — Contract and acceptance tests: Integration testing
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-135-09. **Owner:** [17_Quality/01_testing/mod_integration](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_integration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S01.M03 Integration testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/integration` · **Contracts:** [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md)
 
-## Purpose and scope
-Define the contract and acceptance tests process for integration within 01_testing. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-135-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-135-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-135-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-135-09.R01** Every requirement of this module is covered by at least one automated test using the mapping in section 09.
+- **PS-135-09.R02** Each of the 12 flows has at least one dedicated test row and the flow list is asserted against the reference list in this spec.
+- **PS-135-09.R03** Contract tests are generated from the schema registry so a new registered command or event is covered automatically.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+See the module test table below (all processes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Fixtures:** Vaults for Alice, Bob, Carol, Dave, Erin (one memory vault each, seeded Ed25519 keys), optional in-process relay, DirectTransport, FakeClock 2026-11-04T10:00:00Z, FakeChainVerifierPort script (confirm at 12 blocks, reorg depth 2), EUR and BTC test amounts.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-135-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-135-09.T01 | integration | PS-135-01.R01, PS-135-03.R03 | boot harness and tear down 20 times | each database is isolated and removed; outbox drained assertion runs |
+| TEST-PS-135-09.T02 | integration | PS-135-01.R02, PS-135-01.R03, PS-135-07.R01 | run flows and inspect reports | no row writes by fixtures in flow files; report holds only step names, types, IDs |
+| TEST-PS-135-09.T03 | integration | PS-135-02.R01, PS-135-04.R02 | list flows from the harness | exactly the 12 documented flow names exist and each asserts state, ordered events and no unexpected events |
+| TEST-PS-135-09.T04 | integration | PS-135-02.R02, PS-135-07.R03 | flow attempts fetch to a public URL and Date.now | QUALITY_IT_ISOLATION raised, exit 3 |
+| TEST-PS-135-09.T05 | contract | PS-135-02.R03, PS-135-09.R03 | validate every registered command, event and error | all validate; a mutated schema produces QUALITY_IT_CONTRACT_MISMATCH |
+| TEST-PS-135-09.T06 | integration | PS-135-03.R01, PS-135-03.R02, PS-135-04.R01 | run barter_two, cycle_three, cycle_four, cycle_n, barter_mixed to completion and to expiry | terminal states reached or expired exactly once |
+| TEST-PS-135-09.T07 | integration | PS-135-04.R03, PS-135-06.R03 | run with scripted consumer crash and redelivery | single net effect and outbox drained |
+| TEST-PS-135-09.T08 | integration | PS-135-05.R01, PS-135-05.R02 | each flow performs a wrong-actor step | FORBIDDEN or NOT_FOUND per ERR-4 |
+| TEST-PS-135-09.T09 | abuse | PS-135-05.R03, PS-135-07.R02 | import fake port from production code and scan logs for P3 canary | import rejected; canary absent from logs, exports and P0 payloads |
+| TEST-PS-135-09.T10 | integration | PS-135-06.R01 | replay first mutating command in each flow | identical response and zero new events |
+| TEST-PS-135-09.T11 | integration | PS-135-06.R02 | two concurrent offer acceptances with the deterministic scheduler | same interleaving every run; exactly one accepted |
+| TEST-PS-135-09.T12 | integration | PS-135-08.R01, PS-135-08.R02 | run full suite with timing report | each flow at most 5 s, whole suite at most 120 s, report lists durations |
+| TEST-PS-135-09.T13 | integration | PS-135-08.R03 | boot relay harness 50 times | startup at most 2 s each |
+| TEST-PS-135-09.T14 | integration | PS-135-09.R01, PS-135-09.R02 | assert the flow list equals the reference list and every spec requirement maps to a test | no missing flow or uncovered requirement |
+| TEST-PS-135-09.T15 | integration | PS-135-10.R01, PS-135-10.R02 | federation_io: export from relay A, import to relay B | entities round trip identical; conflicting IDs rejected; report contains no user data |
+| TEST-PS-135-09.T16 | integration | PS-135-10.R03 | revert harness commit in a branch | production tests unaffected |
+| TEST-PS-135-09.T17 | integration | PS-135-03.R03 | payments_claims: cash claim then crypto claim with reorg depth 2 via FakeChainVerifierPort | crypto claim returns to pending after reorg and completes after reconfirmation; platform never holds funds |
+| TEST-PS-135-09.T18 | integration | PS-135-02.R01 | fraud_moderation and messages_private flows | moderation action recorded with audit entry; message payloads absent from public views |
+| TEST-PS-135-09.T19 | integration | PS-135-02.R04, PS-135-06.R04 | run all flows with --mode relay and --mode direct | same final vault state in both modes except declared relay-only flows; QUALITY_IT_MODE_DIVERGENCE otherwise |
+| TEST-PS-135-09.T20 | integration | PS-135-02.R04 | relay_down_midflow: stop relay between prepared and transport_acknowledged | local records intact; status prepared; completes via direct exchange |
+| TEST-PS-135-09.T21 | integration | PS-135-02.R04 | forked_vault: two signed conflicting reservations delivered in both orders | fork detected and coordination frozen in both vaults; no last-writer-wins |
+| TEST-PS-135-09.T22 | integration | PS-135-02.R04 | revocation_lag: statement signed by a revoked key before and after the revocation arrives | accepted before, quarantined after; lag window reported |
+| TEST-PS-135-09.T23 | abuse | PS-135-02.R04 | relay_tamper: relay flips one byte of an envelope | signature_invalid, statement quarantined with provenance, no state change |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+
+- All 12 reference flows pass with outbox drained and zero unexpected events.
+- Contract tests validate every registered command, event and error against the schema registry.
+- The crypto claim flow demonstrates a simulated reorg returning the claim to pending.
+- The full integration suite finishes within 120 s on 2 vCPU.
+
+## Dependencies
+
+Module depends on: CTR-TST-001, CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-IDM-001, CTR-COM-001, CTR-FED-001, CTR-ID-001, F17.S01.M01, F15.S02.M02, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).

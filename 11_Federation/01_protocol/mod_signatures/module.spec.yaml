@@ -1,0 +1,165 @@
+id: F11.S01.M03
+scope: MVP
+summary: >-
+  Shared library, used in the browser vault, the PWA service worker and relays (ADR-0016), that canonicalizes federation envelopes with RFC 8785 JCS (npm canonicalize 5.1.0, vendor-tested
+  against the RFC 8785 test vectors), signs and verifies them with Ed25519 (RFC 8032), encodes and decodes
+  did:key identifiers (multicodec ed25519-pub 0xed 0x01, base58btc with the z prefix) and signs relay-to-relay
+  HTTP requests. A valid signature is evidence that the holder of the key asserted the content; it proves
+  nothing about delivery, truthfulness or the real-world identity of the signer.
+responsibilities:
+  - Produce JCS bytes of an envelope without its sig member and compute the cid as "sha256-" plus base64url of SHA-256 over those bytes.
+  - Sign and verify Ed25519 signatures encoded as unpadded base64url (64 bytes decoded) with strict canonical-S checking.
+  - Encode a 32-byte Ed25519 public key to did:key:z6Mk... and decode it back, rejecting any other multicodec or length.
+  - Sign and verify relay request headers (Date, Digest, Signature) for POST /fed/v1/inbox with a 300 s clock window.
+non_responsibilities:
+  - Storing envelopes or provenance (F11.S01.M02 mod_records).
+  - Holding user private keys; user device keys stay in the user's vault (non-extractable where the platform allows) and only an operator-held relay key is used on a relay.
+  - Deciding whether a valid signer holds the right role for a statement (F11.S01.M01 registry and F11.S01.M02 enforcement).
+  - Peer allowlists and key pinning decisions (F11.S03.M01 mod_trust).
+  - "Future: ActivityPub HTTP Signatures and AT Protocol repo signatures; only documented as mappings in F11.S03.M03."
+depends_on: [CTR-FED-001, CTR-ERR-001, CTR-ID-001, CTR-OBS-001, CTR-TST-001]
+user_stories:
+  - As a relay operator, I can verify that an envelope received from a peer was signed by the did:key named in its author field.
+  - As a developer, I can call one function to canonicalize, hash and sign an envelope on a device and get the same bytes on every platform.
+  - As a security reviewer, I can run the vendored RFC 8785 test vectors and the RFC 8032 vectors in CI and see them pass.
+edge_cases:
+  - Envelope contains a number such as 1e400, a lone surrogate in a string or a duplicate key after parsing; canonicalization rejects it with FEDERATION_ENVELOPE_NOT_CANONICALIZABLE.
+  - Signature is a valid Ed25519 signature but with non-canonical S (malleable); verification rejects it as FED_SIGNATURE_INVALID.
+  - author did:key uses a secp256k1 (0xe7) or P-256 multicodec; decode rejects it with FEDERATION_DID_UNSUPPORTED.
+  - Envelope with sig member plus an extra unknown top-level member; the unknown member is part of the signed bytes, so removing it invalidates the signature.
+  - Relay request Date header is 301 s old or Digest does not match the body; request verification rejects it.
+  - Same key signs the same envelope twice; Ed25519 is deterministic so both signatures are byte-identical and dedup is unaffected.
+ux:
+  notes: "Headless library; no screens. Errors surface to users in the statement detail view of the vault and to relay operators in the peer diagnostics screen of F11.S03.M01 using messageKey values federation.error.*."
+processes:
+  domain_schema:
+    requirements:
+      - The library owns no stored entities; its value types are Envelope, Cid, DidKey and RequestSignature, all defined by CTR-FED-001.
+      - The signed bytes are exactly the RFC 8785 JCS UTF-8 serialization of the envelope object with the sig member removed, with no other transformation.
+      - Keys and signatures are fixed-size binary types with enforced lengths of 32 bytes (public key), 64 bytes (signature) and 32 bytes (SHA-256 digest).
+    entities: []
+    note: "Pure functions and value types only; nothing is persisted by this module, so no entities are owned."
+  validation_rules:
+    requirements:
+      - Every input is validated before cryptographic work to keep verification cost bounded and failure codes stable.
+      - Envelope size is capped at 262144 bytes of canonical JSON and nesting depth at 32 to bound CPU use.
+      - Each rule violation maps to one stable error code so callers can count and rate-limit by cause.
+    rules:
+      - "V01 | envelope is a JSON object, canonical size ≤ 262144 bytes, nesting depth ≤ 32, contains no non-finite numbers or lone surrogates | FEDERATION_ENVELOPE_NOT_CANONICALIZABLE"
+      - "V02 | sig is unpadded base64url decoding to exactly 64 bytes | FED_SIGNATURE_INVALID"
+      - "V03 | author is did:key with multibase prefix z, multicodec bytes 0xed 0x01 and a 32-byte key | FEDERATION_DID_UNSUPPORTED"
+      - "V04 | Ed25519 verification succeeds and S < group order L (RFC 8032 section 5.1.7) | FED_SIGNATURE_INVALID"
+      - "V05 | cid claimed in the envelope equals sha256 of the JCS bytes without sig and cid | FEDERATION_CID_MISMATCH"
+      - "V06 | relay request has Date within ±300 s, Digest header equals SHA-256 of the body and keyId resolves to a peer key | FEDERATION_REQUEST_SIGNATURE_INVALID"
+  workflow_state_machine:
+    requirements:
+      - The library is stateless and every call is a pure function of its arguments and an injected clock.
+      - Verification is a fixed pipeline with no hidden state, so the same input always yields the same Result.
+      - There is no lifecycle to model, so no machine is declared.
+    machines: []
+    timeouts: []
+    note: "Stateless library; no entity lifecycle."
+  commands_queries_events:
+    requirements:
+      - The module exposes functions, not network commands, and therefore has no capability-guarded commands or queries.
+      - Function signatures return Result<T, AppError> per CTR-ERR-001 and never throw for bad input.
+      - The module emits no events; callers record the outcome of verification in their own events.
+    commands: []
+    queries: []
+    note: "Library API surface (TypeScript): canonicalize(value) -> Uint8Array; cidOf(envelope) -> Cid; signEnvelope(envelope, privateKey) -> Envelope; verifyEnvelope(envelope) -> Result<VerifiedEnvelope>; didKeyEncode(pub32) -> string; didKeyDecode(did) -> Uint8Array(32); signRequest(req, relayKey) -> headers; verifyRequest(req, resolveKey, now) -> Result<PeerKeyId>."
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "FED_SIGNATURE_INVALID | 400 | no | signature missing, malformed, malleable or not valid for the author key"
+      - "FEDERATION_ENVELOPE_NOT_CANONICALIZABLE | 422 | no | envelope cannot be serialized under RFC 8785 or exceeds size or depth limits"
+      - "FEDERATION_DID_UNSUPPORTED | 422 | no | did is not did:key with Ed25519 multicodec 0xed"
+      - "FEDERATION_CID_MISMATCH | 422 | no | claimed cid differs from the computed cid"
+      - "FEDERATION_REQUEST_SIGNATURE_INVALID | 401 | no | relay request signature, digest or date check failed"
+    example: |
+      const env = { v: 1, type: "classrup.bazaar.listing/v1", author: "did:key:z6Mk...", createdAt: "2026-11-04T10:00:00.000Z", seq: 1, payload: { title: "Bike" }, ext: {} };
+      const signed = signEnvelope(env, devicePrivateKey);   // adds cid and sig
+      verifyEnvelope(signed);                                 // Ok({ cid, author })
+      verifyEnvelope({ ...signed, payload: { title: "Car" } }); // Err(FED_SIGNATURE_INVALID)
+  authorization_capabilities:
+    requirements:
+      - The library runs in the vault under the unlocked local principal and on relays under relay policy, and has no roles of its own; authorization of who may submit or accept envelopes is enforced by the modules that call it.
+      - The relay private key is readable only by the relay signing service and never exposed through any API or log.
+      - The module must not read any user private key; device keys are passed in by on-device callers only.
+    capabilities: []
+  failure_recovery_idempotency:
+    requirements:
+      - All functions are deterministic and side-effect free, so repeating a call is always safe.
+      - Verification never partially succeeds; a Result is either Ok with the verified cid and author or Err with one code.
+      - Clock skew handling is explicit through an injected now parameter and a fixed 300 s tolerance.
+    idempotency: "Pure functions; the same input yields the same output. Ed25519 signing is deterministic (RFC 8032), so repeated signing is byte-identical."
+    concurrency: "No shared mutable state; safe to call from workers. Verification may run in a pool of at most 4 worker threads on the relay."
+    retries: "None; failures are deterministic and must not be retried with the same input."
+    offline: "Fully offline capable; no network access; runs in the browser, service worker and Node."
+    partial_failure: "Not applicable; a failed verification produces no output and no side effect."
+  privacy_retention_abuse:
+    requirements:
+      - Private key material is never logged, serialized into errors or included in metrics labels.
+      - The library emits no telemetry from the PWA (OBS-7); counters are kept locally for diagnostics and exported only by the user.
+      - Verification cost is bounded so that malformed envelopes cannot be used to exhaust relay CPU.
+      - did:key values are pseudonymous identifiers, not anonymous; this module documents that a did:key links all records of one author.
+    data:
+      - "Public keys and signatures: P0 (published in envelopes)."
+      - "Private keys: P4, never enter this library's outputs; relay key kept in the secrets store of F16.S02."
+    retention:
+      - "No data is retained by the library; logs hold only cid prefix (first 12 chars) and error code under RET-AUDIT."
+    threats:
+      - "T01 | Signature malleability producing a second valid signature for the same content | strict canonical-S check on verify (V04)"
+      - "T02 | CPU exhaustion with huge or deeply nested JSON | size 262144 bytes and depth 32 limits before hashing or verifying (V01)"
+      - "T03 | Replay of a captured relay request | 300 s Date window plus nonce-bearing Digest; receivers also dedup by cid (F11.S02.M02)"
+      - "T04 | Canonicalization differences between platforms causing forged-looking or rejected valid records | single vendored canonicalize 5.1.0 tested against RFC 8785 vectors on Node and browser CI"
+      - "T05 | Downgrade to a weaker key type via did:key multicodec swap | only 0xed 0x01 accepted (V03)"
+    abuse_controls:
+      - "Callers must count FED_SIGNATURE_INVALID per peer and feed the count to F11.S03.M01 health score; a peer with 20 invalid signatures in 10 minutes is suspended there."
+  observability_performance:
+    requirements:
+      - Verification outcomes and latencies are measured per CTR-OBS-001 without logging keys or payloads.
+      - Verification of one typical 4 KiB envelope meets a p95 budget of 2 ms on the reference relay CPU.
+      - A batch of 100 envelopes verifies in under 250 ms on a single worker.
+    metrics:
+      - "classrup_federation_signature_verify_total{outcome=ok|invalid|malformed|unsupported_did}"
+      - "classrup_federation_signature_verify_duration_ms (histogram)"
+      - "classrup_federation_request_signature_total{outcome=ok|invalid|stale}"
+    logs:
+      - "warn federation.signature.invalid {cidPrefix, authorPrefix(16), code, correlationId} — never the signature or payload."
+    budgets:
+      - "verifyEnvelope p95 ≤ 2 ms for envelopes ≤ 4 KiB; ≤ 20 ms for envelopes up to 262144 bytes."
+      - "100-envelope batch verify ≤ 250 ms on one worker."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Conformance is proven with public vectors (RFC 8785 appendix and RFC 8032 section 7.1) run in CI on Node and Chromium.
+      - Property tests prove sign-then-verify round trip and rejection of any single-bit mutation.
+    fixtures: "Vendored vectors in tests/fixtures/federation/rfc8785.json and rfc8032.json; fixed test keypair seed 00..1f (32 bytes); fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | contract | 01.R01,09.R02 | run all RFC 8785 test vectors through canonicalize 5.1.0 | output bytes equal the expected vectors"
+      - "T02 | contract | 01.R02,09.R02 | RFC 8032 section 7.1 vectors for sign and verify | signatures byte-equal and verify Ok"
+      - "T03 | property | 01.R02,06.R02,09.R03 | random envelopes: sign then verify; flip one random bit in payload or sig | round trip Ok; mutated input Err FED_SIGNATURE_INVALID"
+      - "T04 | unit | 01.R03,02.R02,02.R03 | sig of 63 and 65 bytes, padded base64, key of 31 bytes | FED_SIGNATURE_INVALID or FEDERATION_DID_UNSUPPORTED as listed"
+      - "T05 | unit | 02.R01,02.R03 | envelope of 262145 bytes, depth 33, lone surrogate, 1e400 | FEDERATION_ENVELOPE_NOT_CANONICALIZABLE for each"
+      - "T06 | unit | 02.R03,04.R02 | did:key with multicodec 0xe7 and with 31-byte key; valid did round trip | FEDERATION_DID_UNSUPPORTED; valid did encodes and decodes identically"
+      - "T07 | unit | 02.R03 | signature with S replaced by S plus L | rejected FED_SIGNATURE_INVALID (malleability)"
+      - "T08 | unit | 02.R03,01.R01 | claimed cid altered by one character | FEDERATION_CID_MISMATCH"
+      - "T09 | unit | 02.R03,06.R03 | request with Date 301 s old, wrong Digest, unknown keyId | FEDERATION_REQUEST_SIGNATURE_INVALID for each; 299 s old accepted"
+      - "T10 | unit | 03.R01,03.R02,03.R03,04.R01,04.R03,05.R01,05.R02,05.R03,06.R01 | call every function twice with identical input and inspect module for I/O | identical outputs, no network or filesystem access, Result returned, no event emitted"
+      - "T11 | abuse | 07.R01,07.R03,07.R04 | induce errors with a seeded private key and capture logs, metrics and error JSON | key bytes never appear; did:key linkage warning present in docs build"
+      - "T12 | load | 07.R02,08.R01,08.R02,08.R03 | verify 100-envelope batches of 4 KiB for 60 s | p95 per envelope ≤ 2 ms, batch ≤ 250 ms, metrics exported"
+      - "T13 | unit | 09.R01 | traceability tool run | every PS-085 requirement maps to a passing test"
+      - "T14 | unit | 10.R01,10.R02,10.R03 | verify golden envelopes created by the previous release | all verify Ok after upgrade; downgrade test passes"
+    acceptance:
+      - All tests T01–T14 pass in CI on Node 22 and Chromium.
+      - Every RFC 8785 and RFC 8032 vector in the vendored fixtures passes.
+      - No private key bytes appear in any log, metric or error output (abuse test).
+  import_export_backup_rollback:
+    requirements:
+      - The library stores nothing, so there is no export, import or backup of its own.
+      - Envelopes created by any past release must keep verifying; the signed-bytes definition is frozen for envelope v=1.
+      - A change to canonicalization or hashing requires a new envelope version number and never alters v=1 behavior.
+    export: "Nothing is exported; the module has no data. Golden vectors are exported as test fixtures only."
+    import: "Nothing is imported; golden envelopes are loaded from test fixtures only."
+    backup: "None; the relay signing key backup is handled by F16.S02 secrets management."
+    migration_rollback: "Library version pin canonicalize 5.1.0; upgrading requires passing the RFC 8785 vectors and the golden-envelope suite; rollback is a dependency pin revert with no data migration."

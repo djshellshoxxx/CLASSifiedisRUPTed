@@ -1,0 +1,298 @@
+id: F04.S01.M03
+scope: MVP
+summary: >-
+  At the auction's current end the host relay takes the per-auction close lease, determines the winner by the bid ledger and
+  the reserve, and signs the AuctionResult statement with its host key (relay time). The result goes to the seller, the winner
+  and every bidder (each sees what they may see). On receipt each participant vault records the result and opens its own local Deal
+  in F09.S01.M01 for the final price; the seller and winner then settle directly through payment claims, not through the
+  platform. If the winner does not pay within the deal window the seller can report non-payment and, once, offer the sale to the
+  next eligible bidder at that bidder's last visible bid. A relay-signed result is the host's statement of the outcome, not proof of payment or delivery.
+responsibilities:
+  - Own AuctionResult - created by the host at close and mirrored in the seller, winner and bidder vaults - and the statements result (classrup.auctions.result/v1), non_payment_report, second_chance_offer and second_chance_response.
+  - Close exactly once under the close lease with a fencing token, re-reading currentEndsAt after taking the lease, and call F04.S01.M01 mark_closed in the same host transaction.
+  - Decide won or unsold - highest leading bid with price at or above the hidden reserve is a sale; no bids or reserve not met is unsold - and publish the ledger head hash so bidders can check their receipts.
+  - On result receipt, open a local Deal through F09.S01.M01 in the seller and winner vaults and track it until commerce.deal.completed; handle winner non-payment and one second-chance offer.
+non_responsibilities:
+  - Bid acceptance and proxy logic (F04.S01.M02), terms (F04.S01.M01) and soft close (F04.S02.M02).
+  - Payment claims, acknowledgements, receipts and disputes (F09).
+  - Voiding results for fraud (F04.S02.M03 decides and emits; this module applies the voided state).
+  - Delivery logistics and meetups (F08.S03).
+  - "Future: offering an unsold lot to the highest bidder below reserve, and automatic relist."
+depends_on: [F04.S01.M01, F04.S01.M02, F09.S01.M01, F07.S01.M01, F11.S01.M03, F09.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001]
+user_stories:
+  - As a bidder, I see within seconds of the end whether I won, and I can check the host-signed result against the receipts I hold.
+  - As a seller, I get the winner's pseudonymous identity key and a Deal for the final price, and I can report non-payment after 3 days.
+  - As the next-highest bidder, I may receive a second-chance offer at my last visible bid and accept or decline within 48 hours.
+edge_cases:
+  - A bid and the close tick race at the end; the lease serializes them and a bid with host time before the end is included in the ledger before the result is signed, later bids get AUCTIONS_NOT_OPEN.
+  - A soft-close extension lands after the close worker started but before it took the lease; the worker re-reads currentEndsAt under the lease and releases without closing.
+  - Two host workers close the same auction; the unique AuctionResult per auction plus the fencing token let exactly one commit; the other exits without effect.
+  - Leader's maximum is at or above the reserve but the price is below it; the proxy rules have already raised the price to the reserve, so the result is a sale at the reserve price.
+  - The result statement never reaches the winner because the winner is offline; the host retains it for 30 days in the winner's mailbox, and the winner's UI shows result pending from the host and never won until the signed statement is verified.
+  - Winner and seller both open a Deal; the two Deals reference the same result id so reconciliation matches them.
+  - Second-chance candidate has been blocked by the seller or flagged by shill checks; the next eligible candidate is chosen, or the result moves to failed.
+  - Result is voided by fraud review after the Deal opened but before any acknowledged payment; the Deal is closed through the F09 port and the winner is told, with no funds moved by the platform.
+ux:
+  screens:
+    - "Result banner on the auction page: Sold at price to alias, Reserve not met, No bids, with host-signed time and Verify result action."
+    - "Seller settlement card: winner key fingerprint, Deal link, days since close, Report non-payment (enabled from day 3), Offer to next bidder."
+    - "Winner card: You won at price, Deal link with payment instructions agreed with the seller, countdown of the 10-day window."
+  states: [loading, closing, result-pending, sold, unsold, awaiting-payment, completed, non-payment, second-chance, failed, voided]
+  a11y:
+    - Result outcomes are announced once through an aria-live assertive region with the plain text outcome.
+    - Report non-payment and Offer actions are buttons of at least 44x44 px with accessible names that include the auction title.
+    - Countdowns are text and update at most once per minute.
+processes:
+  domain_schema:
+    requirements:
+      - An AuctionResult stores outcome, winning bid reference, final price, reserve check, ledger head hash, host signature data, deal links, settlement state and second-chance data, with revision per CTR-ID-001.
+      - The result is created once per auction by the host and mirrored read-only in participant vaults; participant-specific fields (deal id, local state) are local.
+      - Result visibility is tiered - public projection shows outcome, final price, winner alias and ledger head; the winner key is disclosed only to the seller and the winner.
+    entities:
+      - name: AuctionResult
+        schema: classrup.auctions.result/v1
+        storage: relay+device
+        privacy: P2
+        retention: RET-EVIDENCE
+        fields:
+          - "id: uuidv7 — primary key, generated by the host"
+          - "tenantId: uuidv7 — host relay tenant scope"
+          - "auctionId: uuidv7 — ref F04.S01.M01 Auction; unique"
+          - "outcome: enum — won | unsold"
+          - "unsoldReason?: enum — no_bids | reserve_not_met"
+          - "winningBidId?: uuidv7 — ref F04.S01.M02 Bid"
+          - "winnerId?: actorId — did:key; visible to seller and winner only"
+          - "winnerAlias?: string — alias of the winner in the ledger"
+          - "finalPrice?: Money — CTR-MNY-001; the winning visible price"
+          - "reserveCheck: enum — none | met | not_met"
+          - "ledgerHeadSeq: int — last ledger sequence at close"
+          - "ledgerHeadHash: string — sha256- hash of the last ledger entry"
+          - "closedAtHost: timestamp — host clock, RFC 3339 UTC; evidence of the host clock only"
+          - "hostSignature: string — Ed25519 signature of the host over JCS of the result payload"
+          - "state: enum — determined | pending_deal | awaiting_payment | completed | non_payment | second_chance_offered | failed | unsold | voided"
+          - "dealId?: uuidv7 — local ref F09.S01.M01 Deal in this vault"
+          - "secondChance?: object — {candidateId, price: Money, offerCid, expiresAt, status: offered | accepted | declined | expired}"
+          - "nonPaymentReportCid?: string — cid of the signed non-payment report"
+          - "revision: int — CTR-ID-001 ID-4"
+        invariants:
+          - At most one AuctionResult per auction.
+          - outcome won implies winningBidId, winnerId, finalPrice and reserveCheck met or none.
+          - finalPrice is never lower than the reserve when a reserve exists and outcome is won.
+          - At most one secondChance per result.
+    sql: |
+      CREATE TABLE auctions_result (
+        id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, auction_id TEXT NOT NULL, outcome TEXT NOT NULL, state TEXT NOT NULL,
+        closed_at_host TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+      CREATE UNIQUE INDEX auctions_result_auction ON auctions_result(tenant_id, auction_id);
+      CREATE INDEX auctions_result_state ON auctions_result(state, closed_at_host);
+  validation_rules:
+    requirements:
+      - Close preconditions are checked under the lease - auction is open, host time is at or after currentEndsAt, lease token is current.
+      - Inbound results, reports and offers are validated for signature, signer role and referenced ids before any local state changes.
+      - Every violation maps to one stable error code with a localized message key.
+    rules:
+      - "V01 | auction status is open and host time is at or after currentEndsAt read under the lease | AUCTIONS_NOT_CLOSABLE"
+      - "V02 | close lease token equals the current fencing token | PRECONDITION_FAILED"
+      - "V03 | result statement signature verifies against the host key in the auction terms | AUCTIONS_RESULT_INVALID"
+      - "V04 | non-payment report comes from the seller after at least 3 days and before day 30, while state is awaiting_payment | AUCTIONS_NONPAYMENT_NOT_ALLOWED"
+      - "V05 | second-chance candidate is the highest remaining non-retracted bidder with a last visible bid at or above the reserve, not blocked by the seller, and no earlier second chance exists | AUCTIONS_SECOND_CHANCE_NOT_ALLOWED"
+      - "V06 | second-chance response arrives within 48 hours plus 5 minutes by the seller clock | EXPIRED"
+      - "V07 | the signer of a second-chance response is the nominated candidate key | AUCTIONS_RESULT_INVALID"
+  workflow_state_machine:
+    requirements:
+      - A result is determined once, then follows the sale path to completed, or ends unsold, failed or voided; terminal states never change.
+      - completed requires commerce.deal.completed with acknowledged or final payment per CTR-COM-001; a claim alone does not complete.
+      - Non-payment and second chance are explicit and signed; there is no automatic penalty, and the host only records a signal.
+    machines:
+      - entity: AuctionResult
+        initial: determined
+        terminal: [unsold, completed, failed, voided]
+        transitions:
+          - "determined -> pending_deal | host close under lease with a sale | emits auctions.auction.closed and auctions.auction.won"
+          - "determined -> unsold | host close with no bids or reserve not met | emits auctions.auction.closed and auctions.auction.unsold"
+          - "pending_deal -> awaiting_payment | commerce.deal.opened consumed for this result | dealId stored"
+          - "awaiting_payment -> completed | commerce.deal.completed consumed for this result | payment acknowledged or final"
+          - "awaiting_payment -> non_payment | seller report after day 3, or 10 days without completion | emits auctions.result.non_payment"
+          - "non_payment -> second_chance_offered | auctions.result.offer_second_chance by seller | candidate eligible; emits auctions.result.second_chance_offered"
+          - "non_payment -> failed | seller declines or 7 days pass without offer, or no eligible candidate | sale lapses"
+          - "second_chance_offered -> awaiting_payment | candidate accepts within 48 h | new Deal for the candidate price"
+          - "second_chance_offered -> failed | candidate declines or 48 h pass | sale lapses"
+          - "pending_deal -> voided | auctions.result.voided consumed | Deal not yet opened or closed through F09 port"
+          - "awaiting_payment -> voided | auctions.result.voided consumed | no acknowledged payment exists; Deal closed through F09 port"
+          - "non_payment -> voided | auctions.result.voided consumed | sale cancelled"
+          - "second_chance_offered -> voided | auctions.result.voided consumed | sale cancelled"
+    timeouts:
+      - "Host close tick every 1 s; Deal window 10 days after close in the seller vault; second-chance expiry 48 h; seller second-chance decision window 7 days after non_payment; result retention in winner mailbox 30 days. Vault timers run at app start and every 60 s while open."
+  commands_queries_events:
+    requirements:
+      - The host relay command auctions.result.determine runs from the close tick and produces the host-signed result; participant vaults ingest it with auctions.result.receive.
+      - Seller and candidate actions are vault commands that produce named signed statements and go through the sync outbox and the host.
+      - Auction closed, won and unsold events are host-local and are derived in each participant vault on receipt of the result (actor.kind federated).
+    commands:
+      - name: auctions.result.determine
+        capability: auctions.result.determine
+        input: "[relay command, host close tick] { auctionId }"
+        output: "{ resultId, outcome, ledgerHeadSeq, ledgerHeadHash, hostSignature }"
+        errors: [NOT_FOUND, AUCTIONS_NOT_CLOSABLE, PRECONDITION_FAILED, DEPENDENCY_UNAVAILABLE]
+        emits: [auctions.auction.closed, auctions.auction.won, auctions.auction.unsold]
+        idempotent: true
+      - name: auctions.result.receive
+        capability: auctions.result.receive
+        input: "[vault-local ingestion of the host-signed result envelope per CTR-FED-001; opens the local Deal through F09.S01.M01] { envelope, via? }"
+        output: "{ resultId, accepted: boolean, quarantined?: boolean, code?, dealId? }"
+        errors: [AUCTIONS_RESULT_INVALID, UNSUPPORTED_SCHEMA_VERSION, DEPENDENCY_UNAVAILABLE]
+        emits: [auctions.auction.closed, auctions.auction.won, auctions.auction.unsold]
+        idempotent: true
+      - name: auctions.result.report_non_payment
+        capability: auctions.result.report_non_payment
+        input: "[statement classrup.auctions.non_payment_report/v1 signed by seller, sent to winner and host] { resultId, expectedRevision }"
+        output: "{ resultId, revision, reportCid, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, AUCTIONS_NONPAYMENT_NOT_ALLOWED]
+        emits: [auctions.result.non_payment]
+        idempotent: true
+      - name: auctions.result.nominate_second_chance
+        capability: auctions.result.determine
+        input: "[relay command at the host, authorized by the seller-signed non-payment report] { resultId, reportCid }"
+        output: "{ candidate: statement classrup.auctions.second_chance_candidate/v1 signed by host key {candidateId, lastVisibleBid: Money} }"
+        errors: [NOT_FOUND, AUCTIONS_SECOND_CHANCE_NOT_ALLOWED, FORBIDDEN]
+        emits: []
+        idempotent: true
+      - name: auctions.result.offer_second_chance
+        capability: auctions.result.offer_second_chance
+        input: "[statement classrup.auctions.second_chance_offer/v1 signed by seller, E2E encrypted to the candidate; price equals the host-signed last visible bid] { resultId, expectedRevision, candidateStatement }"
+        output: "{ resultId, revision, offerCid, expiresAt, syncState }"
+        errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, AUCTIONS_SECOND_CHANCE_NOT_ALLOWED]
+        emits: [auctions.result.second_chance_offered]
+        idempotent: true
+      - name: auctions.result.respond_second_chance
+        capability: auctions.result.respond_second_chance
+        input: "[statement classrup.auctions.second_chance_response/v1 signed by the candidate] { resultId, offerCid, accept: boolean }"
+        output: "{ resultId, accepted, responseCid, syncState }"
+        errors: [NOT_FOUND, CONFLICT_STATE, EXPIRED, AUCTIONS_RESULT_INVALID]
+        emits: []
+        idempotent: true
+    queries:
+      - name: auctions.result.get
+        capability: auctions.result.read_public
+        input: "{ auctionId } (relay query or vault cache of the host-signed result)"
+        output: "{ result: public projection (outcome, final price, winner alias, ledger head, closedAtHost); seller and winner also see winnerId and local state }"
+        errors: [NOT_FOUND]
+      - name: auctions.result.verify
+        capability: auctions.result.read_own
+        input: "[vault-local] { auctionId }"
+        output: "{ signatureOk: boolean, ledgerHeadMatchesMyReceipts: boolean, mismatchSeq? }"
+        errors: [NOT_FOUND]
+    events_produced:
+      - {type: auctions.auction.closed, privacy: P0, payload: "{ auctionId, resultId, outcome, closedAtHost, ledgerHeadSeq, ledgerHeadHash }"}
+      - {type: auctions.auction.won, privacy: P2, payload: "{ auctionId, resultId, sellerId, winnerId, finalPrice, winningBidId }"}
+      - {type: auctions.auction.unsold, privacy: P0, payload: "{ auctionId, resultId, reason }"}
+      - {type: auctions.result.non_payment, privacy: P2, payload: "{ resultId, auctionId, sellerId, winnerId, reportCid }"}
+      - {type: auctions.result.second_chance_offered, privacy: P2, payload: "{ resultId, auctionId, candidateId, price, expiresAt }"}
+    events_consumed:
+      - {type: commerce.deal.opened, effect: "for context type auction_result store dealId and move pending_deal to awaiting_payment"}
+      - {type: commerce.deal.completed, effect: "for context type auction_result move awaiting_payment to completed"}
+      - {type: commerce.payment.expired, effect: "for context type auction_result show payment expired and allow non-payment report from day 3"}
+      - {type: auctions.result.voided, effect: "move the result to voided, close the Deal through the F09 port when no acknowledged payment exists"}
+    errors:
+      - "AUCTIONS_NOT_CLOSABLE | 409 | no | auction is not open or has not reached its current end under the lease"
+      - "AUCTIONS_RESULT_INVALID | 422 | no | result or response signature, signer role or host key check failed; quarantined"
+      - "AUCTIONS_NONPAYMENT_NOT_ALLOWED | 409 | no | non-payment report is too early, too late or the result is not awaiting payment"
+      - "AUCTIONS_SECOND_CHANCE_NOT_ALLOWED | 409 | no | no eligible candidate or a second chance was already used"
+    example: |
+      host close tick at 2026-11-12T10:00:01.000Z -> auctions.result.determine { "auctionId": "0192f400-0002-…" }
+      -> { "resultId": "0192f410-0001-…", "outcome": "won", "ledgerHeadSeq": 42, "ledgerHeadHash": "sha256-Lh…", "hostSignature": "MEUCIQ…" }
+      winner and seller vaults: auctions.result.receive -> Deal opened (contextRef { "type": "auction_result", "id": "0192f410-0001-…" }), state awaiting_payment
+      day 4: seller auctions.result.report_non_payment -> state non_payment; then nominate and offer_second_chance at the next bidder's last visible bid
+  authorization_capabilities:
+    requirements:
+      - Relay policy - only the host's close scheduler holding the close lease may determine a result; nominate requires a seller-signed non-payment report for that result.
+      - Vault policy - only the local principal who is the seller reports non-payment and offers second chance; only the nominated candidate key responds; incoming results are accepted only when signed by the host key in the auction terms.
+      - Public result projection exposes no winner key; seller and winner receive it inside end-to-end encrypted envelopes.
+    capabilities:
+      - "auctions.result.determine | system, host-operator | holds the close lease; host time at or after currentEndsAt; or valid seller-signed report for nominate"
+      - "auctions.result.receive | principal | any envelope; acceptance depends on host signature and key from the terms"
+      - "auctions.result.report_non_payment | principal | local principal is the seller of the auction; state awaiting_payment"
+      - "auctions.result.offer_second_chance | principal | local principal is the seller; state non_payment; host-signed candidate present"
+      - "auctions.result.respond_second_chance | principal | local principal key equals the nominated candidate"
+      - "auctions.result.read_public | anonymous, principal | public projection"
+      - "auctions.result.read_own | principal | local principal is seller, winner or a bidder of the auction"
+  failure_recovery_idempotency:
+    requirements:
+      - Close is idempotent by the unique result per auction; repeated or concurrent close attempts produce exactly one result.
+      - The result, the mark_closed call and the outbox event are one host SQLite transaction under the lease and fence token.
+      - Result delivery is at least once via mailboxes and idempotent by result cid in the vaults.
+    idempotency: "Host: unique (tenant, auction) result row; determine on a closed auction returns the stored result. Vault: result cid dedup in the inbox; Deal opening keyed by contextRef (auction_result, resultId) so one Deal per vault per result."
+    concurrency: "Close lease TTL 30 s with fencing token, BEGIN IMMEDIATE, shared with the bid lease so a bid and the close are strictly ordered; the worker re-reads currentEndsAt after taking the lease and releases without closing if an extension moved it."
+    retries: "Host close tick retries every 1 s until the result commits; mailbox delivery retries 1 s, 2 s, 4 s, 8 s up to 8 attempts then hourly for 30 days; F09 Deal open retries 10 s, 60 s, 10 minutes then shows needs attention."
+    offline: "Participants see result pending from the host until the signed statement is held; the seller's report and offer work offline and enter the sync outbox as prepared; a candidate's response expires by the seller clock regardless."
+    partial_failure: "If the Deal port fails on receipt, the result is stored in pending_deal and the Deal opening retries; if the host cannot reach a participant mailbox the public projection still shows the outcome while the private winner key waits for delivery."
+  privacy_retention_abuse:
+    requirements:
+      - The winner key is shared only with the seller and the winner; bidders see aliases and the host-signed ledger head.
+      - Non-payment reports and second-chance offers are P2, end-to-end encrypted, and carry no reputational automation; the host records only a count for its own fraud queue.
+      - False non-payment reports are limited by the day-3 floor, signed evidence of the Deal state, and the dispute path.
+    data:
+      - "AuctionResult: public projection P0; full result P2 (seller, winner)."
+      - "Non-payment report and second-chance statements: P2."
+    retention:
+      - "Results and settlement statements: RET-EVIDENCE (2 years after last related activity) in participant vaults; host result rows kept for its published retention, default 90 days."
+    threats:
+      - "T01 | Host fabricates a winner or alters the price | result signed by host key over JCS bytes, ledger head hash lets every bidder compare with their receipts, discrepancies are exportable evidence"
+      - "T02 | Seller falsely reports non-payment to take the second-chance buyer | report allowed only after day 3 while the Deal shows no acknowledged payment, winner can answer through the dispute path, second chance only at the candidate's own last visible bid"
+      - "T03 | Replay of an old result to a new Deal | result id is bound to the auction id and Deal context; the unique result per auction rejects a second result"
+      - "T04 | Winner key leaks to other bidders | public projection omits it; only seller and winner envelopes carry it"
+      - "T05 | Close race lets a late bid win | single lease orders bids and close; hostTime of the last ledger entry must be before currentEndsAt"
+    abuse_controls:
+      - "Host records non_payment counts per key for its own hosting policy and passes them to F04.S02.M03 review when a key has 2 or more in 30 days."
+      - "Per-vault quota of 20 inbound result envelopes per day from unknown hosts; unknown host keys are quarantined."
+  observability_performance:
+    requirements:
+      - The PWA sends no telemetry (OBS-7); the host exports metrics and logs per OBS-1 to OBS-6.
+      - Close lag p95 ≤ 2 s and p99 ≤ 5 s after currentEndsAt on the host with 1 000 auctions ending in the same minute.
+      - Result verification in the vault completes in ≤ 300 ms with 5 000 ledger entries.
+    metrics:
+      - "classrup_auctions_results_total{outcome=won|unsold|voided,state} (host)"
+      - "classrup_auctions_close_lag_ms (host histogram: close commit minus currentEndsAt)"
+      - "classrup_auctions_close_lease_conflicts_total (host)"
+      - "classrup_auctions_nonpayment_total (vault local counter)"
+    logs:
+      - "info auction.closed {auctionId, resultId, outcome, correlationId} on the host - no bidder keys or prices."
+    budgets:
+      - "close lag p95 ≤ 2 s and p99 ≤ 5 s with 1 000 simultaneous closes; determine transaction p95 ≤ 100 ms."
+      - "Result receive plus Deal open p95 ≤ 250 ms in the vault."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Close concurrency is covered by deterministic tests with injectable clock and lease, including extension races, double workers and lease expiry.
+      - Contract tests validate result, report, offer and response statements and the Deal context against schema registries.
+    fixtures: "Host H with injectable clock; auction A (EUR, reserve 50.00) with bidders B1 (max 80.00), B2 (max 60.00), B3 (max 55.00); seller S; vaults for S, B1, B2; fixed clock 2026-11-12T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R03,02.R01 | close with leader max above reserve but price below it | sale at the reserve price; reserveCheck met; ledger head matches"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01–V07 violated | documented code returned and nothing stored"
+      - "T03 | property | 03.R01 | random timer and command sequences | only declared transitions succeed; terminal states never change"
+      - "T04 | integration | 03.R02,04.R03 | Deal opened, payment claimed only, then acknowledged | state stays awaiting_payment on claim; completed only on commerce.deal.completed"
+      - "T05 | chaos | 06.R01,06.R02,09.R03 | two workers close the same auction; extension lands before lease; lease expires mid-close | exactly one result; no close on extension; stale fence refused"
+      - "T06 | integration | 01.R02,06.R03 | result delivered twice and late; winner offline for 2 days | one Deal per vault; UI shows result pending until signed statement verified"
+      - "T07 | contract | 04.R01,04.R02,09.R02 | each command, statement and event | payloads and signatures validate against registry schemas; public projection has no winner key"
+      - "T08 | integration | 03.R03,04.R03 | non-payment on day 3 and day 10; second chance accepted, declined and expired | states and Deals follow the machine; at most one second chance"
+      - "T09 | abuse | 05.R01,05.R02,05.R03 | result signed by wrong host key; report by non-seller; response by non-candidate | quarantined or FORBIDDEN; no state change"
+      - "T10 | abuse | 07.R02,07.R03 | non-payment report on day 2; report after payment acknowledged | AUCTIONS_NONPAYMENT_NOT_ALLOWED"
+      - "T11 | integration | 07.R01,07.R02 | inspect public projection, bidder views, logs | winner key only in seller and winner envelopes; logs have no keys or prices"
+      - "T12 | integration | 03.R01,04.R03 | voided event after Deal opened without acknowledged payment, and after acknowledged payment | Deal closed through port; second case refused as not voidable and flagged"
+      - "T13 | load | 08.R01,08.R02,08.R03 | 1 000 auctions end in the same minute; 5 000 entry ledger verify | close lag p95 ≤ 2 s, p99 ≤ 5 s; verify ≤ 300 ms"
+      - "T14 | unit | 09.R01 | traceability tool run | every PS-034 requirement maps to a passing test"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import into fresh vault, restore host backup | results and statements round-trip; host restore keeps unique result per auction"
+      - "T16 | e2e | 01.R02,02.R01 | mobile seller and winner in two browsers after close | both show sold with Deal link; non-winner sees alias only; axe zero serious issues"
+    acceptance:
+      - All tests T01–T16 pass in CI.
+      - Exactly one result exists per auction under any worker race and no late bid can win.
+      - A winner is never shown as having won, and a sale never as completed, before the host-signed result and the acknowledged or final payment are held.
+  import_export_backup_rollback:
+    requirements:
+      - The participant's vault export contains results, signed statements and Deal references so the outcome can be reconstructed without the host.
+      - Import verifies the host signature and ledger head; unverifiable results are kept as read-only history with a warning.
+      - Schema changes follow expand and contract and keep v1 readable for 180 days.
+    export: "Section auctions.results in classrup-export/v1; one line per AuctionResult with the signed result, report, offer and response envelopes."
+    import: "Terminal results import as history; awaiting_payment results import as is and resume timers from the stored closedAtHost; second_chance_offered offers whose expiry has passed import as failed."
+    backup: "The vault export is the primary backup (IOX-6); the host uses relay SQLite backup (IOX-3, IOX-7) and after restore re-checks the one-result-per-auction constraint."
+    migration_rollback: "Additive optional fields only in v1; the signed result payload is frozen per version so rollback never invalidates signatures."

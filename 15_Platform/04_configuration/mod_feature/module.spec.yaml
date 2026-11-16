@@ -1,0 +1,190 @@
+# F15.S04.M01 Feature registry (ADR-0015 format, ADR-0016 local-first). Keep IDs stable once published.
+id: F15.S04.M01
+scope: MVP
+summary: >-
+  A static, generated, acyclic registry of every ClassRup feature (F01..F18, 18 features) and module (148 in the
+  current catalog) with its scope, default state and depends_on edges. The registry is generated at build time
+  from planning/modules.yaml and the depends_on lists of each module.spec.yaml, validated for cycles, unknown
+  references and default-state consistency, and shipped inside the isomorphic package so that both the vault
+  (PWA) and an optional relay read the same graph (CTR-FLG-001). It holds no per-user or per-relay values; those
+  belong to F15.S04.M02.
+responsibilities:
+  - Generate registry.generated.json (features, modules, edges, defaults, content hash) deterministically from planning/modules.yaml and the module specs, and fail the build when the checked-in output is stale.
+  - Validate the graph on every generation: no cycles, every depends_on module exists, no self-dependency, CTR-* entries are separated from module edges, and the default configuration itself satisfies the dependency rule of CTR-FLG-001 FLG-2.
+  - Mark FUTURE-scope modules default off and not registered (FLG-4) and mark features F15 Platform and F16 Security as core (not switchable off).
+  - Expose read-only registry queries (list, dependencies, dependents, topological order) that run locally in the vault and on a relay.
+non_responsibilities:
+  - Per-vault and per-relay flag values and evaluation (F15.S04.M02 mod_flags).
+  - Enforcement of FEATURE_DISABLED at the command bus (F15.S02.M02 mod_api).
+  - Authoring of module depends_on lists (each module spec owns its own).
+  - "Future: signed registry updates delivered at runtime; Future: per-module version compatibility ranges."
+depends_on: [CTR-FLG-001, CTR-ERR-001, CTR-ID-001, CTR-OBS-001, CTR-TST-001]
+user_stories:
+  - As a developer, I can add a depends_on edge to a module spec and the build tells me immediately if it creates a cycle or points to a module that does not exist.
+  - As a member, I can see in Settings which optional features exist and which other features each one needs before I turn it on.
+  - As a relay operator, I can see which modules my relay can host and what each depends on.
+edge_cases:
+  - A new dependency closes a cycle (F02.S01.M01 to F01.S01.M01 and back); generation fails with PLATFORM_FEATURE_CYCLE and prints the cycle path in stable order.
+  - A module spec lists a module ID that is not in planning/modules.yaml; generation fails with PLATFORM_FEATURE_UNKNOWN_DEPENDENCY naming the pair.
+  - An MVP module depends on a FUTURE module, so its default on state would violate the dependency rule; generation fails with PLATFORM_FEATURE_DEFAULT_VIOLATION.
+  - planning/modules.yaml changed but the generated file was not regenerated; the CI check fails with PLATFORM_FEATURE_REGISTRY_STALE.
+  - A module has no module.spec.yaml yet; generation emits it with dependsOn from the catalog only and flags specMissing, and strict mode fails.
+  - A client asks for the dependencies of an unknown key; the query returns NOT_FOUND.
+ux:
+  screens:
+    - "Settings > Features: grouped list of features with module toggles (toggle behavior belongs to F15.S04.M02), each row showing 'Needs: <module names>' from this registry."
+  states: [loading, ready, unknown-key]
+  a11y:
+    - Dependency lists are real lists with module names, not icons only.
+    - Group headings use heading levels and toggles are labelled with the module title and the dependency summary.
+processes:
+  domain_schema:
+    requirements:
+      - The registry is a generated, immutable data structure (not a stored entity) with one record per feature and per module, and a content hash over canonical JSON (RFC 8785).
+      - Each module record holds id, title, feature id, slug, scope, defaultState, registered flag, core flag, dependsOn (module IDs only) and dependents (derived).
+      - The registry file is part of the build and versioned with the application, so vault and relay of the same release agree.
+    entities: []
+    note: "Generated static data: no persisted entity. Shape of registry.generated.json: { version: 1, generatedFrom: sha256(planning/modules.yaml + module specs), features: [{ id, slug, title, core }], modules: [{ id, feature, title, scope, defaultState: on|off, registered: boolean, core: boolean, dependsOn: id[], dependents: id[], specMissing?: boolean }], order: id[] (topological), hash }."
+  validation_rules:
+    requirements:
+      - Generation validates structure, graph and defaults and fails the build on any violation with a stable code.
+      - The same input always produces byte-identical output so that staleness is detectable by comparison.
+      - Registry queries validate keys against the registry and never accept free-form patterns.
+    rules:
+      - "V01 | module ID matches F[0-9]{2}.S[0-9]{2}.M[0-9]{2} and feature ID matches F[0-9]{2} | VALIDATION_FAILED"
+      - "V02 | every dependsOn entry that is not CTR-* exists in planning/modules.yaml and is not the module itself | PLATFORM_FEATURE_UNKNOWN_DEPENDENCY"
+      - "V03 | the dependency graph is acyclic (Kahn topological sort consumes all 148 nodes) | PLATFORM_FEATURE_CYCLE"
+      - "V04 | every module with defaultState on has all dependsOn modules defaultState on and registered | PLATFORM_FEATURE_DEFAULT_VIOLATION"
+      - "V05 | generated file equals the output of a fresh generation | PLATFORM_FEATURE_REGISTRY_STALE"
+      - "V06 | query key is a known module or feature ID | NOT_FOUND"
+      - "V07 | core features F15 and F16 have no module with defaultState off | PLATFORM_FEATURE_DEFAULT_VIOLATION"
+  workflow_state_machine:
+    requirements:
+      - The registry has no runtime lifecycle; it is regenerated per build and replaced as a whole.
+      - Generation is an ordered pipeline of parse, merge, validate, order and write steps, and any failing step prevents writing.
+      - The build never publishes a registry that failed validation.
+    machines: []
+    note: "No entity lifecycle. Generation pipeline steps: parse planning/modules.yaml, merge module.spec.yaml depends_on and scope, validate V01-V04 and V07, topologically order, canonicalize and hash, write registry.generated.json atomically."
+    timeouts: []
+  commands_queries_events:
+    requirements:
+      - The module exposes four read-only queries that run in the vault (local) and on a relay (relay query), with identical results for the same release.
+      - There are no commands, statements or events because the registry never changes at runtime.
+      - Query results are small enough to be served from memory in under 5 ms.
+    commands: []
+    queries:
+      - name: platform.feature.list_features
+        capability: platform.feature.read_registry
+        input: "{ featureId?, includeFuture?: boolean (default false) } — vault-local query, also served by a relay"
+        output: "{ version, hash, features: Feature[], modules: ModuleRecord[] }"
+        errors: [NOT_FOUND]
+      - name: platform.feature.get_dependencies
+        capability: platform.feature.read_registry
+        input: "{ key: moduleId|featureId, transitive?: boolean (default true) } — vault-local query, also served by a relay"
+        output: "{ key, dependsOn: id[], dependents: id[], contracts: CTR-ID[] }"
+        errors: [NOT_FOUND]
+      - name: platform.feature.get_order
+        capability: platform.feature.read_registry
+        input: "{ } (no input) — vault-local query"
+        output: "{ order: id[] } (dependencies before dependents)"
+        errors: []
+      - name: platform.feature.verify_hash
+        capability: platform.feature.read_registry
+        input: "{ hash } — vault-local query used by a vault to compare with a relay's registry hash"
+        output: "{ match: boolean, localHash }"
+        errors: [VALIDATION_FAILED]
+    events_produced: []
+    events_consumed: []
+    note: "Read-only module: no commands, no signed statements, no events."
+    errors:
+      - "PLATFORM_FEATURE_CYCLE | 422 | no | build-time failure, the depends_on graph contains a cycle (path reported)"
+      - "PLATFORM_FEATURE_UNKNOWN_DEPENDENCY | 422 | no | build-time failure, a depends_on entry names a module that does not exist"
+      - "PLATFORM_FEATURE_DEFAULT_VIOLATION | 422 | no | build-time failure, default states break the dependency rule or switch off a core module"
+      - "PLATFORM_FEATURE_REGISTRY_STALE | 422 | no | build-time failure, generated registry differs from a fresh generation"
+    example: |
+      $ node packages/platform/src/configuration/feature/generate.ts
+      registry: 18 features, 148 modules, 412 edges, acyclic, hash sha256-Qm3...
+      platform.feature.get_dependencies({ key: "F02.S01.M01" })
+      -> { key: "F02.S01.M01", dependsOn: ["F01.S01.M01", "F07.S01.M01"], dependents: ["F02.S02.M01"], contracts: ["CTR-FED-001", "CTR-ID-001"] }
+  authorization_capabilities:
+    requirements:
+      - Registry data is public information about the application, so queries are available to every local principal and to anonymous relay clients without authentication.
+      - Vault policy applies locally and relay policy applies on a relay; neither can alter the registry because it is read-only and compiled in.
+      - No capability exists to modify the registry at runtime, which prevents an operator or remote party from rewriting the dependency graph.
+    capabilities:
+      - "platform.feature.read_registry | anonymous, member, moderator, operator, admin | none; read-only static data (vault policy: local principal; relay policy: public)"
+  failure_recovery_idempotency:
+    requirements:
+      - Generation and queries are pure functions of their inputs and are idempotent by construction.
+      - A failed generation leaves the previous generated file untouched and fails the build.
+      - A vault and a relay of different releases compare hashes and treat a mismatch as informational, not as an error that blocks work.
+    idempotency: "Generation writes registry.generated.json via temp file and rename; running it twice yields identical bytes. Queries have no side effects."
+    concurrency: "No shared mutable state at runtime. In CI, generation runs once per build; concurrent runs write identical content."
+    retries: "Nothing to retry at runtime; CI reruns on failure after the underlying edit is fixed."
+    offline: "The registry is compiled into the app and works fully offline in the vault and without a relay."
+    partial_failure: "If validation passes but writing fails the build fails and nothing is published. If a module spec is missing, generation continues in normal mode with specMissing flagged and fails in strict mode."
+  privacy_retention_abuse:
+    requirements:
+      - The registry contains no personal data and no per-user information, only public module metadata.
+      - Querying the registry reveals nothing about a user's configuration, which lives in F15.S04.M02.
+      - A tampered registry in a modified client cannot enable server-side features on a relay because relays evaluate their own flags (F15.S04.M02).
+    data:
+      - "Registry: P0 public metadata."
+    retention:
+      - "Not stored beyond the application bundle; superseded with each release."
+    threats:
+      - "T01 | Modified registry in a hostile client claims dependencies are satisfied | registry is advisory in the vault for UX; relays enforce dependencies using their own copy and FEATURE_DISABLED checks"
+      - "T02 | Cycle or missing edge introduced by a careless spec edit | CI generation check on every pull request, cycle path printed, property test over random graphs"
+      - "T03 | Registry drift between vault and relay | hash comparison query and a UI notice listing unknown modules instead of failing"
+    abuse_controls:
+      - "Queries are in-memory and limited to 100 requests per minute per client on a relay (relay policy), which suffices because results are static."
+      - "Registry size capped at 1 MiB uncompressed; generation fails above 512 KiB so that the initial JS budget is protected."
+  observability_performance:
+    requirements:
+      - Generation reports counts and duration in CI and fails when budgets are exceeded.
+      - Registry queries meet read budgets on the PWA and on a relay (CTR-OBS-001 OBS-4, OBS-5).
+      - The PWA sends no telemetry; any usage counters stay local (OBS-7).
+    metrics:
+      - "CI gauges: registry_features, registry_modules, registry_edges, registry_bytes, generation_ms."
+      - "classrup_platform_feature_query_duration_ms (relay histogram)"
+    logs:
+      - "CI log: registry summary line with counts and hash; validation errors list module IDs only."
+    budgets:
+      - "Generation ≤ 2 s for 148 modules; registry JSON ≤ 64 KiB gzip and ≤ 512 KiB raw."
+      - "Query p95 ≤ 5 ms in memory on a Moto G-class device; relay p95 ≤ 150 ms (OBS-4)."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Graph validation is tested with property tests over random graphs and with fixtures of every failure code.
+      - The generated file for the real catalog is checked in CI and compared with a fresh generation.
+    fixtures: "Fixture catalogs: valid 12-module DAG, cycle of 3, unknown dependency, MVP-on-FUTURE dependency, core module off; real planning/modules.yaml with all module specs."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,02.R02 | generate from the valid fixture twice | identical bytes, fields present on every record, hash equals sha256 of canonical JSON"
+      - "T02 | unit | 02.R01,02.R03 | each of V01-V07 violated in turn | documented code returned; query for unknown key returns NOT_FOUND"
+      - "T03 | property | 03.R01,02.R01 | random digraphs with and without injected back edges | cycle detected exactly when one exists; topological order places dependencies first"
+      - "T04 | integration | 03.R02,03.R03,06.R02 | break validation in each pipeline step | generation fails, previous file untouched, nothing published"
+      - "T05 | contract | 04.R01,04.R02,04.R03 | call all four queries in the vault and on a relay | identical results for the same release; no commands or events exist; response within 5 ms"
+      - "T06 | abuse | 05.R01,05.R02,05.R03 | attempt to mutate the registry through the API and as a hostile client | no mutation path exists; relay ignores client-claimed flags"
+      - "T07 | integration | 01.R03,06.R01 | build twice from the same commit, then edit planning/modules.yaml without regenerating | identical bytes; stale check fails with PLATFORM_FEATURE_REGISTRY_STALE"
+      - "T08 | integration | 06.R03,02.R03 | vault of release N queries relay of release N+1 hash | mismatch reported informationally, work continues, unknown modules listed"
+      - "T09 | abuse | 07.R01,07.R02,07.R03 | inspect registry and query payloads | contain no personal data or configuration values; client-claimed dependency satisfaction not trusted by relay"
+      - "T10 | load | 08.R01,08.R03 | generate for 148 modules and 5 000 synthetic modules; run 10 000 queries | generation ≤ 2 s for catalog, size within budgets, query p95 ≤ 5 ms"
+      - "T11 | integration | 08.R02 | relay metrics scrape after queries | duration histogram exported per CTR-OBS-001"
+      - "T12 | unit | 09.R01 | traceability tool run | every PS-123 requirement maps to a passing test"
+      - "T13 | integration | 09.R02,09.R03 | generate the real catalog | 18 features, 148 modules, acyclic, defaults satisfy FLG-2, FUTURE modules off and unregistered, core F15 and F16 on"
+      - "T14 | a11y | 04.R03 | Settings > Features scanned with axe | zero serious issues; dependency text is real list text"
+      - "T15 | integration | 10.R01,10.R02,10.R03 | export, import and release rollback | registry not part of any export; older release regenerates its own registry; no data migration"
+    acceptance:
+      - All tests T01-T15 pass in CI.
+      - The real catalog generates an acyclic registry with defaults that satisfy the dependency rule.
+      - Adding a cycle or an unknown dependency to any module spec fails CI with a stable code and a readable path.
+      - The registry works fully offline and cannot be modified at runtime.
+  import_export_backup_rollback:
+    requirements:
+      - The registry is application code and data, not user data, and is excluded from every export and backup.
+      - Rolling back a release restores that release's registry together with its code, so no migration is needed.
+      - Imports of vault data from a release with unknown modules keep those records read-only and listed, never dropped.
+    export: "Not exported; the registry hash and version are recorded in the export manifest for diagnostics (CTR-IOX-001 IOX-1 manifest field modules[])."
+    import: "On import, module identifiers in the bundle are checked against the registry; unknown modules are kept as read-only sections and reported in the dry-run (IOX-2)."
+    backup: "Not backed up; reproducible from the repository at the release tag."
+    migration_rollback: "Registry version field is 1; new optional fields are additive and ignored by older readers. Rollback redeploys the previous build whose registry matches its modules."

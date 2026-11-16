@@ -1,35 +1,37 @@
-# PS-072-08 — observability performance
+# PS-072-08 — Observability and performance: Settlement reconciliation
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-072-08. **Owner:** [09_Commerce/02_settlement/mod_reconciliation](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_reconciliation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F09.S02.M03 Settlement reconciliation](SPEC.md) · **Scope:** MVP · **Code:** `packages/commerce/src/settlement/reconciliation` · **Contracts:** [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the observability performance process for reconciliation within 02_settlement. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-072-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-072-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-072-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-072-08.R01** The PWA sends no telemetry (OBS-7); run duration and mismatch counts stay in local diagnostics.
+- **PS-072-08.R02** Scans are chunked so the main thread is blocked no longer than 50 ms at a time.
+- **PS-072-08.R03** Run duration meets the budget for large vaults.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- Local diagnostics: classrup_commerce_recon_runs_total{status}
+- Local diagnostics: classrup_commerce_recon_mismatches{kind}
+- Local diagnostics: classrup_commerce_recon_duration_ms (histogram)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- info recon.completed {reportId, mismatchCount, durationMs, correlationId} — no record contents.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-072-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- 20 000 claims scanned in ≤ 10 s in chunks of 500 with no main-thread block over 50 ms.
+- Incremental run for one deal ≤ 200 ms.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-072-09.T12 | load | PS-072-08.R01, PS-072-08.R02, PS-072-08.R03 | 20 000 claims | duration ≤ 10 s; longest main-thread block ≤ 50 ms; no telemetry |
+
+## Dependencies
+
+Module depends on: F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

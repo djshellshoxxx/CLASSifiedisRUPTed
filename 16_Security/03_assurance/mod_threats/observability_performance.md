@@ -1,35 +1,38 @@
-# PS-133-08 — observability performance
+# PS-133-08 — Observability and performance: Security threat model
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-133-08. **Owner:** [16_Security/03_assurance/mod_threats](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_threats. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M01 Security threat model](SPEC.md) · **Scope:** MVP · **Code:** `docs/security/threat_model` · **Contracts:** [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-COM-001](../../../planning/contracts/CTR-COM-001.md)
 
-## Purpose and scope
-Define the observability performance process for threats within 03_assurance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-133-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-133-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-133-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-133-08.R01** CI reports the number of rows, STRIDE coverage, dangling references and review age as numbers on every run.
+- **PS-133-08.R02** The check runs in under 30 seconds on the full repository.
+- **PS-133-08.R03** Review debt (days since last review, open residual risks) is shown in the release gate report.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Metrics**
+- threat_rows_total{boundary} (CI report)
+- threat_review_age_days (CI report)
+- threat_rows_without_test (CI report, must be 0)
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Logs**
+- CI job log lists each failing rule with row ID and reference; no secrets involved.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-133-08`; scenarios and fixtures to be detailed in Prompt 3.
+**Budgets**
+- Check runtime ≤ 30 s on the full repository; report size ≤ 1 MiB.
+- Review of a change set of up to 10 rows completes within 2 working days (process target).
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-133-09.T05 | integration | PS-133-03.R03, PS-133-08.R03 | residual risk with review date 7 months old | SECURITY_THREATMODEL_REVIEW_STALE and gate failed state shown in the report |
+| TEST-PS-133-09.T10 | load | PS-133-08.R01, PS-133-08.R02 | full repository with 148 module specs and 200 register rows | check completes ≤ 30 s; metrics present in report |
+
+## Dependencies
+
+Module depends on: F16.S01.M01, F16.S02.M02, F16.S02.M03, F12.S03.M03, CTR-PRV-001, CTR-CAP-001, CTR-FED-001, CTR-COM-001. Predecessor: [domain_schema.md](domain_schema.md).

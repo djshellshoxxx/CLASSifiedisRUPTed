@@ -1,35 +1,107 @@
-# PS-018-04 — commands queries events
+# PS-018-04 — Commands, queries and events: N-party cycle engine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-018-04. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_n](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_n. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F02.S02.M03 N-party cycle engine](SPEC.md) · **Scope:** MVP · **Code:** `packages/mutiny/src/cycle_matching/n` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md)
 
-## Purpose and scope
-Define the commands queries events process for n within 02_cycle_matching. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-018-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-018-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-018-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-018-04.R01** The vault commands generate, import and dismiss change only local records and send no statement; only the relay command compute_public runs on a relay and is optional.
+- **PS-018-04.R02** Every command is idempotent per CTR-IDM-001 and emits its events in the same IndexedDB transaction as the state change (EVT-8).
+- **PS-018-04.R03** Runs are serialized per vault with a Web Locks mutex so at most one run executes at a time, and the relay serializes runs per tenant.
+- **PS-018-04.R04** The engine consumes want, listing, profile, valuation, block and cycle events only to mark the graph dirty or to change suggestion status; it never acts on another party's behalf.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### Commands
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+| Command | Capability | Input | Output | Errors | Emits | Idempotent |
+|---|---|---|---|---|---|---|
+| `mutiny.suggestion.generate` | mutiny.suggestion.generate | { lmax? (2..8, default 5), mode? local_rooted (default), timeBudgetMs? ≤ 250, expansionBudget? ≤ 100000, dryRun? } | { runId, suggestions: CycleSuggestion[], stats: { nodes, edges, expansions, durationMs, cyclesFound, truncated, projectionAsOf } } | MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_MATCHING_NOT_ENABLED, MUTINY_RUN_IN_PROGRESS, RATE_LIMITED | mutiny.cycle.suggested, mutiny.matching.run_completed | yes (Idempotency-Key) |
+| `mutiny.suggestion.import` | mutiny.suggestion.import | { envelope: classrup.mutiny.cycle_suggestion/v1 signed by a relay, received via mailbox } | { suggestionId, verifiedLocally, status } | MUTINY_SUGGESTION_UNVERIFIED, VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION | mutiny.cycle.suggested | yes (Idempotency-Key) |
+| `mutiny.suggestion.dismiss` | mutiny.suggestion.dismiss | { suggestionId, expectedRevision } | { suggestionId, revision, suppressedUntil } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE |  | yes (Idempotency-Key) |
+| `mutiny.suggestion.compute_public` | mutiny.suggestion.compute_public | { partition?: l1 geohash4, lmax? ≤ tenant maximum, scheduledAt } | { runId, stats, deliveredEnvelopes: int } | MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED | mutiny.matching.run_completed | yes (Idempotency-Key) |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-018-04`; scenarios and fixtures to be detailed in Prompt 3.
+### Queries
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| Query | Capability | Input | Output | Errors |
+|---|---|---|---|---|
+| `mutiny.suggestion.list_mine` | mutiny.suggestion.read | { status? default suggested, cursor?, limit ≤ 50 } | { items: CycleSuggestion[], nextCursor? } |  |
+| `mutiny.suggestion.get` | mutiny.suggestion.read | { suggestionId } | { suggestion: CycleSuggestion, explanation: Explanation } | NOT_FOUND |
+| `mutiny.graph.get_stats` | mutiny.graph.read_stats | { runId? default latest } | { runId, nodes, edges, expansions, durationMs, truncated, inputHash } | NOT_FOUND |
+
+### Events produced
+
+| Type | Privacy | Payload |
+|---|---|---|
+| `mutiny.cycle.suggested` | P2 | { suggestionId, runId, cycleKey, length, participantIds, mode, verifiedLocally, expiresAt } |
+| `mutiny.matching.run_completed` | P2 | { runId, mode, nodes, edges, expansions, durationMs, cyclesFound, suggestionsCreated, truncated } |
+
+### Events consumed
+
+| Type | Effect |
+|---|---|
+| `bazaar.want.declared` | mark graph dirty; schedule a run after the 60 s debounce |
+| `bazaar.want.withdrawn` | supersede active suggestions whose legs reference the want |
+| `bazaar.listing.unpublished` | supersede active suggestions containing an item of that listing |
+| `bazaar.listing.expired` | supersede active suggestions containing an item of that listing |
+| `bazaar.inventory.depleted` | supersede active suggestions containing that inventory item |
+| `mutiny.matching_profile.updated` | mark graph dirty; supersede suggestions whose participant opted out, paused or narrowed maxCycleLength or distance |
+| `mutiny.valuation.declared` | mark graph dirty; supersede suggestions whose value gap changed beyond the profile tolerance |
+| `identity.block.added` | supersede active suggestions containing the blocked DID; no notification names the block |
+| `mutiny.cycle.proposed` | set matching suggestion to proposed when payload.suggestionId matches |
+| `mutiny.cycle.declined` | suppress the cycleKey for 30 days in this vault |
+
+### Module errors
+
+| Code | HTTP | Retryable | Meaning |
+|---|---|---|---|
+| MUTINY_LMAX_INVALID | 422 | no | Lmax is outside 2..tenant maximum |
+| MUTINY_GRAPH_TOO_LARGE | 422 | no | graph exceeds 2000 nodes or 20000 edges even after L1 partitioning |
+| MUTINY_MATCHING_NOT_ENABLED | 409 | no | the principal has not opted in to matching |
+| MUTINY_RUN_IN_PROGRESS | 409 | yes | another matching run holds the mutex |
+| MUTINY_PROFILE_NOT_ELIGIBLE | 409 | no | an endpoint of an edge is not an opted-in, unpaused participant |
+| MUTINY_EDGE_INVALID | 422 | no | an edge fails item, want, distance or projection-age admission |
+| MUTINY_SUGGESTION_UNVERIFIED | 422 | no | relay suggestion failed local signature or leg re-verification |
+
+Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
+
+### Example
+
+```
+# Algorithm (ADR-0005). nodes = DIDs sorted ascending; edge A->B when an item A offers satisfies an active want of B.
+# For each start s in ascending order: restrict to nodes >= s, keep the strongly connected component of s,
+# compute reverse BFS distance d(v) to s, DFS from s in ascending neighbour order, abandon a branch when depth + d(v) > Lmax.
+# Johnson blocking sets are not used with a length cap because blocking is unsound under a depth bound.
+# Unbounded Johnson 1975 is O((n+e)(c+1)) for c cycles; the bounded search is limited by 100000 expansions / 250 ms instead.
+# Maximum-weight cycle packing is NP-hard for cycle length cap >= 3 (Abraham, Blum, Sandholm 2007) so selection is greedy.
+# Score tuple, compare descending: (participants, -imbalance quantized to 10 permille, -maxDistanceBucket, oldestWantAgeDays); ties by cycleKey ascending.
+#
+# 2-party: edges a1->a2 [bike], a2->a1 [guitar]          => cycle [a1,a2] length 2
+# 3-party: a3->a4 [lamp], a4->a5 [desk], a5->a3 [chair]  => cycle [a3,a4,a5] length 3
+# 4-party: b1->b2 [skis], b2->b3 [tent], b3->b4 [drill], b4->b1 [novel] => cycle [b1,b2,b3,b4] length 4
+# N-party (6): c1->c2->c3->c4->c5->c6->c1 : with Lmax 5 no cycle (length 6 > 5, pruned); with Lmax 8 cycle [c1..c6]
+# Greedy: nodes n1..n4, edges n1->n2, n2->n1, n2->n3, n3->n4, n4->n1.
+#   candidates from n1: [n1,n2] (2 participants) and [n1,n2,n3,n4] (4 participants)
+#   4 participants outranks 2, selected; [n1,n2] shares n1 and n2 so it is dropped. Max cycles through a node stay bounded by budgets.
+POST (vault command) mutiny.suggestion.generate
+Idempotency-Key: 0192f3a4-0000-7000-8000-0000000000a1
+{ "lmax": 5, "mode": "local_rooted" }
+200 { "runId": "0192f3a5-1111-7000-8000-000000000001",
+      "suggestions": [ { "id": "0192f3a5-2222-7000-8000-000000000002", "length": 3, "status": "suggested", "verifiedLocally": true,
+        "score": { "participants": 3, "imbalancePermille": 42, "maxDistanceBucket": 1, "oldestWantAgeDays": 12 } } ],
+      "stats": { "nodes": 412, "edges": 1380, "expansions": 9120, "durationMs": 38, "cyclesFound": 17, "truncated": "none" } }
+```
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-018-09.T01 | unit | PS-018-01.R01, PS-018-01.R02, PS-018-04.R01, PS-018-09.R04 | run on g2, g3, g4 | suggestions of length 2, 3, 4 with stable cycleKey rotated to smallest DID; no statement emitted |
+| TEST-PS-018-09.T09 | integration | PS-018-04.R02, PS-018-04.R03, PS-018-06.R01 | replay generate with same key, different body, and parallel generate | stored result replayed; IDEMPOTENCY_KEY_REUSED; second parallel gets MUTINY_RUN_IN_PROGRESS |
+| TEST-PS-018-09.T10 | contract | PS-018-04.R02, PS-018-09.R03 | each command and event | payloads validate against registry schemas classrup.mutiny.cycle_suggestion/v1 and event payloads |
+| TEST-PS-018-09.T11 | integration | PS-018-04.R04, PS-018-03.R02 | consume want.withdrawn, block.added, cycle.declined | suggestions superseded, and declined cycleKey suppressed 30 days |
+
+## Dependencies
+
+Module depends on: F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F11.S01.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

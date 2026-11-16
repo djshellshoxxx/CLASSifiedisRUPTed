@@ -1,35 +1,46 @@
-# PS-117-03 — workflow state machine
+# PS-117-03 — Workflow state machine: API and command bus
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-117-03. **Owner:** [15_Platform/02_backend/mod_api](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_api. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S02.M02 API and command bus](SPEC.md) · **Scope:** MVP · **Code:** `packages/kernel/src/bus` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the workflow state machine process for api within 02_backend. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-117-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-117-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-117-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-117-03.R01** defineMachine rejects at definition time any terminal state with an outgoing transition, any ambiguous (from, event) pair and an initial state that does not occur in the table.
+- **PS-117-03.R02** next(state, event) returns the declared target state or CONFLICT_STATE with params.state and params.event, and can(state, event) agrees with next.
+- **PS-117-03.R03** Each machine exports its transition table (from, to, on and edges()) so module tests compare it with the module.spec.yaml rows.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+### IdempotencyRecord lifecycle
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Initial **stored**; terminal **purged**.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-117-03`; scenarios and fixtures to be detailed in Prompt 3.
+| Transition | Trigger | Guard / effect |
+|---|---|---|
+| stored -> expired | clock passes expiresAt (createdAt + 24 h) | lookups ignore the record and the handler runs again |
+| expired -> purged | maintenance purge on relay schedule or vault open | row deleted |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+```mermaid
+stateDiagram-v2
+  [*] --> stored
+  stored --> expired: clock passes expiresAt (createdAt + 24 h)
+  expired --> purged: maintenance purge on relay schedule or vault open
+  purged --> [*]
+```
+
+### Timeouts and scheduled transitions
+
+- IdempotencyRecord expires 24 h after creation; purgeExpired runs with the relay maintenance sweep and when the vault opens.
+- Relay login nonces expire 120 s after issue; relay access tokens expire after 7 days idle or 30 days absolute.
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-117-09.T07 | unit | PS-117-03.R01, PS-117-03.R02, PS-117-03.R03 | invalid machine definitions and declared or undeclared transitions | definition errors; next returns target or CONFLICT_STATE with state and event; edges exported |
+| TEST-PS-117-09.T08 | property | PS-117-03.R02, PS-117-09.R03 | random event sequences on the offer machine, 200 runs | only declared transitions succeed; terminal states absorb nothing |
+
+## Dependencies
+
+Module depends on: F15.S02.M03, F15.S03.M01, CTR-ID-001, CTR-ERR-001, CTR-EVT-001, CTR-IDM-001, CTR-CAP-001, CTR-FLG-001, CTR-SCH-001, CTR-OBS-001, CTR-PRV-001, CTR-TST-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

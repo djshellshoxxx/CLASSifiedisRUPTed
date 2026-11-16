@@ -1,35 +1,47 @@
-# PS-146-07 — privacy retention abuse
+# PS-146-07 — Privacy, retention and abuse: Prohibited items
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-146-07. **Owner:** [18_Governance/01_policy/mod_prohibited](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_prohibited. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F18.S01.M02 Prohibited items](SPEC.md) · **Scope:** MVP · **Code:** `packages/governance/src/policy/prohibited` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md)
 
-## Purpose and scope
-Define the privacy retention abuse process for prohibited within 01_policy. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-146-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-146-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-146-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-146-07.R01** Evaluated listing text is processed only in memory in the user's vault; the module stores no copy and logs no matched text.
+- **PS-146-07.R02** Rule packs are public signed configuration; sensitive keyword lists may be published as salted hashes so the list itself does not help evaders or spread harmful terms.
+- **PS-146-07.R03** Rule versions are retained RET-STANDARD with the last 3 packs kept locally; decisions that created them are RET-EVIDENCE in F18.S02.M01.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Data classification**
+- ProhibitedRule: P0 signed configuration.
+- Evaluation input and result: P3, memory only; result summary is stored in the PublicationRecord by F01.S01.M03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+**Retention**
+- ProhibitedRule mirror and last 3 packs: RET-STANDARD.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-146-07`; scenarios and fixtures to be detailed in Prompt 3.
+**Threats and controls**
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+| ID | Threat | Control |
+|---|---|---|
+| T01 | Evasion with look-alike characters, spacing or misspelling | normalization pipeline, whole-word and phrase modes, publishers can add variants; honest limit stated in the UI |
+| T02 | Overblocking and censorship through broad rules | proposal and comment period for activation, public rule list, strictest-wins reporting with reason keys, user can choose another publisher |
+| T03 | Rule pack tampering or downgrade | signature over JCS, version monotonic, trusted publishers only |
+| T04 | Denial of service with huge input or pathological rules | 8 000 code-point input limit, 1 MiB pack limit, literal phrase matching without regular expressions, evaluation budget 20 ms |
+| T05 | Emergency rule abused as permanent control | review-level only, 7-day expiry, automatic retirement and public announcement |
+
+**Abuse controls**
+- Evaluate limited to 600 calls per minute per vault; pack applications limited to 20 per day.
+- Publisher limit of 2 000 active rules; emergency rules limited to 5 active at once.
+
+Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
+
+## Verification
+
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-146-09.T11 | abuse | PS-146-07.R01, PS-146-07.R02, PS-146-07.R03 | scan logs, storage and events after evaluating text | no listing text or keywords stored or logged; sensitive keywords only as hashes in public copy |
+| TEST-PS-146-09.T12 | abuse | PS-146-07.R03 | 100 000-code-point input; 2 001 rules; 601 evaluations in a minute | rejected before matching; pack rejected; RATE_LIMITED |
+
+## Dependencies
+
+Module depends on: F18.S01.M03, F18.S01.M01, F18.S02.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

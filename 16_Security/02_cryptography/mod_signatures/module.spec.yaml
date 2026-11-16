@@ -1,0 +1,179 @@
+id: F16.S02.M03
+scope: MVP
+summary: >-
+  Domain-separated Ed25519 sign and verify helpers and the signature envelope used for consents, receipts,
+  attestations, key statements and relay requests. A signature covers the context string, the signer key ID and
+  the RFC 8785 canonical bytes of the payload, so a signature made for one purpose cannot be replayed for another.
+  Verification checks the algorithm, context, canonical form and signature, then asks the key registry
+  (F16.S02.M02) for the signer's status and revocation freshness, and reports a structured result. A valid
+  signature is evidence that the holder of a key asserted a statement; it is not evidence of delivery,
+  physical handover, payment or real-world identity, and timestamps inside a statement are claims by the signer.
+responsibilities:
+  - Provide sign(context, payload, keyHandle) and verify(envelope, expectedContext, policy) as pure helpers over @noble/curves 2.4.0 Ed25519, with strict RFC 8032 verification.
+  - Define and enforce the signature envelope classrup.security.envelope/v1 with context, signer key ID, algorithm, signed-at claim, payload hash and signature.
+  - Maintain the context registry (classrup/consent/v1, receipt/v1, attestation/v1, key-link/v1, key-rotation/v1, key-revoke/v1, relay-request/v1, revocation-list/v1, login/v1, export-manifest/v1) and reject unknown contexts.
+  - Canonicalize payloads with RFC 8785 JCS, rejecting non-canonical inputs, duplicate keys, non-integer numbers and lone surrogates.
+  - Bind exact revisions for consents: payloads carry entity type, entity ID, revision and content hash, and verify checks the binding against the caller's expected revision.
+non_responsibilities:
+  - Key generation and storage (F16.S02.M01) and the key registry (F16.S02.M02).
+  - The federation envelope signature (F11.S01.M03), which uses the CTR-FED-001 FED-2 rule of signing JCS bytes of the envelope without a prefix, and is the only user of the raw signJcs entry point.
+  - Domain meaning of consents, receipts and attestations (F08.S02.M02, F09.S02.M01, F07.S03.M02).
+  - "Future: Ed448 or post-quantum hybrid signatures; threshold signatures; timestamp authority countersignatures."
+depends_on: [F16.S02.M02, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001]
+user_stories:
+  - As a trade participant, I sign my consent to exactly revision 4 of a proposal, and nobody can reuse that signature for revision 5 or another action.
+  - As a verifier, I see 'valid, signer key active, revocation checked 3 hours ago' or 'valid, but revocation status unknown for 9 days'.
+  - As a developer, I add a new signed statement type by registering a context string and a payload schema, and the helper refuses anything else.
+edge_cases:
+  - Same payload signed under two contexts produces different signatures and verification under the wrong expected context fails with SECURITY_CONTEXT_MISMATCH.
+  - Payload contains a float, a duplicate key, or unsorted keys that differ from the canonical form; verify recomputes canonical bytes and rejects non-canonical envelopes with SECURITY_PAYLOAD_NOT_CANONICAL.
+  - Signature with non-canonical S value or small-order public key; strict verification rejects it with SECURITY_SIGNATURE_INVALID.
+  - signedAt claim is 3 days in the future or 40 days in the past; verify returns valid with clockClaim flagged, because signedAt is only a claim, and policy decides whether to accept.
+  - Signer key revoked with effectiveFrom 10 days ago and the statement was received 2 days ago; the result is valid-but-flagged 'signed during claimed compromise' per the registry rules.
+  - Registry freshness unknown because the vault was offline for 9 days; the result carries freshness unknown, and a high-stakes policy turns it into a refusal until the user refreshes or acknowledges.
+  - Payload larger than 64 KiB; refused with PAYLOAD_TOO_LARGE before any hashing.
+ux:
+  notes: "Headless library with one visible surface: the signature detail panel on a consent, receipt or attestation, showing plain-language lines 'Signed by key orbit-maple-quiet-river for: consent to proposal revision 4', 'Signature valid', 'Key status: active, revocation last checked 3 hours ago', and a clear note that a signature proves the key holder asserted the statement and does not prove delivery or handover."
+  screens:
+    - "Signature detail panel: signer fingerprint, context in words, payload binding (entity, revision), verification result, key status with freshness, honesty note."
+  states: [valid-fresh, valid-stale, valid-flagged, invalid, unknown-signer, revoked]
+  a11y:
+    - Result is stated in words with an icon, not color alone.
+    - The panel is a labelled region that is reachable by keyboard and announces changes politely.
+    - Honesty note is plain text, not a tooltip.
+processes:
+  domain_schema:
+    note: "No catalog entities. The signature envelope is a wire and storage format embedded in other modules' records, versioned as classrup.security.envelope/v1, and the context registry is a static table in code."
+    entities: []
+    requirements:
+      - The envelope contains version, context, signer key ID, algorithm ed25519, signedAt claim, payload (canonical JSON) or payload hash, and the base64url 64-byte signature.
+      - The signed bytes are UTF-8 of the context, one zero byte, the 32-byte signer key ID digest, one zero byte, then the JCS bytes of the payload, so context and key are bound into every signature.
+      - Contexts follow classrup/<purpose>/v<major> and the registry maps each context to a payload schema ID, a maximum size and whether a revision binding is required.
+  validation_rules:
+    requirements:
+      - Envelopes are validated strictly for size, version, algorithm and context before any cryptographic operation.
+      - Verification is strict Ed25519 (RFC 8032, canonical S, no small-order keys) and recomputes canonical bytes rather than trusting transmitted bytes.
+      - Every violation maps to one stable error code, and results never reveal secret-dependent details.
+    rules:
+      - "V01 | envelope version is 1, algorithm is ed25519 and payload is at most 65536 bytes | PAYLOAD_TOO_LARGE"
+      - "V02 | context is in the registry and equals the caller's expected context | SECURITY_CONTEXT_MISMATCH"
+      - "V03 | payload canonicalizes under RFC 8785 without duplicate keys, floats or lone surrogates and equals the transmitted form | SECURITY_PAYLOAD_NOT_CANONICAL"
+      - "V04 | Ed25519 signature verifies strictly over the domain-separated bytes | SECURITY_SIGNATURE_INVALID"
+      - "V05 | signer key is known to the registry and not revoked at the verifier's receipt time | SECURITY_SIGNER_UNKNOWN"
+      - "V06 | for revision-bound contexts, payload entityType, entityId and revision equal the caller's expected values and contentHash matches | SECURITY_BINDING_MISMATCH"
+      - "V07 | the signer key is not revoked for statements received after revocation | SECURITY_KEY_REVOKED"
+  workflow_state_machine:
+    note: "Stateless helpers; a verification has a result but no lifecycle."
+    machines: []
+    requirements:
+      - Verification is a pure function of the envelope, expected context, registry status snapshot and verifier receipt time, and has no side effects.
+      - The verifier's own receipt time is the only time used for revocation decisions, and the signedAt claim never extends or shortens a key's validity.
+      - A result with freshness stale or unknown is returned to the caller and never upgraded to valid-fresh by the library.
+    timeouts:
+      - "Registry status snapshot passed to verify must be at most 60 seconds old on a relay; vaults pass the status with its true freshness."
+  commands_queries_events:
+    note: "Library module with no bus commands, queries or events. API is sign, verify, canonicalize, hashPayload and the context registry, usable in vault and relay, with no network access."
+    commands: []
+    queries: []
+    requirements:
+      - sign returns a complete envelope and refuses unregistered contexts and payloads that fail their schema.
+      - verify returns a structured result { valid, reason?, signerKeyId, context, bindingOk, keyStatus, freshnessClass, flags[] } and never throws on hostile input.
+      - signJcs and verifyJcs exist only for the federation envelope (FED-2) and are not exported to other modules.
+    events_produced: []
+    events_consumed: []
+    errors:
+      - "SECURITY_SIGNATURE_INVALID | 422 | no | signature does not verify under strict Ed25519"
+      - "SECURITY_CONTEXT_MISMATCH | 422 | no | context unknown or different from the expected context"
+      - "SECURITY_PAYLOAD_NOT_CANONICAL | 422 | no | payload is not in RFC 8785 canonical form or contains forbidden values"
+      - "SECURITY_SIGNER_UNKNOWN | 422 | no | signer key is not known to the verifier's registry"
+      - "SECURITY_BINDING_MISMATCH | 422 | no | signed entity, revision or content hash differs from what the caller expects"
+    example: |
+      sign("classrup/consent/v1", { entityType: "cycle_proposal", entityId: "0192f430-…", revision: 4, contentHash: "9f86d081…", signedAt: "2026-11-04T10:00:00Z" }, keyHandle)
+      -> { v: 1, ctx: "classrup/consent/v1", kid: "Qm9b…", alg: "ed25519", payload: {…}, sig: "Zm9v…" }
+      verify(envelope, { expectedContext: "classrup/consent/v1", expected: { entityId: "0192f430-…", revision: 5 } }, status)
+      -> { valid: true, bindingOk: false, reason: "SECURITY_BINDING_MISMATCH" }   // signature was for revision 4
+  authorization_capabilities:
+    note: "No capabilities: sign and verify are in-process helpers. Signing authority is possession of the unlocked key in the vault; verifying needs no authority."
+    capabilities: []
+    requirements:
+      - Only vault code holding an unlocked key handle can sign, and the helper never accepts raw key bytes from callers.
+      - Verification is available to every module in vault and relay and requires no secret.
+      - Context registry changes are code changes reviewed in the repository, not runtime configuration.
+  failure_recovery_idempotency:
+    requirements:
+      - sign and verify are deterministic and idempotent, since Ed25519 signatures are deterministic for the same key and bytes.
+      - A failure in registry lookup produces freshness unknown rather than a valid-fresh result.
+      - Canonicalization is total and returns an error value instead of throwing on hostile input.
+    idempotency: "Signing the same payload and context with the same key yields the identical envelope bytes; callers deduplicate on content ID."
+    concurrency: "Pure functions with no shared state; the context registry is an immutable frozen table."
+    retries: "No retries inside the library; callers retry the surrounding network operations under CTR-IDM-001."
+    offline: "Everything works offline; only the freshness of revocation knowledge depends on connectivity, and it is reported in the result."
+    partial_failure: "If the key registry is unavailable, verify returns the cryptographic result plus keyStatus unknown and freshness unknown, never an unqualified valid."
+  privacy_retention_abuse:
+    requirements:
+      - Envelopes contain only the payload the signer chose to sign and key IDs; signing contexts and verification results never include secrets or P4 values.
+      - Retention follows the embedding record (consents and receipts are RET-EVIDENCE) and the library stores nothing itself.
+      - Replay, cross-protocol and substitution attacks are addressed by domain separation, revision binding and strict verification.
+    data:
+      - "Envelope: inherits the privacy class of the embedding record (P0 to P2)."
+      - "Verification results: ephemeral, not stored by the library."
+    retention:
+      - "The library stores nothing; embedding records retain envelopes for their own class (RET-EVIDENCE for consents and receipts)."
+      - "Test vectors and context registry are versioned in the repository."
+    threats:
+      - "T01 | Cross-context replay (a login signature reused as a consent) | context string is part of the signed bytes and the verifier requires the expected context"
+      - "T02 | Replay of a consent for a different revision or entity | payload binds entityType, entityId, revision and contentHash; verify checks against expected values"
+      - "T03 | Signature malleability or small-order key tricks | strict RFC 8032 verification with canonical S and small-order checks; known-answer tests include malleable vectors"
+      - "T04 | Canonicalization ambiguity to smuggle fields | verifier recomputes JCS, rejects duplicate keys, floats and lone surrogates, and compares to transmitted bytes"
+      - "T05 | Backdated signedAt to evade revocation | signedAt is a claim; revocation uses the verifier's receipt time and the registry's effective-from rules"
+      - "T06 | Over-reading a signature as proof of delivery or identity | UI honesty note; docs state that signatures prove key-holder assertion only"
+    abuse_controls:
+      - "Payload size limit 64 KiB and verification limited to 50 per request on a relay (F12.S03.M03 class verify) to bound CPU cost."
+      - "Unknown contexts are rejected before any hashing."
+  observability_performance:
+    requirements:
+      - Relay verification outcomes are counted per CTR-OBS-001 with codes as labels and no key IDs; the vault keeps local diagnostics only.
+      - sign and verify meet p95 ≤ 5 ms on desktop-class and ≤ 25 ms on a Moto G-class device for 4 KiB payloads.
+      - Verification failure spikes are visible to the incident detection hooks of F16.S03.M02.
+    metrics:
+      - "classrup_security_signature_verifications_total{outcome=valid|invalid,code}"
+      - "classrup_security_signature_verify_ms (histogram)"
+      - "classrup_security_signature_freshness_total{class=fresh|stale|unknown}"
+    logs:
+      - "relay warn signature.invalid {context, code, correlationId} — no payload, no key ID."
+    budgets:
+      - "sign and verify p95 ≤ 5 ms (desktop) and ≤ 25 ms (Moto G profile) for 4 KiB; canonicalization of 64 KiB ≤ 10 ms."
+      - "Library bundle ≤ 12 KiB gzip excluding @noble/curves."
+  contract_and_acceptance_tests:
+    requirements:
+      - Every requirement of this module is covered by at least one automated test.
+      - Ed25519 behavior is covered by RFC 8032 known-answer vectors including malleability cases, and domain separation by cross-context property tests.
+      - Canonicalization is covered by the RFC 8785 test vectors.
+    fixtures: "RFC 8032 vectors, RFC 8785 vectors, malleable-S and small-order vectors, registry snapshots for active, revoked, unknown and stale keys, fixed clock 2026-11-04T10:00:00Z."
+    tests:
+      - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | sign consent payload and verify with expected context | envelope fields as specified; valid true; signed bytes equal context, 0x00, key digest, 0x00, JCS bytes"
+      - "T02 | unit | 02.R02,09.R02 | RFC 8032 vectors; non-canonical S; small-order public key | vectors pass; malleable and small-order rejected with SECURITY_SIGNATURE_INVALID"
+      - "T03 | property | 01.R02,05.R02 | random payloads signed under context A and verified under B | always SECURITY_CONTEXT_MISMATCH; no cross-context validity"
+      - "T04 | unit | 02.R01,02.R03,03.R02 | floats, duplicate keys, unsorted keys, lone surrogates, 65 KiB payload, RFC 8785 vectors | rejected with documented codes; canonical forms match vectors"
+      - "T05 | unit | 04.R01,04.R02,05.R01 | consent for revision 4 verified against expected revision 5 and another entity | bindingOk false; SECURITY_BINDING_MISMATCH"
+      - "T06 | integration | 03.R01,03.R02,03.R03 | registry snapshots active-fresh, revoked, stale 9 days, unknown, backdated signedAt | results valid-fresh, SECURITY_KEY_REVOKED, valid with freshness unknown, SECURITY_SIGNER_UNKNOWN, claim flagged"
+      - "T07 | abuse | 05.R03,07.R01,07.R03 | attempt to call signJcs from non-federation module; unknown context; raw key bytes passed | not exported; rejected; API refuses raw key bytes"
+      - "T08 | chaos | 06.R01,06.R02,06.R03,03.R03 | registry lookup throws or times out | result valid cryptographically with keyStatus unknown and freshness unknown; never plain valid-fresh"
+      - "T09 | integration | 06.R01,07.R02 | sign same payload twice; verify embedded envelopes in a stored consent | identical envelope bytes; library writes nothing"
+      - "T10 | unit | 07.R03,04.R03 | honesty text present in signature detail panel; UI string audit | note present in all locales; no wording claims delivery or handover"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 1 000 verifications per second for 5 minutes, 4 KiB payloads; Moto G profile | p95 ≤ 5 ms desktop and ≤ 25 ms Moto G; metrics exported"
+      - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-130 requirement maps to a passing test"
+      - "T13 | integration | 10.R01,10.R02,10.R03 | export consents with envelopes, import to fresh vault, version downgrade attempt | envelopes re-verify identically; unknown envelope version rejected"
+    acceptance:
+      - All tests T01–T13 pass in CI with RFC 8032 and RFC 8785 vectors.
+      - No signature validates under a context other than the one it was made for (property tests).
+      - Every verify result carries key status and revocation freshness, and the UI states what a signature does not prove.
+  import_export_backup_rollback:
+    requirements:
+      - Exports embed envelopes verbatim with their canonical payloads so they can be re-verified by anyone with the signer's public key.
+      - Import re-verifies every envelope under its recorded context, marks failures as unverified and never silently drops or upgrades them.
+      - Envelope and context changes are versioned, with old contexts verifiable for at least 5 years and new major versions introduced alongside.
+    export: "Envelopes are exported inside the records that embed them (consents, receipts, attestations); the context registry version used is recorded in the export manifest."
+    import: "Each envelope is re-verified on import; failures are stored as unverified with the failure code; envelopes with unknown versions are kept opaque and flagged."
+    backup: "No module-specific backup; envelopes are backed up with their records (vault export IOX-6, relay IOX-3)."
+    migration_rollback: "A new context version (for example classrup/consent/v2) is added beside v1 and v1 stays verifiable; rollback to an older client leaves v2 envelopes opaque and flagged rather than misread."

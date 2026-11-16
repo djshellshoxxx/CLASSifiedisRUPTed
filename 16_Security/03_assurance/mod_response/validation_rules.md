@@ -1,35 +1,34 @@
-# PS-132-02 — validation rules
+# PS-132-02 — Validation rules: Incident response
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-132-02. **Owner:** [16_Security/03_assurance/mod_response](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_response. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED (Stage 3). **Module:** [F16.S03.M03 Incident response](SPEC.md) · **Scope:** MVP · **Code:** `docs/security/response` · **Contracts:** [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FLG-001](../../../planning/contracts/CTR-FLG-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
 
-## Purpose and scope
-Define the validation rules process for response within 03_assurance. Do not assume implementation or successful external settlement.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## Requirements to specify
-- [ ] PS-132-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-132-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-132-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+- **PS-132-02.R01** The documentation linter validates runbook structure, step time targets and references to capabilities, flags, error codes and modules.
+- **PS-132-02.R02** Switch commands validate reason text and role before applying, and never accept empty reasons.
+- **PS-132-02.R03** Every violation maps to one stable lint or runtime error code.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Specification
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Rule | Check | Error |
+|---|---|---|
+| V01 | each runbook has trigger, roles, numbered steps with time targets, verification, rollback and communication sections | SECURITY_RUNBOOK_INCOMPLETE |
+| V02 | every capability, flag, error code and module referenced in a runbook exists in the specs and catalog | SECURITY_RUNBOOK_DANGLING_REFERENCE |
+| V03 | read-only and federation switch changes carry a reason of 10..500 code points and an admin or operator role | VALIDATION_FAILED |
+| V04 | the last tabletop drill date is within 6 months of the release date | SECURITY_RUNBOOK_DRILL_STALE |
+| V05 | runbooks and templates contain no claim of external audit, certification or guaranteed security | SECURITY_RUNBOOK_FORBIDDEN_CLAIM |
+| V06 | a mutating command while read-only mode is active and not exempt | SECURITY_READ_ONLY_MODE |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Verification
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-132-02`; scenarios and fixtures to be detailed in Prompt 3.
+| Test | Level | Covers | Scenario | Expected |
+|---|---|---|---|---|
+| TEST-PS-132-09.T01 | unit | PS-132-01.R01, PS-132-01.R02, PS-132-02.R01, PS-132-04.R01, PS-132-04.R03, PS-132-09.R02 | lint the seven runbooks and each broken fixture | valid passes; each broken fixture yields its SECURITY_RUNBOOK_* code with runbook ID |
+| TEST-PS-132-09.T02 | unit | PS-132-01.R03, PS-132-02.R02, PS-132-02.R03 | switch command with empty reason, short reason, wrong role | VALIDATION_FAILED, VALIDATION_FAILED, FORBIDDEN |
+| TEST-PS-132-09.T14 | unit | PS-132-02.R03, PS-132-08.R03 | drill record dated 7 months ago | SECURITY_RUNBOOK_DRILL_STALE and gate failed |
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Dependencies
+
+Module depends on: F16.S03.M02, F16.S03.M01, F16.S02.M02, F15.S04.M02, CTR-CAP-001, CTR-FLG-001, CTR-ERR-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

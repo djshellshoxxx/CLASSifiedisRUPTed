@@ -1,35 +1,30 @@
 # PS-012-03 — workflow state machine
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (event envelope, revision), CTR-COM-001 (quote pin at consent), CTR-CAP-001 (actor roles).
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-012-03. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_counteroffer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Decision label:** Accept = mutual agreement on the new revision is PROVISIONAL (D04 default, unapproved). Counter creation = proposer consent is ASSUMPTION.
 
-## Purpose and scope
-Define the workflow state machine process for counteroffer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## States
+`OPEN` (initial) · terminal: `ACCEPTED`, `REJECTED`, `WITHDRAWN`, `SUPERSEDED`, `EXPIRED`, `INVALIDATED`. Terminal states have no outgoing transitions.
 
-## Requirements to specify
-- [ ] PS-012-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-012-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-012-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| — | `counter.create` (actor = holder ≠ latest proposer) | `cyc_` OPEN; `target_revision` current; validation PASS (PS-012-02) | OPEN | Prior OPEN counter on `cyc_` → SUPERSEDED in same transaction; emit `counter.proposed`; notify recipient |
+| OPEN | `counter.accept` (actor = recipient) | Not expired; `cyc_` still at `target_revision`; all items ACTIVE; both holders ACTIVE; quote valid if cross-currency | ACCEPTED | Write `cyc_` revision = `revision` and consent for both holders in one transaction; emit `counter.accepted` |
+| OPEN | `counter.reject` (actor = recipient) | State OPEN | REJECTED | `cyc_` unchanged; emit `counter.rejected` |
+| OPEN | `counter.withdraw` (actor = proposer) | State OPEN | WITHDRAWN | `cyc_` unchanged; emit `counter.withdrawn` |
+| OPEN | `counter.expire` (system timer) | `now ≥ expires_at` | EXPIRED | Emit `counter.expired` |
+| OPEN | `counter.invalidate` (system) | Reason ∈ ITEM_GONE, PARTY_INACTIVE, TARGET_CHANGED, OFFER_WITHDRAWN | INVALIDATED | Emit `counter.invalidated` with reason; notify both holders |
+| OPEN | `counter.supersede` (system) | Newer counter created on same `cyc_` | SUPERSEDED | Emit `counter.superseded` (inside create transaction) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Invariants: at most one OPEN per `cyc_` (PS-012-01.R02). `cyc_` revision changes only by ACCEPTED. Each transition increments `state_version` by 1.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Lifecycle notes
+- A counter does not reserve items. Items stay available to other trades until ACCEPTED plus the owning module's consent step.
+- Accept is refused, not silently re-based, when `cyc_` moved. The proposer must create a new counter.
+- Cap: a chain reaching revision 5 accepts or rejects only; further creates fail with `CTROFFER.DEPTH_LIMIT`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-012-03`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: consent of the proposer is recorded at create (PS-012-01).
+- D04 PROVISIONAL (D04 default, unapproved): no transition here asserts physical handover; execution is owned by F02.S02/S03.
+- Open: owner of the `cyc_` revision write in the accept transaction (PENDING, F02 cycle module).

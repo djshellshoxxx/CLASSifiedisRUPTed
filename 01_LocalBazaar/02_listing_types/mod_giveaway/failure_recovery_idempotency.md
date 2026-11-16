@@ -1,35 +1,53 @@
-# PS-005-06 — failure recovery idempotency
+# PS-005-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-005-06. **Owner:** [01_LocalBazaar/02_listing_types/mod_giveaway](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 R02, R03, R08, R09; CTR-ERR-001 R03; CTR-SCH-001 R05–R06. PENDING CTR-LST-001 (F01 reserve/reopen idempotency).
 
-## Purpose and scope
-Define the failure recovery idempotency process for giveaway within 02_listing_types. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-005-06.R01 | Idempotency scope = (actor, command, `idempotency_key`); same key and digest return original result; key reuse with different digest → `EVT.IDEMPOTENCY_KEY_REUSED`. Records kept 7 d. | MVP |
+| PS-005-06.R02 | Accept race: exactly one claim becomes ACCEPTED per listing. Losing request returns `GIVE.LISTING_ALREADY_RESERVED` (409, not retryable). | MVP |
+| PS-005-06.R03 | Reservation to F01 uses an outbox with at-least-once delivery, idempotent on `claim_id` + revision; lag p95 ≤ 60 s (ASSUMPTION). | MVP |
+| PS-005-06.R04 | Offline submit/withdraw/confirm queued locally until server acknowledgment (D08). UI shows "pending", never "claimed". | MVP |
+| PS-005-06.R05 | Replayed offline command after listing reserved resolves as `GIVE.LISTING_NOT_CLAIMABLE`; queue entry marked resolved, not retried. | MVP |
+| PS-005-06.R06 | Server timeouts: client waits ≤ 10 s, then shows pending; server commits atomically or not at all. | MVP |
+| PS-005-06.R07 | Partial failure (claim committed, F01 reserve failed): claim stays ACCEPTED, outbox retries; no duplicate ACCEPTED. | MVP |
 
-## Requirements to specify
-- [ ] PS-005-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-005-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-005-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency table: `(actor_ref, command, idempotency_key)` → `request_digest`, `result_revision`, `expires_at` (RET-OPS, 7 d). Outbox table: `claim_id`, `target_command`, `revision`, `attempts`, `next_at`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Idempotency applies to all commands in [commands_queries_events](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery moves: outbox failure after ACCEPTED does not roll back ACCEPTED. If reserve is permanently impossible (listing deleted), claim moves to REJECTED (LISTING_ENDED) via compensating command.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE` (503, true), `EVT.REVISION_GAP` (true). Not retryable: `GIVE.LISTING_ALREADY_RESERVED`, `GIVE.INVALID_TRANSITION`, `EVT.IDEMPOTENCY_KEY_REUSED`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Replays are re-authorized at server receipt using current state; a stale grant does not authorize a replayed write.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-005-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Concurrency: `expected_revision` check; mismatch → `EVT.REVISION_CONFLICT` (client reloads).
+- Offline: pending queue (D08 PROVISIONAL default, unapproved); queue never discarded on unknown MAJOR (CTR-SCH R06).
+- Retry: exponential backoff with jitter, max 8 attempts for outbox; client max 5 attempts (ASSUMPTION).
+
+## Privacy, retention, abuse
+Queue and outbox hold only ids, digests and timestamps. Retention RET-OPS.
+
+## Observability & performance
+Metrics: `giveaway_outbox_lag_seconds`, `giveaway_idempotency_replays_total`, `giveaway_accept_race_losses_total`. Alert when outbox lag p95 > 60 s.
+
+## Tests
+- TEST-PS-005-06-01: 50 concurrent accepts on one listing yield one ACCEPTED.
+- TEST-PS-005-06-02: duplicate submit with same key returns original; different digest returns reuse error.
+- TEST-PS-005-06-03: F01 reserve failure, then recovery, produces no duplicate reservation.
+- TEST-PS-005-06-04: offline queued submit replayed after reserve resolves as not claimable.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No state where two claims are ACCEPTED or later for one listing, including after partial failure.
+2. Every retry path is idempotent and bounded.
+3. Pending offline items are never displayed as final.
+
+**Assumptions and open decisions:** Retry counts and lag budgets are ASSUMPTION. D08 (PROVISIONAL default: local pending queue until authenticated relay acknowledgment, unapproved) applies. D04 (PROVISIONAL default: per-party attestation with compensating recovery, unapproved) applies to handover recovery. See [DECISIONS.md](../../../DECISIONS.md).

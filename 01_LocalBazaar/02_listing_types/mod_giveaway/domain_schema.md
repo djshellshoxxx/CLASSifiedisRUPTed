@@ -1,35 +1,34 @@
 # PS-005-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-005-01. **Owner:** [01_LocalBazaar/02_listing_types/mod_giveaway](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-SCH-001, CTR-PRV-001, CTR-EVT-001, CTR-CAP-001. PENDING CTR-LST-001 (listing record, F01). PENDING CTR-ID-001 registry entry for prefix `gcl_`.
 
-## Purpose and scope
-Define the domain schema process for giveaway within 02_listing_types. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-005-01.R01 | Module owns one aggregate, `giveaway_claim` (ID prefix `gcl_`, class `opaque`). `lst_` listings are referenced by ID only; F01 owns the listing record. | MVP |
+| PS-005-01.R02 | Giveaway listing sets `listing_type = "giveaway"` and `giveaway_policy = GIVER_SELECTS`. Only this value exists in MVP (ASSUMPTION). | MVP |
+| PS-005-01.R03 | No consideration field (price, currency, reference_currency, quote_id, offer, trade item list) exists on the giveaway listing extension or on the claim. | MVP |
+| PS-005-01.R04 | Claim record has no free-text, contact, device or coordinate field. | MVP |
+| PS-005-01.R05 | `pickup_region` is a registered `LOCATION_COARSE` cell (CTR-PRV-001 R04) or null. Precise pickup point is never stored here. | MVP |
+| PS-005-01.R06 | At most one claim per `listing_id` in state ACCEPTED, HANDOVER_RECORDED or RECEIPT_CONFIRMED (partial unique index). | MVP |
+| PS-005-01.R07 | Record `max_data_class` = PRIVATE_PERSONAL (existence of an interest in an item). Every field has exactly one class (CTR-PRV-001 R01). | MVP |
+| PS-005-01.R08 | `giveaway_policy = FIRST_VALID_CLAIM` (automatic first-come). Requires abuse review before enabling. | Future |
 
-## Requirements to specify
-- [ ] PS-005-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-005-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-005-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Schema `giveaway_claim`, version 1.0.0, owner F01, format json-schema-2020-12 (CTR-SCH-001).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | Type | Class | Constraint |
+|---|---|---|---|
+| claim_id | string `gcl_` + 26 Crockford | PRIVATE_PERSONAL | PK; opaque class (CTR-ID-001 R02) |
+| listing_id | string `lst_` + 26 | PUBLIC | must reference an existing listing at submit |
+| claimant_ref | string `acc_` + 26 | PSEUDONYMOUS | authorization subject; other parties see `prf_` view only |
+| giver_ref | string `acc_` + 26 | PSEUDONYMOUS | copied from listing owner at submit |
+| state | enum, closed (8 values, PS-005-03) | PRIVATE_PERSONAL | CTR-SCH R04 closed enum |
+| reason_code | enum closed: LISTING_RESERVED, LISTING_ENDED, GIVER_RESCINDED, CLAIMANT_WITHDREW, TIMEOUT, FEATURE_DISABLED, null | PRIVATE_PERSONAL | required for REJECTED, WITHDRAWN, EXPIRED, CLOSED_UNCONFIRMED |
+| pickup_region | string (registered cell ID) or null | LOCATION_COARSE | from registered set only |
+| revision | integer ≥ 1 | PSEUDONYMOUS | per aggregate (CTR-EVT-001 R02) |
+| submitted_at, state_changed_at, expires_at, handover_at, receipt_at | RFC 3339 UTC, ms, or null | PRIVATE_PERSONAL | `expires_at` = `submitted_at` + 7 d (ASSUMPTION) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Provenance: `server_internal` or `client_offline_replay` (see PS-005-06). Deriving `giver_ref` server-side only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-005-01`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+**Assumptions and open decisions:** Consideration exclusion follows PROJECT_SPEC.md "No platform custody". Pickup region depends on D05 (PROVISIONAL default: coarse public regions, unapproved; see [DECISIONS.md](../../../DECISIONS.md)). `giveaway_policy` values and 7-day expiry have no Dxx; ASSUMPTION pending F01 review.

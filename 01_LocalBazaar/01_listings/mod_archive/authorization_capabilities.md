@@ -1,35 +1,38 @@
-# PS-001-05 — authorization capabilities
+# PS-001-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-001-05. **Owner:** [01_LocalBazaar/01_listings/mod_archive](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_archive. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/01_listings/mod_archive. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (action vocabulary, scopes, privileged grants, field visibility), CTR-ID-001, CTR-ERR-001 (`SYS.FORBIDDEN` vs `SYS.NOT_FOUND`). **Pending:** CTR-LST-001 (participant rights in listings held by cycles). **Decisions:** D10 (defaults PROVISIONAL, unapproved). Grant model is PROVISIONAL (CTR-CAP-001).
 
-## Purpose and scope
-Define the authorization capabilities process for archive within 01_listings. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-001-05.R01 | Module capabilities: `lst.read`, `lst.update` (owner archive and restore), `lst.moderate` (case-scoped archive and restore). No other verbs are declared. | MVP |
+| PS-001-05.R02 | Default deny. Owner rule evaluated on `acc_` from the listing aggregate at decision time (CTR-CAP-001 R05). | MVP |
+| PS-001-05.R03 | Moderator capability requires `case` scope, `constraints.purpose`, `case_id`, and expiry ≤ 72 h after `not_before` (CTR-CAP-001 R06). | MVP |
+| PS-001-05.R04 | Global operators hold no archive capability. Platform staff act only through a case grant. | MVP |
+| PS-001-05.R05 | Every archive, restore and privileged read writes a `aud_` record with listing ID, decision ID, actor kind (CTR-CAP-001 R08). | MVP |
+| PS-001-05.R06 | Decision cache TTL is zero for all archive writes (CTR-CAP-001 R09). | MVP |
 
-## Requirements to specify
-- [ ] PS-001-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-001-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-001-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Authorization matrix
+| Actor | Action | Resource | Result | Code if denied |
+|---|---|---|---|---|
+| owner `acc_` | `archive_listing` | own `lst_` in PUBLISHED | ALLOW | — |
+| owner `acc_` | `restore_listing` | own `lst_`, `archived_by_kind=user` | ALLOW | — |
+| owner `acc_` | `restore_listing` | own `lst_`, `archived_by_kind=mod` | DENY | `ARCHIVE.MODERATION_LOCKED` |
+| non-owner, can see listing | any archive command | `lst_` | DENY | `SYS.FORBIDDEN` |
+| non-owner, cannot see listing | any archive command | `lst_` | DENY | `SYS.NOT_FOUND` |
+| counterparty in open cycle | `get_archive_state` | `lst_` | ALLOW, fields `public` only | — |
+| counterparty in open cycle | archive command | `lst_` | DENY | `SYS.FORBIDDEN` |
+| `mod_` with active case | `archive_listing_by_moderator` | `lst_` in case scope | ALLOW | — |
+| `mod_` without case | any moderator command | `lst_` | DENY | `SYS.FORBIDDEN` |
+| `ope_` global | any archive command | any | DENY | `SYS.FORBIDDEN` |
+| `sys_` federation adapter | archive event import | `lst_` of peer origin | ASSUMPTION: Future, see PS-001-10 | `FED.PEER_NOT_TRUSTED` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Field visibility
+| Field | Owner | Counterparty | Public | Case |
+|---|---|---|---|---|
+| `lifecycle_state`, `revision` | public | public | never ARCHIVED (not found) | case |
+| `archive_reason_code` | owner | never | never | case |
+| `archived_by_ref` | owner (user only) | never | never | case |
+| `archive_case_ref` | never | never | never | case |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-001-05`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Fields without an allowing rule are omitted, not returned as null (CTR-CAP-001 R10).

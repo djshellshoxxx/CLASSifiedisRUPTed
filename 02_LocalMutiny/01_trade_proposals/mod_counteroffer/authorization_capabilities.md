@@ -1,35 +1,34 @@
 # PS-012-05 — authorization capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (action vocabulary, scopes, default deny, field visibility), CTR-ERR-001 (not-found rule), CTR-PRV-001 (classes).
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-012-05. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_counteroffer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Decision label:** Participant-only visibility is required, not provisional. Moderation scope is PROVISIONAL (ASSUMPTION, unapproved).
 
-## Purpose and scope
-Define the authorization capabilities process for counteroffer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-012-05.R01 | Default deny. Each action below needs a participant relation rule evaluated on current `cyc_` and counter state. | MVP |
+| PS-012-05.R02 | Actions: `counter.propose`, `counter.accept`, `counter.reject`, `counter.withdraw`, `counter.read`. Verbs follow CTR-CAP-001.R03. | MVP |
+| PS-012-05.R03 | Authorization uses the `acc_` principal only; `prf_` views never grant access. Body-supplied `proposer_ref` or `recipient_ref` is ignored for authorization. | MVP |
+| PS-012-05.R04 | Field visibility: `value_terms`, `proposer_ref`, `recipient_ref`, `created_at` = `participant`; `status` = `participant`; all others omitted for non-participants. | MVP |
+| PS-012-05.R05 | No `ope_` or global-scope principal may read `value_terms` (FINANCIAL_EVIDENCE). Moderation read needs `case:<cas_>`, dual control and ≤ 72 h expiry (CTR-CAP-001.R06, R07). | MVP |
 
-## Requirements to specify
-- [ ] PS-012-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-012-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-012-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Authorization matrix
+| Actor (relation) | propose | accept | reject | withdraw | read |
+|---|---|---|---|---|---|
+| Holder, no OPEN counter by holder | Allow | Deny | Deny | Deny | Allow |
+| Holder, recipient of OPEN counter | Allow (supersedes) | Allow | Allow | Deny | Allow |
+| Holder, proposer of OPEN counter | Deny `ROLE_NOT_PERMITTED` | Deny | Deny | Allow | Allow |
+| Non-participant `acc_` | Deny `SYS.NOT_FOUND` | Deny | Deny | Deny | Deny `SYS.NOT_FOUND` |
+| `mod_` with `case:<cas_>` | Deny | Deny | Deny | Deny | Allow, purpose-bound, value_terms only with dual control |
+| `ope_` | Deny | Deny | Deny | Deny | Deny (global scope excluded) |
+| `sys_` (this module) | Deny | Deny | Deny | Deny | Expire, invalidate, supersede only |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Grant and decision handling
+- No grants are stored for participant actions; the relation is derived from state (CTR-CAP-001.R05).
+- Each denial is an `authz.decide` record with reason code and no object content (CTR-CAP-001.R13).
+- Revocation of a holder's `acc_` status is an event; the next decision denies all actions except read of terminal counters.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-012-05`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: the `mod_` moderation read path is provided by F12 `cas_` cases; this module adds no moderation action.
+- PENDING: block control between holders (owner F12); until resolved, a blocked holder can still act only through existing relations.
+- D10 PROVISIONAL (D10 default, unapproved): user-controlled keys do not change these relations; recovery never grants `counter.accept` (CTR-CAP-001.R12).

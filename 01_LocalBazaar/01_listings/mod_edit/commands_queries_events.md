@@ -1,35 +1,58 @@
-# PS-003-04 — commands queries events
+# PS-003-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-003-04. **Owner:** [01_LocalBazaar/01_listings/mod_edit](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_edit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/01_listings/mod_edit. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (envelope, idempotency R03), CTR-SCH-001 (`listing.updated` registry entry), CTR-ERR-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for edit within 01_listings. Do not assume implementation or successful external settlement.
+**Decision labels:** Federation of `listing.updated` PROVISIONAL (D01 default, unapproved). Price and currency fields PROVISIONAL (D03 default, unapproved).
 
-## Requirements to specify
-- [ ] PS-003-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-003-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-003-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-003-04.R01 | `listing.edit` v1.0.0 is the only write command. One listing per command; no batch form. | MVP |
+| PS-003-04.R02 | `listing.get_for_edit` v1.0.0 returns editable fields, `state`, `revision`, `has_open_offers` (boolean only). It never returns offer contents. | MVP |
+| PS-003-04.R03 | `listing.updated` v1.0.0 payload carries field names and flags, not field values. | MVP |
+| PS-003-04.R04 | Every command carries `idempotency_key` (26-char Crockford body) and `expected_revision`. | MVP |
+| PS-003-04.R05 | Response of `listing.edit` returns the new `revision`, `changed_fields` and `material`. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Command request: `{listing_id: "lst_…", expected_revision: int≥1, idempotency_key: string, changes: object (1–6 keys)}`. Event payload `listing.updated` 1.0.0: `{changed_fields: [enum title|description|category_id|region_cell|price|currency], material: bool, state: draft|published}`. `max_data_class` = PUBLIC. Event type `listing.updated` matches the CTR-EVT-001 R10 pattern. Schema registered per CTR-SCH-001 R01.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Name | Kind | Capability | Idempotency | Errors |
+|---|---|---|---|---|
+| `listing.edit` v1.0.0 | command | `lst.update` | key required; 7-day record | `EDIT.FIELD_NOT_EDITABLE`, `EDIT.VALIDATION_FAILED`, `EDIT.STATE_NOT_EDITABLE`, `EDIT.MATERIAL_CHANGE_BLOCKED`, `EVT.REVISION_CONFLICT`, `EVT.IDEMPOTENCY_KEY_REUSED`, `SYS.NOT_FOUND`, `SYS.RATE_LIMITED`, `SYS.UNAVAILABLE` |
+| `listing.get_for_edit` v1.0.0 | query | `lst.read` | n/a | `SYS.NOT_FOUND`, `SYS.UNAUTHENTICATED` |
+| `listing.updated` v1.0.0 | event | n/a | `event_id` | n/a |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Event emitted only by the transitions in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Field validation per [validation_rules.md](validation_rules.md). Envelope errors per CTR-ERR-001.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-003-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+`lst.update` for command; `lst.read` for query. Owner relation only. See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Scope per CTR-EVT-001 R03. Replay returns the original `revision` and response. See [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Event carries no values (R03). Subscribers read current values from the owning store under their own capability.
+
+## Observability & budgets
+Per-command metrics in [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-003-04-01 (contract): `listing.edit` request and response match schema; unknown fields rejected.
+- TEST-PS-003-04-02 (contract): `listing.updated` payload contains no field values.
+- TEST-PS-003-04-03 (integration): replay with same key returns same `revision`; different digest → `EVT.IDEMPOTENCY_KEY_REUSED`.
+- TEST-PS-003-04-04 (concurrency): 20 parallel edits with the same `expected_revision` → one commit, 19 `EVT.REVISION_CONFLICT`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command, query and event signatures match this file and CTR-SCH-001 entries.
+2. No event payload contains a title, description, price, currency or region value.
+3. Replay and concurrency tests pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: `listing.get_for_edit` is a query, not an event source.
+- D01 (PROVISIONAL, Dxx default, unapproved): federated `listing.updated` only for published items with opt-in.
+- D03 (PROVISIONAL, Dxx default, unapproved): price fields as minor units.

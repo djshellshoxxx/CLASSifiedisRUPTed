@@ -1,35 +1,61 @@
 # PS-005-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-005-02. **Owner:** [01_LocalBazaar/02_listing_types/mod_giveaway](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001 (ID.MALFORMED), CTR-ERR-001 (envelope, codes), CTR-EVT-001 (idempotency key pattern), CTR-PRV-001 (R04 cells, R01 classes). PENDING CTR-LST-001 (listing fields, F01).
 
-## Purpose and scope
-Define the validation rules process for giveaway within 02_listing_types. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-005-02.R01 | Claim submit requires `listing_type = giveaway`; else `GIVE.LISTING_NOT_GIVEAWAY` (400). | MVP |
+| PS-005-02.R02 | Claim submit requires listing active and unreserved, and `claimant_ref ≠ giver_ref`; else `GIVE.LISTING_NOT_CLAIMABLE` (422) or `GIVE.SELF_CLAIM` (403). | MVP |
+| PS-005-02.R03 | Giveaway listing create/edit rejects any consideration field with `GIVE.CONSIDERATION_NOT_ALLOWED` (400). `details[].field` gives the field path; the value is never echoed. | MVP |
+| PS-005-02.R04 | `listing_id` and `claim_id` are exactly 30 characters with valid prefix; otherwise `ID.MALFORMED` (400). Lowercase body input is normalized (CTR-ID-001 R03). | MVP |
+| PS-005-02.R05 | `idempotency_key` matches `^[A-Za-z0-9_-]{16,128}$`; `expected_revision` is an integer ≥ 1. Unknown fields → `SYS.REQUEST_MALFORMED` (400). | MVP |
+| PS-005-02.R06 | `pickup_region` must be in the registered cell set; else `GIVE.PICKUP_REGION_INVALID` (400). Free-text location is rejected by schema. | MVP |
+| PS-005-02.R07 | Limits: at most 1 SUBMITTED claim per (claimant, listing) and 10 open claims per claimant (ASSUMPTION); else `GIVE.DUPLICATE_ACTIVE_CLAIM` (409) or `GIVE.CLAIM_LIMIT_EXCEEDED` (429, retryable). | MVP |
+| PS-005-02.R08 | Error `details[]` carries JSON-pointer `field` and registry `rule` only; no input values, no stack traces (CTR-ERR-001 R06, R07). | MVP |
 
-## Requirements to specify
-- [ ] PS-005-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-005-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-005-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Validation runs on the server only. Client checks are advisory. Field rules are defined in [domain_schema](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Not applicable as a standalone section. Validation applies to each command in [commands_queries_events](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable. Preconditions per transition are in [workflow_state_machine](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| GIVE.LISTING_NOT_GIVEAWAY | false | validation / 400 | `listing_type` ≠ giveaway |
+| GIVE.CONSIDERATION_NOT_ALLOWED | false | validation / 400 | consideration field present |
+| GIVE.PICKUP_REGION_INVALID | false | validation / 400 | cell not registered |
+| GIVE.LISTING_NOT_CLAIMABLE | false | unprocessable_state / 422 | listing inactive or reserved |
+| GIVE.SELF_CLAIM | false | forbidden / 403 | claimant is giver |
+| GIVE.DUPLICATE_ACTIVE_CLAIM | false | conflict / 409 | open claim already exists |
+| GIVE.CLAIM_LIMIT_EXCEEDED | true | rate_limited / 429 | per-claimant limit |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Other codes (state, race, handover, confirmation) are listed in [workflow_state_machine](workflow_state_machine.md). Shared codes (`SYS.*`, `ID.*`, `EVT.*`) come from the canonical registries.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-005-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Validation runs after authentication and before authorization checks that reveal object existence. Actions denied by authorization use CTR-ERR-001 R08 (`SYS.NOT_FOUND`). See [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Validation is deterministic and side-effect free. Replayed offline commands are re-validated at server receipt (see [failure_recovery_idempotency](failure_recovery_idempotency.md)).
+
+## Privacy, retention, abuse
+Rejected payloads are not stored. Validation logs keep the code and request ID only (CTR-ERR-001 R10).
+
+## Observability & performance
+Validation p95 ≤ 5 ms server-side (ASSUMPTION). Counters per code, no identifiers as labels.
+
+## Tests
+- TEST-PS-005-02-01: each code in the table has a positive and a negative fixture.
+- TEST-PS-005-02-02: consideration fields rejected at every nesting depth (property test over field names).
+- TEST-PS-005-02-03: rejected payload never echoes input values.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every rule R01–R08 has at least one passing and one failing test.
+2. Each code's `retryable` and category match CTR-ERR-001 registry entries.
+3. No validation error response contains input values or coordinates.
+
+**Assumptions and open decisions:** Claim limits are ASSUMPTION (no Dxx). Pickup regions follow D05 (PROVISIONAL default, unapproved; see [DECISIONS.md](../../../DECISIONS.md)).

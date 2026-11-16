@@ -1,35 +1,36 @@
 # PS-012-08 — observability performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (log fields, `request_id`), CTR-PRV-001 (log classes), CTR-EVT-001 (event metrics).
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-012-08. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_counteroffer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Decision label:** Latency and throughput targets are ASSUMPTION, unapproved; no monitoring tool is selected.
 
-## Purpose and scope
-Define the observability performance process for counteroffer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-012-08.R01 | Emit the metrics below per command and per state transition. | MVP |
+| PS-012-08.R02 | Logs carry `counter_id`, `cyc_id`, `status`, `code`, `request_id`, module and timing only. Never `slot_terms`, `value_terms`, item refs or titles. | MVP |
+| PS-012-08.R03 | Expiry sweep runs every 60 s; lag from `expires_at` to EXPIRED ≤ 120 s (ASSUMPTION). | MVP |
+| PS-012-08.R04 | Counter writes do not block cycle reads; accept p95 must not exceed cycle read p95 by more than 100 ms (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-012-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-012-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-012-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Metrics
+| Metric | Type | Labels (no PII) | Alert |
+|---|---|---|---|
+| `counter_created_total` | counter | status_result, revision | Spike > 3× 7-day baseline |
+| `counter_transition_total` | counter | from, to, reason | — |
+| `counter_accept_quote_expired_total` | counter | — | > 5% of accepts in 1 h |
+| `counter_invalidated_total` | counter | reason | Any `TARGET_CHANGED` burst > 50/min |
+| `counter_depth_limit_total` | counter | — | Informational |
+| `counter_expiry_lag_seconds` | histogram | — | p95 > 120 s |
+| `counter_rate_limited_total` | counter | — | Per-actor repeats → F12 review (BT-01) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Budgets (ASSUMPTION)
+| Operation | p95 target | Notes |
+|---|---|---|
+| `counter.create` | 300 ms | Server-side |
+| `counter.accept` | 400 ms | Includes quote and item checks |
+| `counter.list` (50 rows) | 200 ms | Indexed by `cyc_id`, `revision` |
+| Sustained load | 50 creates/s | Peak, one region |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-012-08`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: alerts route to the Marketplace Lead for transitions and to the Security Lead for abuse signals.
+- D06 PROVISIONAL (D06 default, unapproved): counter metrics never count as receipts or verification.
+- PENDING: metric naming under CTR-SCH-001 or F15 platform standard.

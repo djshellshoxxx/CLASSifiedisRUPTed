@@ -1,35 +1,38 @@
 # PS-012-02 — validation rules
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (envelope, codes), CTR-EVT-001 (revision, idempotency), CTR-COM-001 (amounts, quotes), CTR-CAP-001 (not-found rule).
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-012-02. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_counteroffer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Decision label:** Limits (5 revisions, 7-day default expiry, 30-day maximum) are ASSUMPTION. Quote rules follow D03 PROVISIONAL (D03 default, unapproved).
 
-## Purpose and scope
-Define the validation rules process for counteroffer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-012-02.R01 | Every rejected command returns a CTR-ERR-001 envelope. Module code `CTROFFER` (8 letters, within CTR-ERR-001.R02). | MVP |
+| PS-012-02.R02 | Validation runs in a fixed order: identity, state, revision, terms, value, rate. First failure returns; no partial write. | MVP |
+| PS-012-02.R03 | `details[].rule` uses only the enum listed below. Input values are never echoed (CTR-ERR-001.R07). | MVP |
+| PS-012-02.R04 | Non-participants receive `SYS.NOT_FOUND`, identical to a missing `cyc_` (CTR-ERR-001.R08). | MVP |
+| PS-012-02.R05 | Counter `expires_at` ≤ `created_at` + 30 days; default 7 days. | MVP |
 
-## Requirements to specify
-- [ ] PS-012-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-012-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-012-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Validation rules
+| Check | Failure code | Category | Retryable | `details[].rule` |
+|---|---|---|---|---|
+| Caller is a `slot_terms` holder | `SYS.NOT_FOUND` | not_found | false | — |
+| Caller is not the latest proposer | `CTROFFER.ROLE_NOT_PERMITTED` | forbidden | false | `not_latest_proposer` |
+| `cyc_` status is OPEN | `CTROFFER.TARGET_NOT_OPEN` | unprocessable_state | false | `cyc_closed` |
+| `target_revision` = current revision | `EVT.REVISION_CONFLICT` | conflict | false | — |
+| Revision ≤ 5 | `CTROFFER.DEPTH_LIMIT` | unprocessable_state | false | `revision_cap` |
+| `content_hash` differs from current revision | `CTROFFER.TERMS_INVALID` | validation | false | `no_change` |
+| Each `listing_id` ACTIVE and held by a slot holder | `CTROFFER.ITEM_UNAVAILABLE` | unprocessable_state | false | `item_not_active` |
+| Both holders ACTIVE (not dropped out) | `CTROFFER.PARTY_INACTIVE` | unprocessable_state | false | `holder_inactive` |
+| `qty` integer 1–100; array sizes ≤ 20 | `CTROFFER.TERMS_INVALID` | validation | false | `range` |
+| `amount_minor` matches `^(0\|[1-9][0-9]{0,38})$` | `CTROFFER.TERMS_INVALID` | validation | false | `money_format` |
+| Cross-currency: `quote_id` valid, unexpired | `COM.QUOTE_EXPIRED` | unprocessable_state | false | — |
+| Creates by actor on `cyc_` ≤ 10 per 24 h | `SYS.RATE_LIMITED` | rate_limited | true | — |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Accept/reject/withdraw on a non-OPEN counter: `CTROFFER.COUNTER_NOT_OPEN` (422, not retryable). Specific reasons use `CTROFFER.COUNTER_EXPIRED`, `CTROFFER.COUNTER_SUPERSEDED`, `CTROFFER.COUNTER_INVALIDATED` (`details[].rule` = `ITEM_GONE` | `PARTY_INACTIVE` | `TARGET_CHANGED` | `OFFER_WITHDRAWN`). All 422, not retryable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+`message_key` = `err.ctroffer.<code lowercased>` (CTR-ERR-001.R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-012-02`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: 10 creates per actor per `cyc_` per 24 h; tune after abuse review (F16).
+- D03 PROVISIONAL (D03 default, unapproved): quote expiry ≤ 15 min, `HALF_EVEN` rounding.
+- PENDING: `SYS.RATE_LIMITED` retry_after_ms values per CTR-ERR-001 registry.

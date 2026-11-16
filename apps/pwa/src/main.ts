@@ -4,18 +4,32 @@ import { mountBarter } from './barter.ts';
 import { mountNotifications } from './notifications.ts';
 import { drainNotificationDelivery } from './notification-delivery.ts';
 import { bindActionsToSession, createActionQueue } from './action-queue.ts';
+import { listingHistory } from './listing-history.ts';
 import { mountListingEditor } from './listing-editor.ts';
 import { localNotificationDefinitions, localNotificationBackupCodecs } from '../../../packages/notify/src/index.ts';
 import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
 import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
-import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord } from '../../../packages/bazaar/src/index.ts';
+import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord, listingRevisionRepo, listingRevisionId, validateListingRevision } from '../../../packages/bazaar/src/index.ts';
 import { discoveryDefinitions, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
 
 const codecs = [
   ...localNotificationBackupCodecs(backupCodec),
   ...barterCodecs,
+  {
+    ...backupCodec(listingRevisionRepo),
+    recordId(input: unknown) {
+      const row = listingRevisionRepo.schema.parse(input);
+      return listingRevisionId(row.listingId, row.revisionNo);
+    },
+    validate: validateListingRevision,
+    async restoreData(input: unknown, principal: string) {
+      const row = listingRevisionRepo.schema.parse(input);
+      if (row.ownerId !== principal) throw new Error('Backup history belongs to another principal');
+      return row;
+    },
+  },
   {
     ...backupCodec(listingRepo),
     async restoreData(input: unknown, principal: string) {
@@ -154,7 +168,7 @@ async function refresh(): Promise<void> {
     if (item.data.status === 'unpublished') actions.append(button('Archive', async () => {
       await command('bazaar.listing.archive', { listingId: item.id, expectedRevision: item.revision }); message('Listing archived.'); await refresh();
     }));
-    article.append(actions); list.append(article);
+    article.append(actions, listingHistory(item.id, { query, action: vaultAction })); list.append(article);
   }
   await refreshPeers();
   await barter?.refresh();

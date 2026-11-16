@@ -4,6 +4,9 @@ import { publicListingSchema, tombstoneSchema, type PublicListingProjection, typ
 import { fields, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, type Listing } from './model.ts';
 export { listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, type Listing } from './model.ts';
 
+import { changedPublicFields, listingHistoryDefinitions, recordListingRevision } from './history.ts';
+export { listingRevisionRepo, listingRevisionSchema, listingRevisionId, validateListingRevision, type ListingRevision } from './history.ts';
+
 const holdChanged = defineEvent('bazaar.inventory.changed', 1, 'P2', z.strictObject({ listingId: z.string(), state: z.enum(['active', 'released']) }));
 const changed = defineEvent('bazaar.listing.changed', 1, 'P3', z.strictObject({ listingId: z.string(), action: z.string() }));
 export interface BazaarOptions {
@@ -59,13 +62,19 @@ export function bazaarDefinitions(options: BazaarOptions) {
   });
   const edit = defineCommand({ name: 'bazaar.listing.edit', module: 'F01.S01.M02', capability: 'bazaar.listing.edit', idempotent: true,
     input: z.strictObject({ ...fields, listingId: uuidv7(), expectedRevision: z.int().min(1) }),
-    handler(ctx, input) {
+    async handler(ctx, input) {
       const found = owned(ctx, input.listingId); if (!found.ok) return found;
       if (found.value.data.status !== 'draft' && found.value.data.status !== 'unpublished') return err(appError('CONFLICT_STATE'));
       if (!options.categoryAllowed(input.categoryId) || (found.value.data.kind !== 'wanted' && !input.condition)) return err(appError('PRECONDITION_FAILED'));
       const { listingId, expectedRevision, ...data } = input;
       const saved = ctx.tx.repo(listingRepo).put(listingId, { ...found.value.data, ...data }, { expectedRevision });
-      if (!saved.ok) return saved; emitChange(ctx, saved.value, 'edited'); return ok(saved.value);
+      if (!saved.ok) return saved;
+      const changedFields = changedPublicFields(found.value.data, saved.value.data);
+      if (found.value.data.publicationCid && changedFields.length) {
+        const revision = await recordListingRevision(ctx, saved.value, 'owner_edit', changedFields);
+        if (!revision.ok) return revision;
+      }
+      emitChange(ctx, saved.value, 'edited'); return ok(saved.value);
     },
   });
   const publish = defineCommand({ name: 'bazaar.listing.publish', module: 'F01.S01.M03', capability: 'bazaar.listing.publish', idempotent: true,
@@ -85,6 +94,8 @@ export function bazaarDefinitions(options: BazaarOptions) {
       if (!saved.ok) return saved;
       const publication = ctx.tx.repo(publicationRepo).put(signed.value.cid, { envelope: signed.value, listingId: record.id }, { expectedRevision: 0 });
       if (!publication.ok) return publication;
+      const history = await recordListingRevision(ctx, saved.value, 'system', []);
+      if (!history.ok) return history;
       emitChange(ctx, saved.value, 'published'); return ok({ listing: saved.value, envelope: signed.value, delivery: 'local-file-exchange' as const });
     },
   });
@@ -156,7 +167,8 @@ export function bazaarDefinitions(options: BazaarOptions) {
       return saved;
     },
   });
-  return { create, edit, publish, unpublish, archive, get, list, reserve, release, all: [create, edit, publish, unpublish, archive, get, list, reserve, release] as const };
+  const history = listingHistoryDefinitions();
+  return { create, edit, publish, unpublish, archive, get, list, reserve, release, history, all: [create, edit, publish, unpublish, archive, get, list, reserve, release, ...history.all] as const };
 }
 
 /** Local single-item promise only; never implies a remote/global inventory lock. */

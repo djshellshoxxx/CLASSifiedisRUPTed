@@ -1,5 +1,40 @@
 # Project status
 
+## November 16, 2026 owner listing history continuation
+
+A separate candidate stacks on encrypted-storage PR #38. Listing publication now
+records an append-only snapshot of publishable fields. Later public-field edits
+of an unpublished listing that has previously been published record immutable
+local revisions; draft and private-only edits do not create snapshots. The
+owner-only history list/get queries verify hashes, canonical compound keys and
+ownership before returning data. The PWA exposes lazy, paginated history with
+safe text rendering and separate labels for published snapshots and saved,
+unpublished edits. Private notes never enter history, hashes or edited events.
+
+History, listing updates and content-free edited events commit together. There
+are at most 100 snapshots per listing and 20 public-field owner edits per hour;
+limit failures roll back the attempted listing change. Unpublish/archive remain
+available at the history limit. A canonical backup-key callback prevents duplicate
+logical history revisions under different record IDs; restore checks it before
+and after normalization. History is included in the encrypted alpha backup with
+hash and owner validation. Other registered backup scopes remain compatible.
+
+This is an alpha history slice, not the complete F01.S01.M02 contract. It uses
+compound local storage IDs instead of canonical revision UUIDs; existing alpha
+command input/output shapes remain. Published editing is disabled pending policy
+and offer reconfirmation wiring. Sell-term/variant sibling ports, buyer notices,
+canonical signed hash binding, full evidence retention/purge and historical
+backfill remain unfinished. Declared value changes are marked material in the
+alpha; separate sell-term pricing is not implemented. A local snapshot is owner
+asserted evidence, not proof of peer acceptance or real-world handover.
+
+Focused verification passed 21 listing/vault tests, including history privacy,
+owner authorization, pagination, rate/cap rollback, corrupt-read rejection and
+canonical-key restore failures. Review found and fixed publication-status labels,
+missing read-side hash checks and post-normalization backup-key validation; final
+review reported no additional high-confidence defects. Full integration and
+candidate browser checks are recorded separately before merge.
+
 ## November 16, 2026 encrypted persistence continuation
 
 Consolidation PR #37 at `a189787` passed Alpha verification run 43889531898 and

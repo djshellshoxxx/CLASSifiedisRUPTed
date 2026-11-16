@@ -22,6 +22,7 @@ Use `pnpm run setup` and `pnpm run doctor`: both bare names collide with pnpm's 
 
 ## Implemented scope and limits
 
+- Owner-only local listing history with hashed public-field snapshots, publication-status labels, material-change markers, pagination and backup support. New history begins with this version; published editing and buyer reconfirmation remain unfinished.
 - Ed25519 identities, encrypted signing-key storage, explicit lock/unlock, per-vault IndexedDB persistence and signed/encrypted record backup into a new vault.
 - Single-item listing lifecycle, exact minor-unit values, signed public projections, explicit file exchange, retained peer verification and revision/fork checks.
 - Browser editing for draft/unpublished listings, preserving exact values and private notes. Saving an edit never publishes it; published items must be explicitly unpublished first.

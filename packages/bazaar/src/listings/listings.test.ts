@@ -4,7 +4,7 @@ import { createTestKernel } from '@classrup/kernel/testing';
 import { createIdentity, type UnlockedIdentity } from '@classrup/identity';
 import { signEnvelope, verifyEnvelope } from '@classrup/federation';
 import { discoveryDefinitions } from '@classrup/discovery';
-import { bazaarDefinitions, releaseSubjectReservations } from './index.ts';
+import { bazaarDefinitions, releaseSubjectReservations, validateListingRevision, listingRevisionRepo } from './index.ts';
 
 let identity: UnlockedIdentity;
 beforeAll(async () => { identity = (await createIdentity('correct horse battery staple')).identity; });
@@ -161,4 +161,116 @@ describe('verified retained discovery', () => {
     expect(search.ok && (search.value.value as { items: unknown[] }).items).toEqual([]);
     expect(search.ok && (search.value.value as { staleOrExcluded: number }).staleOrExcluded).toBe(1);
   });
+  it('keeps owner-only public snapshots after publication without copying private notes', async () => {
+    const { k, input, actor, cmd } = setup();
+    const history = () => k.ask('bazaar.listing_revision.list', { listingId: input.listingId }, { actor });
+    await cmd('bazaar.listing.create', input);
+    const { kind: _kind, ...edit } = input;
+    await cmd('bazaar.listing.edit', { ...edit, title: 'Draft bicycle', expectedRevision: 1 });
+    const drafts = await history();
+    expect(drafts.ok && (drafts.value.value as { items: unknown[] }).items).toEqual([]);
+    await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 2 });
+    await cmd('bazaar.listing.unpublish', { listingId: input.listingId, expectedRevision: 3 });
+    await cmd('bazaar.listing.edit', { ...edit, title: 'Updated bicycle', condition: 'fair', expectedRevision: 4 });
+    const result = await history();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const items = (result.value.value as { items: Array<{ data: { revisionNo: number; material: boolean; wasPublic: boolean; snapshot: { title: string }; changedFields: string[] } }> }).items;
+    expect(items.map(row => row.data.revisionNo)).toEqual([5, 3]);
+    expect(items[0]!.data.material).toBe(true);
+    expect(items[0]!.data.wasPublic).toBe(false);
+    expect(items[1]!.data.wasPublic).toBe(true);
+    expect(items[0]!.data.changedFields).toEqual(['title', 'condition']);
+    expect(items[1]!.data.snapshot.title).toBe('Draft bicycle');
+    expect(JSON.stringify(items)).not.toContain('Never publish this');
+    expect(JSON.stringify(items)).not.toContain('privateNotes');
+    const foreign = await k.ask('bazaar.listing_revision.list', { listingId: input.listingId }, { actor: k.user() });
+    expect(!foreign.ok && foreign.error.code).toBe('NOT_FOUND');
+    const read = await k.ask('bazaar.listing_revision.get', { listingId: input.listingId, revisionNo: 3 }, { actor });
+    expect(read.ok && (read.value.value as { revision: { data: { snapshot: { title: string } } } }).revision.data.snapshot.title).toBe('Draft bicycle');
+    const events = k.events.filter(event => event.type === 'bazaar.listing.edited');
+    expect(events).toHaveLength(1);
+    expect(JSON.stringify(events)).not.toContain('Updated bicycle');
+    expect(JSON.stringify(events)).not.toContain('Never publish this');
+  });
+
+  it('limits public history edits atomically and paginates immutable snapshots', async () => {
+    const { k, input, actor, cmd } = setup();
+    await cmd('bazaar.listing.create', input);
+    await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 1 });
+    await cmd('bazaar.listing.unpublish', { listingId: input.listingId, expectedRevision: 2 });
+    const { kind: _kind, ...edit } = input;
+    for (let index = 0; index < 20; index++) {
+      expect((await cmd('bazaar.listing.edit', { ...edit, title: `Edited bicycle ${index}`, expectedRevision: 3 + index })).ok).toBe(true);
+    }
+    const before = [...k.events];
+    const denied = await cmd('bazaar.listing.edit', { ...edit, title: 'Too many edits', expectedRevision: 23 });
+    expect(!denied.ok && denied.error.code).toBe('RATE_LIMITED');
+    expect(k.events).toEqual(before);
+    const page = await k.ask('bazaar.listing_revision.list', { listingId: input.listingId, limit: 1 }, { actor });
+    if (!page.ok) throw new Error(page.error.code);
+    const first = page.value.value as { items: Array<{ data: unknown }>; nextCursor?: string };
+    expect(first.items).toHaveLength(1);
+    expect(first.nextCursor).toBeTruthy();
+    await expect(validateListingRevision(first.items[0]!.data)).resolves.toBeUndefined();
+    const forged = { ...(first.items[0]!.data as object), snapshotHash: `sha256-${'0'.repeat(64)}` };
+    await expect(validateListingRevision(forged)).rejects.toThrow('snapshot hash mismatch');
+    const second = await k.ask('bazaar.listing_revision.list', { listingId: input.listingId, limit: 1, cursor: first.nextCursor }, { actor });
+    expect(second.ok && (second.value.value as { items: unknown[] }).items).not.toEqual(first.items);
+    k.clock.advance(3600001);
+    expect((await cmd('bazaar.listing.edit', { ...edit, title: 'After rate recovery', expectedRevision: 23 })).ok).toBe(true);
+  });
+
+  it('caps history at 100 without blocking archive, and rolls back failed edits', async () => {
+    const { k, input, actor, cmd } = setup();
+    await cmd('bazaar.listing.create', input);
+    await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 1 });
+    await cmd('bazaar.listing.unpublish', { listingId: input.listingId, expectedRevision: 2 });
+    const { kind: _kind, ...edit } = input;
+    for (let index = 0; index < 99; index++) {
+      k.clock.advance(3600001);
+      expect((await cmd('bazaar.listing.edit', { ...edit, title: `History bicycle ${index}`, expectedRevision: 3 + index })).ok).toBe(true);
+    }
+    const before = [...k.events];
+    const denied = await cmd('bazaar.listing.edit', { ...edit, title: 'Must not be saved', expectedRevision: 102 });
+    expect(!denied.ok && denied.error.code).toBe('BAZAAR_EDIT_REVISION_LIMIT');
+    expect(k.events).toEqual(before);
+    const current = await k.ask('bazaar.listing.get', { listingId: input.listingId }, { actor });
+    expect(current.ok && (current.value.value as { revision: number; data: { title: string } }).revision).toBe(102);
+    expect(current.ok && (current.value.value as { data: { title: string } }).data.title).toBe('History bicycle 98');
+    expect((await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 102 })).ok).toBe(true);
+  });
+
+  it('keeps private-only edits out of history and marks changed declared values as material', async () => {
+    const { k, input, actor, cmd } = setup();
+    await cmd('bazaar.listing.create', input);
+    await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 1 });
+    await cmd('bazaar.listing.unpublish', { listingId: input.listingId, expectedRevision: 2 });
+    const { kind: _kind, ...edit } = input;
+    await cmd('bazaar.listing.edit', { ...edit, privateNotes: 'private-only-edit-canary', expectedRevision: 3 });
+    const first = await k.ask('bazaar.listing_revision.list', { listingId: input.listingId }, { actor });
+    expect(first.ok && (first.value.value as { items: unknown[] }).items).toHaveLength(1);
+    await cmd('bazaar.listing.edit', { ...edit, privateNotes: 'private-only-edit-canary', value: { amount: '10001', currency: 'CAD' }, expectedRevision: 4 });
+    const current = await k.ask('bazaar.listing_revision.get', { listingId: input.listingId, revisionNo: 5 }, { actor });
+    expect(current.ok && (current.value.value as { revision: { data: { material: boolean; changedFields: string[] } } }).revision.data.material).toBe(true);
+    expect(current.ok && (current.value.value as { revision: { data: { changedFields: string[] } } }).revision.data.changedFields).toEqual(['value']);
+    expect(JSON.stringify(current)).not.toContain('private-only-edit-canary');
+    const events = [...k.events];
+    expect((await cmd('bazaar.listing.edit', { ...edit, expectedRevision: 4 })).ok).toBe(false);
+    expect(k.events).toEqual(events);
+  });
+
+  it('rejects corrupt snapshot hashes on list and get instead of showing them as evidence', async () => {
+    const { k, input, actor, cmd } = setup();
+    await cmd('bazaar.listing.create', input);
+    await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 1 });
+    const stored = await k.storage.read(tx => tx.records.query({ tenant: k.tenantId, type: listingRevisionRepo.type, filters: [], orderSlot: 0, dir: 'asc', limit: 1 })[0]);
+    if (!stored) throw new Error('Missing history');
+    await k.storage.transaction(tx => tx.records.put({ tenant: k.tenantId, type: listingRevisionRepo.type, id: stored.id, data: { ...(stored.data as object), snapshotHash: `sha256-${'0'.repeat(64)}` }, idx: [input.listingId, '0000000000000002', null, null], expectedRevision: 1, now: k.clock.now() }));
+    for (const [name, extra] of [['list', {}], ['get', { revisionNo: 2 }]] as const) {
+      const result = await k.ask(`bazaar.listing_revision.${name}`, { listingId: input.listingId, ...extra }, { actor });
+      expect(!result.ok && result.error.code).toBe('VALIDATION_FAILED');
+    }
+  });
+
 });

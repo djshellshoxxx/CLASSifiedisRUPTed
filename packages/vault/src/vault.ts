@@ -20,6 +20,8 @@ export interface BackupCodec {
   validate?(input: unknown): Promise<void>;
   /** Rebuild derived state after trust validation; applied only during restore. */
   restoreData?(input: unknown, principal: string): Promise<unknown>;
+  /** Optional canonical storage key for data with a compound uniqueness invariant. */
+  recordId?(input: unknown): string;
   indexes(input: unknown): readonly [string | null, string | null, string | null, string | null];
 }
 export function backupCodec<T, K extends string>(repo: RepoDef<T, K>): BackupCodec {
@@ -112,7 +114,11 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           const out: StoredRecord[] = [];
           for (const codec of codecs) {
             const rows = tx.records.query({ tenant: identity.principal, type: codec.type, filters: [], orderSlot: 0, dir: 'asc', limit: MAX_RECORDS + 1 });
-            for (const row of rows) out.push({ ...row, data: codec.parse(row.data) });
+            for (const row of rows) {
+              const data = codec.parse(row.data);
+              if (codec.recordId && codec.recordId(data) !== row.id) throw new Error('Backup record key mismatch');
+              out.push({ ...row, data });
+            }
             if (out.length > MAX_RECORDS) throw new Error('Backup record limit exceeded');
           }
           return out;
@@ -192,6 +198,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           if (ids.has(id)) throw new Error('Duplicate backup record');
           ids.add(id);
           const parsedData = codec.parse(row.data);
+          if (codec.recordId && codec.recordId(parsedData) !== row.id) throw new Error('Backup record key mismatch');
           return { record: { ...row, data: parsedData } as unknown as StoredRecord, idx: codec.indexes(parsedData) };
         });
         for (const entry of records) {
@@ -200,6 +207,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
             const normalized = codec.parse(await codec.restoreData(entry.record.data, identity.principal));
             entry.record = { ...entry.record, data: normalized };
             entry.idx = codec.indexes(normalized);
+            if (codec.recordId && codec.recordId(normalized) !== entry.record.id) throw new Error('Backup record key mismatch');
           }
           await codec.validate?.(entry.record.data);
         }

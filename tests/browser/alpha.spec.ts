@@ -231,11 +231,23 @@ test('listing edits preserve exact amounts, publish public fields, and clear dra
   await page.getByRole('button', { name: 'Unpublish', exact: true }).click();
   await page.getByRole('button', { name: 'Edit listing', exact: true }).click();
   await expect(page.getByLabel('Private listing notes', { exact: true })).toHaveValue('Private seller detail');
+  await page.getByLabel('Edit title', { exact: true }).fill('Revised guitar');
+  await page.getByLabel('Edit condition', { exact: true }).selectOption('good');
+  await page.getByRole('button', { name: 'Save listing changes', exact: true }).click();
+  const history = page.locator('#listings > article > details');
+  await history.locator('summary').first().click();
+  await history.getByRole('button', { name: 'Load revision history', exact: true }).click();
+  await expect(history.getByRole('status')).toHaveText('2 local revision snapshots loaded.');
+  await expect(history).toContainText('Material change');
+  await expect(history).toContainText('Saved locally; not published');
+  await expect(history).toContainText('Published locally');
+  await expect(history).not.toContainText('Private seller detail');
+  await page.getByRole('button', { name: 'Edit listing', exact: true }).click();
   await page.getByLabel('Edit title', { exact: true }).fill('Unsubmitted edit');
   await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
   await expect(page.locator('#listing-editor')).toBeEmpty();
   await page.reload(); await unlock(page, 'editor');
-  await expect(page.locator('#listings')).toContainText('Edited guitar');
+  await expect(page.locator('#listings')).toContainText('Revised guitar');
   await expect(page.locator('#listings')).not.toContainText('Unsubmitted edit');
 });
 

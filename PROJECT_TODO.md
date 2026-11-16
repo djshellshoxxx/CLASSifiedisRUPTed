@@ -8,7 +8,7 @@ Current evidence: [project status](docs/status/PROJECT_STATUS.md), [generated fe
 - [ ] Qualify encrypted domain persistence, migration, tamper detection and recovery on the new candidate before merging.
 - [ ] Complete remaining encrypted-storage load/rotation/recovery contracts after the implemented row-encryption and migration slice.
 - [ ] Finish canonical identity/device rotation, revocation and recovery contracts.
-- [ ] Implement listing revision history, material-change handling, kind-specific terms, quantity/variant inventory and media workflows.
+- [ ] Finish published editing and material-change offer reconfirmation after the owner history slice; complete kind-specific terms, quantity/variant inventory and media workflows.
 - [ ] Implement purchase offers, negotiations, payment claims, settlement evidence and receipts.
 - [ ] Finish barter matching profiles, execution, handover and recovery beyond signed coordination evidence.
 - [ ] Implement private messaging, consent capture/revocation and safe-meetup workflows.

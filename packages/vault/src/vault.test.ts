@@ -69,4 +69,28 @@ describe('vault composition', () => {
     await expect(write).rejects.toThrow();
     await lock;
   });
+  it('rejects noncanonical record keys during backup restore without initializing the destination', async () => {
+    const source = vaultFromStorage(createMemoryStorage(), codecs);
+    const session = await source.create(passphrase);
+    await session.storage.transaction(tx => tx.records.put({ tenant: session.principal, type: note.type, id: 'wrong-id', data: { text: 'canonical-id' }, idx: ['canonical-id', null, null, null], expectedRevision: 0, now: Date.now() }));
+    const backup = await session.exportBackup(passphrase);
+    const canonical = { ...backupCodec(note), recordId: (input: unknown) => note.schema.parse(input).text };
+    const destination = vaultFromStorage(createMemoryStorage(), [canonical]);
+    await expect(destination.restoreBackup(backup, passphrase)).rejects.toThrow('Backup record key mismatch');
+    expect(await destination.isInitialized()).toBe(false);
+    await destination.close();
+    await session.lock();
+  }, 30000);
+
+  it('rechecks canonical keys after restore normalization before any records commit', async () => {
+    const source = vaultFromStorage(createMemoryStorage(), codecs);
+    const session = await source.create(passphrase);
+    await session.storage.transaction(tx => tx.records.put({ tenant: session.principal, type: note.type, id: 'canonical', data: { text: 'canonical' }, idx: ['canonical', null, null, null], expectedRevision: 0, now: Date.now() }));
+    const backup = await session.exportBackup(passphrase);
+    const destination = vaultFromStorage(createMemoryStorage(), [{ ...backupCodec(note), recordId: (input: unknown) => note.schema.parse(input).text, restoreData: async () => ({ text: 'different' }) }]);
+    await expect(destination.restoreBackup(backup, passphrase)).rejects.toThrow('Backup record key mismatch');
+    expect(await destination.isInitialized()).toBe(false);
+    await destination.close(); await session.lock();
+  }, 30000);
+
 });

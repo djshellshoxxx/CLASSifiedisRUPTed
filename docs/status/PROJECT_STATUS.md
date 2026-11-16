@@ -1,5 +1,44 @@
 # Project status
 
+## November 16, 2026 archive recovery and owner pagination continuation
+
+Continues from `edcb583` (PR #40, stacked on owner-history PR #39). New archives
+have owner-only lifecycle evidence, an exact 90-day restore deadline, revision
+checks and atomic archived/restored events. Draft and published listings can now
+be archived directly. Published archive creates and verifies a chained signed
+withdrawal in the same transaction; a bad signer or active inventory hold blocks
+the action without committing changes. Restoring preserves listing data and
+history, returns the listing as unpublished, and never republishes automatically.
+Publishing again continues from the withdrawal's signed chain position.
+
+The PWA exposes archive confirmation and restore actions. Published archive
+explicitly downloads the withdrawal for sharing. Archive evidence is included in
+encrypted backups; restore validates lifecycle dates and ownership before any
+records commit. Owner listing pages now show the newest 50 first with Previous
+and Next controls. Pagination resets on lock and draft creation; queued duplicate
+navigation callbacks cannot advance from a stale page. Owner-scoped cursors are
+validated by the kernel repository.
+
+This remains a bounded F01.S01.M04 implementation. Automatic expiry, close reasons,
+auto-archive/purge sweeps, release-holds confirmation and complete account deletion
+are unfinished. Legacy archived listings have no dated recovery record and do not
+acquire an invented restore deadline. Existing archive output now follows the
+specified archiveRecordId/restoreUntil shape. Archive records use UUIDv7 IDs;
+prior compound-key history storage is unchanged. The 90-day deadline is based on
+the local clock and cannot provide a trusted wall clock against device tampering.
+The historical 51-row planning security tracker remains open.
+
+Verification so far: 22 listing/discovery tests and 3 production archive-backup
+tests passed; 32 CLI/tooling tests passed. Typecheck, build, dependency checks and
+strict specification checks (148 modules, zero errors/warnings) pass. The first
+full domain run was terminated by the host (exit 137), so it is not a pass. A
+memory-bounded fork-pool full run is in progress. Two browser journeys were added
+for signed archive/backup/recovery and pagination beyond 50 listings. Playwright
+loads their definitions, but local execution fails before any assertion because
+the pinned Chromium executable is unavailable; its download returned corrupt
+archives. Candidate CI must qualify the final head before merge. Predecessor
+PR #39's Alpha workflow passed; its separate CLI platform workflow remains queued.
+
 ## November 16, 2026 owner listing history continuation
 
 PR #39 continues from encrypted-storage PR #38, which passed Alpha verification

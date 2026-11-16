@@ -1,3 +1,4 @@
+import { archiveBackupCodec } from './archive-backup.ts';
 import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
 import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
 import { mountBarter } from './barter.ts';
@@ -11,12 +12,13 @@ import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.t
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
 import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
-import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord, listingRevisionRepo, listingRevisionId, validateListingRevision } from '../../../packages/bazaar/src/index.ts';
+import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
 import { discoveryDefinitions, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
 
 const codecs = [
   ...localNotificationBackupCodecs(backupCodec),
   ...barterCodecs,
+  archiveBackupCodec,
   {
     ...backupCodec(listingRevisionRepo),
     recordId(input: unknown) {
@@ -55,6 +57,9 @@ let unlocked: UnlockedVault | undefined;
 let bus: Bus | undefined;
 const queueAction = createActionQueue();
 let appliedPeerSearch = defaultPeerSearch();
+let listingCursor: string | undefined;
+const listingPages: (string | undefined)[] = [];
+function resetListingPage() { listingCursor = undefined; listingPages.length = 0; }
 let barter: ReturnType<typeof mountBarter> | undefined;
 let notifications: ReturnType<typeof mountNotifications> | undefined;
 let notificationOutbox: OutboxDispatcher | undefined;
@@ -148,8 +153,9 @@ function card(title: string, description: string, detail: string, value?: MoneyV
   article.append(node('p', detail));
   return article;
 }
-async function refresh(): Promise<void> {
-  const page = z.object({ items: z.array(z.object({ id: z.string(), revision: z.number(), data: listingSchema })) }).parse(await query('bazaar.listing.list', {}));
+async function refreshListings(): Promise<void> {
+  const loadedCursor = listingCursor;
+  const page = z.object({ items: z.array(z.object({ id: z.string(), revision: z.number(), data: listingSchema })), nextCursor: z.string().optional() }).parse(await query('bazaar.listing.list', listingCursor ? { cursor: listingCursor } : {}));
   const list = element('listings'); list.replaceChildren();
   if (!page.items.length) list.append(node('p', 'No listings yet. Save your first local draft above.'));
   for (const item of page.items) {
@@ -165,11 +171,37 @@ async function refresh(): Promise<void> {
       const response = z.object({ envelope: z.unknown() }).parse(await command('bazaar.listing.unpublish', { listingId: item.id, expectedRevision: item.revision }));
       download(`withdraw-listing-${item.id}.json`, response.envelope); message('Unpublished locally. Share the signed withdrawal with peers who retained your listing.'); await refresh();
     }));
-    if (item.data.status === 'unpublished') actions.append(button('Archive', async () => {
-      await command('bazaar.listing.archive', { listingId: item.id, expectedRevision: item.revision }); message('Listing archived.'); await refresh();
+    if (item.data.status !== 'archived') actions.append(button('Archive', async () => {
+      if (!confirm('Archive this listing? You can restore it for 90 days. Published listings also need their signed withdrawal shared with peers.')) return;
+      const result = z.object({ restoreUntil: z.string(), envelope: z.unknown().optional() }).parse(await command('bazaar.listing.archive', { listingId: item.id, expectedRevision: item.revision }));
+      if (result.envelope) download(`withdraw-listing-${item.id}.json`, result.envelope);
+      message(`Archived locally. Restore until ${new Date(result.restoreUntil).toLocaleString()}.${result.envelope ? ' Share the downloaded withdrawal with peers who retained this listing.' : ''}`);
+      await refresh();
+    }));
+    if (item.data.status === 'archived') actions.append(button('Restore listing', async () => {
+      const records = z.object({ items: z.array(z.object({ id: z.string(), revision: z.int().positive(), data: archiveRecordRepo.schema })) }).parse(await query('bazaar.archive_record.list_mine', { listingId: item.id, status: 'archived' }));
+      if (records.items.length !== 1) throw new Error('No unique restore record is available for this archived listing.');
+      const record = records.items[0]!;
+      await command('bazaar.listing.restore', { archiveRecordId: record.id, expectedRevision: record.revision });
+      message('Listing restored as unpublished. Review and publish it when ready.'); await refresh();
     }));
     article.append(actions, listingHistory(item.id, { query, action: vaultAction })); list.append(article);
   }
+  const navigation = node('nav'); navigation.setAttribute('aria-label', 'My listing pages'); navigation.className = 'actions';
+  if (listingPages.length) navigation.append(button('Previous listings', async () => {
+    if (listingCursor !== loadedCursor) return;
+    const prior = listingCursor; const cursor = listingPages.pop(); listingCursor = cursor;
+    try { await refreshListings(); } catch (error) { listingPages.push(cursor); listingCursor = prior; throw error; }
+  }));
+  if (page.nextCursor) navigation.append(button('Next listings', async () => {
+    if (listingCursor !== loadedCursor) return;
+    const prior = listingCursor; listingPages.push(prior); listingCursor = page.nextCursor;
+    try { await refreshListings(); } catch (error) { listingPages.pop(); listingCursor = prior; throw error; }
+  }));
+  list.append(navigation);
+}
+async function refresh(): Promise<void> {
+  await refreshListings();
   await refreshPeers();
   await barter?.refresh();
 }
@@ -214,6 +246,7 @@ async function connect(session: UnlockedVault): Promise<void> {
   await refresh(); message('Vault unlocked. Local changes are persisted in this browser.');
 }
 function clearLocalViews() {
+  resetListingPage();
   listingEditor?.destroy(); listingEditor = undefined;
   notifications?.destroy(); notifications = undefined; notificationOutbox = undefined; lastNotificationSweep = 0;
   element('notification-delivery-status').textContent = '';
@@ -252,7 +285,7 @@ element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
     await command('bazaar.listing.create', { listingId: ids.next(), title: String(data.get('title')), description: String(data.get('description')),
       kind: data.get('kind'), condition: data.get('condition'), categoryId: CATEGORY, regionCell: data.get('region'),
       value: { amount: String(data.get('amount')), currency: listingCurrency.code }, barterOptIn: data.get('barter') === 'on' });
-    form.reset(); message('Draft saved locally. It has not been shared.'); await refresh();
+    resetListingPage(); form.reset(); message('Draft saved locally. It has not been shared.'); await refresh();
   });
 });
 element<HTMLInputElement>('peer-file').addEventListener('change', event => { const input = event.currentTarget as HTMLInputElement;

@@ -278,6 +278,63 @@ test('encrypted backup restores listings and identity into a new empty vault', a
   await expect(page.locator('#listings')).toContainText('Backup-only lamp');
 });
 
+test('archive signs a withdrawal, survives encrypted backup and restores unpublished', async ({ page }) => {
+  await create(page, 'archive-source');
+  await listing(page, 'Restorable canoe');
+  await downloadedAction(page, 'Publish signed file');
+  page.once('dialog', dialog => dialog.accept());
+  const withdrawal = JSON.parse((await downloadedAction(page, 'Archive')).toString());
+  expect(withdrawal.type).toBe('classrup.alpha.tombstone/v1');
+  await expect(page.locator('#listings')).toContainText('archived');
+  await expect(page.getByRole('button', { name: 'Publish signed file', exact: true })).toHaveCount(0);
+  await page.locator('#backup-password').fill(password);
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download encrypted backup' }).click();
+  const path = await (await pending).path();
+  if (!path) throw new Error('Backup unavailable');
+  const backup = await readFile(path);
+  expect(backup.toString()).not.toContain('Restorable canoe');
+  await page.getByRole('button', { name: 'Lock vault' }).click();
+  await page.locator('#access details summary').click();
+  await page.locator('[name="restore-name"]').fill('archive-restored');
+  await page.locator('[name="restore-password"]').fill(password);
+  await page.locator('#restore-file').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: backup });
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await expect(page.locator('#status')).toContainText('Backup restored');
+  await page.getByRole('button', { name: 'Restore listing', exact: true }).click();
+  await expect(page.locator('#listings')).toContainText('unpublished');
+  await expect(page.getByRole('button', { name: 'Publish signed file', exact: true })).toBeVisible();
+  await page.reload(); await unlock(page, 'archive-restored');
+  await expect(page.locator('#listings')).toContainText('unpublished');
+  const republished = JSON.parse((await downloadedAction(page, 'Publish signed file')).toString());
+  expect(republished.seq).toBe(3); expect(republished.prev).toBe(withdrawal.cid);
+});
+
+test('owner listing pages expose records beyond 50 and reset after locking', async ({ page }) => {
+  await create(page, 'listing-pages');
+  page.on('dialog', dialog => dialog.accept());
+  for (let index = 0; index < 51; index++) {
+    await listing(page, `Archived page item ${index}`);
+    const newest = page.locator('#listings > article').first();
+    await newest.getByRole('button', { name: 'Archive', exact: true }).click();
+    await expect(page.locator('#status')).toContainText('Archived locally');
+  }
+  await expect(page.locator('#listings > article')).toHaveCount(50);
+  await page.getByRole('button', { name: 'Next listings', exact: true }).click();
+  await expect(page.locator('#listings > article')).toHaveCount(1);
+  await expect(page.locator('#listings')).toContainText('Archived page item 0');
+  await expect(page.locator('#listings')).not.toContainText('Archived page item 50');
+  await page.getByRole('button', { name: 'Previous listings', exact: true }).click();
+  await expect(page.locator('#listings > article')).toHaveCount(50);
+  await expect(page.locator('#listings')).toContainText('Archived page item 50');
+  await page.getByRole('button', { name: 'Next listings', exact: true }).click();
+  await expect(page.locator('#listings > article')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await unlock(page, 'listing-pages');
+  await expect(page.locator('#listings > article')).toHaveCount(50);
+  await expect(page.getByRole('button', { name: 'Previous listings', exact: true })).toHaveCount(0);
+});
+
 test('concurrent tabs cannot both acquire a vault writer', async ({ page, context }) => {
   await create(page, 'shared');
   const second = await context.newPage();

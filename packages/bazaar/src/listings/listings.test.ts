@@ -274,3 +274,123 @@ describe('verified retained discovery', () => {
   });
 
 });
+
+
+describe('owner archive and restore lifecycle', () => {
+  it('archives a draft and restores it unpublished at the 90-day boundary, preserving private data', async () => {
+    const { k, input, actor, cmd } = setup();
+    await cmd('bazaar.listing.create', input);
+    const archived = await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 1 });
+    expect(archived.ok).toBe(true); if (!archived.ok) return;
+    const result = archived.value.value as { archiveRecordId: string; restoreUntil: string };
+    expect(Date.parse(result.restoreUntil)).toBe(k.clock.now() + 90 * 86400000);
+    const foreign = await k.ask('bazaar.archive_record.get', { archiveRecordId: result.archiveRecordId }, { actor: k.user() });
+    expect(!foreign.ok && foreign.error.code).toBe('NOT_FOUND');
+    const denied = await k.cmd('bazaar.listing.restore', { archiveRecordId: result.archiveRecordId, expectedRevision: 1 }, { actor: k.user() });
+    expect(!denied.ok && denied.error.code).toBe('NOT_FOUND');
+    k.clock.advance(90 * 86400000);
+    const restored = await cmd('bazaar.listing.restore', { archiveRecordId: result.archiveRecordId, expectedRevision: 1 });
+    expect(restored.ok).toBe(true);
+    const current = await k.ask('bazaar.listing.get', { listingId: input.listingId }, { actor });
+    expect(current.ok && (current.value.value as { data: { status: string; privateNotes: string } }).data).toMatchObject({ status: 'unpublished', privateNotes: input.privateNotes });
+    const replay = await cmd('bazaar.listing.restore', { archiveRecordId: result.archiveRecordId, expectedRevision: 2 });
+    expect(!replay.ok && replay.error.code).toBe('CONFLICT_STATE');
+  });
+  it('archives a published listing with a verified chained tombstone, without republishing on restore', async () => {
+    const { k, input, actor, cmd } = setup();
+    await cmd('bazaar.listing.create', input);
+    const pub = await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 1 });
+    if (!pub.ok) throw new Error(pub.error.code);
+    const original = (pub.value.value as { envelope: { cid: string } }).envelope;
+    await cmd('discovery.listing.retain', { envelope: original });
+    const archived = await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 2 });
+    expect(archived.ok).toBe(true); if (!archived.ok) return;
+    const output = archived.value.value as { archiveRecordId: string; envelope: unknown };
+    const tombstone = await verifyEnvelope(output.envelope, { now: k.clock.now() });
+    expect(tombstone.type).toBe('classrup.alpha.tombstone/v1'); expect(tombstone.prev).toBe(original.cid); expect(tombstone.seq).toBe(2);
+    expect(tombstone.payload).not.toHaveProperty('privateNotes');
+    expect((await cmd('discovery.listing.retain', { envelope: output.envelope })).ok).toBe(true);
+    expect((await cmd('bazaar.listing.restore', { archiveRecordId: output.archiveRecordId, expectedRevision: 1 })).ok).toBe(true);
+    const search = await k.ask('discovery.listing.search', {}, { actor });
+    expect(search.ok && (search.value.value as { items: unknown[] }).items).toHaveLength(0);
+    const republished = await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 4 });
+    expect(republished.ok).toBe(true); if (!republished.ok) return;
+    const next = await verifyEnvelope((republished.value.value as { envelope: unknown }).envelope, { now: k.clock.now() });
+    expect(next.seq).toBe(3); expect(next.prev).toBe(tombstone.cid);
+  });
+  it('rejects stale restore revisions and expired restore windows without mutation', async () => {
+    const { k, input, cmd } = setup();
+    await cmd('bazaar.listing.create', input);
+    const archived = await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 1 });
+    if (!archived.ok) throw new Error(archived.error.code);
+    const { archiveRecordId } = archived.value.value as { archiveRecordId: string };
+    const before = [...k.events];
+    const stale = await cmd('bazaar.listing.restore', { archiveRecordId, expectedRevision: 2 });
+    expect(!stale.ok && stale.error.code).toBe('CONFLICT_REVISION');
+    k.clock.advance(90 * 86400000 + 1);
+    const expired = await cmd('bazaar.listing.restore', { archiveRecordId, expectedRevision: 1 });
+    expect(!expired.ok && expired.error.code).toBe('BAZAAR_ARCHIVE_RESTORE_EXPIRED'); expect(k.events).toEqual(before);
+  });
+  it('refuses archive while an active inventory hold exists, and rolls back invalid tombstone signatures', async () => {
+    let corrupt = false;
+    const { k, input, actor, cmd } = setup((seq, prev, other) => ({ seq, prev: corrupt ? other : prev }));
+    await cmd('bazaar.listing.create', input);
+    await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 1 });
+    const holdId = k.ids.next();
+    await cmd('bazaar.inventory.reserve', { listingId: input.listingId, expectedRevision: 2, holdId, subjectId: k.ids.next(), revisionHash: 'immutable-proposal-hash', expiresAt: new Date(k.clock.now() + 1000).toISOString() });
+    const held = await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 2 });
+    expect(!held.ok && held.error.code).toBe('BAZAAR_ARCHIVE_HOLD_ACTIVE');
+    await cmd('bazaar.inventory.release', { holdId, expectedRevision: 1 });
+    corrupt = true;
+    const before = [...k.events];
+    const result = await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 2 });
+    expect(!result.ok && result.error.code).toBe('FORBIDDEN'); expect(k.events).toEqual(before);
+    const records = await k.ask('bazaar.archive_record.list_mine', {}, { actor });
+    expect(records.ok && (records.value.value as { items: unknown[] }).items).toEqual([]);
+  });
+});
+
+
+it('paginates all owner listings newest first, including beyond 50 archived records, without exposing another owner', async () => {
+  const { k, input, actor, cmd } = setup();
+  const ids: string[] = [];
+  for (let i = 0; i < 55; i++) {
+    const listingId = k.ids.next(); ids.push(listingId);
+    expect((await cmd('bazaar.listing.create', { ...input, listingId })).ok).toBe(true);
+    expect((await cmd('bazaar.listing.archive', { listingId, expectedRevision: 1 })).ok).toBe(true);
+  }
+  const first = await k.ask('bazaar.listing.list', {}, { actor });
+  if (!first.ok) throw new Error(first.error.code);
+  const page = first.value.value as { items: { id: string }[]; nextCursor: string };
+  expect(page.items).toHaveLength(50); expect(page.items[0]!.id).toBe(ids.at(-1)); expect(page.nextCursor).toBeTypeOf('string');
+  const second = await k.ask('bazaar.listing.list', { cursor: page.nextCursor }, { actor });
+  if (!second.ok) throw new Error(second.error.code);
+  const tail = second.value.value as { items: { id: string }[]; nextCursor?: string };
+  expect(tail.items).toHaveLength(5); expect(tail.nextCursor).toBeUndefined();
+  expect(new Set([...page.items, ...tail.items].map(row => row.id))).toEqual(new Set(ids));
+  const foreign = await k.ask('bazaar.listing.list', { cursor: page.nextCursor }, { actor: k.user() });
+  expect(!foreign.ok || (foreign.value.value as { items: unknown[] }).items.length === 0).toBe(true);
+});
+
+
+it('replays an archive command exactly once and starts a fresh 90-day window only after restoration', async () => {
+  const { k, input, actor, cmd } = setup();
+  await cmd('bazaar.listing.create', input);
+  const key = k.ids.next();
+  const data = { listingId: input.listingId, expectedRevision: 1 };
+  const archived = await k.cmd('bazaar.listing.archive', data, { actor, idempotencyKey: key });
+  if (!archived.ok) throw new Error(archived.error.code);
+  const before = [...k.events];
+  const replay = await k.cmd('bazaar.listing.archive', data, { actor, idempotencyKey: key });
+  expect(replay.ok && replay.value.value).toEqual(archived.value.value); expect(k.events).toEqual(before);
+  const first = archived.value.value as { archiveRecordId: string; restoreUntil: string };
+  await cmd('bazaar.listing.restore', { archiveRecordId: first.archiveRecordId, expectedRevision: 1 });
+  k.clock.advance(86400000);
+  const again = await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 3 });
+  if (!again.ok) throw new Error(again.error.code);
+  const second = again.value.value as { archiveRecordId: string; restoreUntil: string };
+  expect(second.archiveRecordId).not.toBe(first.archiveRecordId);
+  expect(Date.parse(second.restoreUntil) - Date.parse(first.restoreUntil)).toBe(86400000);
+  const list = await k.ask('bazaar.archive_record.list_mine', { listingId: input.listingId }, { actor });
+  expect(list.ok && (list.value.value as { items: unknown[] }).items).toHaveLength(2);
+});

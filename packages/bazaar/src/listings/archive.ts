@@ -29,8 +29,9 @@ export function recordArchive(ctx: CommandContext, listing: StoredRecord<Listing
   if (!prior.ok) return prior;
   if (prior.value.items.length || prior.value.nextCursor) return err(appError('CONFLICT_STATE'));
   const archiveRecordId = ctx.ids.next();
-  const archivedAt = ctx.clock.iso();
-  const restoreUntil = new Date(ctx.clock.now() + RESTORE_WINDOW_MS).toISOString();
+  const observedAt = ctx.clock.now();
+  const archivedAt = new Date(observedAt).toISOString();
+  const restoreUntil = new Date(observedAt + RESTORE_WINDOW_MS).toISOString();
   const saved = repo.put(archiveRecordId, { listingId: uuidv7().parse(listing.id), ownerId: listing.data.ownerId,
     status: 'archived', endedAt: archivedAt, archivedAt, restoreUntil, purgeAt: restoreUntil }, { expectedRevision: 0 });
   if (!saved.ok) return saved;
@@ -47,16 +48,20 @@ export function archiveDefinitions() {
       if (!record || ctx.actor.kind !== 'user' || record.data.ownerId !== ctx.actor.id) return err(appError('NOT_FOUND'));
       if (record.revision !== input.expectedRevision) return err(appError('CONFLICT_REVISION'));
       if (record.data.status !== 'archived') return err(appError('CONFLICT_STATE'));
-      if (ctx.clock.now() > Date.parse(record.data.restoreUntil)) return err(archiveErrors.make('BAZAAR_ARCHIVE_RESTORE_EXPIRED'));
+      const observedAt = ctx.clock.now();
+      if (observedAt > Date.parse(record.data.restoreUntil)) return err(archiveErrors.make('BAZAAR_ARCHIVE_RESTORE_EXPIRED'));
       // Do not re-date a record when a device clock moves backward.
-      if (ctx.clock.now() < Date.parse(record.data.archivedAt)) return err(appError('CONFLICT_STATE'));
+      if (observedAt < Date.parse(record.data.archivedAt)) return err(appError('CONFLICT_STATE'));
       const listing = ctx.tx.repo(listingRepo).get(record.data.listingId);
       if (!listing || listing.data.ownerId !== ctx.actor.id) return err(appError('NOT_FOUND'));
       if (listing.data.status !== 'archived') return err(appError('CONFLICT_STATE'));
+      const active = repo.query({ where: { listing: listing.id, status: 'archived' }, limit: 2 });
+      if (!active.ok) return active;
+      if (active.value.items.length !== 1 || active.value.nextCursor || active.value.items[0]!.id !== record.id) return err(appError('CONFLICT_STATE'));
       const { expiresAt: _expiry, ...data } = listing.data;
       const saved = ctx.tx.repo(listingRepo).put(listing.id, { ...data, status: 'unpublished' }, { expectedRevision: listing.revision });
       if (!saved.ok) return saved;
-      const updated = repo.put(record.id, { ...record.data, status: 'restored', restoredAt: ctx.clock.iso() }, { expectedRevision: record.revision });
+      const updated = repo.put(record.id, { ...record.data, status: 'restored', restoredAt: new Date(observedAt).toISOString() }, { expectedRevision: record.revision });
       if (!updated.ok) return updated;
       ctx.emit(restored, { aggregate: { type: 'listing', id: listing.id }, revision: saved.value.revision,
         payload: { listingId: record.data.listingId, ownerId: ctx.actor.id, archiveRecordId: input.archiveRecordId } });

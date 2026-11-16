@@ -4,7 +4,7 @@ import { createTestKernel } from '@classrup/kernel/testing';
 import { createIdentity, type UnlockedIdentity } from '@classrup/identity';
 import { signEnvelope, verifyEnvelope } from '@classrup/federation';
 import { discoveryDefinitions } from '@classrup/discovery';
-import { bazaarDefinitions, releaseSubjectReservations, validateListingRevision, listingRevisionRepo } from './index.ts';
+import { bazaarDefinitions, releaseSubjectReservations, validateListingRevision, listingRevisionRepo, archiveRecordRepo } from './index.ts';
 
 let identity: UnlockedIdentity;
 beforeAll(async () => { identity = (await createIdentity('correct horse battery staple')).identity; });
@@ -393,4 +393,37 @@ it('replays an archive command exactly once and starts a fresh 90-day window onl
   expect(Date.parse(second.restoreUntil) - Date.parse(first.restoreUntil)).toBe(86400000);
   const list = await k.ask('bazaar.archive_record.list_mine', { listingId: input.listingId }, { actor });
   expect(list.ok && (list.value.value as { items: unknown[] }).items).toHaveLength(2);
+});
+
+it('uses one clock observation for an archive deadline while the clock advances between reads', async () => {
+  const { k, input, actor, cmd } = setup();
+  await cmd('bazaar.listing.create', input);
+  const now = k.clock.now;
+  k.clock.now = () => { const value = now(); k.clock.advance(1); return value; };
+  k.clock.iso = () => new Date(k.clock.now()).toISOString();
+  const result = await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 1 });
+  expect(result.ok).toBe(true); if (!result.ok) return;
+  const { archiveRecordId } = result.value.value as { archiveRecordId: string };
+  const record = await k.ask('bazaar.archive_record.get', { archiveRecordId }, { actor });
+  expect(record.ok).toBe(true); if (!record.ok) return;
+  const data = (record.value.value as { record: { data: { archivedAt: string; restoreUntil: string } } }).record.data;
+  expect(Date.parse(data.restoreUntil) - Date.parse(data.archivedAt)).toBe(90 * 86400000);
+});
+
+
+it('refuses ambiguous active archive records rather than restoring against conflicting evidence', async () => {
+  const { k, input, actor, cmd } = setup();
+  await cmd('bazaar.listing.create', input);
+  const archived = await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 1 });
+  if (!archived.ok) throw new Error(archived.error.code);
+  const { archiveRecordId } = archived.value.value as { archiveRecordId: string };
+  const record = await k.storage.read(tx => tx.records.get(k.tenantId, archiveRecordRepo.type, archiveRecordId));
+  if (!record) throw new Error('Missing archive record');
+  await k.storage.transaction(tx => tx.records.put({ tenant: k.tenantId, type: archiveRecordRepo.type, id: k.ids.next(),
+    data: record.data, idx: [identity.principal, input.listingId, 'archived', null], expectedRevision: 0, now: k.clock.now() }));
+  const events = [...k.events];
+  const restore = await cmd('bazaar.listing.restore', { archiveRecordId, expectedRevision: 1 });
+  expect(!restore.ok && restore.error.code).toBe('CONFLICT_STATE'); expect(k.events).toEqual(events);
+  const current = await k.ask('bazaar.listing.get', { listingId: input.listingId }, { actor });
+  expect(current.ok && (current.value.value as { data: { status: string } }).data.status).toBe('archived');
 });

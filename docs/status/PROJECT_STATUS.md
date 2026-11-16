@@ -28,18 +28,35 @@ prior compound-key history storage is unchanged. The 90-day deadline is based on
 the local clock and cannot provide a trusted wall clock against device tampering.
 The historical 51-row planning security tracker remains open.
 
-Verification so far: 22 listing/discovery tests and 3 production archive-backup
-tests passed; 32 CLI/tooling tests passed. Typecheck, build, dependency checks and
-strict specification checks (148 modules, zero errors/warnings) pass. The first
-full domain run was terminated by the host (exit 137), so it is not a pass. A
-memory-bounded fork-pool full retry passed all 520 tests with zero failures/skips. Two browser journeys were added
-for signed archive/backup/recovery and pagination beyond 50 listings. Playwright
-loads their definitions, but local execution fails before any assertion because
-the pinned Chromium executable is unavailable; its download returned corrupt
-archives. Candidate CI must qualify the final head before merge. Candidate PR #41 at `b2363bf` passed its Linux CLI smoke matrix on Node 22/24;
-Alpha browser qualification is still in progress. Predecessor PR #39's Alpha
-workflow passed, but its CLI matrix has a cancelled macOS Node 22 job and a queued
-macOS Node 24 job. No merge is represented as qualified while these gates remain open.
+Verification: 24 listing/discovery tests and 3 production archive-backup tests
+passed; 32 CLI/tooling tests passed. Review reproduced and fixed a real-clock
+deadline race and rejection of duplicate active archive evidence. Typecheck with
+`GOMEMLIMIT=256MiB GOMAXPROCS=2 --singleThreaded`, build, setup/doctor, dependency
+checks and strict specifications (148 modules, zero errors/warnings) pass. An
+uncapped compiler attempt was host-killed before the bounded passing check.
+
+The first full domain run was host-killed (exit 137). A memory-bounded fork-pool
+retry then passed 520/520 tests on the earlier implementation. After the final
+two review fixes, the full retry completed 519 of 522 assertions with no failed
+assertions; the fork runner emitted an internal incomplete-report warning and
+exited 1 with three Mutiny saturation/rollback/tombstone tests pending. The same
+file failed to finish under an isolated fork retry, then passed all 16 assertions
+under the normal thread pool with the unchanged 60-second saturation-test limit
+(the saturation test took 30.1 seconds). All 522 unique assertions therefore have
+passing execution evidence across the final full run and the isolated file retry;
+there is no claim of a single all-green final full-suite run. The earlier full
+report and incomplete final report are distinguished rather than rewritten.
+
+Two browser journeys cover signed archive/backup/recovery and pagination beyond
+50 listings. Playwright loads their definitions, but local execution fails before
+any assertion because the pinned Chromium executable is unavailable; its download
+returned corrupt archives. Final-head CI must qualify these workflows before
+merge. Earlier candidate heads passed Linux CLI smoke on Node 22/24; their Alpha
+browser checks do not qualify the later clock/duplicate-record fixes. Predecessor
+PR #39's Alpha workflow passed, but its CLI matrix still has unresolved macOS jobs.
+No merge or full-project completion is claimed. Generated inventory: 31/148 runtime
+module paths, 13/688 exact specified interfaces, 442/4510 requirements with passing
+mapped tests; these are traceability counts rather than completion percentages.
 
 ## November 16, 2026 owner listing history continuation
 

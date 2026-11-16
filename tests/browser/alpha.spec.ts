@@ -27,6 +27,37 @@ async function listing(page: Page, title: string, amount = '12500') {
   await expect(page.locator('#listings').getByRole('heading', { name: title, exact: true })).toBeVisible();
 }
 
+test('local listing contents and identifiers stay encrypted on disk across lock and unlock', async ({ page }) => {
+  const principal = await create(page, 'encrypted-disk');
+  const title = 'Private disk encryption canary';
+  await listing(page, title);
+  const persisted = await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('classrup-vault:encrypted-disk');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      const entries = await Promise.all(Array.from(db.objectStoreNames).map(async table => {
+        const store = db.transaction(table).objectStore(table);
+        const keys = store.getAllKeys();
+        const values = store.getAll();
+        return await new Promise<unknown>((resolve, reject) => {
+          values.onsuccess = () => resolve({ table, keys: keys.result, values: values.result });
+          values.onerror = () => reject(values.error);
+        });
+      }));
+      return JSON.stringify(entries);
+    } finally { db.close(); }
+  });
+  expect(persisted).toContain('classrup.storage-row/v1');
+  expect(persisted).not.toContain(title);
+  expect(persisted).not.toContain(principal);
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await unlock(page, 'encrypted-disk');
+  await expect(page.locator('#listings')).toContainText(title);
+});
+
 test('real persisted identity/listing and isolated peer signed-file exchange', async ({ browser, page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));

@@ -308,3 +308,24 @@ describe('F13.S02.M04 in-app notification preferences', () => {
     expect(code(await set(e, [{ category: 'offers', push: true, expectedRevision: revision }]))).toBe('ok');
   });
 });
+
+
+it.each(['seq', 'prev'] as const)('rolls back preferences when a verified mirror signer returns wrong %s', async field => {
+  const e = await setup();
+  await enableChannel(e);
+  const before = JSON.stringify([await stored(e), await sync(e), e.vault.events]);
+  const actual = e.user.sign;
+  e.user.sign = (type, payload, seq, prev, at) => actual(type, payload, field === 'seq' ? seq + 1 : seq, field === 'prev' ? `sha256-${'a'.repeat(64)}` : prev, at);
+  expect(code(await set(e, [{ category: 'offers', email: true, expectedRevision: 1 }]))).toBe('FORBIDDEN');
+  expect(JSON.stringify([await stored(e), await sync(e), e.vault.events])).toBe(before);
+});
+
+it('rejects a signed mirror whose envelope sequence disagrees with its payload sequence', async () => {
+  const e = await setup();
+  await enableChannel(e);
+  const payload = { userDid: e.user.did, seq: 2, cells: CATEGORIES.map(category => ({ category, push: true, email: false })) };
+  const statement = await e.user.sign(PREFERENCE_MIRROR_STATEMENT, payload, 3, `sha256-${'a'.repeat(64)}`, e.vault.clock.iso());
+  const before = val(await e.relay.ask('test.mirror.dump', {}, { actor: e.relayActor }));
+  expect(code(await e.relay.cmd('notify.preference.mirror', { statement }, { actor: e.relayActor }))).toBe('PRECONDITION_FAILED');
+  expect(val(await e.relay.ask('test.mirror.dump', {}, { actor: e.relayActor }))).toEqual(before);
+});

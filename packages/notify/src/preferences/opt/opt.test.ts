@@ -434,3 +434,14 @@ it.each(['privacy.consent.withdrawn', 'privacy.deletion.requested'] as const)('w
   expect(record?.data.withdrawnVia).toBe(type === 'privacy.consent.withdrawn' ? 'privacy_withdrawal' : 'account_deletion');
   expect((await vaultSync(e)).map(s => (s.envelope['payload'] as { status: string }).status)).toEqual(['granted', 'withdrawn']);
 });
+
+
+it.each(['seq', 'prev'] as const)('rejects a verified channel signer with wrong %s without consent, event or sync writes', async field => {
+  const e = await setup();
+  const actual = e.user.sign;
+  e.user.sign = (type, payload, seq, prev, at) => actual(type, payload, field === 'seq' ? seq + 1 : seq, field === 'prev' ? `sha256-${'a'.repeat(64)}` : prev, at);
+  expect(code(await optIn(e))).toBe('FORBIDDEN');
+  expect(await mineOf(e)).toEqual([]);
+  expect(await vaultSync(e)).toEqual([]);
+  expect(e.vault.events).toEqual([]);
+});

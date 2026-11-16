@@ -10,5 +10,9 @@
     "@classrup/kernel": "workspace:*",
     "zod": "4.6.7"
   },
-  "description": "Specification-only package; no runtime entry point implemented yet."
+  "exports": {
+    ".": "./src/index.ts",
+    "./policy/goods": "./src/policy/goods/index.ts",
+    "./policy/prohibited": "./src/policy/prohibited/index.ts"
+  }
 }

@@ -15,5 +15,7 @@
     "@classrup/i18n": "workspace:*",
     "@classrup/governance": "workspace:*"
   },
-  "description": "Specification-only package; no runtime entry point implemented yet."
+  "exports": {
+    ".": "./src/index.ts"
+  }
 }

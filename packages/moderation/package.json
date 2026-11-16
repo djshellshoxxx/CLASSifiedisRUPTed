@@ -15,5 +15,10 @@
     "@classrup/i18n": "workspace:*",
     "@classrup/governance": "workspace:*"
   },
-  "description": "Specification-only package; no runtime entry point implemented yet."
+  "exports": {
+    ".": "./src/index.ts",
+    "./antifraud/rate": "./src/antifraud/rate/index.ts",
+    "./antifraud/limits": "./src/antifraud/limits/index.ts",
+    "./antifraud/signals": "./src/antifraud/signals/index.ts"
+  }
 }

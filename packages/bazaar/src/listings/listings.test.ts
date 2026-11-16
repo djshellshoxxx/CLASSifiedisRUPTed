@@ -8,12 +8,16 @@ import { bazaarDefinitions, releaseSubjectReservations } from './index.ts';
 
 let identity: UnlockedIdentity;
 beforeAll(async () => { identity = (await createIdentity('correct horse battery staple')).identity; });
-function setup() {
+function setup(alter?: (seq: number, prev: string | null, unrelatedCid: string) => { seq: number; prev: string | null }) {
   const k = createTestKernel();
   const categoryId = k.ids.next();
   const actor = { kind: 'user' as const, id: identity.principal, roles: ['member'] };
   const defs = bazaarDefinitions({ categoryAllowed: id => id === categoryId,
-    signProjection: async (type, payload, seq, prev) => ({ ...await signEnvelope(identity, { type, payload, seq, prev, createdAt: new Date(k.clock.now()).toISOString() }) }),
+    signProjection: async (type, payload, seq, prev) => {
+      const createdAt = new Date(k.clock.now()).toISOString();
+      const unrelated = await signEnvelope(identity, { type: 'classrup.test/v1', payload: {}, seq: 1, prev: null, createdAt });
+      return { ...await signEnvelope(identity, { type, payload, createdAt, ...(alter ? alter(seq, prev, unrelated.cid) : { seq, prev }) }) };
+    },
     verifyProjection: envelope => verifyEnvelope(envelope, { now: k.clock.now() }),
   });
   k.registry.add(...defs.all, ...discoveryDefinitions({ verifyEnvelope: envelope => verifyEnvelope(envelope, { now: k.clock.now() }) }).all);
@@ -41,6 +45,40 @@ describe('LocalBazaar persistent command path', () => {
     expect((await cmd('discovery.listing.retain', { envelope: (unpublish.value.value as { envelope: unknown }).envelope })).ok).toBe(true);
     expect((await cmd('bazaar.listing.archive', { listingId: input.listingId, expectedRevision: 3 })).ok).toBe(true);
     expect(k.events.filter(e => e.type === 'bazaar.listing.changed')).toHaveLength(4);
+  });
+  it.each(['publish', 'unpublish', 'reserve'] as const)('rejects validly signed wrong sequences during %s without changing records or events', async action => {
+    let corrupt = false;
+    const { k, input, cmd } = setup((seq, prev, unrelatedCid) => corrupt ? { seq: seq + 1, prev: prev ?? unrelatedCid } : { seq, prev });
+    await cmd('bazaar.listing.create', input);
+    if (action !== 'publish') await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 1 });
+    const records = () => k.storage.read(tx => ['bazaar.listing', 'bazaar.publication', 'bazaar.inventory_hold'].map(type =>
+      tx.records.query({ tenant: k.tenantId, type, filters: [], orderSlot: 0, dir: 'asc', limit: 100 })));
+    const before = await records();
+    const events = [...k.events];
+    corrupt = true;
+    const result = action === 'reserve'
+      ? await cmd('bazaar.inventory.reserve', { listingId: input.listingId, expectedRevision: 2, holdId: k.ids.next(), subjectId: k.ids.next(), revisionHash: 'sha256-immutable-proposal', expiresAt: new Date(k.clock.now() + 1000).toISOString() })
+      : await cmd(`bazaar.listing.${action}`, { listingId: input.listingId, expectedRevision: action === 'publish' ? 1 : 2 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('FORBIDDEN');
+    expect(await records()).toEqual(before);
+    expect(k.events).toEqual(events);
+  });
+  it('rejects a correctly sequenced tombstone signed against the wrong parent', async () => {
+    let corrupt = false;
+    const { k, input, cmd } = setup((seq, prev, unrelatedCid) => ({ seq, prev: corrupt ? unrelatedCid : prev }));
+    await cmd('bazaar.listing.create', input);
+    await cmd('bazaar.listing.publish', { listingId: input.listingId, expectedRevision: 1 });
+    const before = await k.ask('bazaar.listing.get', { listingId: input.listingId }, { actor: { kind: 'user', id: identity.principal, roles: ['member'] } });
+    const events = [...k.events];
+    corrupt = true;
+    const result = await cmd('bazaar.listing.unpublish', { listingId: input.listingId, expectedRevision: 2 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('FORBIDDEN');
+    const after = await k.ask('bazaar.listing.get', { listingId: input.listingId }, { actor: { kind: 'user', id: identity.principal, roles: ['member'] } });
+    expect(after.ok && after.value.value).toEqual(before.ok && before.value.value);
+    expect(k.events).toEqual(events);
+    expect(await k.storage.read(tx => tx.records.query({ tenant: k.tenantId, type: 'bazaar.publication', filters: [], orderSlot: 0, dir: 'asc', limit: 100 }))).toHaveLength(1);
   });
   it('rejects unknown/private-location fields, foreign edits, and stale updates without additional events', async () => {
     const { k, input, actor, cmd } = setup();

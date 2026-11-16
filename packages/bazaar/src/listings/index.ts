@@ -25,7 +25,7 @@ export interface BazaarOptions {
   /** Resolve a category against an explicit local policy pack; there is deliberately no allow-all default. */
   readonly categoryAllowed: (categoryId: string) => boolean;
   readonly signProjection: (type: string, payload: unknown, revision: number, previousCid: string | null) => Promise<SignedEnvelope>;
-  readonly verifyProjection: (envelope: unknown) => Promise<VerifiedStatement>;
+  readonly verifyProjection: (envelope: unknown) => Promise<VerifiedStatement & { readonly prev: string | null }>;
 }
 function owned(ctx: CommandContext | QueryContext, id: string) {
   const record = ctx.tx.repo(listingRepo).get(id);
@@ -107,7 +107,8 @@ export function bazaarDefinitions(options: BazaarOptions) {
     try {
       const envelope = structuredClone(await options.signProjection(type, payload, revision, prev));
       const verified = await options.verifyProjection(envelope);
-      if (verified.author !== ownerId || verified.type !== type || canonicalJson(verified.payload) !== canonicalJson(payload) || verified.cid !== envelope.cid) return err(appError('FORBIDDEN'));
+      // A valid signature must bind the exact chain position requested by this transaction.
+      if (verified.author !== ownerId || verified.type !== type || verified.seq !== revision || verified.prev !== prev || canonicalJson(verified.payload) !== canonicalJson(payload) || verified.cid !== envelope.cid) return err(appError('FORBIDDEN'));
       return ok(envelope);
     } catch { return err(appError('VALIDATION_FAILED')); }
   }

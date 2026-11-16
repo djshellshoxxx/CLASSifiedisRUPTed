@@ -1,14 +1,39 @@
 name: Alpha verification
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**/*.md', 'docs/**']
+  workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 permissions:
   contents: read
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      browsers: ${{ steps.plan.outputs.browsers }}
+      projects: ${{ steps.plan.outputs.projects }}
+      key: ${{ steps.plan.outputs.key }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - id: plan
+        name: Decide which browser engines this change needs
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          files=""
+          if [ "$EVENT" = "pull_request" ] && git fetch --no-tags --depth=1 origin "$BASE_SHA"; then
+            files="$(git diff --name-only "$BASE_SHA" HEAD || true)"
+          fi
+          printf '%s\n' "$files" | node tools/ci/plan.mjs "$EVENT" | tee -a "$GITHUB_OUTPUT"
   domain:
+    needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -24,7 +49,26 @@ jobs:
       - run: corepack pnpm test --reporter=json --outputFile=test-results/domain.json
       - name: Report executed requirement coverage (not a release gate)
         run: corepack pnpm trace --results test-results/domain.json
+      - name: Report feature status (not a release gate)
+        run: corepack pnpm run status --results test-results/domain.json
       - run: corepack pnpm run setup --non-interactive
       - run: corepack pnpm build
-      - run: corepack pnpm exec playwright install --with-deps chromium firefox webkit
-      - run: corepack pnpm run test:browser
+      - name: Locate the browser cache
+        run: echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/pw-browsers" >> "$GITHUB_ENV"
+      - name: Restore the pinned browser downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ${{ runner.temp }}/pw-browsers
+          key: playwright-${{ runner.os }}-${{ needs.plan.outputs.key }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install browsers
+        run: corepack pnpm exec playwright install --with-deps ${{ needs.plan.outputs.browsers }}
+      - name: Browser journeys
+        run: corepack pnpm exec playwright test ${{ needs.plan.outputs.projects }} --trace off
+      - name: Keep failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-failures
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

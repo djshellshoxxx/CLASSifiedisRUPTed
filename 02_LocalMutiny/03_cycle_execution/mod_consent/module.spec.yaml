@@ -214,6 +214,7 @@ processes:
         output: "{ committable: boolean, missing: { code, actorId? }[], evaluatedAt, clockBasis: local }"
         errors: [NOT_FOUND]
     events_produced:
+      - {type: mutiny.coordination.observed, privacy: P2, payload: "{ subjectId: UUIDv7, participantIds, actorId: verified evidence author } — alpha local acceptance notice, emitted once per newly accepted signed evidence; not proof of settlement"}
       - {type: mutiny.cycle.proposed, privacy: P2, payload: "{ cycleId, origin, suggestionId?, coordinatorId, participantIds, length, revisionNo, revisionHash, consentDeadline }"}
       - {type: mutiny.cycle.consent_recorded, privacy: P2, payload: "{ cycleId, participantId, revisionNo, revisionHash, direction, status }"}
       - {type: mutiny.cycle.committed, privacy: P2, payload: "{ cycleId, revisionNo, revisionHash, participantIds, executionDeadline, sourceType, sourceId? }"}

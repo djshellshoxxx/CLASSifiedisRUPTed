@@ -57,7 +57,7 @@ Turns a suggestion (or an accepted two-party proposal) into a Cycle that every p
 
 - Commands: `mutiny.cycle.propose`, `mutiny.cycle.consent`, `mutiny.cycle.decline`, `mutiny.cycle.ingest`
 - Queries: `mutiny.cycle.get`, `mutiny.cycle.list_mine`, `mutiny.cycle.explain_verdict`
-- Emits: `mutiny.cycle.proposed`, `mutiny.cycle.consent_recorded`, `mutiny.cycle.committed`, `mutiny.cycle.declined`
+- Emits: `mutiny.coordination.observed`, `mutiny.cycle.proposed`, `mutiny.cycle.consent_recorded`, `mutiny.cycle.committed`, `mutiny.cycle.declined`
 - Consumes: `mutiny.proposal.accepted`, `mutiny.proposal.revised`, `mutiny.cycle.locked`, `mutiny.cycle.unlocked`, `comms.consent.signed`, `mutiny.revision.forked`, `mutiny.lock.conflict_detected`, `mutiny.cycle.cancelled`, `mutiny.leg.handed_over`, `mutiny.leg.received`, `mutiny.cycle.completed`, `mutiny.cycle.partially_executed`
 
 ## Dependencies

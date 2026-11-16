@@ -182,7 +182,7 @@ describe('F13.S01.M03 in-app notifications', () => {
     const catalog = new Set(modules.flatMap(m => m.emits ?? []));
     const spec = parse(readFileSync(new URL('../../../../../13_Notifications/01_delivery/mod_inapp/module.spec.yaml', import.meta.url), 'utf8')) as { processes: { commands_queries_events: { events_consumed: Array<{ type: string; effect: string }> } } };
     const consumed = spec.processes.commands_queries_events.events_consumed;
-    expect(consumed).toHaveLength(49);
+    expect(consumed).toHaveLength(50);
     expect(consumed.map(c => c.type).filter(t => t !== 'notify.preference.changed')).toEqual(ROUTES.map(r => r.type));
     expect(new Set(ROUTES.map(r => r.type)).size).toBe(ROUTES.length);
     const missing = ROUTES.map(r => r.type).filter(t => !catalog.has(t));

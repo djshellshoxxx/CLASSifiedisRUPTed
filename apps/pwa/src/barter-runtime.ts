@@ -77,7 +77,7 @@ export function createBarterRuntime(session: Pick<UnlockedVault, 'principal' | '
     },
   });
   const inputs = defineQuery({ name: 'mutiny.alpha.inputs', module: 'F02.S02.M04', capability: 'mutiny.coordination.read', input: z.strictObject({}), handler(ctx) { return ok(barterInputs(ctx.tx)); } });
-  return { definitions: [...domains.all, inputs, consent], setMatchingPolicy(next: MatchingPolicy) {
+  return { definitions: [...domains.all, inputs, consent], isBlocked: (did: string) => policy.blockedOwners.includes(did), setMatchingPolicy(next: MatchingPolicy) {
     if (typeof next.enabled !== 'boolean' || next.blockedOwners.length > 2000) throw new Error('Invalid matching policy');
     policy = { enabled: next.enabled, blockedOwners: [...next.blockedOwners] };
   } };

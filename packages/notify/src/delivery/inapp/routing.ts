@@ -28,6 +28,7 @@ const r = (type: string, category: NotifyCategory, name: string, to: readonly st
 const offer = (idField = 'offerId'): Route['ref'] => ({ type: 'offer', idField });
 
 export const ROUTES: readonly Route[] = [
+  r('mutiny.coordination.observed', 'cycles', 'coordination_updated', ['participantIds'], 'subjectId', { actor: 'actorId', ref: { type: 'cycle', idField: 'subjectId' } }),
   r('bazaar.offer.made', 'offers', 'made', ['sellerId'], 'offerListingId', { actor: 'buyerId', ref: offer() }),
   r('bazaar.offer.accepted', 'offers', 'accepted', ['buyerId'], 'offerId', { actor: 'sellerId', ref: offer() }),
   r('bazaar.offer.rejected', 'offers', 'rejected', ['buyerId'], 'offerId', { actor: 'sellerId', ref: offer() }),

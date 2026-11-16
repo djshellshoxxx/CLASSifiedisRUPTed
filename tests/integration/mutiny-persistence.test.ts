@@ -10,6 +10,8 @@ import { admitSignedGraph, WANT_TYPE } from '../../packages/mutiny/src/cycle_mat
 import { discoverCycles } from '../../packages/mutiny/src/cycle_matching/index.ts';
 import { prepareProposal, CONSENT_TYPE, PROPOSAL_TYPE, RESERVATION_TYPE, WITHDRAWAL_TYPE, type Proposal } from '../../packages/mutiny/src/trade_proposals/index.ts';
 import { mutinyDefinitions, coordinationRepo, coordinationSchema, wantRepo, validateCoordinationRecord, normalizeCoordinationRecord } from '../../packages/mutiny/src/trade_proposals/repository.ts';
+import { createOutboxDispatcher } from '../../packages/kernel/src/index.ts';
+import { localNotificationDefinitions, inApp } from '../../packages/notify/src/index.ts';
 
 const NOW = Date.parse('2026-11-09T12:00:00.000Z');
 const HOUR = 3600000;
@@ -147,6 +149,40 @@ async function scenario(size: number, failRelease: () => boolean = () => false) 
 }
 
 describe('independent durable signed Mutiny verification', () => {
+  it('routes only newly verified peer evidence to the local inbox and resumes without duplicate alerts', async () => {
+    const f = await scenario(2);
+    const [alice, bob] = f.peers as [Peer, Peer];
+    async function attachInbox(peer: Peer, blocked: () => boolean = () => false) {
+      const definitions = localNotificationDefinitions({ localPrincipal: () => peer.identity.principal, isBlocked: blocked, isThreadMuted: () => false });
+      const registry = createRegistry().add(...definitions.all);
+      const dispatcher = createOutboxDispatcher({ registry, storage: peer.storage, clock: f.clock, ids: peer.ids });
+      await dispatcher.drain();
+      return { dispatcher, rows: () => peer.storage.read(tx => tx.records.query<inApp.Notification>({ tenant: peer.identity.principal,
+        type: inApp.notificationRepo.type, filters: [], orderSlot: 0, dir: 'asc', limit: 500 })) };
+    }
+    expect(await (await attachInbox(alice)).rows()).toEqual([]);
+    let inbox = await attachInbox(bob);
+    expect(await inbox.rows()).toMatchObject([{ data: { category: 'cycles', templateKey: 'notify.tpl.cycles.coordination_updated', count: 1,
+      ref: { type: 'cycle', id: f.proposal.snapshot.subjectId } } }]);
+    await bob.ingest(f.opening);
+    await inbox.dispatcher.drain();
+    expect((await inbox.rows())[0]!.data.count).toBe(1);
+    const forged = { ...f.opening, sig: f.opening.sig.slice(0, -3) + 'AAA' };
+    expect((await bob.command('mutiny.coordination.ingest', { envelope: forged, expectedRevision: (await bob.record(f.proposal.snapshot.subjectId))!.revision })).ok).toBe(false);
+    await inbox.dispatcher.drain();
+    expect((await inbox.rows())[0]!.data.count).toBe(1);
+    await bob.restart();
+    inbox = await attachInbox(bob);
+    expect((await inbox.rows())[0]!.data.count).toBe(1);
+    const { reservations } = await f.reserveAll();
+    await bob.ingest(reservations[0]!);
+    await inbox.dispatcher.drain();
+    expect((await inbox.rows())[0]!.data.count).toBe(2);
+    expect(JSON.stringify((await inbox.rows())[0]!.data)).not.toContain(alice.identity.principal);
+    await alice.ingest(reservations[1]!);
+    expect(await (await attachInbox(alice, () => true)).rows()).toEqual([]);
+    expect(await bob.storage.read(tx => tx.sync.list({}))).toEqual([]);
+  });
   for (const size of [2, 3, 4]) it(`${size} actual principals retain signed listings/wants, reserve, consent, commit and survive IndexedDB adapter restart`, async () => {
     const f = await scenario(size);
     const { reservations } = await f.reserveAll();

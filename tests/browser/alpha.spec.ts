@@ -130,9 +130,44 @@ test('wrong passphrase fails without destroying saved records; lock clears priva
   await page.locator('[name="passphrase"]').fill('incorrect passphrase here');
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(page.locator('#error')).toContainText(/Incorrect passphrase|damaged/);
+  await expect(page.locator('[name="passphrase"]')).toHaveValue('');
   await expect(page.locator('#workspace')).toBeHidden();
   await unlock(page, 'local');
   await expect(page.locator('#listings')).toContainText('Retained chair');
+});
+
+test('local notification preferences survive reload, backup and lock without external delivery', async ({ page, context }) => {
+  await create(page, 'inbox');
+  await expect(page.locator('#notification-count')).toHaveText('0 unread notifications.');
+  await expect(page.getByLabel('Security notifications (always enabled)')).toBeChecked();
+  await expect(page.getByLabel('Security notifications (always enabled)')).toBeDisabled();
+  await page.getByLabel('Barter updates', { exact: true }).uncheck();
+  await page.getByRole('button', { name: 'Save notification preferences' }).click();
+  await expect(page.locator('#status')).toHaveText('Local notification preferences saved.');
+  await expect(page.getByLabel('Barter updates', { exact: true })).not.toBeChecked();
+  await page.reload(); await unlock(page, 'inbox');
+  await expect(page.getByLabel('Barter updates', { exact: true })).not.toBeChecked();
+  await page.locator('#backup-password').fill(password);
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download encrypted backup' }).click();
+  const path = await (await pending).path();
+  if (!path) throw new Error('Missing backup download');
+  const backup = await readFile(path);
+  await page.getByRole('button', { name: 'Lock vault' }).click();
+  await expect(page.locator('#notifications')).toBeEmpty();
+  await page.locator('#access details summary').click();
+  await page.locator('[name="restore-name"]').fill('restored-inbox');
+  await page.locator('[name="restore-password"]').fill(password);
+  await page.locator('#restore-file').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: backup });
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await expect(page.locator('#status')).toContainText('Backup restored');
+  await expect(page.getByLabel('Barter updates', { exact: true })).not.toBeChecked();
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  await context.setOffline(true);
+  await page.getByLabel('Barter updates', { exact: true }).check();
+  await page.getByRole('button', { name: 'Save notification preferences' }).click();
+  await expect(page.locator('#status')).toHaveText('Local notification preferences saved.');
+  await expect(page.locator('#notification-delivery-status')).toBeEmpty();
 });
 
 test('encrypted backup restores listings and identity into a new empty vault', async ({ page }) => {
@@ -255,7 +290,32 @@ for (const count of [2, 3, 4]) {
       await expect(coordinator.locator('section[aria-label="Local barter coordination"] [role="status"]')).toContainText('matching suggestions');
       await expect(coordinator.getByRole('heading', { name: `${count}-party cycle`, exact: true })).toBeVisible();
       const proposal = await downloadedAction(coordinator, 'Propose this exact cycle');
+      if (count === 2) await pages[1]!.evaluate(() => {
+        const transaction = IDBDatabase.prototype.transaction;
+        let fail = true;
+        IDBDatabase.prototype.transaction = function (...args: Parameters<IDBDatabase['transaction']>) {
+          const stores = typeof args[0] === 'string' ? [args[0]] : Array.from(args[0]);
+          if (fail && args[1] === 'readwrite' && stores.includes('inbox')) {
+            fail = false;
+            throw new DOMException('Injected notification commit failure', 'UnknownError');
+          }
+          return transaction.apply(this, args);
+        };
+      });
       for (const page of pages.slice(1)) await importBarter(page, proposal);
+      if (count === 2) {
+        const peer = pages[1]!;
+        await expect(peer.locator('#notification-delivery-status')).toContainText('Some local updates could not be processed');
+        await expect(peer.locator('#notification-count')).toHaveText('0 unread notifications.');
+        await peer.clock.setFixedTime(new Date(start + 17 * 60000));
+        await peer.getByRole('button', { name: 'Refresh notifications', exact: true }).click();
+        await expect(peer.locator('#notification-delivery-status')).toBeEmpty();
+      }
+      await expect(coordinator.locator('#notification-count')).toHaveText('0 unread notifications.');
+      for (const page of pages.slice(1)) {
+        await expect(page.locator('#notification-count')).toHaveText('1 unread notification.');
+        await expect(page.locator('#notification-list')).toContainText('Barter coordination updated');
+      }
       const reservations: Buffer[] = [];
       for (const page of pages) reservations.push(await downloadedAction(page, 'Reserve my item and download signed claim'));
       for (const [i, page] of pages.entries()) {
@@ -272,8 +332,15 @@ for (const count of [2, 3, 4]) {
         await expect(page.getByRole('heading', { name: /Proposal .* · committed/ })).toBeVisible();
       }
       if (count === 2) {
+        await pages[1]!.getByRole('button', { name: 'Mark all as read', exact: true }).click();
+        await expect(pages[1]!.locator('#notification-count')).toHaveText('0 unread notifications.');
+        await pages[1]!.getByLabel('Show notifications', { exact: true }).selectOption('all');
+        await expect(pages[1]!.locator('#notification-list')).toContainText('Read');
         const withdrawal = await downloadedAction(coordinator, 'Withdraw from this proposal');
         await importBarter(pages[1]!, withdrawal);
+        await expect(pages[1]!.locator('#notification-count')).toHaveText('1 unread notification.');
+        await pages[1]!.getByRole('button', { name: 'Mark as read', exact: true }).click();
+        await expect(pages[1]!.locator('#notification-count')).toHaveText('0 unread notifications.');
         for (const page of pages) {
           await expect(page.getByRole('heading', { name: /Proposal .* · cancelled/ })).toHaveCount(1);
           await expect(page.getByRole('button', { name: 'Release local hold', exact: true })).toHaveCount(0);

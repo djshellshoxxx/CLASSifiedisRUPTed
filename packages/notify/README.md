@@ -4,11 +4,13 @@ The package exports `inApp`, `preferences`, and `channels` namespaces for explic
 
 `localNotificationBackupCodecs(backupCodec)` accepts the vault's codec factory without depending on the vault package. Add the returned codecs to `openVault` or `vaultFromStorage`. They preserve local inbox, dedupe, counters and preference records. Restore validates the owner of inbox/preferences and rejects security in-app preferences that are disabled. They deliberately carry no channel-consent, relay-mirror or relay-destination state: restored preferences do not authorize external delivery. This extends the existing encrypted alpha backup format, not the future IOX protocol; its codec-set compatibility rules still apply.
 
-## Current PWA integration boundary
+## PWA integration
 
-The current alpha emits `mutiny.coordination.changed` with `{subjectId,status}`, `mutiny.want.retained`, `bazaar.listing.changed`, and `bazaar.inventory.changed`. These are not the canonical routed events in `delivery/inapp/routing.ts`. Merely registering the notification router will not turn those into notifications. A composition adapter must re-read verified coordination state, establish local recipient membership, map supported transitions to canonical events carrying participant DIDs and validated references, and distinguish remote actions from the user's own actions. An adapter must not interpret a local coordination change as independent peer consent or completed settlement.
+The PWA registers the local definitions, drains the durable outbox on unlock and after commands, and includes notification codecs in encrypted backups. Its inbox shows unread/all pages, an accessible unread count, individual and bulk read actions, and local barter preferences. Security preferences remain enabled. Locking destroys the inbox DOM and its handlers. A failed inbox refresh never reports an already committed domain command as rolled back.
 
-The PWA still needs the inbox/preferences screens, renderers, accessible unread announcements and retention scheduler. External push/email, codec integration for images, complete IOX export, and relay scheduling remain separate unfinished work. No browser Notification permission or network delivery is requested by the local composition.
+The alpha producer emits `mutiny.coordination.observed` only after a newly accepted signed statement is stored. Recipients come from the verified proposal roster and the actor comes from the verified statement author. Repeated files and rejected signatures produce no new notice. The router suppresses the local user's own actions and the current barter block list. UUID subject IDs support a link to barter coordination; older opaque subject IDs remain usable without alerts. A notification reports local acceptance of evidence, not unanimous consent, payment or settlement.
+
+Retention runs on unlock and the first command after an hour (including clock rollback). The inbox supports 500 retained notifications; pages show 20 rows. External push/email, quiet hours, messaging alerts, full identity lifecycle alerts and complete IOX export remain unfinished. No browser Notification permission or network delivery is requested. The existing alpha keeps local domain records unencrypted at rest.
 
 ## Verification
 

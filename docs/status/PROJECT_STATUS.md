@@ -1,5 +1,17 @@
 # Project status
 
+## November 16, 2026 inbox and import continuation
+
+Continues PR #37 from `ca26646` without merging or deleting historical branches. The PWA now exposes a local inbox, unread/all pagination, individual/bulk read actions, barter preferences, encrypted-backup codecs, and 30-day retention on unlock/activity. Newly accepted signed barter evidence emits a content-free event with verified participant and author identifiers. Duplicate files, rejected signatures, self-actions and session-blocked peers do not create new alerts. Alerts describe local evidence acceptance, not completed settlement. Other notification channels and quiet hours remain unfinished.
+
+The browser rerun exposed a separate application defect: a second file selection during a pending action was silently ignored. Actions now run in order, import handlers capture each selected file immediately, and queued UI callbacks are rejected after their vault is destroyed. Failures clear passphrase fields. Notification failures never undo an already saved domain operation; Refresh retries due delivery, and retry/dead-letter state remains visible across quiet outbox passes.
+
+Verification before publishing: targeted integration/domain tests, typecheck, build, 32 CLI/tooling tests, strict specifications (148 modules, zero errors/warnings), and dependency checks pass. A full run passed 481 of 482 tests; its only failure was the unchanged discovery sub-millisecond benchmark under this host. The same baseline benchmark passed in a separate isolated run; its threshold is unchanged. Final-head CI is required before merging.
+
+The original WebKit vault-creation failure remains under investigation. The pinned browser has an upstream Ed25519 fixed-width encoding defect, but the failing operation from that original run was not captured. Separate diagnostics in [WEBKIT_CRYPTO_DIAGNOSTIC_20261116.md](WEBKIT_CRYPTO_DIAGNOSTIC_20261116.md) preserve this distinction. Native cryptography and acceptance tests are unchanged; no browser result is claimed from the local host, which cannot create Chromium's required socket.
+
+This remains an alpha with the substantial feature and security gaps listed below. No full-project completion claim is made.
+
 ## November 16, 2026 continuation
 
 Work continues on `codex/classrup-completion-20261116` and PR #37, from the reviewed runnable `d16abee` baseline. This remains a development alpha, not a completed implementation or production release.
@@ -35,7 +47,7 @@ Work continues on `codex/classrup-completion-20261116` and PR #37, from the revi
 
 ### Release limits
 
-The repository still has substantial missing runtime features: purchase offers/negotiation, settlement evidence/receipts, private messaging, identity/device recovery, encrypted domain storage, canonical federation/relay delivery, and major services/auctions/rentals workflows. The audit notes are not all resolved. See `SECURITY_REVIEW_20261116.md` for branch dispositions and scope. No full-project completion percentage or comprehensive security certification is claimed.
+The repository still has substantial missing runtime features: purchase offers/negotiation, settlement evidence/receipts, private messaging, identity/device recovery, encrypted domain storage, canonical federation/relay delivery, and major services/auctions/rentals workflows. The audit notes are not all resolved. See `docs/status/SECURITY_REVIEW_20261116.md` for branch dispositions and scope. No full-project completion percentage or comprehensive security certification is claimed.
 
 Local browser execution is blocked: the pinned Chromium download returned an invalid archive; installed Chromium cannot create its required socket under this host. Browser assertions were added, but are not reported as passing. GitHub browser/platform checks must qualify the final remote head before merging or release. No historical branches were deleted.
 

@@ -34,6 +34,7 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
+| `mutiny.coordination.observed` | P2 | { subjectId: UUIDv7, participantIds, actorId: verified evidence author } — alpha local acceptance notice, emitted once per newly accepted signed evidence; not proof of settlement |
 | `mutiny.cycle.proposed` | P2 | { cycleId, origin, suggestionId?, coordinatorId, participantIds, length, revisionNo, revisionHash, consentDeadline } |
 | `mutiny.cycle.consent_recorded` | P2 | { cycleId, participantId, revisionNo, revisionHash, direction, status } |
 | `mutiny.cycle.committed` | P2 | { cycleId, revisionNo, revisionHash, participantIds, executionDeadline, sourceType, sourceId? } |

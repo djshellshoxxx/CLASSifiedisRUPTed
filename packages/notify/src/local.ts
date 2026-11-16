@@ -1,4 +1,4 @@
-import type { RepoDef } from '@classrup/kernel';
+import { appError, defineCommand, err, ok, z, type RepoDef } from '@classrup/kernel';
 import { inAppDefinitions, notificationRepo, seenRepo, dayRepo, diagRepo, type InAppOptions } from './delivery/inapp/index.ts';
 import { prefDefinitions, preferenceRepo, counterRepo } from './preferences/in/index.ts';
 
@@ -7,7 +7,12 @@ export function localNotificationDefinitions(options: InAppOptions) {
   const unavailable = async (): Promise<never> => { throw new Error('External notification delivery is not configured'); };
   const inbox = inAppDefinitions(options);
   const preferences = prefDefinitions({ localPrincipal: options.localPrincipal, signStatement: unavailable, verifyStatement: unavailable });
-  return { inbox, preferences, all: [...inbox.all, preferences.set, preferences.reset, preferences.getMatrix] as const };
+  const sweep = defineCommand({ name: 'notify.notification.sweep', module: 'F13.S01.M03', capability: 'notify.notification.mark_read',
+    idempotent: false, input: z.strictObject({}), handler(ctx) {
+      if (ctx.actor.kind !== 'user' || ctx.actor.id !== options.localPrincipal()) return err(appError('FORBIDDEN'));
+      return ok(inbox.sweepNotifications(ctx));
+    } });
+  return { inbox, preferences, sweep, all: [...inbox.all, preferences.set, preferences.reset, preferences.getMatrix, sweep] as const };
 }
 
 /** Structural codec interface avoids a dependency from the notification domain to the vault composition layer. */

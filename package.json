@@ -21,6 +21,7 @@
     "preview": "node tools/cli/classrup.mjs preview",
     "test:cli": "node --test tests/cli/*.test.mjs",
     "test:browser": "playwright test",
+    "test:browser:crypto": "playwright test --config playwright.crypto.config.ts",
     "configure": "node tools/cli/classrup.mjs configure",
     "test:tooling": "node --test tests/tooling/*.test.mjs",
     "status": "node tools/status/status.mjs"

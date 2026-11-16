@@ -148,6 +148,7 @@ processes:
       - {type: notify.notification.created, privacy: P2, payload: "{ notificationId, category, templateKey, ref?, urgency, collapsed, count, muted }"}
       - {type: notify.notification.read, privacy: P2, payload: "{ notificationId, category, readAt }"}
     events_consumed:
+      - {type: mutiny.coordination.observed, effect: "category cycles; template notify.tpl.cycles.coordination_updated; recipient participantIds except verified actorId; collapse key subjectId; local alpha evidence acceptance, not completed settlement"}
       - {type: bazaar.offer.made, effect: "category offers; template notify.tpl.offers.made; recipient the seller; collapse key offerListingId"}
       - {type: bazaar.offer.accepted, effect: "category offers; template notify.tpl.offers.accepted; recipient the buyer; collapse key offerId"}
       - {type: bazaar.offer.rejected, effect: "category offers; template notify.tpl.offers.rejected; recipient the buyer; collapse key offerId"}

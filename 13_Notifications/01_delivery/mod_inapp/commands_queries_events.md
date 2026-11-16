@@ -38,6 +38,7 @@
 
 | Type | Effect |
 |---|---|
+| `mutiny.coordination.observed` | category cycles; template notify.tpl.cycles.coordination_updated; recipient participantIds except verified actorId; collapse key subjectId; local alpha evidence acceptance, not completed settlement |
 | `bazaar.offer.made` | category offers; template notify.tpl.offers.made; recipient the seller; collapse key offerListingId |
 | `bazaar.offer.accepted` | category offers; template notify.tpl.offers.accepted; recipient the buyer; collapse key offerId |
 | `bazaar.offer.rejected` | category offers; template notify.tpl.offers.rejected; recipient the buyer; collapse key offerId |

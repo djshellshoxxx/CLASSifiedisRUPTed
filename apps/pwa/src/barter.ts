@@ -97,13 +97,16 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
     await ingest(envelope); options.download(`want-${envelope.cid}.json`, envelope);
     options.message('Want signed and saved locally. Share its file and the referenced listings; matching starts after the 15-minute aging period.'); await refresh();
   }); });
-  file.addEventListener('change', () => run(async () => {
-    try {
-      const selected = file.files?.[0]; if (!selected) throw new Error('Choose a signed JSON file');
-      if (selected.size > MAX_ENVELOPE_BYTES) throw new Error('File exceeds the 1 MiB statement limit');
-      await ingest(JSON.parse(await selected.text()) as unknown); options.message('Signed statement verified and saved locally.'); await refresh();
-    } finally { file.value = ''; }
-  }));
+  file.addEventListener('change', () => {
+    const selected = file.files?.[0];
+    run(async () => {
+      try {
+        if (!selected) throw new Error('Choose a signed JSON file');
+        if (selected.size > MAX_ENVELOPE_BYTES) throw new Error('File exceeds the 1 MiB statement limit');
+        await ingest(JSON.parse(await selected.text()) as unknown); options.message('Signed statement verified and saved locally.'); await refresh();
+      } finally { if (file.files?.[0] === selected) file.value = ''; }
+    });
+  });
 
   async function discover(): Promise<void> {
     if (!trust.checked) throw new Error('Explicitly choose whether to include unfamiliar signing identities before discovery.');

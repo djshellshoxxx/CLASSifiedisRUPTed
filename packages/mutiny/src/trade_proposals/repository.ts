@@ -1,4 +1,4 @@
-import { appError, defineCommand, defineEvent, defineQuery, defineRepo, err, ok, z, type CommandContext } from '@classrup/kernel';
+import { appError, defineCommand, defineEvent, defineQuery, defineRepo, err, isUuidV7, ok, z, type CommandContext } from '@classrup/kernel';
 import { verifyEnvelope, type VerifiedEnvelope } from '@classrup/federation';
 import { WANT_TYPE, parseWant } from '../cycle_matching/admission.ts';
 import { CONSENT_TYPE, PROPOSAL_TYPE, WITHDRAWAL_TYPE, conflictingSubjects, evaluateCoordination, freezeConflict, ingestCoordination, openCoordination, reviseCoordination, type CoordinationState, type Feasibility, type Proposal } from './index.ts';
@@ -26,6 +26,10 @@ const recordSchema = z.strictObject({ ownerId: identifier, state: coordinationSc
 export const coordinationRepo = defineRepo({ type: 'mutiny.coordination', schema: recordSchema, indexes: { owner: d => d.ownerId } });
 export const wantRepo = defineRepo({ type: 'mutiny.want', schema: z.strictObject({ ownerId: identifier, envelope: envelopeSchema, receivedAtLocal: safeInteger }), indexes: { author: d => d.envelope.author } });
 const changed = defineEvent('mutiny.coordination.changed', 1, 'P2', z.strictObject({ subjectId: identifier, status: identifier }));
+// Emitted only for newly accepted signed evidence, never from a raw file or a UI action.
+const observed = defineEvent('mutiny.coordination.observed', 1, 'P2', z.strictObject({
+  subjectId: identifier, participantIds: z.array(identifier).min(2).max(8), actorId: identifier,
+}));
 const wantRetained = defineEvent('mutiny.want.retained', 1, 'P2', z.strictObject({ cid: identifier }));
 export interface MutinyOptions {
   /** Check the actual local inventory inside this same kernel transaction, never a UI boolean. */
@@ -132,6 +136,13 @@ export function mutinyDefinitions(options: MutinyOptions) {
         if (!saved.ok) return saved;
         if (['cancelled', 'declined', 'frozen'].includes(state.status)) options.releaseLocalReservations(ctx, state.proposal.snapshot.subjectId);
         ctx.emit(changed, { aggregate: { type: 'coordination', id: saved.value.id }, revision: saved.value.revision, payload: { subjectId: saved.value.id, status: state.status } });
+        const newEvidence = state.evidence.some(e => e.envelope.cid === envelope.cid)
+          && !previous?.data.state.evidence.some(e => e.envelope.cid === envelope.cid);
+        // The inbox uses UUID references. Older opaque subject IDs remain supported without alerts.
+        if (newEvidence && isUuidV7(saved.value.id)) ctx.emit(observed, {
+          aggregate: { type: 'coordination', id: saved.value.id }, revision: saved.value.revision,
+          payload: { subjectId: saved.value.id, participantIds: state.proposal.snapshot.legs.map(leg => leg.giverId), actorId: envelope.author },
+        });
         return ok(saved.value);
       } catch { return err(appError('VALIDATION_FAILED')); }
     },

@@ -1,35 +1,38 @@
 # PS-003-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-003-01. **Owner:** [01_LocalBazaar/01_listings/mod_edit](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_edit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/01_listings/mod_edit. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ID-001 (`lst_`), CTR-SCH-001 (`listing.updated` 1.0.0), CTR-PRV-001 (data classes), CTR-COM-001 (minor-unit amounts).
 
-## Purpose and scope
-Define the domain schema process for edit within 01_listings. Do not assume implementation or successful external settlement.
+**Decision labels:** Price and currency rules PROVISIONAL (D03 default, unapproved). Region precision rules PROVISIONAL (D05 default, unapproved).
 
-## Requirements to specify
-- [ ] PS-003-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-003-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-003-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-003-01.R01 | This module writes only the editable field set of an existing `lst_`: `title`, `description`, `category_id`, `region_cell`, `price`, `currency`. No other listing field is writable here. | MVP |
+| PS-003-01.R02 | `title`: 1–120 Unicode code points after NFC normalization. PUBLIC. | MVP |
+| PS-003-01.R03 | `description`: 0–4000 code points, plain text, no markup. PUBLIC. | MVP |
+| PS-003-01.R04 | `category_id` must exist and be active in the category registry. PUBLIC. | MVP |
+| PS-003-01.R05 | `region_cell` must be a registry cell at LOCATION_COARSE precision (CTR-PRV-001 R04). Coordinates, street addresses and meetup points are never accepted or stored here. | MVP |
+| PS-003-01.R06 | `price` = decimal string of integer minor units (CTR-COM-001 R02), nullable. `currency` = ISO 4217 alpha-3 from the registry. Floats are rejected. | MVP |
+| PS-003-01.R07 | `revision` (int ≥ 1) and `updated_at` (RFC3339 UTC, milliseconds) are server-owned and read-only. | MVP |
+| PS-003-01.R08 | `state` is read-only in this module. Allowed values per [workflow_state_machine.md](workflow_state_machine.md). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+| Field | Type | Class | Constraint | Provenance |
+|---|---|---|---|---|
+| `listing_id` | string `lst_` | PSEUDONYMOUS | 30 chars, ulid class (CTR-ID-001) | Owned by F01 listing aggregate |
+| `title` | string | PUBLIC | R02 | Owner edit (`acc_`) |
+| `description` | string | PUBLIC | R03 | Owner edit |
+| `category_id` | string | PUBLIC | R04 | Owner edit |
+| `region_cell` | string | LOCATION_COARSE | R05 | Owner edit |
+| `price` | string or null | PUBLIC (ASSUMPTION) | `^(0|[1-9][0-9]{0,14})$` | Owner edit |
+| `currency` | string | PUBLIC | ISO 4217 alpha-3 | Owner edit |
+| `revision` | integer | PSEUDONYMOUS | ≥ 1, +1 per commit (CTR-EVT-001 R02) | Server |
+| `updated_at` | string | PSEUDONYMOUS | RFC3339 UTC ms | Server |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Records owned by this module: idempotency records for `listing.edit` (see [failure_recovery_idempotency.md](failure_recovery_idempotency.md)). The listing record itself stays owned by F01. Event `listing.updated` 1.0.0 is registered per [commands_queries_events.md](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-003-01`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: listing states `draft`, `published`, `archived`, `hidden` come from mod_publish, mod_archive and 12_Moderation. Canonical lifecycle contract PENDING CTR-LST-001.
+- D03 (PROVISIONAL): integer minor units, pinned quotes and expiry. Pinned-quote fields are out of scope here.
+- D05 (PROVISIONAL): coarse public regions only. Precision disclosure is handled elsewhere.
+- Category and region registries: owner and change process PENDING.

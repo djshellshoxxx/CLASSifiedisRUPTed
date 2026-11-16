@@ -1,35 +1,50 @@
-# PS-005-10 — import export backup rollback
+# PS-005-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-005-10. **Owner:** [01_LocalBazaar/02_listing_types/mod_giveaway](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 R06, R11, R12 (export, deletion record); CTR-FED-001 (listing federation; claims excluded); CTR-SCH-001 R07–R09 (migrations); CTR-EVT-001 R13.
 
-## Purpose and scope
-Define the import export backup rollback process for giveaway within 02_listing_types. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-005-10.R01 | Claimant export includes own claims at PRIVATE_PERSONAL; giver counterpart fields are redacted to `redacted`. | MVP |
+| PS-005-10.R02 | Giver export includes own giveaway listings (via F01) and claim counts only, no claimant identities. | MVP |
+| PS-005-10.R03 | Claim records are never federated or published. Only the giveaway listing federates, per F01 and CTR-FED-001. | MVP |
+| PS-005-10.R04 | Backups expire on schedule; restore replays purges (CTR-PRV-001 R06, BT-04). | MVP |
+| PS-005-10.R05 | Schema changes are additive within 1.x; migrations pure and idempotent (CTR-SCH-001 R07). | MVP |
+| PS-005-10.R06 | Rollback via feature flag: disable submit; open claims move to REJECTED or WITHDRAWN with `FEATURE_DISABLED`; no data deleted. | MVP |
+| PS-005-10.R07 | Imported giveaway listings from peers carry signatures and are validated against PS-005-02 (no consideration fields). | Future |
 
-## Requirements to specify
-- [ ] PS-005-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-005-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-005-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export package: JSON per claim `{claim_id, listing_id, state, reason_code, timestamps, pickup_region, role}`. No content beyond PS-005-01 fields. Deletion produces an `aud_` completion record with counts only (CTR-PRV-001 R12).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export is a `giveaway_claim.export` capability call; see [authorization_capabilities](authorization_capabilities.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback transitions defined in [workflow_state_machine](workflow_state_machine.md) (feature disabled row).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Import validation: `GIVE.CONSIDERATION_NOT_ALLOWED` for peer listings with price fields. Unknown MAJOR → `SCH.UNKNOWN_VERSION`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export requires self scope; giver listing export delegated to F01 capability.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-005-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export is resumable with cursor; re-run produces identical package for same revision.
+
+## Privacy, retention, abuse
+Exports are PRIVATE_PERSONAL and encrypted in transit (ASSUMPTION). Retention per D07 (PROVISIONAL, unapproved), see [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & performance
+Export of 10 000 claims ≤ 60 s p95 (ASSUMPTION). Backup restore drill monthly (ASSUMPTION).
+
+## Tests
+- TEST-PS-005-10-01: export contains no counterparty identity for giver-side export.
+- TEST-PS-005-10-02: restore from backup replays purge; purged claim not reappearing.
+- TEST-PS-005-10-03: feature-flag rollback leaves no open claim and no deleted record.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export packages pass redaction fixtures.
+2. Claim records never appear in federation payloads (CTR-FED-001 scan).
+3. Rollback drill completes with zero data loss and zero open claims.
+
+**Assumptions and open decisions:** Export format and throughput budgets are ASSUMPTION. D10 (PROVISIONAL default: user-controlled keys with documented recovery, unapproved) governs portability keys. D01 (PROVISIONAL default: versioned signed envelopes with explicit opt-in, unapproved) governs federated listing import. D07 applies to retention. See [DECISIONS.md](../../../DECISIONS.md).

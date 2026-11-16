@@ -60,5 +60,5 @@ Count transitions by `from`, `event`, `to`. See [observability_performance.md](o
 
 ## Assumptions & open decisions
 - ASSUMPTION: states `draft`, `published`, `archived`, `hidden` are canonical in mod_publish, mod_archive, 12_Moderation. Lifecycle contract PENDING CTR-LST-001.
-- ASSUMPTION (PROVISIONAL, Dxx: none; no D-entry covers edit rules): blocking material edits while offers are open.
+- ASSUMPTION: blocking material edits while offers are open. No Dxx entry covers it; decision PENDING.
 - D01 (PROVISIONAL, Dxx default, unapproved): federation of `listing.updated` only for `published` items with explicit opt-in.

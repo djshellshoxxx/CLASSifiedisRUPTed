@@ -1,61 +1,62 @@
 # Process inventory and integration checklist
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Owner: [module](SPEC.md) (Marketplace Lead). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
+- [x] [domain_schema.md](domain_schema.md) — claim record and listing extension drafted (PS-005-01.R01–R08)
+  - [x] Requirements and field classes written (no free text, no consideration, no coordinates)
+  - [x] Upstream F01 `lst_` and F07 IDs mapped; PENDING CTR-LST-001 noted
+  - [ ] F10 review of PRIVATE_PERSONAL class and pickup region (pending)
+  - [x] Fixtures and acceptance conditions defined (TEST-PS-005-01 family in PS-005-09)
+- [x] [validation_rules.md](validation_rules.md) — GIVE.* validation drafted (PS-005-02.R01–R08)
+  - [x] Requirements and error table written
+  - [x] Upstream listing type and consideration checks mapped
+  - [ ] F12 review of claim limits (pending)
+  - [x] Fixtures and acceptance conditions defined
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — eight-state claim lifecycle drafted (PS-005-03.R01–R08)
+  - [x] Transition table and timers written (7 d expiry, 30 d confirmation)
+  - [x] Upstream F01 reserve/reopen events and downstream F13 mapped
+  - [ ] Offline behavior review under D08 (pending)
+  - [x] Fixtures and acceptance conditions defined
+- [x] [commands_queries_events.md](commands_queries_events.md) — giveaway.claim.* and giveaway_claim.* drafted (PS-005-04.R01–R06)
+  - [x] Command signatures and event list written
+  - [x] Consumers (F01, F13, F12) mapped
+  - [ ] Canonical event schema registration with F15 (pending)
+  - [x] Fixtures and acceptance conditions defined
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — giver/claimant matrix drafted (PS-005-05.R01–R07)
+  - [x] Capability verbs and field visibility written
+  - [x] F07/F16 identity and grant model referenced
+  - [ ] F16 review of dual control for moderator access (pending)
+  - [x] Fixtures and acceptance conditions defined
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — accept race, outbox and offline replay drafted (PS-005-06.R01–R07)
+  - [x] Idempotency, retry and outbox budgets written
+  - [x] Upstream F01 and downstream reconciliation mapped
+  - [ ] D08 and D04 review (pending)
+  - [x] Fixtures and acceptance conditions defined
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — claim privacy, purge and bait-listing abuse drafted (PS-005-07.R01–R08)
+  - [x] Data classes, purge window and abuse cases written
+  - [x] F10, F12, F08 touchpoints mapped
+  - [ ] F10 approval of retention defaults (D07, pending)
+  - [x] Fixtures and acceptance conditions defined
+- [x] [observability_performance.md](observability_performance.md) — giveaway funnel metrics and budgets drafted (PS-005-08.R01–R05)
+  - [x] Metric names and labels limited to enumerations
+  - [x] F15 operations consumers mapped
+  - [ ] F15 review of budgets (pending)
+  - [x] Fixtures and acceptance conditions defined
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — TEST-PS-005-09-01 to -07 drafted (PS-005-09.R01–R06)
+  - [x] Test levels and scopes written
+  - [x] Upstream contract fixtures (CTR-EVT, CTR-ERR) mapped
+  - [ ] F14 confirmation of target size (pending)
+  - [x] Fixtures and acceptance conditions defined
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — claimant export, claim non-federation and flag rollback drafted (PS-005-10.R01–R07)
+  - [x] Export shape and redaction rules written
+  - [x] Federation (CTR-FED-001) and backup (CTR-PRV-001) consumers mapped
+  - [ ] F11 confirmation of listing-only federation (pending)
+  - [x] Fixtures and acceptance conditions defined
 
 ## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
+- [ ] Resolve cross-module ownership: `lst_` (F01) needs PENDING CTR-LST-001; `gcl_` needs CTR-ID-001 registry entry.
+- [ ] Validate GIVE.* typed errors against CTR-ERR-001 registry (lead registration).
+- [ ] Validate reserve/reopen events with F01 and capabilities with F16.
+- [x] Cover rollback, backup/restore, import/export and retention (PS-005-07, PS-005-10).
+- [ ] Record giveaway-only choices in DECISIONS.md (lead; not edited by module worker).
 - [ ] Complete Prompt 3 specification-quality review before implementation.

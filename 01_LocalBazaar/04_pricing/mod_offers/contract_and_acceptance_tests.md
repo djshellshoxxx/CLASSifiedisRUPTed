@@ -1,35 +1,57 @@
 # PS-011-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-011-09. **Owner:** [01_LocalBazaar/04_pricing/mod_offers](SPEC.md). **Implementing module:** 01_LocalBazaar/04_pricing/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/04_pricing/mod_offers. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-PRV-001, CTR-ID-001, CTR-COM-001, CTR-FED-001. Test ownership: F17 QA Lead.
 
-## Purpose and scope
-Define the contract and acceptance tests process for offers within 04_pricing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-011-09.R01 | Consumer contract tests run against every supported producer version (CTR-SCH-001 consumer-driven). | MVP |
+| PS-011-09.R02 | Every OFFER.* code passes CTR-ERR-001 registry lint and has a message_key in the catalog. | MVP |
+| PS-011-09.R03 | Every offer event passes CTR-EVT-001 envelope fixtures, including the invalid examples. | MVP |
+| PS-011-09.R04 | Authorization matrix (PS-011-05) runs as a table-driven test; each row is one case. | MVP |
+| PS-011-09.R05 | State transition table (PS-011-03) runs as a table-driven test; each row is one case. | MVP |
+| PS-011-09.R06 | Acceptance scenarios cover the user journeys: submit, accept, reject, withdraw, expire, offline replay, blocked party, duplicate offer, stale quote. | MVP |
+| PS-011-09.R07 | Test fixtures are synthetic. No real account, listing or location data. | MVP |
 
-## Requirements to specify
-- [ ] PS-011-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-011-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-011-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `fixtures/offer/<version>/*.json`, one file per example in PS-011-01 and PS-011-04 plus each invalid case from PS-011-02.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Harness calls each command and subscribes to each event; no internal calls bypass the API.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Table-driven from PS-011-03 (R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative fixtures for every rule in PS-011-02 and every error in PS-011-04.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix from PS-011-05 (R04). Includes cross-listing and guessed-ID cases.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-011-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Scenarios from PS-011-06 are acceptance tests: replay, race, offline reconnect, partial supersede.
+
+## Privacy, retention, abuse
+Privacy scan fixtures from PS-011-07 run in this harness (zero-tolerance output check).
+
+## Observability & budgets
+Harness asserts metric emission from PS-011-08 for each command.
+
+## Tests
+- TEST-PS-011-09-01 (consumer contract): each consumer fixture set passes against 1.0.0 producer.
+- TEST-PS-011-09-02 (error lint): OFFER codes and message keys present.
+- TEST-PS-011-09-03 (envelope): valid example passes; each invalid example fails on its listed violation.
+- TEST-PS-011-09-04 (matrix): PS-011-05 rows, one case each.
+- TEST-PS-011-09-05 (state table): PS-011-03 rows, one case each.
+- TEST-PS-011-09-06 (journeys): end-to-end scenario per R06 journey, run on PWA and API.
+- TEST-PS-011-09-07 (fixtures): scan finds no real-looking personal data.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix and state-table cases all pass.
+2. Each fixture in PS-011-01 and PS-011-04 validates; each invalid case fails.
+3. TEST-PS-011-09-01 through -07 pass in CI.
+
+## Assumptions & open decisions
+- ASSUMPTION: harness and fixture location owned by F17 (test strategy, OPEN).
+- PENDING CTR-ID-001 (offer prefix) and CTR-COM-001 (COM.QUOTE_EXPIRED) before fixtures can be final.
+- PENDING F01 listing-state fixtures.

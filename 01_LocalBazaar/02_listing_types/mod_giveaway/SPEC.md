@@ -1,44 +1,48 @@
 # F01.S02.M03 — giveaway
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F01.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Marketplace Lead. **Parent:** [F01.S02 listing_types](../SPEC.md).
 
 ## Purpose and business behavior
-Provide giveaway as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Giveaway is a listing type for items offered at zero consideration. A giver publishes an item, recipients submit claims, the giver selects one claimant, and the pair records a self-reported handover and receipt. The module creates no payment, escrow, settlement or custody state. Its claim records are the only data it owns. All transitions are explicit, authorized, auditable and recoverable.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a giver, I publish a giveaway with no price field, review claims, accept one claimant, and rescind or record handover.
+- As a claimant, I submit one claim per giveaway with a coarse pickup area, withdraw it, and see why a claim closed.
+- As an operator, I disable giveaway claims with a feature flag without affecting ordinary listings or other listing types.
 
 ## Scope
-- Required process spec: `giveaway_domain_model.md` (not yet authored)
-- Required process spec: `giveaway_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `giveaway_validation_and_authorization.md` (not yet authored)
-- Required process spec: `giveaway_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `giveaway_interfaces_and_events.md` (not yet authored)
-- Required process spec: `giveaway_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `giveaway_acceptance_and_property_tests.md` (not yet authored)
+Process specifications (all 10 in the inventory below). In scope: giveaway listing extension rules, claim lifecycle, claim queries, giver and claimant views, expiry and rollback. Out of scope: listing publication and archive (F01 mod_publish, mod_archive), messaging (F08), reporting and case handling (F12), disputes over item condition (F09 pattern, Future).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands and queries `giveaway.claim.*` and events `giveaway_claim.*` in [commands_queries_events](mod_giveaway/commands_queries_events.md). Errors `GIVE.*` in [validation_rules](mod_giveaway/validation_rules.md). Listing reads use F01 `lst_` IDs.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F01 listing record (`lst_`, PENDING CTR-LST-001); F07 identity and `acc_`/`prf_` views; F16 capabilities; F10 retention and classes. Downstream: F13 generic notifications; F12 reports on bait listings; F08 coordination threads (no claim text stored here); F15 flags and observability; F11 listing federation. Integration uses reserve/reopen commands on F01 through an outbox with idempotent retries.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+This module owns `giveaway_claim` records (`gcl_`, PENDING registry entry in CTR-ID-001). It does not own the listing, identity, messages, location precision or any payment record. Ownership of `lst_` stays with F01; this module references it by ID only.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Risks specific to giveaways:
+- Bait listings used to lure people into meetups or harvest contact data.
+- Claim lists exposing who wants which item (PRIVATE_PERSONAL), including to the giver beyond pseudonym.
+- Pickup at home addresses if a precise point leaks into claim or listing fields.
+- Pseudonym farms claiming every giveaway; Sybil effects with pseudonyms, which do not guarantee anonymity.
+- Two accepts racing on one listing; partial failure between claim commit and F01 reserve.
+- Self-reported handover read as a verified transfer.
+No platform custody of items or money.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs reach approved status; contract IDs resolved (PENDING CTR-LST-001, gcl_ registry); privacy and abuse review by F10 and F12; race and replay tests pass; rollback drill passes.
 
 ## Required process specification inventory
-- [ ] `giveaway_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `giveaway_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `giveaway_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `giveaway_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `giveaway_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `giveaway_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `giveaway_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](mod_giveaway/domain_schema.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [validation_rules.md](mod_giveaway/validation_rules.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [workflow_state_machine.md](mod_giveaway/workflow_state_machine.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [commands_queries_events.md](mod_giveaway/commands_queries_events.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [authorization_capabilities.md](mod_giveaway/authorization_capabilities.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [failure_recovery_idempotency.md](mod_giveaway/failure_recovery_idempotency.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [privacy_retention_abuse.md](mod_giveaway/privacy_retention_abuse.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [observability_performance.md](mod_giveaway/observability_performance.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [contract_and_acceptance_tests.md](mod_giveaway/contract_and_acceptance_tests.md) — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [import_export_backup_rollback.md](mod_giveaway/import_export_backup_rollback.md) — SPEC-DRAFT-COMPLETE (pending approval)

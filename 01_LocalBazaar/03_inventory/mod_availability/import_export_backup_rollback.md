@@ -1,35 +1,46 @@
 # PS-008-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-008-10. **Owner:** [01_LocalBazaar/03_inventory/mod_availability](SPEC.md). **Implementing module:** 01_LocalBazaar/03_inventory/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [01_LocalBazaar/03_inventory/mod_availability](SPEC.md) (F01.S03.M01; accountable role: Platform Lead for backup and rollback, Marketplace Lead for owner). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (migration, no in-place rewrite), CTR-PRV-001 (export and backup classes), CTR-EVT-001 (compensating events).
 
-## Purpose and scope
-Define the import export backup rollback process for availability within 03_inventory. Do not assume implementation or successful external settlement.
+**Decisions:** Backup retention follows D07 default (PROVISIONAL, unapproved). Compensating reversal of committed units follows D04 default (PROVISIONAL, unapproved).
 
-## Requirements to specify
-- [ ] PS-008-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-008-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-008-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-008-10.R01 | Owner export returns own records and holds, with counterparty `holder_ref` redacted, in JSON 1.0.0. | MVP |
+| PS-008-10.R02 | Restore replays deletions and holds before serving. Restored PLACED holds past `expires_at` become EXPIRED. | MVP |
+| PS-008-10.R03 | Restore recomputes counters and rejects any state violating R02 of PS-008-01. | MVP |
+| PS-008-10.R04 | Rollback is by compensating event only. Stored events are never deleted or rewritten. | MVP |
+| PS-008-10.R05 | Executed holds are not reversible by hold rollback. Reversal is `availability.committed` with negative correction, allowed within 14 d (ASSUMPTION). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Export
+- Format: JSON, `schema_version` 1.0.0, one file per owner. Classes PUBLIC and PSEUDONYMOUS only.
+- Excludes other parties' `holder_ref` and any event payload beyond the record.
+- Import: none in MVP. Federation import of a listing's counts is deferred (FED.DATA_CLASS_NOT_ALLOWED is not triggered; counts are PUBLIC but federation is off by default).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Backup and restore
+- Backups are encrypted and expire on the schedule of CTR-PRV-001 (Y for PUBLIC and PSEUDONYMOUS).
+- Restore order: deletions, holds, then counts. Withdrawn holds are never resurrected.
+- Restore verification: invariant check (TEST-02) before traffic is routed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Rollback
+- Bad bulk configure: reverse with compensating `availability.configured` (reason `rollback`), never delete.
+- Schema change: MINOR additions only in rollout. Breaking change needs a MAJOR with lossless upcast (CTR-SCH-001 R07).
+- Reversal of executed holds: PS-008-10 R05 above; disputes route to F09 dispute process by reference.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-008-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Tests
+- TEST-PS-008-10-01 (export): owner export contains no other party's `holder_ref`.
+- TEST-PS-008-10-02 (restore): backup with stale PLACED hold → EXPIRED after restore; withdrawn hold stays withdrawn.
+- TEST-PS-008-10-03 (restore invariant): corrupted counter in backup → restore refuses to serve.
+- TEST-PS-008-10-04 (rollback): bulk configure reversed by compensating event; original event bytes unchanged.
+- TEST-PS-008-10-05 (reversal): executed-hold reversal allowed within 14 d and rejected after.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-008-10-01 to -05 pass in CI.
+2. Zero event rows deleted in rollback drill.
+3. Restore drill meets RTO and RPO set by F15 (PENDING).
+
+## Assumptions & open decisions
+- ASSUMPTION: 14-day reversal window.
+- PROVISIONAL (D07 and D04 defaults, unapproved).
+- PENDING: F15 RTO and RPO values.

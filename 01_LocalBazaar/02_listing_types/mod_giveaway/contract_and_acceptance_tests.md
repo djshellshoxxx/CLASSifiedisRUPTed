@@ -1,35 +1,55 @@
 # PS-005-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-005-09. **Owner:** [01_LocalBazaar/02_listing_types/mod_giveaway](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/02_listing_types/mod_giveaway. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (fixtures R01–R13), CTR-ERR-001 (fixtures per code), CTR-SCH-001 R09 (golden fixtures), CTR-PRV-001 R01 (CI check). PENDING CTR-LST-001 (F01 contract fixtures).
 
-## Purpose and scope
-Define the contract and acceptance tests process for giveaway within 02_listing_types. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-005-09.R01 | Every event type in PS-005-04 has a valid and invalid fixture per CTR-EVT-001 schema. | MVP |
+| PS-005-09.R02 | Every GIVE.* code in PS-005-02 and PS-005-03 has a fixture that produces it, and its retryable flag matches the registry. | MVP |
+| PS-005-09.R03 | Contract test against F01 stub: reserve/reopen commands accept giveaway events; PENDING CTR-LST-001. | MVP |
+| PS-005-09.R04 | Negative and abuse suites: unauthorized read, forged IDs, oversized payload, free-text injection. | MVP |
+| PS-005-09.R05 | Accessibility: claim action states announced by screen reader; touch targets ≥ 44 × 44 CSS px (ASSUMPTION). | MVP |
+| PS-005-09.R06 | Offline/reconnect E2E: submit offline, reconnect, ack, no duplicate. | MVP |
 
-## Requirements to specify
-- [ ] PS-005-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-005-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-005-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures stored under the module test directory (future phase). Each fixture declares schema version and expected outcome.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Covered by fixtures in PS-005-04 test IDs.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Transition coverage: every row in the PS-005-03 table has one test.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error fixtures assert `code`, `retryable`, `category`, and absence of input values.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Negative fixtures from PS-005-05 matrix, including `SYS.NOT_FOUND` parity.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-005-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrency and replay fixtures from PS-005-06. Offline fixtures use D08 pending-queue behavior.
+
+## Privacy, retention, abuse
+Privacy fixtures: no free text, no coordinates, purge within 24 h (PS-005-07).
+
+## Observability & performance
+Budget tests from PS-005-08 run in performance environment.
+
+## Tests
+| Test ID | Level | Scope |
+|---|---|---|
+| TEST-PS-005-09-01 | contract | event envelope and schema fixtures |
+| TEST-PS-005-09-02 | contract | error code and retryable fixtures |
+| TEST-PS-005-09-03 | integration | F01 stub reserve/reopen |
+| TEST-PS-005-09-04 | property | at most one ACCEPTED per listing under concurrency |
+| TEST-PS-005-09-05 | e2e | giver publishes, claimant submits, giver accepts, handover, confirm |
+| TEST-PS-005-09-06 | a11y | claim states announced; touch target size |
+| TEST-PS-005-09-07 | offline | queued submit replay after reserve |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every test ID in this file passes in CI before implementation sign-off.
+2. Contract fixtures validate against CTR-EVT-001 and CTR-ERR-001 registries with zero drift.
+3. E2E path TEST-PS-005-09-05 completes without any payment or settlement step.
+
+**Assumptions and open decisions:** Touch target size is ASSUMPTION (WCAG 2.1 AA target-size guidance; F14 to confirm). Fixture ownership is QA Lead (F17). D08 governs offline fixtures; see [DECISIONS.md](../../../DECISIONS.md).

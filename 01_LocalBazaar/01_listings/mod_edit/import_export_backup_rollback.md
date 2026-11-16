@@ -1,35 +1,56 @@
-# PS-003-10 — import export backup rollback
+# PS-003-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-003-10. **Owner:** [01_LocalBazaar/01_listings/mod_edit](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_edit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/01_listings/mod_edit. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 R06, R11, R12 (retention, export, deletion record), CTR-SCH-001 (schema versions), CTR-EVT-001 R07–R08 (schema check, immutable events).
 
-## Purpose and scope
-Define the import export backup rollback process for edit within 01_listings. Do not assume implementation or successful external settlement.
+**Decision labels:** Export and deletion scope PROVISIONAL (D07 default, unapproved). Device queue survival window ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-003-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-003-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-003-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-003-10.R01 | Owner export includes current editable fields and `revision` of each owned listing at their CTR-PRV-001 classes. Edit history is not exported: this module stores none (PS-003-07 R04). | MVP |
+| PS-003-10.R02 | No bulk import. Fields are set by `listing.edit`, one listing per call (PS-003-04 R01). | MVP |
+| PS-003-10.R03 | Backups restore listing revisions and outbox rows. Restore replays outbox rows idempotently by `event_id` and does not re-emit events already dispatched. | MVP |
+| PS-003-10.R04 | After module rollback, unknown keys from a newer client are rejected with `EDIT.FIELD_NOT_EDITABLE`. The queued item is kept for owner review, not dropped. | MVP |
+| PS-003-10.R05 | Feature flag off (mod_flags): `listing.edit` returns `SYS.UNAVAILABLE` (retryable). Device queues are kept up to 30 days (ASSUMPTION), then the owner is notified. | MVP |
+| PS-003-10.R06 | Changes to `listing.updated` are additive MINOR only (CTR-SCH-001). MAJOR requires a migration plan. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Export shape: `{listing_id, revision, state, title, description, category_id, region_cell, price, currency, updated_at}`. No idempotency records are exported (RET-OPS).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Export uses `listing.get_for_edit`. Restore uses outbox replay. No new command.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Rollback and restore never change `state` (PS-003-03 R01).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Outbox row with unknown schema MAJOR is held, not dropped (`SCH.UNKNOWN_VERSION`, CTR-EVT-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-003-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Export is owner-only (`lst.read`). Restore runs under operator procedures outside this module (runbook owner PENDING, F15).
+
+## Failure, idempotency, concurrency, offline
+Device queue survives module rollback. See [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Exports and backups expire per their retention class; restore replays deletions (CTR-PRV-001 R06). See [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+Export and restore counts only. See [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-003-10-01 (integration): export then import of a listing fixture round-trips editable fields.
+- TEST-PS-003-10-02 (restore): restore of backup taken before 10 edits gives correct revisions and no duplicate `listing.updated`.
+- TEST-PS-003-10-03 (rollback): older build receives newer client's unknown key; queued item kept.
+- TEST-PS-003-10-04 (flag): flag off returns `SYS.UNAVAILABLE`; queue retained.
+- TEST-PS-003-10-05 (schema): MINOR change passes compatibility checker; MAJOR without migration blocked.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No edit or queued item is lost by rollback or restore.
+2. No duplicate `listing.updated` after restore.
+3. Export contains no field outside the listed shape.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day device queue retention.
+- D07 (PROVISIONAL, Dxx default, unapproved): retention and legal-hold scope for exports and backups.
+- D08 (PROVISIONAL, Dxx default, unapproved): local pending queue.

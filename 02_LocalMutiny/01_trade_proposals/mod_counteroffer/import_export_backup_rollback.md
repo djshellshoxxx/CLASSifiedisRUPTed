@@ -1,35 +1,35 @@
 # PS-012-10 — import export backup rollback
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (export format, expand/contract migrations), CTR-PRV-001 (export and deletion), CTR-FED-001 (federated import, Future), CTR-EVT-001 (replay).
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-012-10. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_counteroffer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_counteroffer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Decision label:** Federated import and export are PROVISIONAL deferral (D01 default, unapproved). Feature flag name is ASSUMPTION.
 
-## Purpose and scope
-Define the import export backup rollback process for counteroffer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-012-10.R01 | Owner export returns counters as JSON `counter.v1` with classes per CTR-PRV-001.R11. | MVP |
+| PS-012-10.R02 | Backups include `counter` rows with their `cyc_` rows. Restore is refused unless invariants pass (below). | MVP |
+| PS-012-10.R03 | Feature flag `counteroffer.create_enabled` (ASSUMPTION) blocks `counter.create` only. Accept, reject and withdraw of OPEN counters stay available. | MVP |
+| PS-012-10.R04 | Federated counter import and export are not in MVP. Inbound `counter.*` events from peers are rejected with `FED` codes per CTR-FED-001. | Future |
 
-## Requirements to specify
-- [ ] PS-012-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-012-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-012-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Export and import
+| Item | Rule |
+|---|---|
+| Export format | `counter.v1` JSON array, sorted by `cyc_id`, `revision` |
+| Export of counterparty content | Only the requester's own counters and shared `cyc_` history at allowed classes |
+| Import (MVP) | None. Counters are created only by `counter.create`. |
+| Federation (Future) | Deferred until CTR-FED-001 event envelope and D01 are decided |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Backup, restore and rollback
+| Step | Rule |
+|---|---|
+| Restore invariant 1 | At most one OPEN per `cyc_` |
+| Restore invariant 2 | `cyc_.revision` equals the revision of its ACCEPTED counter, if any |
+| Restore invariant 3 | No OPEN counter with `expires_at` in the past; expiry sweep runs first |
+| Invariant failure | Block `cyc_` transitions; alert Marketplace Lead; no automatic repair |
+| Migration | CTR-SCH-001 expand then contract; no in-place rename of `counter.v1` fields |
+| Rollback of release | Disable `counteroffer.create_enabled`; leave schema in place; do not drop `counter` rows |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-012-10`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: restore point objective 15 min for `counter` rows, same as `cyc_` rows (owner F15).
+- D01 PROVISIONAL (D01 default, unapproved): federated protocol decided later; this file defers it.
+- PENDING: owner of backup policy for `cyc_` (F02 cycle module).

@@ -1,35 +1,58 @@
 # PS-003-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-003-09. **Owner:** [01_LocalBazaar/01_listings/mod_edit](SPEC.md). **Implementing module:** 01_LocalBazaar/01_listings/mod_edit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/01_listings/mod_edit. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (consumer-driven tests R04–R06), CTR-EVT-001 (envelope, concurrency and idempotency tests), CTR-ERR-001 (error shape), CTR-CAP-001 (authorization tests).
 
-## Purpose and scope
-Define the contract and acceptance tests process for edit within 01_listings. Do not assume implementation or successful external settlement.
+**Decision labels:** Offline test expectations PROVISIONAL (D08 default, unapproved). Test IDs are assignments, not results.
 
-## Requirements to specify
-- [ ] PS-003-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-003-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-003-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-003-09.R01 | Producer contract tests for `listing.edit` and `listing.get_for_edit` run in CI on every change. | MVP |
+| PS-003-09.R02 | Consumer-driven contract tests for `listing.updated` run against discovery index (06_Discovery mod_index) and moderation (12_Moderation). | MVP |
+| PS-003-09.R03 | Every error code in [validation_rules.md](validation_rules.md) and [workflow_state_machine.md](workflow_state_machine.md) has one negative test. | MVP |
+| PS-003-09.R04 | Offline reconnect and conflict flows run end-to-end on mobile viewport with screen reader announcement of conflict. | MVP |
+| PS-003-09.R05 | Fixtures: 50 listing fixtures across categories, states and price shapes; no real personal data. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Fixtures: `listing` (per state), `offer` (open/closed flag only), `device_queue` (pending, conflicting edits). Schema per [domain_schema.md](domain_schema.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Contract coverage: `listing.edit` v1.0.0, `listing.get_for_edit` v1.0.0, `listing.updated` v1.0.0. See [commands_queries_events.md](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Each row of the transition table in [workflow_state_machine.md](workflow_state_machine.md) has one test.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Error coverage per PS-003-09 R03.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-003-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Authorization matrix tests in [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Failure tests in [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Privacy tests in [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+Load and metric tests in [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-003-09-01 (contract): producer schema for `listing.edit` request and response.
+- TEST-PS-003-09-02 (contract): consumer test for `listing.updated` in mod_index.
+- TEST-PS-003-09-03 (contract): consumer test for `listing.updated` in moderation re-screen.
+- TEST-PS-003-09-04 (e2e): owner edits published title on mobile viewport; index shows new title within budget.
+- TEST-PS-003-09-05 (a11y): conflict message announced by screen reader and reachable by keyboard.
+- TEST-PS-003-09-06 (offline): queued edit flushes on reconnect; "not yet saved" state clears on acknowledgment.
+- TEST-PS-003-09-07 (integration): full negative table run; no value echoed in any error.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Producer and consumer contract tests pass in CI.
+2. Every error code and transition has one passing negative or unit test.
+3. Mobile and screen-reader tests pass for conflict and blocked-edit messages.
+4. Fixtures contain no real personal data.
+
+## Assumptions & open decisions
+- ASSUMPTION: test environment runs mod_index and moderation stubs.
+- D08 (PROVISIONAL, Dxx default, unapproved): offline test expectations.
+- Consumer list confirmed by dependency matrix PENDING.

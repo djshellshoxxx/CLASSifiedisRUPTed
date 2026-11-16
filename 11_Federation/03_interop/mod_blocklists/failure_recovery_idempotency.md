@@ -1,35 +1,59 @@
-# PS-089-06 — failure recovery idempotency
+# PS-089-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-089-06. **Owner:** [11_Federation/03_interop/mod_blocklists](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_blocklists. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_blocklists. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R05 dedupe, R10 limits, R13 per-event results), CTR-EVT-001 (R03 idempotency, R02 revision), CTR-CAP-001 (fail closed), CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for blocklists within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-089-06.R01 | Check path fails closed: store unavailable or check > 50 ms (ASSUMPTION) → inbound federated events returned `deferred` with `SYS.UNAVAILABLE`; never accepted unchecked. | MVP |
+| PS-089-06.R02 | Deferred inbound events retried until the event's `expires_at` or 24 h (ASSUMPTION), whichever first. After that, rejected with `SYS.UNAVAILABLE` and logged. | MVP |
+| PS-089-06.R03 | Export retries back off from 1 s to 1 h with ±20% jitter (ASSUMPTION). Export failure older than 24 h raises an alert. Receivers stop enforcing at the entry's `expires_at` regardless of export state. | MVP |
+| PS-089-06.R04 | Each import event commits independently. Duplicate `(origin_node, event_id)` returns `duplicate` (CTR-FED-001 R05). Batch response lists per-event results. | MVP |
+| PS-089-06.R05 | Blocklist writes are online-only. Offline clients have no write queue and receive `SYS.UNAVAILABLE` on write. D08 is not applicable. | MVP |
 
-## Requirements to specify
-- [ ] PS-089-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-089-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-089-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retry state for deferred events and export cursors stored as operational records, retention RET-OPS (PS-089-07). No new entry fields.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Idempotency keys per PS-089-04. Replay of same key returns original result (CTR-EVT-001 R03).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Deferred inbound event: `deferred` → `accepted` | `rejected` (on check pass/fail) or `rejected` after 24 h. Export job: `pending` → `sent` | `retrying`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.UNAVAILABLE` (retryable, 503) for check failures. `FED.RATE_LIMITED` (retryable) for per-peer limits. `EVT.REVISION_CONFLICT` for concurrency (PS-089-03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Fail closed per CTR-CAP-001: no decision when grant or policy store is unavailable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-089-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Timeout: check 50 ms; propose, activate and withdraw 2 s; per-peer export send 10 s (all ASSUMPTION).
+- Concurrency: `expected_revision` on activate and withdraw; first commit wins.
+- Partial failure: a crash between commit and export enqueue is repaired by an idempotent scan of entries with `activated` events and no export marker.
+- Recovery from store restore: PS-089-10.
+- Offline: no queue (R05).
+
+## Privacy, retention, abuse
+Failure logs carry codes, `blk_` IDs and counts only. Deferred payloads are held encrypted at rest (ASSUMPTION) and purged at deferral end.
+
+## Observability & budgets
+`blocklist_check_fail_closed_total`, `blocklist_deferred_inbound_total`, `blocklist_export_retry_total`. Alert: deferred inbound > 1,000 in 5 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-089-06-01 (fault): store down → inbound events `deferred`, none `accepted`.
+- TEST-PS-089-06-02 (unit): check at 51 ms → fail closed.
+- TEST-PS-089-06-03 (integration): duplicate delivery of same `(origin_node, event_id)` → `duplicate`.
+- TEST-PS-089-06-04 (integration): concurrent activate race → one commit, one `EVT.REVISION_CONFLICT`.
+- TEST-PS-089-06-05 (unit): export backoff schedule matches R03 bounds.
+- TEST-PS-089-06-06 (fault): crash between activate commit and export enqueue → export sent exactly once after restart.
+- TEST-PS-089-06-07 (offline): client write attempt while offline is not queued.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No inbound federated event accepted while the check path is unavailable; TEST-PS-089-06-01 passes.
+2. Duplicate and replay handling match CTR-FED-001 R05; TEST-PS-089-06-03 passes.
+3. Crash recovery produces exactly one export; TEST-PS-089-06-06 passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: timeouts, backoff and 24 h deferral window.
+- PROVISIONAL (D01 default, unapproved): replay protection via CTR-FED-001 dedupe and `expires_at`.
+- D08 not applicable (see R05).

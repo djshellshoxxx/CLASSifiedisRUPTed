@@ -1,35 +1,56 @@
 # PS-008-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-008-06. **Owner:** [01_LocalBazaar/03_inventory/mod_availability](SPEC.md). **Implementing module:** 01_LocalBazaar/03_inventory/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [01_LocalBazaar/03_inventory/mod_availability](SPEC.md) (F01.S03.M01; accountable role: Marketplace Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03, commit atomicity), CTR-ERR-001 (retry rules), CTR-CAP-001 (fail closed).
 
-## Purpose and scope
-Define the failure recovery idempotency process for availability within 03_inventory. Do not assume implementation or successful external settlement.
+**Decisions:** Offline rules follow D08 default (PROVISIONAL, unapproved). Saga and compensation follow D04 default (PROVISIONAL, unapproved).
 
-## Requirements to specify
-- [ ] PS-008-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-008-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-008-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-008-06.R01 | Hold placement is all-or-nothing with the counter change and event append, in one transaction. | MVP |
+| PS-008-06.R02 | For the last unit, exactly one of N concurrent `hold.place` calls commits. | MVP |
+| PS-008-06.R03 | No hold exists without a committed `offer_ref`. A hold whose offer fails is withdrawn within 5 min. | MVP |
+| PS-008-06.R04 | Repeat of a command with the same key and digest returns the original result without a new event. | MVP |
+| PS-008-06.R05 | Holds and executions are never queued offline. Configure and commit may be queued and are re-validated at commit. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Idempotency and concurrency
+- Scope: (actor, command, `idempotency_key`) per CTR-EVT-001 R03. Same key, different digest → EVT.IDEMPOTENCY_KEY_REUSED.
+- Writes carry `expected_revision`. Mismatch → EVT.REVISION_CONFLICT; client reloads and retries with a new key.
+- Lock granularity: one `availability_id`. Holds on different listings never contend.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Timeouts and retries
+- `hold.place` client timeout 5 s; retry with the same key only.
+- Server budget for `hold.place` 2 s; on overrun the server commits or rolls back and the caller re-reads.
+- SYS.UNAVAILABLE retried with exponential backoff, base 500 ms, cap 60 s, full jitter (CTR-ERR-001). Non-retryable AVAIL codes are never retried automatically.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Saga (offer → hold → activate)
+1. F01.S04.M01 creates offer in DRAFT.
+2. `hold.place` with that `offer_ref`.
+3. Offer activates. On failure at 3, F01.S04.M01 calls `hold.withdraw` (reason `offer_failed`).
+4. Expiry job removes any hold left by a crash between 2 and 3 at TTL.
+Correlation via one `cor_` ID for the whole saga.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Offline
+Queued configure and commit entries show "not applied" on rejection (CTR-ERR-001). Holds show "reserving" until server acknowledgement; no local hold is ever assumed.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-008-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Recovery
+- Expiry job: every 60 s, batch ≤ 500, idempotent (re-running a terminal hold is a no-op).
+- Reconciliation job, daily: recompute `held_units` from PLACED holds and `committed_units` from events. Mismatch → alert and repair by compensating event `availability.configured` with reason `reconciliation`. Records are never edited in place.
+- Store or policy unavailable: deny with SYS.UNAVAILABLE. No hold is placed on a guess.
+
+## Tests
+- TEST-PS-008-06-01 (concurrency): 50 parallel `hold.place` on last unit → 1 PLACED, 49 AVAIL.INSUFFICIENT_UNITS.
+- TEST-PS-008-06-02 (idempotency): same key and digest → same `hold_id`; different digest → EVT.IDEMPOTENCY_KEY_REUSED.
+- TEST-PS-008-06-03 (fault injection): crash between offer creation and hold commit → no orphan hold after TTL.
+- TEST-PS-008-06-04 (offline): queued `configure` with stale revision → rejected at replay, shown as not applied.
+- TEST-PS-008-06-05 (reconciliation): seeded drift is detected and repaired by compensating event.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-008-06-01 to -05 pass in CI.
+2. Zero orphan holds after a 1-hour fault-injection run.
+3. Reconciliation mismatch count is 0 in the seeded environment.
+
+## Assumptions & open decisions
+- ASSUMPTION: 2 s server budget; 5 min orphan-withdrawal bound.
+- PROVISIONAL (D08 default, unapproved): offline holds disallowed.
+- PROVISIONAL (D04 default, unapproved): compensation, not atomic rollback, for partial failure.

@@ -1,35 +1,38 @@
 # PS-008-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-008-09. **Owner:** [01_LocalBazaar/03_inventory/mod_availability](SPEC.md). **Implementing module:** 01_LocalBazaar/03_inventory/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [01_LocalBazaar/03_inventory/mod_availability](SPEC.md) (F01.S03.M01; accountable role: QA Lead for test plan, Marketplace Lead for owner). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001 (contract tests for each).
 
-## Purpose and scope
-Define the contract and acceptance tests process for availability within 03_inventory. Do not assume implementation or successful external settlement.
+**Decisions:** Consumer set is PROVISIONAL (unapproved; consumers not yet confirmed in DEPENDENCY_MATRIX). Test scope per D08 for offline paths (PROVISIONAL, unapproved).
 
-## Requirements to specify
-- [ ] PS-008-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-008-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-008-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-008-09.R01 | Consumer-driven contract tests exist for every consumer below, run against all supported producer versions (CTR-SCH-001 TEST-10). | MVP |
+| PS-008-09.R02 | Every requirement in PS-008-01 to -08 maps to ≥ 1 TEST-ID. Unmapped requirement fails CI. | MVP |
+| PS-008-09.R03 | Two-buyer race on the last unit is an end-to-end test. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Consumer contracts
+| Consumer | Contract under test | Test IDs |
+|---|---|---|
+| F01.S04.M01 `mod_offers` (`sys`) | `hold.place`, `hold.withdraw`, `hold.execute` | TEST-PS-008-09-01 |
+| F01.S01.M04 `mod_archive` | listing archived → availability ARCHIVED | TEST-PS-008-09-02 |
+| F01.S03.M02 `mod_variants` | `variant_ref` lifecycle | TEST-PS-008-09-03 |
+| F02.S03.M02 `mod_lock` (PENDING) | cycle reservation through `hold.create` | TEST-PS-008-09-04 |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-008-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Tests
+- TEST-PS-008-09-01 (contract): `mod_offers` fixtures pass against v1 producer; error codes match PS-008-02.
+- TEST-PS-008-09-02 (contract): archive event leads to ARCHIVED and PLACED holds WITHDRAWN.
+- TEST-PS-008-09-03 (contract): variant removed with committed units → rejected, no counter change.
+- TEST-PS-008-09-04 (contract, PENDING): cycle reservation holds and releases on dropout.
+- TEST-PS-008-09-05 (e2e): two buyers race for last unit; one hold, one AVAIL.INSUFFICIENT_UNITS, owner sees one hold.
+- TEST-PS-008-09-06 (traceability lint): every requirement ID across PS-008-01..08 has a TEST-ID.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All consumer contract tests pass for supported versions.
+2. TEST-PS-008-09-05 passes 100 consecutive runs.
+3. Traceability lint (TEST-06) reports zero unmapped requirements.
+4. Accessibility: availability state and "sold out" text reachable by keyboard and screen reader (WCAG 2.1 AA; checked by F14 gate, PENDING).
+
+## Assumptions & open decisions
+- ASSUMPTION: consumer list above is complete for MVP; to be confirmed with F01.S04.M01 and F02.S03.M02 owners.
+- PENDING: F02.S03.M02 contract entry in CTR-CAP-001 before TEST-04 can run.

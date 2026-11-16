@@ -1,35 +1,60 @@
 # PS-089-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-089-02. **Owner:** [11_Federation/03_interop/mod_blocklists](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_blocklists. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_blocklists. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (envelope of codes), CTR-FED-001 (peer states, size limits), CTR-SCH-001 (closed enums), CTR-PRV-001 (privacy-safe diagnostics), CTR-ID-001 (`blk_`, `nod_`, `fpr_`, `cas_`, `dlv_` prefixes).
 
-## Purpose and scope
-Define the validation rules process for blocklists within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-089-02.R01 | Every write is validated before commit; zero rows violating PS-089-01 persist (TEST-PS-089-02-02). | MVP |
+| PS-089-02.R02 | Enum fields are closed. Unknown values are refused with `BLOCKLISTS.REASON_INVALID` or `BLOCKLISTS.TARGET_INVALID`; no open-enum passthrough. | MVP |
+| PS-089-02.R03 | `peer_import` entries require `expires_at` > receipt time and ≤ receipt + 180 days (ASSUMPTION). Local entries: ≤ 365 days. | MVP |
+| PS-089-02.R04 | `scope = federate` requires federation enabled and, for export, a `trusted` destination peer (CTR-FED-001 R01, R02). Imports from `restricted` peers create `proposed` entries only. | MVP |
+| PS-089-02.R05 | Error details name field path and code only. Rejected values are never echoed or logged. | MVP |
 
-## Requirements to specify
-- [ ] PS-089-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-089-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-089-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Rule | Code on failure |
+|---|---|---|
+| `target_kind` | closed enum | `BLOCKLISTS.TARGET_INVALID` |
+| `target_ref` | node `^nod_[0-9A-HJKMNP-TV-Z]{26}$`; peer `^fpr_…$`; digest `^[0-9a-f]{64}$`; any other prefix, including `acc_`/`prf_`, refused | `BLOCKLISTS.TARGET_INVALID` |
+| `reason_code` | closed enum (F12 registry) | `BLOCKLISTS.REASON_INVALID` |
+| any unlisted field | schema `additionalProperties: false`; free text absent by design | `BLOCKLISTS.REASON_INVALID` |
+| `source_ref` | `cas_` for `local_moderator`; `dlv_` for `peer_import` | `BLOCKLISTS.SOURCE_REF_REQUIRED` |
+| `expires_at` | R03 bounds | `BLOCKLISTS.EXPIRY_INVALID` |
+| `scope` | R04 | `BLOCKLISTS.SCOPE_NOT_ALLOWED` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Order: authenticate, authorize (PS-089-05), validate, check state (PS-089-03), commit. Unauthorized callers receive only `SYS.FORBIDDEN` or `SYS.NOT_FOUND` and no validation detail.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| BLOCKLISTS.TARGET_INVALID | false | validation / 400 | Unknown kind, bad pattern, personal or location reference |
+| BLOCKLISTS.REASON_INVALID | false | validation / 400 | Reason outside enum; unlisted or free-text field |
+| BLOCKLISTS.SOURCE_REF_REQUIRED | false | validation / 400 | Missing or wrong-prefix `cas_`/`dlv_` |
+| BLOCKLISTS.EXPIRY_INVALID | false | validation / 400 | Missing, past, or over cap |
+| BLOCKLISTS.SCOPE_NOT_ALLOWED | false | forbidden / 403 | Federate scope with flag off or peer not `trusted` |
+| BLOCKLISTS.LOCAL_OVERRIDE_PRESENT | false | unprocessable_state / 422 | Import targets a locally withdrawn or rejected entry |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Peer-import failures are returned per event as `rejected` with the code (CTR-FED-001 R13), not as HTTP errors.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Privacy, retention, abuse
+Diagnostics carry code, field path and `blk_` ID only (PS-089-07). Validation logs are pseudonymous and follow RET-OPS.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-089-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Observability & budgets
+`blocklist_validation_rejections_total{code}`. Alert when one code exceeds 10× its 7-day baseline (ASSUMPTION).
+
+## Tests
+- TEST-PS-089-02-01 (unit): one fixture per code in the table; each returns exactly that code.
+- TEST-PS-089-02-02 (property): random strings and prefixes; no invalid row persists.
+- TEST-PS-089-02-03 (unit): expiry boundaries at now, now + 180 d, and now + 180 d + 1 ms.
+- TEST-PS-089-02-04 (negative): free text in `reason_code` field is refused and not echoed.
+- TEST-PS-089-02-05 (integration): import from `restricted` peer yields `proposed`, not `active`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All six codes reachable by fixtures; TEST-PS-089-02-01 passes.
+2. No invalid row persists; TEST-PS-089-02-02 passes.
+3. Rejected values never appear in responses or logs; TEST-PS-089-02-04 passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: 180-day peer expiry cap; 365-day local cap (F10 to confirm).
+- PROVISIONAL (D01 default, unapproved): inbound events validated against signature and schema before import.
+- PENDING F12: reason enum values.

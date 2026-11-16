@@ -40,7 +40,7 @@ Non-owner denial returns `SYS.FORBIDDEN` if the listing is visible, `SYS.NOT_FOU
 Field visibility (CTR-CAP-001 R10): `title`, `description`, `category_id`, `region_cell`, `price`, `currency`, `state`: `public`. `revision`, `updated_at`, `has_open_offers`: `owner`.
 
 ## Failure, idempotency, concurrency, offline
-Denials are not retried. A revoked owner relation (for example after account deletion) denies at the next decision. Offline queued edits are rejected at commit (CTR-CAP-001 interoperability note).
+Denials are not retried. A revoked owner relation (for example after account deletion) denies at the next decision. Offline queued edits are rejected at commit (CTR-CAP-001 revocation propagation).
 
 ## Privacy, retention, abuse
 Denial reasons do not reveal whether a listing exists beyond CTR-ERR-001 R08. See [privacy_retention_abuse.md](privacy_retention_abuse.md).

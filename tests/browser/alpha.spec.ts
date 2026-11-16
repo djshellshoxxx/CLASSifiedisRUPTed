@@ -59,6 +59,26 @@ test('real persisted identity/listing and isolated peer signed-file exchange', a
     await expect(peer.locator('#peers')).toContainText('Guitar');
     await expect(peer.locator('#peers')).toContainText(display);
     await expect(peer.locator('#status')).toContainText('verified and retained');
+    await expect(peer.locator('#peer-search-status')).toHaveText('1 matching retained peer listing.');
+    // Draft choices do not change results until applied; reset restores the complete retained view.
+    await peer.getByLabel('Filter listing type').selectOption('wanted');
+    await expect(peer.locator('#peers article')).toHaveCount(1);
+    await peer.getByRole('button', { name: 'Apply search', exact: true }).click();
+    await expect(peer.locator('#peer-search-status')).toHaveText('0 matching retained peer listings.');
+    await peer.getByRole('button', { name: 'Reset search', exact: true }).click();
+    await expect(peer.locator('#peers article')).toHaveCount(1);
+    await peer.getByLabel('Filter condition').selectOption('good');
+    await peer.getByLabel('Search coarse area').fill('c2b2');
+    await peer.getByLabel('Approximate radius').selectOption('5');
+    await peer.getByLabel('Peer listing order').selectOption('ranked');
+    await peer.getByRole('button', { name: 'Apply search', exact: true }).click();
+    await expect(peer.locator('#peers article')).toHaveCount(1);
+    await peer.getByLabel('Search coarse area').fill('');
+    await peer.getByRole('button', { name: 'Apply search', exact: true }).click();
+    await expect(peer.locator('#error')).toContainText('Enter a coarse area');
+    await expect(peer.locator('#peers article')).toHaveCount(1);
+    await peer.getByRole('button', { name: 'Reset search', exact: true }).click();
+
     // Repeat the exact same upload; the file input must reset and processing must stay idempotent.
     await peer.locator('#peer-file').setInputFiles({ name: 'alice-listing.json', mimeType: 'application/json', buffer: Buffer.from(signed) });
     await expect(peer.locator('#peers article')).toHaveCount(1);
@@ -88,9 +108,25 @@ test('wrong passphrase fails without destroying saved records; lock clears priva
   await create(page, 'local');
   await listing(page, 'Retained chair');
   await page.getByLabel('Title', { exact: true }).fill('Unsubmitted private text');
+  await page.getByLabel('Search retained listings').fill('Private search draft');
+  await page.getByLabel('Search coarse area').fill('u4pru');
+  await page.getByLabel('Approximate radius').selectOption('10');
+  await page.getByLabel('Filter listing type').selectOption('wanted');
+  await page.getByLabel('Filter condition').selectOption('fair');
+  await page.getByLabel('Peer listing order').selectOption('ranked');
+  await page.getByRole('button', { name: 'Apply search', exact: true }).click();
+
   await page.getByRole('button', { name: 'Lock vault' }).click();
   await expect(page.locator('#workspace')).toBeHidden();
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Search retained listings')).toHaveValue('');
+  await expect(page.getByLabel('Search coarse area')).toHaveValue('');
+  await expect(page.getByLabel('Approximate radius')).toHaveValue('');
+  await expect(page.getByLabel('Filter listing type')).toHaveValue('');
+  await expect(page.getByLabel('Filter condition')).toHaveValue('');
+  await expect(page.getByLabel('Peer listing order')).toHaveValue('retained');
+  await expect(page.locator('#peer-search-status')).toHaveText('');
+
   await page.locator('[name="passphrase"]').fill('incorrect passphrase here');
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
   await expect(page.locator('#error')).toContainText(/Incorrect passphrase|damaged/);

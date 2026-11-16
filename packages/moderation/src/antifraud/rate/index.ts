@@ -270,8 +270,12 @@ export function createRateLimiter(opts: RateOptions): RateLimiter {
   const monoNow = (): number => {
     if (opts.monotonic) return opts.monotonic();
     const w = opts.clock.now();
-    if (w > lastWall) mono += w - lastWall;
-    lastWall = w;
+    // Without a trusted monotonic source, a wall-clock rollback must not earn
+    // capacity again while catching up to time already observed.
+    if (w > lastWall) {
+      mono += w - lastWall;
+      lastWall = w;
+    }
     return mono;
   };
   const wallOf = (monoMs: number, monoNowMs: number): string => new Date(opts.clock.now() + Math.max(0, monoMs - monoNowMs)).toISOString();

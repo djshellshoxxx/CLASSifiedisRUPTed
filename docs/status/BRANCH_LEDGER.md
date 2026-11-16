@@ -113,3 +113,7 @@ git fetch origin '+refs/heads/*:refs/remotes/origin/*'
 git merge-base --is-ancestor origin/<branch> HEAD && echo contained
 git merge --no-commit --no-ff origin/<branch>; git diff --name-only --diff-filter=U | wc -l; git merge --abort
 ```
+
+## November 16 implementation consolidation outcome
+
+PR #37 combines the latest reviewed runnable alpha with the reviewed code from `agents/discovery/coarse-filters`, `agents/governance/taxonomy-prohibited`, `agents/moderation/rate-limits-signals`, `agents/privacy/classification-metadata-consent`, `agents/notify/prefs-inapp`, and `agents/ci/trim-workflows`. These are content integrations with additional regression fixes, not indiscriminate merges of every historical branch. Current `main` is merged into the candidate; the new planning contracts remain archived separately. The incomplete `a403614` foundation checkpoint and incompatible mock-demo histories remain preserved and unmerged. See PROJECT_STATUS.md for actual wiring and remaining runtime gaps.

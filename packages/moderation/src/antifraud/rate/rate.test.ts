@@ -279,14 +279,22 @@ describe('keys, privacy and salts', () => {
     expect(r).toEqual({ allowed: false, retryAfterMs: 30_000 });
   });
 
-  it('ignores backward wall-clock steps: elapsed time never goes negative and limits are not loosened', () => {
+  it.each(['gcra', 'token_bucket'] as const)('does not refill %s buckets while a rolled-back wall clock catches up', algorithm => {
     const { limiter, clock } = limiterSetup();
-    limiter.applyPolicy(TENANT, { capabilityClass: 'write.offer', algorithm: 'gcra', ratePerMinute: 1, burst: 2, prefixMultiplier: 20, failMode: 'open' });
+    limiter.applyPolicy(TENANT, { capabilityClass: 'write.offer', algorithm, ratePerMinute: 1, burst: 2, prefixMultiplier: 20, failMode: 'open' });
     expect(limiter.check(query()).allowed).toBe(true);
     expect(limiter.check(query()).allowed).toBe(true);
-    clock.set('2026-11-04T09:00:00.000Z');
-    expect(limiter.check(query()).allowed).toBe(false);
-    clock.advance(60_000);
+    for (let i = 0; i < 2; i++) {
+      clock.set('2026-11-04T09:00:00.000Z');
+      expect(limiter.check(query())).toEqual({ allowed: false, retryAfterMs: 60_000 });
+      clock.advance(60_000);
+      expect(limiter.check(query())).toEqual({ allowed: false, retryAfterMs: 60_000 });
+      clock.set(START);
+      expect(limiter.check(query())).toEqual({ allowed: false, retryAfterMs: 60_000 });
+    }
+    clock.advance(30_000);
+    expect(limiter.check(query())).toEqual({ allowed: false, retryAfterMs: 30_000 });
+    clock.advance(30_000);
     expect(limiter.check(query()).allowed).toBe(true);
   });
 

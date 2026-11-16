@@ -1,12 +1,12 @@
 {
   "totals": {
     "modules": 148,
-    "withRuntime": 18,
-    "withPassingTests": 7,
+    "withRuntime": 30,
+    "withPassingTests": 19,
     "declared": 688,
     "implemented": 8,
     "requirements": 4510,
-    "covered": 190
+    "covered": 442
   },
   "features": [
     {
@@ -74,12 +74,12 @@
       "slug": "discovery",
       "title": "Local discovery",
       "modules": 8,
-      "withRuntime": 4,
-      "withPassingTests": 2,
+      "withRuntime": 6,
+      "withPassingTests": 4,
       "declared": 18,
       "implemented": 3,
       "requirements": 240,
-      "covered": 46
+      "covered": 93
     },
     {
       "id": "F07",
@@ -122,12 +122,12 @@
       "slug": "privacy",
       "title": "Privacy and data rights",
       "modules": 7,
-      "withRuntime": 0,
-      "withPassingTests": 0,
+      "withRuntime": 2,
+      "withPassingTests": 2,
       "declared": 24,
       "implemented": 0,
       "requirements": 210,
-      "covered": 0
+      "covered": 43
     },
     {
       "id": "F11",
@@ -146,24 +146,24 @@
       "slug": "moderation",
       "title": "Moderation and safety",
       "modules": 10,
-      "withRuntime": 0,
-      "withPassingTests": 0,
+      "withRuntime": 3,
+      "withPassingTests": 3,
       "declared": 46,
       "implemented": 0,
       "requirements": 301,
-      "covered": 0
+      "covered": 61
     },
     {
       "id": "F13",
       "slug": "notify",
       "title": "Notifications",
       "modules": 7,
-      "withRuntime": 0,
-      "withPassingTests": 0,
+      "withRuntime": 3,
+      "withPassingTests": 3,
       "declared": 34,
       "implemented": 0,
       "requirements": 210,
-      "covered": 0
+      "covered": 65
     },
     {
       "id": "F14",
@@ -218,12 +218,12 @@
       "slug": "governance",
       "title": "Governance and compliance",
       "modules": 5,
-      "withRuntime": 0,
-      "withPassingTests": 0,
+      "withRuntime": 2,
+      "withPassingTests": 2,
       "declared": 46,
       "implemented": 0,
       "requirements": 150,
-      "covered": 0
+      "covered": 36
     }
   ],
   "modules": [
@@ -1116,24 +1116,24 @@
       "id": "F06.S01.M03",
       "title": "Search filters",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 0,
+      "covered": 25,
       "sources": []
     },
     {
       "id": "F06.S02.M01",
       "title": "Coarse location regions",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 0,
+      "covered": 22,
       "sources": []
     },
     {
@@ -1737,24 +1737,24 @@
       "id": "F10.S02.M02",
       "title": "Data classification model",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 0,
+      "covered": 25,
       "sources": []
     },
     {
       "id": "F10.S02.M03",
       "title": "Metadata minimization",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 0,
+      "covered": 18,
       "sources": []
     },
     {
@@ -2043,7 +2043,7 @@
       "id": "F12.S03.M02",
       "title": "Fraud signals",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 4,
       "implemented": 0,
       "missing": [
@@ -2053,14 +2053,14 @@
         "moderation.signal.categories_own"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 19,
       "sources": []
     },
     {
       "id": "F12.S03.M03",
       "title": "Rate limiting",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 4,
       "implemented": 0,
       "missing": [
@@ -2070,14 +2070,14 @@
         "moderation.ratebucket.get_status_own"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 22,
       "sources": []
     },
     {
       "id": "F12.S03.M04",
       "title": "Account limits",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 4,
       "implemented": 0,
       "missing": [
@@ -2087,7 +2087,7 @@
         "moderation.accountlimit.list_mine"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 20,
       "sources": []
     },
     {
@@ -2132,7 +2132,7 @@
       "id": "F13.S01.M03",
       "title": "In-app notifications",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 5,
       "implemented": 0,
       "missing": [
@@ -2143,7 +2143,7 @@
         "notify.notification.unread_count"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 23,
       "sources": []
     },
     {
@@ -2183,7 +2183,7 @@
       "id": "F13.S02.M03",
       "title": "Channel opt-in/opt-out",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 5,
       "implemented": 0,
       "missing": [
@@ -2194,14 +2194,14 @@
         "notify.channel.get_mine"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 22,
       "sources": []
     },
     {
       "id": "F13.S02.M04",
       "title": "In-app notification preferences",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 5,
       "implemented": 0,
       "missing": [
@@ -2212,7 +2212,7 @@
         "notify.preference.resolve"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 20,
       "sources": []
     },
     {
@@ -2731,7 +2731,7 @@
       "id": "F18.S01.M02",
       "title": "Prohibited items",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 7,
       "implemented": 0,
       "missing": [
@@ -2744,14 +2744,14 @@
         "governance.prohibited_rule.list_active"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 16,
       "sources": []
     },
     {
       "id": "F18.S01.M03",
       "title": "Goods taxonomy",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 10,
       "implemented": 0,
       "missing": [
@@ -2767,7 +2767,7 @@
         "governance.category.resolve"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 20,
       "sources": []
     },
     {

@@ -65,7 +65,12 @@ export function createStorage(driver: StorageDriver): Storage {
     kind: driver.kind,
     transaction: (fn, opts) => {
       guard();
-      return lock(() => runTx(driver, opts?.mode ?? 'write', fn));
+      return lock(() => {
+        // A previously queued close() may complete after the call-site guard.
+        // Check again at execution time so no handler can run against a closed driver.
+        guard();
+        return runTx(driver, opts?.mode ?? 'write', fn);
+      });
     },
     read: async <T>(fn: (tx: Tx) => T | Promise<T>): Promise<T> => {
       const r = await storage.transaction<T, never>(async (tx) => ok((await fn(tx)) as T), { mode: 'read' });

@@ -106,8 +106,32 @@
 <p>Import a peer's signed listing file. Signature, author, expiry and revision checks run locally.</p>
 <label>Signed listing file<input id="peer-file" type="file" accept="application/json,.json">
 </label>
-<label>Search retained listings<input id="search" type="search" maxlength="120">
+<form id="peer-search-form" aria-label="Filter retained peer listings" autocomplete="off">
+<label>Search retained listings<input id="search" name="query" type="search" maxlength="120">
 </label>
+<div class="columns">
+<label>Filter listing type<select id="search-kind" name="kind">
+<option value="">All types</option><option value="sell">Offer an item</option><option value="wanted">Wanted</option><option value="giveaway">Give away</option>
+</select></label>
+<label>Filter condition<select id="search-condition" name="condition">
+<option value="">All conditions</option><option value="new">New</option><option value="like_new">Like new</option><option value="good">Good</option><option value="fair">Fair</option><option value="poor">Poor</option><option value="for_parts">For parts</option>
+</select></label>
+</div>
+<div class="columns">
+<label>Search coarse area<input id="search-area" name="centerCell" pattern="[0123456789bcdefghjkmnpqrstuvwxyz]{4,5}" maxlength="5" aria-describedby="search-location-note" placeholder="Optional geohash">
+</label>
+<label>Approximate radius<select id="search-radius" name="distanceKm" aria-describedby="search-location-note">
+<option value="">Any area</option><option value="5">5 km</option><option value="10">10 km</option><option value="25">25 km</option><option value="50">50 km</option><option value="100">100 km</option>
+</select></label>
+</div>
+<p id="search-location-note" class="note">A radius needs a coarse area. Results include overlapping regions, not exact distances. No device location is requested.</p>
+<label>Peer listing order<select id="search-sort" name="sort" aria-describedby="search-ranking-note">
+<option value="retained">Default retained order</option><option value="ranked">Recent + coarse-distance ranking</option>
+</select></label>
+<p id="search-ranking-note" class="note">Ranking uses when this vault first saw a listing and, if supplied, your coarse area. Text is a match filter; paid placement is not used.</p>
+<div class="actions"><button type="submit">Apply search</button><button id="reset-peer-search" type="button" class="secondary">Reset search</button></div>
+</form>
+<p id="peer-search-status" role="status" aria-live="polite"></p>
 <div id="peers" class="cards">
 </div>
 </section>

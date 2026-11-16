@@ -1,3 +1,4 @@
+import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
 import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
 import { mountBarter } from './barter.ts';
 import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
@@ -33,6 +34,7 @@ const ids = createUuidV7Generator();
 let unlocked: UnlockedVault | undefined;
 let bus: Bus | undefined;
 let busy = false;
+let appliedPeerSearch = defaultPeerSearch();
 let barter: ReturnType<typeof mountBarter> | undefined;
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
@@ -126,7 +128,7 @@ async function refresh(): Promise<void> {
   await barter?.refresh();
 }
 async function refreshPeers(): Promise<void> {
-  const result = await query('discovery.listing.search', { query: element<HTMLInputElement>('search').value });
+  const result = await query('discovery.listing.search', appliedPeerSearch);
   const data = z.object({ items: z.array(z.unknown()), staleOrExcluded: z.number() }).parse(result);
   const list = element('peers'); list.replaceChildren();
   for (const value of data.items) {
@@ -136,9 +138,11 @@ async function refreshPeers(): Promise<void> {
     list.append(card(p.title, p.description, `Peer-signed · ${p.regionCell} · expires ${p.expiresAt} · observed ${retained.observedAt}`, p.value));
   }
   if (!data.items.length) list.append(node('p', 'No matching retained peer listings. Import a signed file to start.'));
+  element('peer-search-status').textContent = `${data.items.length} matching retained peer listing${data.items.length === 1 ? '' : 's'}.`;
   if (data.staleOrExcluded) list.append(node('p', `${data.staleOrExcluded} expired, conflicted or filtered records excluded.`));
 }
 async function connect(session: UnlockedVault): Promise<void> {
+  resetPeerSearch();
   unlocked = session;
   const definitions = bazaarDefinitions({ categoryAllowed: id => id === CATEGORY,
     signProjection: async (type, payload, seq, prev) => ({ ...await signEnvelope(session.identity, { type, payload, seq, prev, createdAt: new Date().toISOString() }) }),
@@ -168,10 +172,11 @@ element<HTMLFormElement>('unlock-form').addEventListener('submit', event => {
 });
 element('lock').addEventListener('click', () => { void action(async () => {
   const session = unlocked; barter?.destroy(); barter = undefined; unlocked = undefined; bus = undefined;
-  if (session) await session.lock();
   element('workspace').hidden = true; element('access').hidden = false;
   element('listings').replaceChildren(); element('peers').replaceChildren(); element('principal').textContent = '';
-  element<HTMLInputElement>('backup-password').value = ''; element<HTMLFormElement>('listing-form').reset(); element<HTMLInputElement>('search').value = ''; element<HTMLInputElement>('peer-file').value = ''; message('Vault locked.');
+  element<HTMLInputElement>('backup-password').value = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
+  if (session) await session.lock();
+  message('Vault locked.');
 }); });
 element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
   event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const data = new FormData(form);
@@ -185,12 +190,24 @@ element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
 element<HTMLInputElement>('peer-file').addEventListener('change', event => { const input = event.currentTarget as HTMLInputElement;
   void action(async () => { try { await command('discovery.listing.retain', { envelope: await readFile(input, MAX_ENVELOPE_BYTES) }); message('Peer statement verified and retained locally.'); await refreshPeers(); await barter?.refresh(); } finally { input.value = ''; } });
 });
-let searchRevision = 0;
-element('search').addEventListener('input', () => {
-  const revision = ++searchRevision;
-  const run = () => { if (revision !== searchRevision) return; if (busy) { setTimeout(run, 80); return; } void action(refreshPeers); };
-  setTimeout(run, 120);
+function resetPeerSearch(): void {
+  appliedPeerSearch = defaultPeerSearch();
+  element<HTMLFormElement>('peer-search-form').reset();
+  element('peer-search-status').textContent = '';
+}
+element<HTMLFormElement>('peer-search-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  void action(async () => {
+    const next = parsePeerSearch(new FormData(form));
+    const previous = appliedPeerSearch;
+    appliedPeerSearch = next;
+    try { await refreshPeers(); } catch (error) { appliedPeerSearch = previous; throw error; }
+  });
 });
+element('reset-peer-search').addEventListener('click', () => { void action(async () => {
+  resetPeerSearch(); await refreshPeers();
+}); });
 element('backup').addEventListener('click', () => { void action(async () => {
   const password = element<HTMLInputElement>('backup-password');
   try { download('classrup-encrypted-backup.json', await current().vault.exportBackup(password.value)); message('Encrypted backup downloaded. Keep its passphrase separately.'); }

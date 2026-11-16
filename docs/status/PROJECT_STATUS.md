@@ -1,5 +1,45 @@
 # Project status
 
+## November 16, 2026 continuation
+
+Work continues on `codex/classrup-completion-20261116` and PR #37, from the reviewed runnable `d16abee` baseline. This remains a development alpha, not a completed implementation or production release.
+
+### Integrated functionality
+
+- Consolidated reviewed coarse location/filter, governance taxonomy/prohibited goods, moderation rate/limits/signals, privacy classification/metadata, local notification/preferences, and change-aware CI branches.
+- Wired supported retained-listing filters and bundled ranking through the public query and accessible PWA Apply/Reset controls. Coarse-radius results indicate regional overlap, not exact distance. Search fields clear on lock.
+- Added local notification bus composition and encrypted-backup codecs. External notification delivery remains unconfigured; real PWA notification routing needs verified participant/actor event adapters and inbox UI.
+- Preserved current main security reports, the 51-finding planning tracker, and newer planning contracts without replacing implemented contracts with draft specifications.
+- Resolved all 33 duplicate-error specification warnings using canonical ownership and direct dependencies. No requirement was marked implemented by this cleanup.
+
+### Fixed defects and regression coverage
+
+1. Older supported vault backups now restore after new module codecs are registered; unknown scopes/records remain rejected.
+2. Barter evidence saturation cannot consume the slot required for authenticated terminal withdrawal and inventory-hold release.
+3. Bazaar signer callbacks must return the requested sequence and previous CID before records/events change.
+4. Rate-limit telemetry failures cannot turn a denied request into fail-open permission; backward wall-clock recovery cannot grant duplicate refill.
+5. Imported rate policies are validated and copied rather than retaining caller-mutable state.
+6. Notification grants reject future-dated issuance; relay withdrawal binds the stored user/channel; revocation bypasses daily change limits and paginates beyond 500 historical records.
+7. PNG sanitation rejects malformed critical chunk structure instead of marking nonempty IEND/duplicate IHDR clean.
+8. Storage rejects transactions queued behind close, with regressions for both memory and IndexedDB while preserving work queued before closure.
+9. Category expansion enforces its bound across roots; out-of-range date cutoffs return validation failures.
+
+### Verification of this continuation
+
+- Combined domain/integration suite: 479 passed, zero failed/skipped. The subsequently added storage-close regression and latest rate regressions passed in a 28-test targeted run.
+- Final TypeScript check passed with `GOMEMLIMIT=512MiB GOMAXPROCS=2 pnpm typecheck --singleThreaded`. Default concurrent native compiler attempts exceeded host resources; they are not recorded as passes.
+- CLI: 18 passed. Tooling: 14 passed with Node test concurrency limited to one after a resource-failed concurrent attempt.
+- Production build, setup/doctor, dependency check, whitespace checks and strict specifications pass. Specifications: 148/148, zero errors and zero warnings.
+- Generated source/test mapping: 30/148 modules with runtime code and 442/4510 requirements with mapped passing tests. These are inventory/traceability counts, not product completion percentages.
+- Browser and cross-platform execution remains unverified for this candidate. GitHub checks were queued/pending when recorded; only the actual final-head results can qualify merging.
+
+### Release limits
+
+The repository still has substantial missing runtime features: purchase offers/negotiation, settlement evidence/receipts, private messaging, identity/device recovery, encrypted domain storage, canonical federation/relay delivery, and major services/auctions/rentals workflows. The audit notes are not all resolved. See `SECURITY_REVIEW_20261116.md` for branch dispositions and scope. No full-project completion percentage or comprehensive security certification is claimed.
+
+Local browser execution is blocked: the pinned Chromium download returned an invalid archive; installed Chromium cannot create its required socket under this host. Browser assertions were added, but are not reported as passing. GitHub browser/platform checks must qualify the final remote head before merging or release. No historical branches were deleted.
+
+
 ## November 12, 2026 continuation
 
 This candidate combines the parked ranking and i18n work from PR [#27](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/27) at `de8f44d` and [#28](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/28) at `a0f9422`. Both descend from the consolidation at `75d4bf5`. Its [alpha checks](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42935421212) and [six CLI jobs](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/42935421115) passed.

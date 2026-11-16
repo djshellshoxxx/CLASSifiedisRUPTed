@@ -28,7 +28,7 @@
 | SELL.RESERVATION_ACTIVE | unprocessable_state | 422 | true | none |
 | SELL.REQUEST_CLOSED | unprocessable_state | 422 | false | none |
 
-Category `precondition_failed` is not in the CTR-ERR-001 HTTP table; the HTTP status for it is ASSUMPTION (412 used here; implementation must confirm against CTR-ERR-001 before use). Details `field` values are JSON-pointer paths (for example `/sell/price_minor`).
+Category `precondition_failed` maps to HTTP 412 (CTR-ERR-001 category table). Details `field` values are JSON-pointer paths (for example `/sell/price_minor`).
 
 ## States & transitions
 Not applicable. Validation gates the transitions in [PS-006-03](workflow_state_machine.md).

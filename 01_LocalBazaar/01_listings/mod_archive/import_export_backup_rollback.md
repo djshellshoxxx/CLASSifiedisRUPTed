@@ -58,6 +58,6 @@ Restore and import counters by outcome; invariant-abort count alerts on any non-
 3. Flag-off rollback needs no data deletion.
 
 ## Assumptions & open decisions
-- D07 PROVISIONAL: backup and export retention follow the defaults in PS-001-07.
-- D01 PROVISIONAL: federated import rules (Future).
+- PROVISIONAL (D07 default, unapproved): backup and export retention follow the defaults in PS-001-07.
+- PROVISIONAL (D01 default, unapproved): federated import rules (Future).
 - ASSUMPTION: export integrity via hash of canonical JSON; method pending CTR-FED-001 review.

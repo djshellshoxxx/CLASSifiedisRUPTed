@@ -39,7 +39,7 @@ Provenance: every transition records `actor_ref` (`acc_` owner, `mod_` moderator
 ## Assumptions & open decisions
 - ASSUMPTION: `duration_days` set and default 30.
 - PROVISIONAL (D05 default, unapproved): `region_cell` is a coarse registered cell.
-- PROVISIONAL (D03 default, unapproved): integer minor units with expiry-free `amount_minor` strings.
+- PROVISIONAL (D03 default, unapproved): money as integer minor units in decimal strings; no floats.
 - PROVISIONAL (D07 default, unapproved): RET-ACC for listing fields.
 
 ## Tests

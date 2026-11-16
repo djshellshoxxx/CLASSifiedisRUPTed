@@ -50,10 +50,10 @@ Fields without an allowing rule are omitted, not returned as null (CTR-CAP-001 R
 | `archive_case_ref` | no | no | no | yes |
 
 ## Failure, idempotency, concurrency, offline
-Recovery never grants archive capability (CTR-CAP-001 R12). After account recovery, owner actions require the standard proof (D10 PROVISIONAL). Federation adapter (`sys_`) scope is Future, see [import_export_backup_rollback.md](import_export_backup_rollback.md).
+Recovery never grants archive capability (CTR-CAP-001 R12). After account recovery, owner actions require the standard proof (PROVISIONAL, D10 default, unapproved). Federation adapter (`sys_`) scope is Future, see [import_export_backup_rollback.md](import_export_backup_rollback.md).
 
 ## Privacy, retention, abuse
-Case IDs are shown only in case scope. Privileged reads are audited (R05).
+Case IDs are shown only in case scope. Privileged reads are recorded in `aud_` records (R05).
 
 ## Observability & budgets
 Deny counts by code only, no actor IDs (PS-001-08 R05).
@@ -69,6 +69,6 @@ Deny counts by code only, no actor IDs (PS-001-08 R05).
 3. No `ope_` path grants archive.
 
 ## Assumptions & open decisions
-- D10 PROVISIONAL: recovery requires standard proof before owner actions.
+- PROVISIONAL (D10 default, unapproved): recovery requires standard proof before owner actions.
 - Grant model PROVISIONAL (CTR-CAP-001).
 - PENDING CTR-LST-001: counterparty rights.

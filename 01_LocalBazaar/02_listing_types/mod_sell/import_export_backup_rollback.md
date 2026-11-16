@@ -1,35 +1,54 @@
-# PS-006-10 — import export backup rollback
+# PS-006-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-006-10. **Owner:** [01_LocalBazaar/02_listing_types/mod_sell](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_sell. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/02_listing_types/mod_sell. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R02, R05, R07, R08), CTR-EVT-001 (R08), CTR-PRV-001 (R11, R12), CTR-FED-001 (R08, R12).
 
-## Purpose and scope
-Define the import export backup rollback process for sell within 02_listing_types. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-006-10.R01 | Owner export includes the `sell` object, the owner's listing events, and buyer references at PSEUDONYMOUS class. Buyer-side export includes own `prq_` records only. | MVP |
+| PS-006-10.R02 | Export never includes `reservation.trx_id` evidence payloads, requests from other buyers, or any LOCATION_PRECISE data (CTR-PRV-001 R11). | MVP |
+| PS-006-10.R03 | Import of a federated sell listing requires a valid CTR-FED-001 envelope and PUBLIC class. Import never creates reservations or sales. | MVP |
+| PS-006-10.R04 | Backup restore rebuilds `sell_state` by replaying listing events, then reconciles each open `trx_` against F09 (PS-006-06 R05). Backup state alone is not trusted. | MVP |
+| PS-006-10.R05 | Rollback: feature flag `sell_listing_type` off (F15) stops new sell listings and new requests. Existing reservations run to completion or release. Events are never deleted. | MVP |
+| PS-006-10.R06 | Schema changes: adding `"sell"` to `listing_kind` and new optional fields are MINOR. Changing the `sell` object shape is MAJOR (CTR-SCH-001 R03–R04). | MVP |
 
-## Requirements to specify
-- [ ] PS-006-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-006-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-006-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export file: JSON with `schema_id` and `schema_version` per record, plus SHA-256 digest (CTR-SCH-001 R02). Golden fixtures for `sell.listing-extension` 1.0.0 and each supported upcast path (CTR-SCH-001 R09).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export is a query, `sell.export(lst_id | self)`, owner or buyer scope only. Import runs as `sys_` with `lst.execute`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback path: flag off → no new T1 transitions; open reservations complete through T2–T7; no new events are required beyond those.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Import rejects unknown MAJOR with `SCH.UNKNOWN_VERSION`. Import with a digest mismatch is rejected with `SYS.CONFLICT` (ASSUMPTION for code choice).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export scopes: owner (own listings), buyer (own requests). Import is `sys_` only. Restore runs as operator with dual control for any PRIVATE data (CTR-CAP-001 R07), none expected here.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-006-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Import is idempotent on `(origin_node, event_id)` (CTR-FED-001 R05). Restore is repeatable: running it twice yields the same state. Partial restore fails closed: `sell_state` stays unset until reconciliation completes.
+
+## Privacy, retention, abuse
+Exports of `prq_` are deleted from export storage after 7 days (ASSUMPTION). Export digests are logged; contents are not.
+
+## Observability & budgets
+Restore reconciliation counts (rebuilt, drifted, failed) emitted per run. Export p95 ≤ 5 s for 1000 listings (ASSUMPTION).
+
+## Tests
+- TEST-PS-006-10-01 (contract): golden fixture for `sell.listing-extension` 1.0.0 round-trips byte-identical.
+- TEST-PS-006-10-02 (integration): restore from backup rebuilds `sell_state` and reconciles one drifted `trx_`.
+- TEST-PS-006-10-03 (integration): flag off stops new requests; an open reservation releases correctly.
+- TEST-PS-006-10-04 (negative): federated import without PUBLIC class or without a valid envelope is rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Owner and buyer exports contain no data outside their scope.
+2. Restore followed by reconciliation yields no drift against F09.
+3. Rollback leaves no reservation without a live `trx_` or compensation.
+4. Schema changes follow the version table in R06 and pass CTR-SCH-001 checks.
+
+## Assumptions & open decisions
+- D01 PROVISIONAL (default: versioned signed envelopes). Import relies on it.
+- D07 PROVISIONAL (default: minimal retention). Export file retention is ASSUMPTION within it.
+- D10 PROVISIONAL (default: user-controlled keys with documented recovery). Owner export is unsigned in MVP.

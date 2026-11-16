@@ -8,7 +8,7 @@
 | PS-001-02.R01 | `reason_code` must be in the closed enum of PS-001-01. Otherwise `ARCHIVE.REASON_INVALID`. Free text is rejected. | MVP |
 | PS-001-02.R02 | `expected_revision` required, integer 1 to 2^53−1. Mismatch → `EVT.REVISION_CONFLICT`. | MVP |
 | PS-001-02.R03 | Archive requires `PUBLISHED`. Restore requires `ARCHIVED`. Otherwise `ARCHIVE.INVALID_STATE`. | MVP |
-| PS-001-02.R04 | Archive refused with `ARCHIVE.ACTIVE_REFERENCE` while an open cycle proposal (`cyc_`) or open exchange (`trx_`) references the listing (D04 PROVISIONAL). | MVP |
+| PS-001-02.R04 | Archive refused with `ARCHIVE.ACTIVE_REFERENCE` while an open cycle proposal (`cyc_`) or open exchange (`trx_`) references the listing (PROVISIONAL, D04 default, unapproved). | MVP |
 | PS-001-02.R05 | Restore re-runs F01 publish validators (owned by mod_publish). Failure → `ARCHIVE.RESTORE_VALIDATION_FAILED` with `details[].rule` enum values only. | MVP |
 | PS-001-02.R06 | Unknown or extra request fields → `SYS.REQUEST_MALFORMED`. | MVP |
 | PS-001-02.R07 | Moderator command requires `case_ref` (`cas_`) in active case scope. Missing → `ARCHIVE.CASE_REQUIRED`. | MVP |
@@ -64,7 +64,7 @@ Each error code is counted by `archive_commands_total{outcome}` (PS-001-08 R01).
 3. Validation order is deterministic and documented in this file.
 
 ## Assumptions & open decisions
-- D04 PROVISIONAL: archive blocked while a cycle or exchange references the listing.
-- D01 PROVISIONAL: federated archive events are signature-validated before this checks run (Future).
+- PROVISIONAL (D04 default, unapproved): archive blocked while a cycle or exchange references the listing.
+- PROVISIONAL (D01 default, unapproved): federated archive events are signature-validated before this checks run (Future).
 - ASSUMPTION: idempotency key length 16–64 chars.
 - PENDING CTR-LST-001: reference query for open cycles and exchanges.

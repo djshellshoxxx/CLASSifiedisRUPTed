@@ -1,44 +1,47 @@
 # F01.S02.M01 — sell
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F01.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Marketplace Lead (F01). **Parent:** F01.S02 ([listing_types](../SPEC.md)).
 
 ## Purpose and business behavior
-Provide sell as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Sell is the fixed-price listing type. An owner offers one or more identical units (1–20) at one price in one currency. A buyer requests a unit; the owner accepts one request, which reserves a unit for 72 h while the parties arrange the exchange outside the platform. The module records a sale only after F09 reports a counterparty attestation (cash, other external) or external verification (on-chain). It never holds funds, never offers a buyer a price other than the listed one, and never marks a unit sold on a party's own claim.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As an owner, I can offer units at a fixed price while only a coarse region is shown, not my home address.
+- As a buyer, I can request a unit and see whether it is available, reserved, held or sold, without seeing other requesters.
+- As an owner, I can accept one request; price and quantity stay locked until that reservation ends.
+- As a buyer, I am told why a reservation was released (cancelled, expired, or no sale).
+- As an operator, I can turn off new sell listings by feature flag without breaking reservations already in progress.
 
 ## Scope
-- Required process spec: `sell_domain_model.md` (not yet authored)
-- Required process spec: `sell_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `sell_validation_and_authorization.md` (not yet authored)
-- Required process spec: `sell_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `sell_interfaces_and_events.md` (not yet authored)
-- Required process spec: `sell_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `sell_acceptance_and_property_tests.md` (not yet authored)
+In scope: `listing_kind = sell` terms (price, currency, quantity, condition, pickup method, coarse region reference); purchase requests (`prq_`); reservation and release; sale recording and reversal from F09 claim states; HELD handling for disputes.
+
+Out of scope: listing create, publish, edit and archive (F01.S01); offers and counteroffers (F01.S04 `mod_offers`); payment, claims and settlement (F09); meetup coordination and handoff (F08); federation transport (F11); moderation cases (F12).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `sell.set_terms`, `sell.request_purchase`, `sell.accept_request`, `sell.decline_request`, `sell.withdraw_request`. Queries `sell.get_status`, `sell.list_requests`, `sell.get_request`. Events `listing.sell_terms_changed`, `listing.purchase_*`, `listing.reserved`, `listing.reservation_released`, `listing.sale_*`. Errors `SELL.*` plus shared `SYS.*`. Full contracts are in the process specs below.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F01.S01 (`lst_` lifecycle, visibility, archive); F07 (`acc_` identity, account tier); F10 (data classes, retention); F15 (feature flags, idempotency infrastructure); F16 (capability enforcement). Downstream: F09 (`trx_` creation and cancellation; claim states drive sale recording); F12 (case on held sales; signals on repeated expiry); F13 (reservation notices, generic previews only per CTR-PRV-001 R10); F11 (PUBLIC sell terms only, when listing federation is on); F06 (region cells).
+
+Contract gaps: PENDING CTR-ID-001 registration of the `prq` prefix; PENDING CTR-COM-001 transaction-level event for `trx_` create and cancel.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns: the `sell` object on `lst_` (price, currency, quantity, condition, pickup method, `sell_state`, reservation reference) and `prq_` purchase requests. Does not own: core `lst_` fields (F01.S01), `trx_` and `clm_` evidence (F09), accounts (F07), region cells (F06, F10), moderation cases (F12). Export and deletion follow CTR-PRV-001 retention and legal holds.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Reservation hoarding by owners or buyers (72 h expiry; at most 3 open reservations per buyer). Bait-and-switch after a request (price and quantity locked while RESERVED or HELD). Fake sale records from self-submitted claims (rejected by design, CTR-COM-001 R06). Late attestation after release (moved to HELD). Duplicate accepts and replayed offline writes (revision checks, idempotency keys). Buyer linkage across repeated requests (responses never expose other requesters). Sale recording is attestation-based, not proof of payment or handover. No platform custody of money. Pseudonyms do not guarantee anonymity.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten PS-006 process specs approved; state rows T1–T10 covered by tests; quantity invariant holds under property tests; F09 sale-recording contract tested for claimed versus attested states; federation negative tests pass; privacy review (F10) and abuse review (F12) recorded; traceability from PS-006 IDs to TEST IDs complete.
 
 ## Required process specification inventory
-- [ ] `sell_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sell_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sell_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sell_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sell_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sell_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sell_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-006-01, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `validation_rules.md` — PS-006-02, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `workflow_state_machine.md` — PS-006-03, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `commands_queries_events.md` — PS-006-04, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `authorization_capabilities.md` — PS-006-05, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `failure_recovery_idempotency.md` — PS-006-06, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `privacy_retention_abuse.md` — PS-006-07, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `observability_performance.md` — PS-006-08, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `contract_and_acceptance_tests.md` — PS-006-09, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `import_export_backup_rollback.md` — PS-006-10, SPEC-DRAFT-COMPLETE (pending approval)

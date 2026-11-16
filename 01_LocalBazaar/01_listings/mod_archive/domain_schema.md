@@ -9,9 +9,9 @@
 | PS-001-01.R02 | Module-visible `lifecycle_state` values: `PUBLISHED`, `ARCHIVED`. Other F01 values belong to mod_publish. | MVP |
 | PS-001-01.R03 | Archive and restore never change `published_at`. | MVP |
 | PS-001-01.R04 | No free-text reason field. `archive_reason_code` is a closed enum of 4 values. | MVP |
-| PS-001-01.R05 | Archive fields hold no LOCATION_PRECISE data. `region_cell` is LOCATION_COARSE only (D05 PROVISIONAL). | MVP |
+| PS-001-01.R05 | Archive fields hold no LOCATION_PRECISE data. `region_cell` is LOCATION_COARSE only (PROVISIONAL, D05 default, unapproved). | MVP |
 | PS-001-01.R06 | Each accepted state change increments `revision` by exactly 1 (CTR-EVT-001 R02). | MVP |
-| PS-001-01.R07 | Archive fields are retained per PS-001-07 (D07 PROVISIONAL). | MVP |
+| PS-001-01.R07 | Archive fields are retained per PS-001-07 (PROVISIONAL, D07 default, unapproved). | MVP |
 | PS-001-01.R08 | Archive state federates only when `federate=true` (CTR-FED-001 R02). | Future |
 
 ## Data / schema
@@ -64,6 +64,6 @@ No location precision in any metric or log (PS-001-08 R06).
 4. `published_at` unchanged across archive/restore in all fixtures.
 
 ## Assumptions & open decisions
-- D05 PROVISIONAL (coarse region only). D07 PROVISIONAL (retention bases). D01 PROVISIONAL (federation Future).
+- PROVISIONAL (D05 default, unapproved): coarse region only. PROVISIONAL (D07 default, unapproved): retention bases. PROVISIONAL (D01 default, unapproved): federation Future.
 - ASSUMPTION: `archived_by_ref` is always an `acc_`/`mod_` ID, never a pseudonym view (CTR-CAP-001 R02).
 - PENDING CTR-LST-001: owner of the `lst_` aggregate fields is not yet fixed by a contract.

@@ -71,4 +71,4 @@ Alerts:
 
 ## Assumptions & open decisions
 - D05 PROVISIONAL (Dxx default, unapproved): K_MIN aggregation for any region-level metric.
-- ASSUMPTION: scale and latency numbers are placeholders until a load environment exists.
+- ASSUMPTION: scale and latency numbers are provisional until a load environment exists.

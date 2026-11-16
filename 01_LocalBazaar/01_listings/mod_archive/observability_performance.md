@@ -63,6 +63,6 @@ Telemetry is pseudonymous (CTR-PRV-001 R09). Aggregates have no per-listing or p
 3. Alerts fire in a staged drill.
 
 ## Assumptions & open decisions
-- D08 PROVISIONAL: queue metrics needed for the offline model.
-- D05 PROVISIONAL: no location precision in telemetry.
+- PROVISIONAL (D08 default, unapproved): queue metrics needed for the offline model.
+- PROVISIONAL (D05 default, unapproved): no location precision in telemetry.
 - ASSUMPTION: all latency and throughput numbers above.

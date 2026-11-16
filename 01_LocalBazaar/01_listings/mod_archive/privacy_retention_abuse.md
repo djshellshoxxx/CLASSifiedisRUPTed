@@ -16,7 +16,7 @@
 ## Data / schema
 | Record | Class | Retention | Basis |
 |---|---|---|---|
-| Archive fields on `lst_` | PSEUDONYMOUS | RET-ACC (account lifetime + 30 days) | D07 PROVISIONAL |
+| Archive fields on `lst_` | PSEUDONYMOUS | RET-ACC (account lifetime + 30 days) | PROVISIONAL (D07 default, unapproved) |
 | `listing.archived`, `listing.restored` | PSEUDONYMOUS | RET-AUD (12 months) | CTR-PRV-001 |
 | Moderator-archive `aud_` record | PSEUDONYMOUS | RET-AUD; RET-LEGAL if `cas_` is held | CTR-PRV-001 R07 |
 | Idempotency records | PSEUDONYMOUS | RET-OPS (7 days) | PS-001-06 |
@@ -59,12 +59,12 @@ Logs and metrics pseudonymous only (CTR-PRV-001 R09); see [observability_perform
 - TEST-PS-001-07-04 — retention: RET-ACC purge removes archive fields after account lifetime + 30 days.
 
 ## Acceptance criteria
-1. Retention and class table matches CTR-PRV-001 defaults or cites an approved change.
+1. Retention and class table matches CTR-PRV-001 defaults, or any change cites a recorded decision (Dxx) and the F10 review.
 2. No test fixture exposes a case ID to the owner view.
 3. Federated export of archived listing contains no owner `acc_` (test fixture).
 
 ## Assumptions & open decisions
-- D05 PROVISIONAL: no precise location in archive records.
-- D07 PROVISIONAL: retention defaults above; jurisdiction review OPEN (CTR-PRV-001 R07).
+- PROVISIONAL (D05 default, unapproved): no precise location in archive records.
+- PROVISIONAL (D07 default, unapproved): retention defaults above; jurisdiction review OPEN (CTR-PRV-001 R07).
 - ASSUMPTION: 60 s de-index budget; day-granular public timestamps.
 - F10 review of this file is a future gate, not claimed.

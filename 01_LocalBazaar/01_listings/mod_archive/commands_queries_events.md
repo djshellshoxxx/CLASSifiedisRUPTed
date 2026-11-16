@@ -67,6 +67,6 @@ Each command emits `archive_commands_total`; budgets in [observability_performan
 3. Fixtures stored per CTR-SCH-001 R09.
 
 ## Assumptions & open decisions
-- D01 PROVISIONAL: event envelope and federation export rules.
-- D08 PROVISIONAL: offline commands carry the same key as online.
+- PROVISIONAL (D01 default, unapproved): event envelope and federation export rules.
+- PROVISIONAL (D08 default, unapproved): offline commands carry the same key as online.
 - ASSUMPTION: idempotency key 16–64 chars.

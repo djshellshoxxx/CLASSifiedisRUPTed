@@ -62,6 +62,6 @@ Load test against budgets in [observability_performance.md](observability_perfor
 4. Security and privacy sign-off by F10 and F16 is recorded by those owners. Not claimed here.
 
 ## Assumptions & open decisions
-- D01 PROVISIONAL: envelope and dedupe behavior.
-- D08 PROVISIONAL: offline queue behavior tested in -09, -13.
+- PROVISIONAL (D01 default, unapproved): envelope and dedupe behavior.
+- PROVISIONAL (D08 default, unapproved): offline queue behavior tested in -09, -13.
 - PENDING CTR-LST-001: fixture for active references is a stub until the contract exists.

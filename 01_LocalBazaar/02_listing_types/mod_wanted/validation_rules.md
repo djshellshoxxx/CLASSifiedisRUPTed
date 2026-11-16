@@ -77,5 +77,5 @@ Counter `wanted_validation_reject_total{rule}`. Validation p95 ≤ 5 ms per requ
 
 ## Assumptions & open decisions
 - D05 PROVISIONAL (Dxx default, unapproved): precise location rejected; region cell only.
-- ASSUMPTION: contact and address detectors are heuristic; thresholds are placeholders until fixture measurement.
+- ASSUMPTION: contact and address detectors are heuristic; thresholds are provisional until fixture measurement.
 - ASSUMPTION: active-post limit 5; duplicate window 24 h.

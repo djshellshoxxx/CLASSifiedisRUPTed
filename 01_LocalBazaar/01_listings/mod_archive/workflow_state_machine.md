@@ -40,8 +40,8 @@ Guards `lst.update` and `lst.moderate` are defined in [authorization_capabilitie
 ## Failure, idempotency, concurrency, offline
 - Transitions serialize on the `lst_` lock (CTR-EVT-001 R02). The second writer receives `EVT.REVISION_CONFLICT`.
 - Server commit timeout 5 s. Ambiguous outcome → client retries with same key (PS-001-06).
-- Offline: command sits in the local pending queue (D08 PROVISIONAL). No server state exists until relay acknowledgement.
-- Cycle acceptance and archive race on the same lock; the active-reference guard decides the winner (D04 PROVISIONAL).
+- Offline: command sits in the local pending queue (PROVISIONAL, D08 default, unapproved). No server state exists until relay acknowledgement.
+- Cycle acceptance and archive race on the same lock; the active-reference guard decides the winner (PROVISIONAL, D04 default, unapproved).
 
 ## Privacy, retention, abuse
 Transition events carry no free text and no account ID for federated export (CTR-EVT-001 R13). Abuse control: R03.
@@ -61,7 +61,7 @@ Transition events carry no free text and no account ID for federated export (CTR
 3. No transition writes state without a matching event.
 
 ## Assumptions & open decisions
-- D08 PROVISIONAL: local pending queue until relay acknowledgement.
-- D04 PROVISIONAL: archive blocked during open cycle or exchange.
+- PROVISIONAL (D08 default, unapproved): local pending queue until relay acknowledgement.
+- PROVISIONAL (D04 default, unapproved): archive blocked during open cycle or exchange.
 - ASSUMPTION: 10 transitions per 24 h; 60 s de-index budget.
 - PENDING CTR-LST-001 and PENDING CTR-NTF-001.

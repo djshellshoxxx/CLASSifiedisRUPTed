@@ -1,35 +1,64 @@
 # PS-007-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-007-09. **Owner:** [01_LocalBazaar/02_listing_types/mod_wanted](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_wanted. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/02_listing_types/mod_wanted. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R03 compatibility checker), CTR-EVT-001, CTR-ERR-001 (R02 registry lint), CTR-FED-001, PENDING CTR-LST-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for wanted within 02_listing_types. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-007-09.R01 | Contract tests cover `listing.wanted_fields`, every command in PS-007-04, every event type, and every error code in PS-007-02. | MVP |
+| PS-007-09.R02 | Consumers reference schemas by canonical ID. No consumer redefines a schema. | MVP |
+| PS-007-09.R03 | A breaking change fails CI through the CTR-SCH-001 compatibility checker. | MVP |
+| PS-007-09.R04 | Every acceptance criterion in PS-007-01…10 maps to at least one TEST ID. Traceability is 100%. | MVP |
+| PS-007-09.R05 | Line coverage ≥ 90% for validation and state modules (ASSUMPTION). Property tests cover the state machine. | MVP |
 
-## Requirements to specify
-- [ ] PS-007-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-007-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-007-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Consumer contract list:
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Contract | Producer | Consumer | Test |
+|---|---|---|---|
+| `listing.wanted_fields` 1.0.0 | mod_wanted | 06_Discovery index (projection) | TEST-PS-007-09-01 |
+| Commands v1 | mod_wanted | PWA client (15_Platform) | TEST-PS-007-09-02 |
+| `listing.*` events | mod_wanted | 04_pricing/mod_offers, F13 notifications | TEST-PS-007-09-03 |
+| Moderation hooks (`cas_` status) | F12 | mod_wanted | TEST-PS-007-09-04 |
+| Owner export | mod_wanted | F10 export | TEST-PS-007-09-05 (see PS-007-10) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Contract tests run against the schema digests in CTR-SCH-001. Event replay is covered in PS-007-06.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Consumers must handle every state in PS-007-03, including `suspended` and `tombstoned`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Consumers must handle every code in PS-007-02 by `message_key`. Unknown codes are treated as non-retryable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-007-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Contract tests include a negative case per consumer: a consumer without the matching capability gets `SYS.FORBIDDEN` or `SYS.NOT_FOUND`.
+
+## Failure, idempotency, concurrency, offline
+Consumer tests replay duplicate and out-of-order events (CTR-EVT R02, R03).
+
+## Privacy, retention, abuse
+Contract fixtures use synthetic `acc_` and `prf_` values only. No real personal data in fixtures.
+
+## Observability & budgets
+Contract test results published in CI summary. Failures block merge.
+
+## Tests
+- TEST-PS-007-09-01 (contract, consumer-driven): 06_Discovery index accepts fragment 1.0.0; rejects unknown major.
+- TEST-PS-007-09-02 (contract): PWA command client validates request and response for each command.
+- TEST-PS-007-09-03 (contract, replay): offers and notifications handle duplicate and reordered events.
+- TEST-PS-007-09-04 (contract): F12 hook suspends and reinstates with `cas_` reference only.
+- TEST-PS-007-09-05 (contract): export schema matches PS-007-10.
+- TEST-PS-007-09-06 (lint): every acceptance criterion in PS-007-01…10 maps to a TEST ID.
+- TEST-PS-007-09-07 (registry): PS-007-01…10 present in planning/SPEC_REGISTRY.md with matching paths.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Contract tests pass for all five consumers.
+2. Traceability lint reports 100% mapping.
+3. No consumer defines its own copy of a wanted schema.
+4. Release is blocked until PENDING CTR-LST-001 is resolved.
+
+## Assumptions & open decisions
+- PENDING CTR-LST-001 gates contract freeze.
+- D01 PROVISIONAL (Dxx default, unapproved): envelope and signature rules for federated consumers.
+- D08 PROVISIONAL (Dxx default, unapproved): offline clients use the same command contracts.

@@ -9,7 +9,7 @@
 | PS-001-06.R02 | Same key, different digest → `EVT.IDEMPOTENCY_KEY_REUSED`. No state change. | MVP |
 | PS-001-06.R03 | Retry after ambiguous timeout reuses the key. Exactly one `listing.archived` event results (fault-injection test PS-001-09). | MVP |
 | PS-001-06.R04 | Archive is reversible. No saga: compensation of an accepted archive is an explicit restore. | MVP |
-| PS-001-06.R05 | Offline archive and restore queue locally until relay acknowledgement (D08 PROVISIONAL). Queue survives app restart. | MVP |
+| PS-001-06.R05 | Offline archive and restore queue locally until relay acknowledgement (PROVISIONAL, D08 default, unapproved). Queue survives app restart. | MVP |
 | PS-001-06.R06 | Server command timeout 5 s. Client timeout 10 s, then retry with backoff: 1 s base, ×2, cap 60 s, ±20 % jitter (ASSUMPTION). | MVP |
 | PS-001-06.R07 | Revision conflict is never auto-resolved. Client shows "listing changed" and re-reads before any new command. | MVP |
 
@@ -40,7 +40,7 @@ Authorization is re-checked on every retry (CTR-CAP-001 R09; no cache for writes
 | Second device edits listing while archive queued | `EVT.REVISION_CONFLICT` | queued command fails; not retried silently |
 | Key older than 7 days | treated as new | safe: state guard still applies |
 
-Concurrency: writes serialize on the `lst_` lock. Archive vs. cycle acceptance: the active-reference check runs under the same lock, so exactly one wins (D04 PROVISIONAL).
+Concurrency: writes serialize on the `lst_` lock. Archive vs. cycle acceptance: the active-reference check runs under the same lock, so exactly one wins (PROVISIONAL, D04 default, unapproved).
 
 Backup, rollback and migration rules: [import_export_backup_rollback.md](import_export_backup_rollback.md).
 
@@ -62,7 +62,7 @@ Idempotency records hold no content, only digests. Queue entries are RET-EPH and
 3. No auto-resolution of revision conflicts.
 
 ## Assumptions & open decisions
-- D08 PROVISIONAL: local queue until relay acknowledgement.
-- D04 PROVISIONAL: no compensation needed; active-reference guard.
-- D01 PROVISIONAL: federated dedupe on (`origin_node`, `event_id`).
+- PROVISIONAL (D08 default, unapproved): local queue until relay acknowledgement.
+- PROVISIONAL (D04 default, unapproved): no compensation needed; active-reference guard.
+- PROVISIONAL (D01 default, unapproved): federated dedupe on (`origin_node`, `event_id`).
 - ASSUMPTION: backoff parameters, 50-entry queue, 9-day reconcile window.

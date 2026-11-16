@@ -1,35 +1,54 @@
 # PS-006-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-006-09. **Owner:** [01_LocalBazaar/02_listing_types/mod_sell](SPEC.md). **Implementing module:** 01_LocalBazaar/02_listing_types/mod_sell. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/02_listing_types/mod_sell. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R03, R09), CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-COM-001, CTR-FED-001 (R03).
 
-## Purpose and scope
-Define the contract and acceptance tests process for sell within 02_listing_types. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-006-09.R01 | Contract tests run in CI for every sell command, query and event against CTR-SCH-001 fixtures. A schema change without a compatibility pass blocks merge. | MVP |
+| PS-006-09.R02 | End-to-end tests cover: single-unit sale; two-unit sale with reversal; dispute hold and release; reservation expiry; offline replay. | MVP |
+| PS-006-09.R03 | Accessibility tests cover the request and accept flows by keyboard and screen reader (F14 rules). | MVP |
+| PS-006-09.R04 | F09 is mocked for contract tests. A recorded F09 sandbox run is required before release (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-006-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-006-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-006-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Test fixtures: `fixtures/sell.listing-extension/1.0.0/*.json` (valid and invalid); `fixtures/listing.sell_terms_changed/1.0.0/*.json`; claim sequences for cash, on-chain and reversal cases. Each fixture records its expected error code or event.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Every command and event in [PS-006-04](commands_queries_events.md) has at least one contract test.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+State-machine coverage: rows T1–T10 in [PS-006-03](workflow_state_machine.md) each have one e2e or integration test.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Each `SELL.*` code in [PS-006-02](validation_rules.md) has one fixture that triggers it.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Each row of the matrix in [PS-006-05](authorization_capabilities.md) has an allow and a deny case.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-006-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection: F09 timeout, duplicate claim event, out-of-order claim event, two concurrent accepts, replayed offline write.
+
+## Privacy, retention, abuse
+Negative fixtures: SECRET field in payload, coordinate-shaped `region_cell`, federated export containing `prq_`.
+
+## Observability & budgets
+Contract suite runtime ≤ 10 min in CI (ASSUMPTION). Load and budget tests are in [PS-006-08](observability_performance.md).
+
+## Tests
+- TEST-PS-006-09-01 (contract): all event fixtures validate against CTR-SCH-001 registry entries.
+- TEST-PS-006-09-02 (e2e): single-unit sale from request to `listing.sale_recorded`.
+- TEST-PS-006-09-03 (e2e): two-unit sale, then claim reversal restores quantity to 2.
+- TEST-PS-006-09-04 (e2e): dispute hold, then resolved with no sale; listing returns to AVAILABLE.
+- TEST-PS-006-09-05 (a11y): request, accept and decline are completable by keyboard alone with announced state changes.
+- TEST-PS-006-09-06 (offline): queued `set_terms` replays against current revision and produces `SYS.CONFLICT` if changed.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every row of PS-006-01 through PS-006-08 maps to at least one passing test ID.
+2. All five e2e scenarios pass against the F09 mock and the recorded sandbox run.
+3. Every `SELL.*` code has a fixture and a passing test.
+4. Contract suite blocks merge on any unversioned schema change.
+
+## Assumptions & open decisions
+- ASSUMPTION: sandbox recording from F09 is available before release.
+- D04 NOT APPLICABLE (not barter).
+- D06 PROVISIONAL (signed statements only). Test fixtures use attested claims, not payment proof.

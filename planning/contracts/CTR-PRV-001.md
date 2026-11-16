@@ -15,7 +15,7 @@ Defines the data classes every field and record must carry, default retention cl
 | CTR-PRV-001.R01 | Every schema field has exactly one class (CTR-SCH-001). Unclassified field → CI failure `PRV.UNCLASSIFIED_FIELD`. | MVP |
 | CTR-PRV-001.R02 | Class ordering for `max_data_class`: PUBLIC < PSEUDONYMOUS < LOCATION_COARSE < PRIVATE_PERSONAL < FINANCIAL_EVIDENCE < LOCATION_PRECISE. `SECRET` is outside the ordering and never appears in events. | MVP |
 | CTR-PRV-001.R03 | Precise location (exact coordinates, street address, home address) is LOCATION_PRECISE. It never enters public payloads, federation, logs, analytics or push previews (zero tolerance; tested). | MVP |
-| CTR-PRV-001.R04 | Coarse location is limited to the approved region-cell set. A cell is published only when it contains at least K_MIN active items (ASSUMPTION: K_MIN = 5; F10 to validate). Cells below threshold are merged upward or suppressed. | MVP |
+| CTR-PRV-001.R04 | Coarse location is limited to the registered region-cell set. A cell is published only when it contains at least K_MIN active items (ASSUMPTION: K_MIN = 5; F10 to validate). Cells below threshold are merged upward or suppressed. | MVP |
 | CTR-PRV-001.R05 | Location query budget per principal: ≤ 30 region queries per 24 h (ASSUMPTION). Queries cannot take a precise center; centers snap to cell centroids. Repeated narrowing patterns raise an alert (CR-13). | MVP |
 | CTR-PRV-001.R06 | Retention: every record carries a retention class (table below). Deletion and expiry propagate to replicas, caches, search indexes, derived location data and exports within 24 h (ASSUMPTION). Backups expire by their own schedule; restore replays deletions (BT-04). | MVP |
 | CTR-PRV-001.R07 | Legal holds are scoped to a `cas_` ID or a named matter, require an `ope` approval and dual control, have a stated end date, and are released automatically at that date unless renewed. Holds never extend unrelated records. | MVP |
@@ -33,7 +33,7 @@ Data class definitions:
 |---|---|---|
 | PUBLIC | Intended for anyone; no personal data. | Listing title, public description, category. |
 | PSEUDONYMOUS | Linked to an `acc_` or `prf_`; no legal identity. | Pseudonym, reputation counts, listing owner ref. |
-| LOCATION_COARSE | Approved region cell only (R04). | `region_cell` such as `DE-BE-C1`. |
+| LOCATION_COARSE | Registered region cell only (R04). | `region_cell` such as `DE-BE-C1`. |
 | PRIVATE_PERSONAL | Personal data not for public display. | Contact details, profile private fields, messages, attachment content. |
 | FINANCIAL_EVIDENCE | Payment claims, attestations, transaction references, amounts. | CTR-COM-001 claim records. |
 | LOCATION_PRECISE | Exact coordinates or addresses. | Home address, meetup point. |
@@ -62,7 +62,7 @@ Y = allowed. C = conditional (condition in the notes). N = forbidden.
 |---|---|---|---|---|---|---|---|
 | Owner | Y | Y | Y | Y | Y | Y | N (fingerprint only) |
 | Transaction counterparty | Y | C (in active transaction) | Y | C (in transaction or thread) | C (same transaction) | C (user-initiated, time-limited, D05) | N |
-| Public, unauthenticated | Y | C (public profile) | C (approved cells, R04) | N | N | N | N |
+| Public, unauthenticated | Y | C (public profile) | C (registered cells, R04) | N | N | N | N |
 | Federation peer | Y | C (per-item opt-in; per-audience pseudonym) | C (cell only, same thresholds) | N | C (deferred; redacted proof only, no counterparty IDs) | N | N |
 | Logs and telemetry | Y (no content) | C (pseudonymous ID only) | C (cell ID only) | N | N (IDs only, no amounts) | N | N |
 | Analytics | Y (aggregate) | C (aggregate, K_MIN) | C (aggregate, K_MIN) | N | N | N | N |

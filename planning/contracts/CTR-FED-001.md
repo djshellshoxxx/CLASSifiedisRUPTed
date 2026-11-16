@@ -13,7 +13,7 @@ Wire format and verification rules for events exchanged between nodes: batch env
 | ID | Requirement (measurable) | Priority |
 |---|---|---|
 | CTR-FED-001.R01 | Federation is opt-in and off by default. A node federates only when an admin enables it (feature flag) and a peer is in state `trusted` (or `restricted` for inbound only). | MVP |
-| CTR-FED-001.R02 | Items are not federated by default. Each item carries `federate` (default false). Only PUBLIC items federate without per-item opt-in. PSEUDONYMOUS items require per-item opt-in. LOCATION_COARSE federates only as an approved cell (CTR-PRV-001). | MVP |
+| CTR-FED-001.R02 | Items are not federated by default. Each item carries `federate` (default false). Only PUBLIC items federate without per-item opt-in. PSEUDONYMOUS items require per-item opt-in. LOCATION_COARSE federates only as a registered cell (CTR-PRV-001). | MVP |
 | CTR-FED-001.R03 | Never federated: PRIVATE_PERSONAL, LOCATION_PRECISE, SECRET. FINANCIAL_EVIDENCE is deferred for MVP (no federation of financial evidence until a separate decision). Inbound events of these classes → `FED.DATA_CLASS_NOT_ALLOWED`. | MVP |
 | CTR-FED-001.R04 | Each event in a batch is independently signed (CTR-EVT-001 R05) over the domain-prefixed JCS of the envelope, including `audience` and `expires_at`. Batch-level transport fields are not signed and are validated only for size and rate. | MVP |
 | CTR-FED-001.R05 | Dedupe key = (`provenance.origin_node`, `event_id`). Duplicates are acknowledged with status `duplicate` and not reprocessed. | MVP |
@@ -127,7 +127,7 @@ Valid batch (one accepted event, one with a signature failure in the ack):
       "max_data_class": "PUBLIC",
       "audience": "public",
       "expires_at": "2026-12-10T09:12:04.317Z",
-      "signature": {"alg": "Ed25519", "key_id": "key_01HZX3W0X2Y4Z6A8B0C2D4E6FG", "value": "Qm9ndXNfc2lnbmF0dXJlX3ZhbHVlX2Zvcl9kb2NfZXhhbXBsZV9vbmx5X25vdF9yZWFsXzAxMjM0NTY3ODlBQkNE"},
+      "signature": {"alg": "Ed25519", "key_id": "key_01HZX3W0X2Y4Z6A8B0C2D4E6FG", "value": "Qm9ndXNfc2lnbmF0dXJlX3ZhbHVlX2Zvcl9kb2NfZXhhbXBsZV9vbmx5X25vdF9yZWFsXzAxMjM0NTY3ODlBQk"},
       "payload": {"title": "Used road bike", "price": {"amount_minor": "15000", "currency": "EUR", "exponent": 2}}
     }
   ]

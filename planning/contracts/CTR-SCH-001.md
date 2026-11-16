@@ -148,7 +148,7 @@ Invalid (violations: `schema_id` uses uppercase; `owner` not a module ID; `sha25
 }
 ```
 
-Violations: `schema_id` (R01); `schema_version` not SemVer (R01); `format` (R01); `owner` not `F01`–`F18` (R01); `data_classes.api_key = SECRET` (R-EVT R11); `sha256` (R02).
+Violations: `schema_id` (R01); `schema_version` not SemVer (R01); `format` (R01); `owner` not `F01`–`F18` (R01); `data_classes.api_key = SECRET` (CTR-EVT-001 R11); `sha256` (R02).
 
 ## Validation and errors
 

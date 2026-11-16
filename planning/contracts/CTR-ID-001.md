@@ -41,6 +41,7 @@ Entity identifiers for every persisted or transmitted aggregate. External identi
 | aud | audit record | ulid | F16 |
 | evt | event | ulid | F15 |
 | cor | correlation ID (one per command or saga) | ulid | F15 |
+| req | request ID returned in error responses (CTR-ERR-001) | opaque | F15 |
 | nod | federation node | ulid | F11 |
 | fpr | federation peer | ulid | F11 |
 | dlv | federation delivery batch | ulid | F11 |

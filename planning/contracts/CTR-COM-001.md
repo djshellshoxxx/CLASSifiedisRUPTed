@@ -149,7 +149,7 @@ Valid claim (cross-currency, on-chain, pinned quote; `claim_hash` shown as a pla
   "direction": "claimant_paid",
   "amount_minor": "250000",
   "currency": {"kind": "asset", "code": "eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "exponent": 6},
-  "quote_id": "qte_01HZX3U4W6X8Y0Z2A4B6C8D0EF",
+  "quote_id": "qte_01HZX3V4W6X8Y0Z2A4B6C8D0EF",
   "method": "onchain_transfer",
   "external_ref": {"chain": "eip155:1", "tx_hash": "0x9f1c2e7d4a6b8c0e2f4a6b8d0c2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a1b2c3d4e", "recipient": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", "asset": "eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},
   "evidence": [{"kind": "chain_transaction", "digest_sha256": "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b", "source": "external_adapter"}],
@@ -181,7 +181,7 @@ Invalid (violations listed below):
 }
 ```
 
-Violations: `amount_minor` is a float, not a decimal string (R02); `platform_wallet` is a custody field (R01, `COM.CUSTODY_FORBIDDEN`); `state` = `PAID` is not in the state set (R05); `state_version` below minimum 1 (Data); `claim_hash` not 64 hex (Data); `quote_id` absent although the currency is in a different asset class than the agreed one, if applicable (conditional rule, Data); `method` = `cash` cannot be `FINAL` or `EXTERNALLY_VERIFIED` (R07) — stated here as the state ceiling for the record.
+Violations: `amount_minor` is a float, not a decimal string (R02); `platform_wallet` is a custody field (R01, `COM.CUSTODY_FORBIDDEN`); `state` = `PAID` is not in the state set (R05); `state_version` below minimum 1 (Data); `claim_hash` not 64 hex (Data); `method` = `cash` cannot reach `EXTERNALLY_VERIFIED` or `FINAL` (R07); the record's maximum state is `COUNTERPARTY_ATTESTED`.
 
 ## Validation and errors
 

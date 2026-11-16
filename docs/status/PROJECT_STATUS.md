@@ -1,5 +1,41 @@
 # Project status
 
+## November 16, 2026 encrypted persistence continuation
+
+Consolidation PR #37 at `a189787` passed Alpha verification run 43889531898 and
+CLI setup run 43889532000, and merged into `main` at `3fd5fdb`. These checks apply
+to that predecessor, not to the encrypted-storage implementation below.
+
+The new candidate adds production vault domain encryption: AES-GCM row payloads,
+HKDF-separated encryption/address keys, opaque HMAC row addresses, and an encrypted
+inventory that rejects partial row deletion or ciphertext replacement. Identity
+headers carry an authenticated format marker inside a sealed v2 wrapper. Legacy
+plaintext migration follows identity verification and replaces rows and their
+keys atomically with the wrapped identity/key header/inventory. New creates and
+restores commit those components together. The low-level kernel IndexedDB adapter
+remains a general unencrypted adapter; production `openVault` adds protection.
+
+The implementation preserves the synchronous decrypted working-set API, per-vault
+writer lock/fence, rollback on persistence/encryption failures, backup codecs and
+post-unlock retention. No cryptography dependency was added. Existing alpha record
+backups remain supported; older app versions cannot read the upgraded on-disk
+identity. Table names/counts/lengths and identity timestamps remain visible. Whole
+store rollback, historical plaintext copies, physical erasure, key rotation and
+complete recovery are not solved by authenticated row encryption.
+
+Local verification: 504/504 domain and integration tests passed, including 11
+storage protection regressions; 32/32 CLI/tooling tests passed. Typecheck, production
+build, setup/doctor, dependency checks, whitespace checks and strict specifications
+passed (148 modules, zero errors/warnings). A new browser journey inspects raw
+IndexedDB keys and contents, then verifies lock/unlock recovery. Local execution
+could not launch because the pinned Chromium executable is absent. Candidate CI
+must qualify all browser engines before merge; predecessor CI is not reused as
+new-feature evidence. Review found and corrected raw-key disclosure, a missing-header
+downgrade path and silent partial-row deletion; the follow-up review reported no
+additional high-confidence defects.
+This is a scoped storage improvement; the project remains an alpha with the other
+unfinished workflows below. Historical status entries describe their own heads.
+
 ## November 16, 2026 inbox, import and editor continuation
 
 Continues PR #37 from `ca26646` without merging or deleting historical branches. The PWA now exposes a local inbox, unread/all pagination, individual/bulk read actions, barter preferences, encrypted-backup codecs, and 30-day retention on unlock/activity. Newly accepted signed barter evidence emits a content-free event with verified participant and author identifiers. Duplicate files, rejected signatures, self-actions and session-blocked peers do not create new alerts. Alerts describe local evidence acceptance, not completed settlement. Other notification channels and quiet hours remain unfinished.

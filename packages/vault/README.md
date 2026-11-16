@@ -11,8 +11,30 @@ Signing keys are encrypted with the ADR-0013 scrypt parameters (N=131072, r=8,
 p=1), fresh 16-byte salt and XChaCha20-Poly1305 with a fresh 24-byte nonce.
 Passphrases must contain 12–1024 UTF-8 bytes. Signing uses nonextractable
 WebCrypto Ed25519 keys after creation/unlock; the DID binds the exact public key.
-**Other domain records are plaintext in IndexedDB.** This foundation does not
-claim whole-database encryption or physical erasure of browser storage/memory.
+Domain row contents, secondary index values, blobs and delivery/idempotency state
+are encrypted with AES-256-GCM and fresh 96-bit nonces. A random 256-bit storage
+key is protected with the existing scrypt/XChaCha20-Poly1305 envelope; separate
+HKDF-SHA-256 subkeys protect row contents and HMAC-SHA-256 row addresses. AAD binds
+ciphertext to the database name, table and opaque stored key. An encrypted
+inventory authenticates the exact durable row set and its ciphertext hashes,
+including the protected identity, so partial deletion/replacement fails unlock.
+
+The root identity uses a sealed `classrup.vault-identity/v2` wrapper containing an
+authenticated storage-format marker. Removing the storage-key header from an
+upgraded vault fails closed. Legacy plaintext rows migrate only after a correct
+identity passphrase, with row replacement, old-key deletion, identity upgrade,
+key header and inventory committed atomically. New create/restore operations
+commit their identity, key header, domain rows and inventory together. Failed
+migration leaves the original plaintext rows intact for retry. Older application
+versions cannot open upgraded vaults; backups remain alpha-backup compatible.
+
+Table names, row counts, ciphertext lengths and root identity timestamps remain
+visible. This does not provide physical erasure of old browser pages or in-memory
+JavaScript strings, protection from malicious same-origin scripts, or detection
+of a complete database rollback (including a pre-migration plaintext snapshot).
+Unlock adds bounded key-derivation work and loads/decrypts the working set; each
+write updates the encrypted inventory. Very large vaults need further load and
+memory qualification. Rotation, key deletion and complete recovery remain open.
 
 `exportBackup(passphrase)` encrypts a signed alpha record bundle for exactly the
 registered codecs. `restoreBackup(bundle, passphrase)` validates signature,

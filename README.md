@@ -29,7 +29,7 @@ Use `pnpm run setup` and `pnpm run doctor`: both bare names collide with pnpm's 
 - Local inbox for accepted signed barter updates, with read controls, preferences, retry status and encrypted-backup support. No push/email delivery is configured.
 - Terminal installation/configuration diagnostics, static browser build, public-asset-only offline cache and cross-platform CI definitions.
 
-Signing keys and exported backups are encrypted. **Local domain records are not encrypted at rest.** Alpha backup covers registered domain records and identity, not the complete media/outbox/device-rotation recovery protocol. Keep the original vault passphrase for backup and restore. Browser origin changes create separate storage locations.
+Signing keys, exported backups and local domain rows are encrypted. Existing plaintext vaults migrate atomically after successful unlock. Storage uses authenticated row encryption, opaque row keys and an authenticated inventory; table names, row counts and ciphertext sizes remain visible. Alpha backup covers registered domain records and identity, not the complete media/outbox/device-rotation recovery protocol. Keep the original vault passphrase for backup and restore. Browser origin changes create separate storage locations.
 
 The alpha signed-file protocol uses per-subject chains and explicitly experimental statement types where full federation contracts are not implemented. It is not interoperable canonical relay federation. Peer statements are claims, not proof of physical availability. Reservations only protect local inventory; conflicting peer commitments freeze coordination. No payment custody or atomic physical exchange is provided.
 

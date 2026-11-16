@@ -1,5 +1,6 @@
 import { ok, type Storage, type StoredRecord, type RepoDef, type Tx, type Result, type TxMode } from '@classrup/kernel';
-import { openIndexedDbStorage, type IndexedDbOptions } from '@classrup/kernel/browser';
+import { type IndexedDbOptions } from '@classrup/kernel/browser';
+import { openEncryptedStorage } from './encrypted-storage.ts';
 import { createIdentity, unlockIdentity, seal, unseal, type ProtectedIdentity, type UnlockedIdentity, type Sealed } from '@classrup/identity';
 import { signEnvelope, verifyEnvelope } from '@classrup/federation';
 
@@ -9,6 +10,7 @@ const KEY_ID = 'root';
 const MAX_RECORDS = 10000;
 const MAX_BACKUP_BYTES = 16 * 1024 * 1024;
 const encoder = new TextEncoder();
+const STORAGE_IDENTITY_FORMAT = 'classrup.vault-identity/v2';
 const decoder = new TextDecoder('utf-8', { fatal: true });
 
 /** Explicit domain schema and indexes; unknown record types never pass restore. */
@@ -52,18 +54,25 @@ export interface Vault {
 
 export async function openVault(options: VaultOptions): Promise<Vault> {
   if (!/^[A-Za-z0-9 _-]{1,80}$/.test(options.name)) throw new Error('Use a vault name of 1–80 letters, digits, spaces, _ or -');
-  return vaultFromStorage(await openIndexedDbStorage({ ...options, name: `classrup-vault:${options.name}` }), options.codecs);
+  const protectedStorage = await openEncryptedStorage({ ...options, name: `classrup-vault:${options.name}` });
+  return vaultFromStorage(protectedStorage.storage, options.codecs, protectedStorage.unlock);
 }
 
 /** Composition seam for contract tests; production callers use openVault's IndexedDB adapter. */
-export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = []): Vault {
+export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = [], unlockStorage?: (passphrase: string, required: boolean, replacement?: object) => Promise<void>): Vault {
   const byType = new Map(codecs.map(codec => [codec.type, codec]));
   if (byType.size !== codecs.length || byType.has(KEY_TYPE)) throw new Error('Invalid backup codecs');
   let session: UnlockedVault | undefined;
   let closed = false;
   let opening = false;
   const check = (): void => { if (closed) throw new Error('Vault closed'); };
-  const key = (): Promise<StoredRecord<ProtectedIdentity> | undefined> => { check(); return raw.read(tx => tx.records.get<ProtectedIdentity>(KEY_TENANT, KEY_TYPE, KEY_ID)); };
+  const key = (): Promise<StoredRecord<unknown> | undefined> => { check(); return raw.read(tx => tx.records.get(KEY_TENANT, KEY_TYPE, KEY_ID)); };
+  const wrapIdentity = async (identity: ProtectedIdentity, passphrase: string): Promise<object> => {
+    if (!unlockStorage) return identity;
+    const bytes = encoder.encode(JSON.stringify({ storageFormat: 'classrup.storage-row/v1', identity }));
+    try { return { format: STORAGE_IDENTITY_FORMAT, sealed: await seal(bytes, passphrase) }; }
+    finally { bytes.fill(0); }
+  };
   const close = async (): Promise<void> => {
     closed = true;
     session?.identity.lock();
@@ -126,7 +135,10 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
       const created = await createIdentity(passphrase);
       try {
         check();
-        const saved = await raw.transaction(tx => tx.records.put({ tenant: KEY_TENANT, type: KEY_TYPE, id: KEY_ID, data: created.protectedIdentity, idx: [null, null, null, null], expectedRevision: 0, now: Date.now() }));
+        const persistedIdentity = await wrapIdentity(created.protectedIdentity, passphrase);
+        await unlockStorage?.(passphrase, false);
+        check();
+        const saved = await raw.transaction(tx => tx.records.put({ tenant: KEY_TENANT, type: KEY_TYPE, id: KEY_ID, data: persistedIdentity, idx: [null, null, null, null], expectedRevision: 0, now: Date.now() }));
         if (!saved.ok) throw new Error('Vault initialization conflict');
         return activate(created.identity, created.protectedIdentity);
       } catch (error) { created.identity.lock(); throw error; }
@@ -134,8 +146,25 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
     unlock: passphrase => exclusive(async () => {
       const stored = await key();
       if (!stored) throw new Error('Vault does not exist');
-      const identity = await unlockIdentity(stored.data, passphrase);
-      return activate(identity, stored.data);
+      let protectedIdentity = stored.data;
+      let requiresEncryption = false;
+      if (protectedIdentity && typeof protectedIdentity === 'object' && (protectedIdentity as { format?: unknown }).format === STORAGE_IDENTITY_FORMAT) {
+        const wrapper = protectedIdentity as Record<string, unknown>;
+        if (Object.keys(wrapper).sort().join(',') !== 'format,sealed') throw new Error('Invalid vault identity');
+        const bytes = await unseal(wrapper.sealed, passphrase);
+        try {
+          const payload = JSON.parse(decoder.decode(bytes)) as Record<string, unknown>;
+          if (!payload || Object.keys(payload).sort().join(',') !== 'identity,storageFormat' || payload.storageFormat !== 'classrup.storage-row/v1') throw new Error('Invalid vault identity');
+          protectedIdentity = payload.identity;
+          requiresEncryption = true;
+        } finally { bytes.fill(0); }
+      }
+      const identity = await unlockIdentity(protectedIdentity, passphrase);
+      try {
+        const replacement = !requiresEncryption && unlockStorage ? await wrapIdentity(protectedIdentity as ProtectedIdentity, passphrase) : undefined;
+        await unlockStorage?.(passphrase, requiresEncryption, replacement);
+        return activate(identity, protectedIdentity as ProtectedIdentity);
+      } catch (error) { identity.lock(); throw error; }
     }),
     restoreBackup: (input, passphrase) => exclusive(async () => {
       if (await key()) throw new Error('Restore requires a new empty vault');
@@ -175,8 +204,11 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           await codec.validate?.(entry.record.data);
         }
         check();
+        const persistedIdentity = await wrapIdentity(data.protectedIdentity as ProtectedIdentity, passphrase);
+        await unlockStorage?.(passphrase, false);
+        check();
         const saved = await raw.transaction(tx => {
-          const identityWrite = tx.records.put({ tenant: KEY_TENANT, type: KEY_TYPE, id: KEY_ID, data: data.protectedIdentity, idx: [null, null, null, null], expectedRevision: 0, now: Date.now() });
+          const identityWrite = tx.records.put({ tenant: KEY_TENANT, type: KEY_TYPE, id: KEY_ID, data: persistedIdentity, idx: [null, null, null, null], expectedRevision: 0, now: Date.now() });
           if (!identityWrite.ok) return identityWrite;
           for (const { record, idx } of records) {
             const restored = tx.records.restore(record, idx);

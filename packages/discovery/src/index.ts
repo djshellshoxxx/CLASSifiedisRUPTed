@@ -18,3 +18,4 @@ export {
   canonicalize as canonicalizeFilter, compileFilter, discoveryFilterErrors, filterCacheKey, validateFilter,
   type CompiledFilter, type Filter, type FilterPorts, type ValidatedFilter,
 } from './search/filter/index.ts';
+export { localSearchOptionsSchema, type LocalSearchOptions } from './search/local-options.ts';

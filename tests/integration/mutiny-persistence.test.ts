@@ -297,6 +297,46 @@ describe('independent durable signed Mutiny verification', () => {
     }
   });
 
+  it('keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget', async () => {
+    const f = await scenario(2); const { reservations, holds } = await f.reserveAll();
+    await f.broadcast(reservations);
+    const peer = f.peers[0]!; const remote = f.peers[1]!;
+    const subjectId = f.proposal.snapshot.subjectId;
+    const payload = { subjectId, revisionHash: f.proposal.revisionHash, revisionNo: 1 };
+    // Each valid statement has a different CID, so CID deduplication cannot stop this flood.
+    for (let attempt = 0; attempt < 197; attempt++) {
+      const envelope = await signEnvelope(remote.identity, { type: CONSENT_TYPE, payload, seq: 1, prev: null,
+        createdAt: f.clock.iso(), ext: { attempt } });
+      await peer.ingest(envelope);
+    }
+    const full = (await peer.record(subjectId))!;
+    expect(full.state.evidence).toHaveLength(200);
+    const extra = await signEnvelope(remote.identity, { type: CONSENT_TYPE, payload, seq: 1, prev: null,
+      createdAt: f.clock.iso(), ext: { attempt: 197 } });
+    const rejected = await peer.command('mutiny.coordination.ingest', { envelope: extra, expectedRevision: full.revision });
+    expect(rejected.ok ? '' : rejected.error.code).toBe('PRECONDITION_FAILED');
+    expect(await peer.record(subjectId)).toEqual(full);
+    const outsider = await realIdentity();
+    const forged = await signEnvelope(outsider, { type: WITHDRAWAL_TYPE, payload: { ...payload, reason: 'dropout' },
+      seq: 1, prev: null, createdAt: f.clock.iso() });
+    expect((await peer.command('mutiny.coordination.ingest', { envelope: forged, expectedRevision: full.revision })).ok).toBe(false);
+    const withdrawal = await peer.sign(WITHDRAWAL_TYPE, { ...payload, reason: 'cancel' });
+    await peer.ingest(withdrawal);
+    const cancelled = (await peer.record(subjectId))!.state;
+    expect(cancelled.status).toBe('cancelled');
+    expect(cancelled.evidence).toHaveLength(201);
+    expect(cancelled.evidence.at(-1)!.envelope.cid).toBe(withdrawal.cid);
+    expect(coordinationSchema.safeParse({ ...cancelled, status: 'proposed' }).success).toBe(false);
+    expect(coordinationSchema.safeParse({ ...cancelled, evidence: [...full.state.evidence, { envelope: extra, receivedAtLocal: NOW }] }).success).toBe(false);
+    expect(coordinationSchema.safeParse({ ...cancelled, evidence: [...cancelled.evidence, cancelled.evidence.at(-1)!] }).success).toBe(false);
+    expect((await validateCoordinationRecord(cancelled)).status).toBe('cancelled');
+    await peer.restart();
+    await peer.must('mutiny.coordination.refresh', {});
+    expect((await peer.record(subjectId))!.state.status).toBe('cancelled');
+    const hold = await peer.storage.read(tx => tx.records.get(peer.identity.principal, inventoryHoldRepo.type, holds[0]!));
+    expect((hold!.data as { state: string }).state).toBe('released');
+  }, 60000);
+
   it('a failure after hold release rolls back coordination and inventory together', async () => {
     let releaseFails = false;
     const f = await scenario(2, () => releaseFails); const { reservations, holds } = await f.reserveAll();

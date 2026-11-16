@@ -1,3 +1,47 @@
+# Branch consolidation review — 2026-11-16
+
+Read-only ancestry and source review of all fetched remote heads. This entry supersedes the earlier ledger's branch dispositions where explicitly stated. It does not claim that pending branches have been merged or that source review is runtime verification.
+
+## Selected baseline and scope
+
+The runnable baseline is `chatgpt/zero-codex/review-ranking-i18n-20261112` at `d16abee`, which contains `integration/classrup-completion` at `75d4bf5` plus ranking and i18n. The consolidation branch starts from it. Newer `main` (`76d39e3`) and `claude/wonderful-cori-ynhlsb` (`3a5c9e3`) are planning-only trees, not newer versions of the runnable PWA.
+
+| Branch or group | Reviewed head | Disposition |
+|---|---|---|
+| `integration/classrup-completion` | `75d4bf5` | Contained in baseline; retains local alpha and seven corrective fixes |
+| `agents/discovery/ranking` and `agents/i18n/languages-currencies` | `de8f44d`, `a0f9422` | Contained in `d16abee`; avoid duplicating these integrations |
+| `agents/discovery/coarse-filters` | `4f60ff9` | Integrated by `bb1f4b8` before this documentation worktree was created; verification belongs to the implementation report |
+| `agents/privacy/classification-metadata-consent` | `2752f04` | Additive classification/metadata candidate; consent was not implemented on this branch |
+| `agents/governance/taxonomy-prohibited` | `9972491` | Additive taxonomy/prohibited-policy candidate; requires review, exports and application integration |
+| `agents/moderation/rate-limits-signals` | `c098f1b` | Additive rate/account-limit/signal candidate; requires review and caller wiring |
+| `agents/notify/prefs-inapp` | `d6076d1` | Additive preferences/in-app candidate; requires review and application wiring |
+| `agents/ci/trim-workflows` | `3f41b81` | Workflow planner candidate; execution evidence required after adoption |
+| `agents/orchestration/wave1-handoff` | `6406a03` | Preserve remaining-work details; November 11 status is historical |
+| `claude/bold-mccarthy-qklhl6` | `a403614` | Unique partial security/platform implementation and contract changes; selective qualification required, not a blanket merge |
+| `claude/difficult-project-parts-dcqlup` | `566778c` | One planning checkpoint beyond its alpha baseline; does not deliver the planned encryption/recovery runtime |
+| `main`, `claude/wonderful-cori-ynhlsb` | `76d39e3`, `3a5c9e3` | Preserve security audits/tracker; archive newer contract drafts separately rather than overwrite existing runtime contracts |
+| `chatgpt/zero-codex/audit-observability-20261110`, `docs-wiki-20261110`, `qualify-pr10-20261110` | fetched heads | Historical audit/handoff/docs logs; retain findings without copying stale status claims |
+| `planning/future-cli-specs-20261110` | `af4dcc5` | Future CLI proposal, distinct from the working local-alpha setup/serve CLI |
+| `continuation/classrup-20261101` and old demo ancestors | `fa0cf0c` | Preserves the mock-demo lineage; adapt useful UX individually, not conflicting storage/contracts |
+| `claude/busy-cerf-vg3hz3` | `34a6892` | Separate workspace/runtime assumptions; feature-level port only after review |
+| `claude/happy-newton-4yttpa` | `e402bd5` | Hand-written process changes conflict with generated documents; reconcile into YAML rather than overwrite |
+| `claude/vigilant-newton-nva2l6`, `claude/gallant-goodall-9cc7yb` | fetched heads | Historical documentation/recovery notes; no independent current runtime baseline |
+
+The old demo ancestors include `docs/prompt3-foundations-20261022`, `docs/client-owned-foundations-20261024`, `work/classrup-haiku-framework`, `claude/classifiedisrupted-continue-lcuuwg`, `milestone/framework-browser-verification`, and `claude/pensive-mendel-30x81m` / `work/classrup-framework`. All are ancestors of `continuation/classrup-20261101`.
+
+No source branch is deleted or force-pushed. “Preserved” is not “merged”: incompatible historical implementations stay recoverable in Git rather than being installed beside the active runtime.
+
+## Qualification sequence
+
+1. Continue from the reviewed alpha baseline; qualify the additive parked modules independently.
+2. Add package exports and honest integration tests, then connect application workflows separately.
+3. Fix confirmed runtime defects with regression tests, including backup codec evolution.
+4. Reconcile the newer security/platform checkpoint in bounded changes with its missing generated files, exports, adapters and tests supplied.
+5. Reconcile preserved planning findings against the runnable code; retain OPEN status until each acceptance criterion has evidence.
+6. Run complete available checks on the combined tree and record exact CI heads before deciding which PRs are redundant.
+
+## Historical ledger (2026-11-11)
+
 # Branch and pull-request ledger
 
 Recorded 2026-11-11 (UTC) by the integration lane on `integration/classrup-completion`.

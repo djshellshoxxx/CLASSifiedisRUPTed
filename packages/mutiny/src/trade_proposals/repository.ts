@@ -1,18 +1,27 @@
 import { appError, defineCommand, defineEvent, defineQuery, defineRepo, err, ok, z, type CommandContext } from '@classrup/kernel';
 import { verifyEnvelope, type VerifiedEnvelope } from '@classrup/federation';
 import { WANT_TYPE, parseWant } from '../cycle_matching/admission.ts';
-import { CONSENT_TYPE, PROPOSAL_TYPE, conflictingSubjects, evaluateCoordination, freezeConflict, ingestCoordination, openCoordination, reviseCoordination, type CoordinationState, type Feasibility, type Proposal } from './index.ts';
+import { CONSENT_TYPE, PROPOSAL_TYPE, WITHDRAWAL_TYPE, conflictingSubjects, evaluateCoordination, freezeConflict, ingestCoordination, openCoordination, reviseCoordination, type CoordinationState, type Feasibility, type Proposal } from './index.ts';
 
 const safeInteger = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const identifier = z.string().min(1).max(512);
 const edge = z.strictObject({ giverId: identifier, receiverId: identifier, inventoryItemId: identifier, listingCid: identifier, wantCid: identifier, receiverOfferingListingCid: identifier.optional(), valueMinor: z.string().regex(/^(0|[1-9][0-9]{0,29})$/), currency: z.string().regex(/^[A-Z]{3}$/), distanceBucket: z.int().min(0).max(4), wantCreatedAt: safeInteger });
+const MAX_ORDINARY_EVIDENCE = 200;
+// A terminal withdrawal must remain durable even when a participant fills the normal budget.
+// Only one extra slot is needed: subsequent input cannot grow a terminal state's evidence.
+function withinEvidenceBudget(state: { readonly evidence: readonly { readonly envelope: { readonly type: string } }[]; readonly status: string }): boolean {
+  return state.evidence.length <= MAX_ORDINARY_EVIDENCE
+    || state.evidence.length === MAX_ORDINARY_EVIDENCE + 1
+      && (state.status === 'cancelled' || state.status === 'declined')
+      && state.evidence.at(-1)?.envelope.type === WITHDRAWAL_TYPE;
+}
 const envelopeSchema = z.strictObject({ v: z.literal(1), type: identifier, cid: identifier, author: identifier, createdAt: identifier, seq: safeInteger, prev: identifier.nullable(), payload: z.unknown(), ext: z.record(z.string(), z.unknown()), sig: identifier });
 export const coordinationSchema = z.strictObject({
   proposal: z.strictObject({ snapshot: z.strictObject({ subjectId: identifier, coordinatorId: identifier, revisionNo: z.int().min(1).max(20), previousHash: identifier.nullable(), legs: z.array(edge).min(2).max(8), createdAt: safeInteger, consentDeadline: safeInteger, executionWindowMs: safeInteger }), revisionHash: identifier }),
   status: z.enum(['proposed', 'committed', 'cancelled', 'declined', 'frozen']), reason: z.string().max(100).nullable(),
-  evidence: z.array(z.strictObject({ envelope: envelopeSchema, receivedAtLocal: safeInteger })).min(1).max(200),
+  evidence: z.array(z.strictObject({ envelope: envelopeSchema, receivedAtLocal: safeInteger })).min(1).max(MAX_ORDINARY_EVIDENCE + 1),
   consentCids: z.record(z.string(), identifier), reservationCids: z.record(z.string(), identifier), lastObservedAt: safeInteger, committedLocallyAt: safeInteger.nullable(), commitFeasibility: z.strictObject({ revisionHash: identifier, checkedAt: safeInteger, feasible: z.boolean() }).nullable(),
-});
+}).refine(withinEvidenceBudget, 'Evidence budget exceeded');
 const recordSchema = z.strictObject({ ownerId: identifier, state: coordinationSchema });
 export const coordinationRepo = defineRepo({ type: 'mutiny.coordination', schema: recordSchema, indexes: { owner: d => d.ownerId } });
 export const wantRepo = defineRepo({ type: 'mutiny.want', schema: z.strictObject({ ownerId: identifier, envelope: envelopeSchema, receivedAtLocal: safeInteger }), indexes: { author: d => d.envelope.author } });
@@ -103,7 +112,7 @@ export function mutinyDefinitions(options: MutinyOptions) {
           if (envelope.author === ctx.actor.id && envelope.type === CONSENT_TYPE && !options.hasLocalReservation(ctx, before.proposal, ctx.actor.id)) return err(appError('PRECONDITION_FAILED'));
           state = envelope.type === PROPOSAL_TYPE ? await reviseCoordination(before, envelope, ctx.clock.now()) : await ingestCoordination(before, envelope, ctx.clock.now());
         }
-        if (state.evidence.length > 200) return err(appError('PRECONDITION_FAILED'));
+        if (!withinEvidenceBudget(state)) return err(appError('PRECONDITION_FAILED'));
         const report = await options.checkFeasibility(ctx, state.proposal);
         const ownsHold = options.hasLocalReservation(ctx, state.proposal, ctx.actor.id);
         if (state.status === 'committed' && !ownsHold) state = { ...freezeConflict(state), reason: 'local_reservation_lost' };

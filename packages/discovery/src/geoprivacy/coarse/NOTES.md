@@ -33,4 +33,4 @@ Implemented and self-validated by the implementing agent. **Not independently re
 
 ## Integration review (2026-11-16)
 
-Reviewed and exported from `@classrup/discovery` for composition. The package remains a headless library; the existing retained-listing query and PWA do not yet consume these filters. Discovery tests pass (68 tests), including regression coverage for category-root expansion bounds and date-cutoff underflow in the filter compiler. This does not establish the unmeasured load, metrics, or query-plan requirements above.
+Reviewed and exported from `@classrup/discovery` for composition. The library is now consumed by the retained-listing query for optional coarse-radius filtering and distance ranking. The PWA still uses the default query without these options. Discovery tests pass (68 tests), including regression coverage for category-root expansion bounds and date-cutoff underflow in the filter compiler. This does not establish the unmeasured load, metrics, or query-plan requirements above.

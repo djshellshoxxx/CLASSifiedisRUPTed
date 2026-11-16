@@ -1,4 +1,5 @@
 import { appError, boundedString, canonicalJson, defineCommand, defineEvent, defineQuery, defineRepo, err, money, ok, timestamp, uuidv7, z, type ReadRepo, type SignedEnvelope } from '@classrup/kernel';
+import { localSearchOptionsSchema, localSearchPredicate, rankRetainedListings } from './local-options.ts';
 
 const cleanText = (min: number, max: number) => boundedString({ min, max }).refine(v => v === v.normalize('NFC') && !/[\p{Cc}\p{Cf}]/u.test(v));
 export const publicListingSchema = z.strictObject({
@@ -71,7 +72,7 @@ export function discoveryDefinitions(options: DiscoveryOptions) {
         ...previous.data, conflicted: true, evidenceCids: [previous.data.cid, envelope.cid], envelopes: [...previous.data.envelopes.slice(0, 1), snapshot],
       } : {
         ownerId: data.ownerId, listingId: data.listingId, remoteRevision: data.revision, cid: envelope.cid, projection,
-        observedAt: new Date(ctx.clock.now()).toISOString(), conflicted: false, evidenceCids: [envelope.cid], envelopes: [snapshot],
+        observedAt: previous?.data.observedAt ?? new Date(ctx.clock.now()).toISOString(), conflicted: false, evidenceCids: [envelope.cid], envelopes: [snapshot],
       };
       const put = repo.put(key, next, { expectedRevision: previous?.revision ?? 0 });
       if (!put.ok) return put;
@@ -82,19 +83,25 @@ export function discoveryDefinitions(options: DiscoveryOptions) {
   const search = defineQuery({
     name: 'discovery.listing.search', module: 'F06.S01.M02', capability: 'discovery.listing.search',
     input: z.strictObject({ query: z.string().max(120).default(''), regionCell: z.string().regex(/^[0123456789bcdefghjkmnpqrstuvwxyz]{4,5}$/).optional(),
-      barterOnly: z.boolean().default(false), blockedOwners: z.array(z.string().max(128)).max(2000).default([]), includeUnavailable: z.boolean().default(false) }),
+      options: localSearchOptionsSchema.optional(), barterOnly: z.boolean().default(false), blockedOwners: z.array(z.string().max(128)).max(2000).default([]), includeUnavailable: z.boolean().default(false) }),
     handler(ctx, input) {
+      const now = ctx.clock.now();
+      const options = input.options ?? { sort: 'retained' as const };
+      const predicate = localSearchPredicate(options, now);
+      if (!predicate.ok) return predicate;
       const blocked = new Set(input.blockedOwners);
       const query = input.query.normalize('NFC').toLowerCase();
       const records = allRetained(ctx.tx.repo(retainedListingRepo));
       const items = records.filter(r => {
         const p = r.projection;
-        return p && !r.conflicted && !blocked.has(r.ownerId) && Date.parse(p.expiresAt) > ctx.clock.now()
+        return p && !r.conflicted && !blocked.has(r.ownerId) && Date.parse(p.expiresAt) > now && predicate.value(r)
           && (!input.barterOnly || p.barterOptIn) && (input.includeUnavailable || p.availability === 'available')
           && (!input.regionCell || p.regionCell.startsWith(input.regionCell))
           && `${p.title} ${p.description} ${p.tags.join(' ')}`.toLowerCase().includes(query);
       });
-      return ok({ items, source: 'locally-retained' as const, staleOrExcluded: records.length - items.length });
+      const ordered = rankRetainedListings(items, options, now);
+      if (!ordered.ok) return ordered;
+      return ok({ items: ordered.value, source: 'locally-retained' as const, staleOrExcluded: records.length - items.length });
     },
   });
   return { retain, search, all: [retain, search] as const };

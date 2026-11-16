@@ -11,7 +11,7 @@ Requires Node >=22.18.0 and the pinned pnpm 10.28.0. See the [CLI setup guide](d
 ```sh
 git clone https://github.com/djshellshoxxx/CLASSifiedisRUPTed.git
 cd CLASSifiedisRUPTed
-git switch integration/classrup-completion   # until this branch is merged to main
+git switch main   # qualified baseline; unmerged feature PRs are separate candidates
 corepack pnpm install --frozen-lockfile
 corepack pnpm run setup --non-interactive
 corepack pnpm run doctor
@@ -22,6 +22,7 @@ Use `pnpm run setup` and `pnpm run doctor`: both bare names collide with pnpm's 
 
 ## Implemented scope and limits
 
+- Owner archive/recovery records with a 90-day local-clock restore window, signed withdrawals for published archives, encrypted-backup support, and newest-first owner listing pagination. Restore returns listings as unpublished. Automated expiry, closure and purge are unfinished; archives created before recovery tracking have no inferred deadline.
 - Owner-only local listing history with hashed public-field snapshots, publication-status labels, material-change markers, pagination and backup support. New history begins with this version; published editing and buyer reconfirmation remain unfinished.
 - Ed25519 identities, encrypted signing-key storage, explicit lock/unlock, per-vault IndexedDB persistence and signed/encrypted record backup into a new vault.
 - Single-item listing lifecycle, exact minor-unit values, signed public projections, explicit file exchange, retained peer verification and revision/fork checks.

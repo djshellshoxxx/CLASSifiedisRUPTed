@@ -4,7 +4,7 @@
     "withRuntime": 31,
     "withPassingTests": 19,
     "declared": 688,
-    "implemented": 10,
+    "implemented": 13,
     "requirements": 4510,
     "covered": 442
   },
@@ -17,7 +17,7 @@
       "withRuntime": 5,
       "withPassingTests": 0,
       "declared": 73,
-      "implemented": 7,
+      "implemented": 10,
       "requirements": 330,
       "covered": 0
     },
@@ -293,17 +293,15 @@
       "scope": "MVP",
       "runtime": "partial",
       "declared": 6,
-      "implemented": 1,
+      "implemented": 4,
       "missing": [
         "bazaar.listing.close",
-        "bazaar.listing.restore",
-        "bazaar.listing.expire",
-        "bazaar.archive_record.list_mine",
-        "bazaar.archive_record.get"
+        "bazaar.listing.expire"
       ],
       "requirements": 30,
       "covered": 0,
       "sources": [
+        "packages/bazaar/src/listings/archive.ts",
         "packages/bazaar/src/listings/index.ts"
       ]
     },

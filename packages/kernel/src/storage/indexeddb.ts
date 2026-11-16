@@ -152,19 +152,21 @@ export interface IndexedDbOptions {
   readonly random?: RandomFill;
 }
 
-/**
- * Opens the vault: takes the vault lock (DEPENDENCY_UNAVAILABLE with reason vault_locked when another tab
- * holds it), loads the working set and runs the retention sweep (expired idempotency rows, old outbox
- * events and dead letters).
- */
-export async function openIndexedDbStorage(opts: IndexedDbOptions): Promise<Storage> {
+/** A fenced connection; callers serialize snapshot/persist operations and own authentication. */
+export interface IndexedDbConnection {
+  snapshot(): Promise<Snapshot>;
+  persist(changes: readonly Change[]): Promise<void>;
+  close(): void;
+}
+
+/** Owns the writer fence while a higher layer authenticates and decodes its snapshot. */
+export async function openIndexedDbConnection(opts: IndexedDbOptions): Promise<IndexedDbConnection> {
   const factory = opts.indexedDB ?? globalThis.indexedDB;
   if (!factory) throw new Error('IndexedDB is not available');
   const locks: VaultLocks | undefined = opts.locks ?? globalThis.navigator?.locks;
   const release = locks ? await acquireLock(locks, `classrup-storage:${opts.name}`) : () => undefined;
   if (!release) throw vaultBusy('vault_locked');
   let db: IDBDatabase | undefined;
-  let storage: Storage | undefined;
   try {
     db = await openDb(factory, opts.name);
     const conn = db;
@@ -172,17 +174,31 @@ export async function openIndexedDbStorage(opts: IndexedDbOptions): Promise<Stor
     const token = new Uint8Array(16);
     (opts.random ?? webCryptoRandom)(token);
     const writer = bytesToBase64url(token);
-    await claimWriter(db, writer);
-    storage = createStorage(createIndexedDbDriver(db, await loadSnapshot(db), { writer, onClose: release }));
+    await claimWriter(conn, writer);
+    let closed = false;
+    const check = (): void => { if (closed) throw new Error('Storage closed'); };
+    return {
+      async snapshot() { check(); return loadSnapshot(conn); },
+      async persist(changes) { check(); await persist(conn, changes, writer); },
+      close() { if (closed) return; closed = true; conn.close(); release(); },
+    };
+  } catch (error) { db?.close(); release(); throw error; }
+}
+
+/** Opens an unencrypted working set and runs retention; user vaults add protection in @classrup/vault. */
+export async function openIndexedDbStorage(opts: IndexedDbOptions): Promise<Storage> {
+  const connection = await openIndexedDbConnection(opts);
+  let storage: Storage | undefined;
+  try {
+    storage = createStorage(createMemoryDriver({
+      kind: 'indexeddb', snapshot: await connection.snapshot(),
+      persist: changes => connection.persist(changes), onClose: () => connection.close(),
+    }));
     const swept = await runRetentionSweep(storage, opts.clock ?? createSystemClock(), opts.retention);
     if (!swept.ok) throw new AppErrorException(swept.error);
     return storage;
-  } catch (e) {
-    if (storage) await storage.close();
-    else {
-      db?.close();
-      release();
-    }
-    throw e;
+  } catch (error) {
+    if (storage) await storage.close(); else connection.close();
+    throw error;
   }
 }

@@ -33,6 +33,21 @@ describe('vault composition', () => {
     await expect(destination.restoreBackup(backup, passphrase)).rejects.toThrow();
     await restored.lock();
   }, 30000);
+  it('restores older backups after registering additional codecs but rejects unsupported types', async () => {
+    const source = vaultFromStorage(createMemoryStorage(), codecs);
+    const session = await source.create(passphrase);
+    await session.storage.transaction(tx => tx.records.put({ tenant: session.principal, type: note.type, id: 'old', data: { text: 'preserved' }, idx: ['preserved', null, null, null], expectedRevision: 0, now: Date.now() }));
+    const backup = await session.exportBackup(passphrase);
+    const added = defineRepo({ type: 'test.added', schema: z.strictObject({ value: z.string() }), indexes: {} });
+    const destination = vaultFromStorage(createMemoryStorage(), [...codecs, backupCodec(added)]);
+    const restored = await destination.restoreBackup(backup, passphrase);
+    expect(await restored.storage.read(tx => tx.records.get(restored.principal, note.type, 'old')?.data)).toEqual({ text: 'preserved' });
+    const unsupported = vaultFromStorage(createMemoryStorage(), [backupCodec(added)]);
+    await expect(unsupported.restoreBackup(backup, passphrase)).rejects.toThrow('Invalid or unsupported backup scope');
+    expect(await unsupported.isInitialized()).toBe(false);
+    await restored.lock();
+    await session.lock();
+  }, 30000);
   it('rejects corrupt restores before creating an identity and rolls back a lock during an awaited write', async () => {
     const vault = vaultFromStorage(createMemoryStorage());
     await expect(vault.restoreBackup({ format: 'invalid' }, passphrase)).rejects.toThrow();

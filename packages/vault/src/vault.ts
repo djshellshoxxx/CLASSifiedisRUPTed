@@ -148,7 +148,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
       } finally { plaintext.fill(0); }
       const envelope = await verifyEnvelope(parsed, { expectedType: 'classrup.vault.alpha_backup/v1' });
       const data = envelope.payload as Record<string, unknown>;
-      if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).sort().join(',') !== 'principal,protectedIdentity,recordTypes,records' || data.principal !== envelope.author || !Array.isArray(data.records) || data.records.length > MAX_RECORDS || !Array.isArray(data.recordTypes) || JSON.stringify(data.recordTypes) !== JSON.stringify(codecs.map(c => c.type).sort())) throw new Error('Invalid or unsupported backup scope');
+      if (!data || typeof data !== 'object' || Array.isArray(data) || Object.keys(data).sort().join(',') !== 'principal,protectedIdentity,recordTypes,records' || data.principal !== envelope.author || !Array.isArray(data.records) || data.records.length > MAX_RECORDS || !Array.isArray(data.recordTypes) || data.recordTypes.some(type => typeof type !== 'string' || !byType.has(type)) || new Set(data.recordTypes).size !== data.recordTypes.length || JSON.stringify(data.recordTypes) !== JSON.stringify([...data.recordTypes].sort())) throw new Error('Invalid or unsupported backup scope');
       const identity = await unlockIdentity(data.protectedIdentity, passphrase);
       try {
         if (identity.principal !== envelope.author) throw new Error('Backup identity mismatch');
@@ -158,7 +158,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           const row = input as Record<string, unknown>;
           if (Object.keys(row).sort().join(',') !== 'createdAt,data,id,revision,tenantId,type,updatedAt' || row.tenantId !== identity.principal || typeof row.type !== 'string' || typeof row.id !== 'string' || row.id.length < 1 || row.id.length > 256 || /[\u0000-\u001f\u007f]/u.test(row.id) || !Number.isSafeInteger(row.revision) || (row.revision as number) < 1 || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string' || !Number.isFinite(Date.parse(row.createdAt)) || !Number.isFinite(Date.parse(row.updatedAt)) || new Date(row.createdAt).toISOString() !== row.createdAt || new Date(row.updatedAt).toISOString() !== row.updatedAt || row.updatedAt < row.createdAt) throw new Error('Invalid backup record');
           const codec = byType.get(row.type);
-          if (!codec) throw new Error('Unsupported backup record type');
+          if (!codec || !(data.recordTypes as unknown[]).includes(row.type)) throw new Error('Unsupported backup record type');
           const id = `${row.type}\u0000${row.id}`;
           if (ids.has(id)) throw new Error('Duplicate backup record');
           ids.add(id);

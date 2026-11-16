@@ -1,0 +1,149 @@
+{
+  "date": "2026-11-16",
+  "sourceCommit": "36428ccc8a1ccf365418748abd7cc6ee2dc2bfb3",
+  "pullRequest": 42,
+  "localInitial": {
+    "reportSha256": "301da7559880c7d7ef2745cf81229c74711621f84df85cec5ca4ffcc63fe368e",
+    "success": false,
+    "tests": 589,
+    "passed": 585,
+    "failed": 4,
+    "pendingOrSkipped": 0,
+    "failures": [
+      {
+        "file": "alpha-security.test.ts",
+        "test": "restores an encrypted signed backup and rejects a bad later record without initializing the target"
+      },
+      {
+        "file": "mutiny-persistence.test.ts",
+        "test": "keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget"
+      },
+      {
+        "file": "kernel.meta.test.ts",
+        "test": "TEST-PS-117-09.T24 the core is isomorphic: only Node adapter files import node: modules"
+      },
+      {
+        "file": "currencies.test.ts",
+        "test": "speed: warm formatMoney and parseMoneyInput average well under 0.05 ms over batches (not a spec claim)"
+      }
+    ],
+    "sourceCommit": "f5f7dcb9b110b0906d4ce70fb60c9f8fde9240c7"
+  },
+  "localSerialRetry": {
+    "reportSha256": "aad98cfc3befd22eaf143d7543ad1056e6fc0a3227f804c29ae558cee8b47848",
+    "success": false,
+    "tests": 589,
+    "passed": 588,
+    "failed": 1,
+    "pendingOrSkipped": 0,
+    "failures": [
+      {
+        "file": "mutiny-persistence.test.ts",
+        "test": "keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget"
+      }
+    ],
+    "sourceCommit": "36428ccc8a1ccf365418748abd7cc6ee2dc2bfb3"
+  },
+  "localSaturationOnly": {
+    "reportSha256": "2655cc553861715c80ae3fc85087c9ed19cf92f3e119ac8f54bd3211537ce52f",
+    "success": true,
+    "tests": 16,
+    "passed": 1,
+    "failed": 0,
+    "pendingOrSkipped": 15,
+    "failures": [],
+    "sourceCommit": "36428ccc8a1ccf365418748abd7cc6ee2dc2bfb3"
+  },
+  "localNote": "Initial run was interrupted during prolonged shutdown. Retry has one unchanged 60-second saturation timeout; isolated saturation passes in 50.296 seconds. No single final all-green local full suite is claimed.",
+  "cliAndTooling": {
+    "passed": 32,
+    "failed": 0
+  },
+  "specification": {
+    "modules": 148,
+    "errors": 0,
+    "warnings": 0
+  },
+  "money": {
+    "pythonVectorsPassed": 331,
+    "propertyCases": 40000,
+    "gzipBytes": 2355,
+    "gzipBudgetBytes": 12288,
+    "allocationP99MsBudget": 2,
+    "targetDeviceQualification": "pending"
+  },
+  "localBrowser": {
+    "definitions": 57,
+    "executed": false,
+    "blocker": "Chromium launch denied required Unix socket before assertions"
+  },
+  "github": {
+    "commit": "36428ccc8a1ccf365418748abd7cc6ee2dc2bfb3",
+    "alphaRunId": 43957906791,
+    "domainStep": "success",
+    "browserJourneys": "failure",
+    "platformRunId": 43957906779,
+    "platformJobsPassed": 6,
+    "browserPassed": 51,
+    "browserFailed": 6,
+    "browserFailures": [
+      "Month-long fastForward failed before lifecycle assertions in all three browsers",
+      "History selector opened the closure panel in all three browsers"
+    ],
+    "failureArtifactId": 14272968710,
+    "failureArtifactSha256": "0d00479ad1e7cf6cd02ef844ac92870bebdfb5f6403e039f1300c423839c7fde"
+  },
+  "releaseQualification": "incomplete",
+  "wholeProductCompletion": false,
+  "browserTestRepair": {
+    "commit": "7bf7d51e016616d37b109853061cebeeb51ece85",
+    "alphaRunId": 43959971234,
+    "platformRunId": 43959971249,
+    "status": "success",
+    "changes": [
+      "Advance wall time while locked with setSystemTime",
+      "Select the explicitly named Local revision history panel"
+    ],
+    "assertionsOrLimitsRemoved": false,
+    "browserPassed": 57,
+    "browserFailed": 0,
+    "platformJobsPassed": 6
+  },
+  "secondWave": {
+    "sourceCommit": "bdd2971c675d996a6a8e38b8a36362b549790274",
+    "localCombined": {
+      "success": false,
+      "tests": 631,
+      "passed": 630,
+      "failed": 1,
+      "reportSha256": "d345c9f7d3678f0fef6cff842b8a89d565df21aa57c68f5bdaa79fd62bc10e35",
+      "failure": "Unchanged search-filter validation timing p95 2.332 ms exceeded 1 ms"
+    },
+    "filterRetry": {
+      "success": true,
+      "tests": 13,
+      "passed": 13,
+      "failed": 0,
+      "reportSha256": "281e6c87ee71a1a9da2f620c0ec75e40bdb1883f5df7e93e2982eab2ba07a718"
+    },
+    "browserDefinitions": 63,
+    "alphaRunId": 43962230354,
+    "githubStatus": "success",
+    "productComplete": false,
+    "platformRunId": 43962230320,
+    "domainStep": "success",
+    "browserJourneys": "success",
+    "browserPassed": 63,
+    "browserFailed": 0,
+    "platformJobsPassed": 6,
+    "verifiedAtUtc": "2026-11-16T21:53:24Z",
+    "qualificationNote": "All final source CI jobs passed. Local combined run remains 630/631 with one unchanged timing failure; the isolated filter suite passed 13/13. Later documentation-only commits do not change this source."
+  },
+  "latestReviewedSourceCommit": "bdd2971c675d996a6a8e38b8a36362b549790274",
+  "securityEvidence": {
+    "sourceCommit": "bdd2971c675d996a6a8e38b8a36362b549790274",
+    "historicalFindings": 51,
+    "closed": 0,
+    "path": "docs/status/SECURITY_EVIDENCE_20261116_PARALLEL.md"
+  }
+}

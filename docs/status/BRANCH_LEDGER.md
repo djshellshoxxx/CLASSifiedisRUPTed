@@ -1,5 +1,25 @@
 # Branch consolidation review — 2026-11-16
 
+## Latest parallel continuation
+
+Draft PR #42 (`codex/parallel-completion-20261116`) continues PR #41 at
+`560b328`; first-wave runtime `36428cc` was qualified after browser-harness
+repair `7bf7d51`. Latest reviewed source is `bdd2971`, adding currency
+registry commit `5c2e766`, coarse preferences and worker offload; its final CI
+evidence is tracked in PROJECT_STATUS. All 63 browser journeys and six platform
+jobs passed on `bdd2971`; later documentation commits preserve that source. PR #39 → #40 → #41
+remain the prerequisite stack. Current `main` was `32c9d7e` at review.
+The older selected-baseline entries below are historical.
+
+The new content audit confirms the parked coarse discovery, taxonomy/prohibited
+policy, privacy metadata, antifraud, notification and CI paths are already
+incorporated. They must not be merged again simply because their original commits
+were not ancestors. Money, consent, lifecycle and session additions were written
+as separate commits with fresh review handoffs. See
+[the exact branch inventory](../handoffs/20261116-inventory-audit.md) and
+[the current integration handoff](../handoffs/20261116-parallel-integration.md).
+No source branch or old PR was deleted, closed or automatically merged here.
+
 Read-only ancestry and source review of all fetched remote heads. This entry supersedes the earlier ledger's branch dispositions where explicitly stated. It does not claim that pending branches have been merged or that source review is runtime verification.
 
 ## Selected baseline and scope

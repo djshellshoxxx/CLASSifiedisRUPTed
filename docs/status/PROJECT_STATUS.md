@@ -1,5 +1,106 @@
 # Project status
 
+## November 16, 2026 second parallel implementation wave
+
+PR #42 now also includes encrypted coarse-location preferences, cancellable
+background barter matching with offline assets, and an opt-in currency registry.
+Each implementation team supplied a handoff and transferred ownership to a fresh
+reviewer. Review fixed stale location precision copying, GPS supersession,
+concurrent-save draft loss, foreign-vault currency imports, unsupported-chain
+activation, cancellation feedback and encoding batches for large statements.
+
+The location workflow is composed in the PWA with real commands and backup
+codecs. Worker discovery and proposal revalidation use the unchanged signed
+admission/matching contracts. The currency registry remains unmounted pending
+authentic signed release data, canonical vault/usage adapters and encrypted
+backup integration; its tested import validator alone is not a complete recovery
+workflow. No payment, precise sharing or private messaging workflow is claimed.
+
+Focused review suites passed: location 16, currency plus money 27, and worker
+plus matching/admission 24. Shared bounded typecheck, build, doctor, strict
+specifications, dependencies, tooling, independent money vectors and bundle
+budget passed. At final source `bdd2971c675d996a6a8e38b8a36362b549790274`, the combined
+local run completed 630/631. Its only failure was the unchanged filter-validation
+timing check (2.332 ms versus its 1 ms limit); the same filter suite passed alone
+without changing that limit. This is passing execution across runs, not one green
+local full-suite result. GitHub [Alpha run 43962230354](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43962230354)
+passed the combined domain step and all **63 Chromium/Firefox/WebKit journeys**.
+All six Linux/Windows/macOS Node 22/24 jobs passed in
+[platform run 43962230320](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43962230320).
+The qualified source is `bdd2971`; later documentation-only commits preserve
+that exact runtime/tooling/test tree. The generated inventory is 35/148 runtime paths,
+15/688 statically recognized interfaces and 484/4510 passing mapped requirements.
+Module constants are not resolved by the conservative interface scanner, so those
+counts understate interfaces such as the new location and currency operations.
+They are not feature-completion percentages. See the machine-readable validation
+summary for report digests. The [security evidence matrix](SECURITY_EVIDENCE_20261116_PARALLEL.md)
+maps all 51 historical findings to current controls and remaining closure evidence;
+all remain open. The product and full release qualification remain incomplete.
+Previous-wave checks below qualify only their named candidates.
+
+## November 16, 2026 parallel completion checkpoint
+
+Draft [PR #42](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/42) continues
+PR #41. The tested source candidate is `36428ccc8a1ccf365418748abd7cc6ee2dc2bfb3`.
+Implementation teams handed their checkpoints to fresh reviewers; the combined
+[handoff](../handoffs/20261116-parallel-integration.md) records each result and
+remaining dependency. This remains an incomplete development alpha.
+
+Owners can close listings with a reason, automatically expire/archive them while
+the vault is unlocked, and download verified publication/withdrawal evidence
+again after reopening. Maintenance is bounded and resumable, creates no automatic
+downloads and stops on lock. Existing owner recovery and encrypted backup paths
+are retained. Complete purge and cross-domain evidence retention remain open.
+
+Vault sessions now default to a 15-minute idle lock (session setting 1–60) and a
+five-minute hidden-tab lock. Local unlock backoff survives reconnects within one
+page. Fixed cryptographic stage errors expose no native details and perform no
+retry. Independent review corrected stale asynchronous exports, suppressed close
+failures, private DOM left after failed startup, and overlapping closure promises.
+These controls do not implement delegated-device recovery or fix upstream WebKit.
+
+Money now has exact pure bigint arithmetic/conversion/allocation, 331 independent
+Python vectors, 40,000 property cases and a 2,355-byte gzip browser bundle. The
+existing alpha wire schema is not migrated. The opt-in consent core binds
+participants, revision hashes and wording, retains conflicts and supports
+monotonic revocation; fresh review fixed withdrawal-capacity exhaustion and
+first-seen key validity during replay. Consent remains disabled in the PWA until
+domain adapters, confirmation UI, backup validation and quarantine exist.
+Existing notifications additionally enforce signer-chain and mirror-sequence
+bindings.
+
+Local validation: typecheck, build, setup/doctor, dependencies, whitespace,
+32 CLI/tooling tests and strict specifications (148 modules, zero errors/warnings)
+pass. The first combined attempt reported 585/589 passed with a now-fixed export
+allowlist error, two timeouts and a currency performance failure. It was interrupted
+during prolonged runner shutdown. The visible serial retry completed 588/589 with
+only the unchanged 60-second barter saturation timeout. That exact test then
+passed alone in 50.296 seconds, without changing its threshold. All 589 distinct
+assertions have passing local execution across those runs; there is no single
+green final local full-suite claim. Failures are preserved in the
+[validation summary](20261116-parallel-validation.json).
+
+GitHub [Alpha verification](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43957906791)
+at `36428cc` passed its combined domain test step and preceding checks; browser
+journeys reported 51 passed and six failures: the lifecycle test used an unsupported
+month-long timer jump, and the older history test opened the new closure panel.
+Both test harness defects were repaired in `7bf7d51` with all assertions/limits
+retained; [its Alpha rerun](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43959971234)
+passed all 57 browser journeys and the combined domain step. All six platform
+jobs also passed on that repaired candidate. All six Linux/Windows/macOS Node
+22/24 [platform jobs](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43957906779)
+passed on that same candidate. Local Chromium is blocked before assertions by
+the host's required-socket denial; 57 browser definitions loading is not a pass.
+
+The generated inventory is now 33/148 module paths, 15/688 exact interfaces and
+464/4510 requirements with mapped passing tests from the local serial report.
+These measure traceability, not feature completion. Money's unchanged 2 ms
+allocation p99 budget and specified Android hardware remain unqualified. Offers,
+Deals/payment claims/receipts, private messaging, full recovery/federation,
+services/rentals/auctions, full privacy lifecycle, accessibility and other
+requirements in the audit remain incomplete. No merge, release or deployment
+was performed.
+
 ## November 16, 2026 archive recovery and owner pagination continuation
 
 Continues from `edcb583` (PR #40, stacked on owner-history PR #39). New archives

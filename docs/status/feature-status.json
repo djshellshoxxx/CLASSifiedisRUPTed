@@ -1,12 +1,12 @@
 {
   "totals": {
     "modules": 148,
-    "withRuntime": 31,
-    "withPassingTests": 19,
+    "withRuntime": 35,
+    "withPassingTests": 21,
     "declared": 688,
-    "implemented": 13,
+    "implemented": 15,
     "requirements": 4510,
-    "covered": 442
+    "covered": 484
   },
   "features": [
     {
@@ -17,7 +17,7 @@
       "withRuntime": 5,
       "withPassingTests": 0,
       "declared": 73,
-      "implemented": 10,
+      "implemented": 12,
       "requirements": 330,
       "covered": 0
     },
@@ -74,12 +74,12 @@
       "slug": "discovery",
       "title": "Local discovery",
       "modules": 8,
-      "withRuntime": 6,
+      "withRuntime": 7,
       "withPassingTests": 4,
       "declared": 18,
       "implemented": 3,
       "requirements": 240,
-      "covered": 93
+      "covered": 90
     },
     {
       "id": "F07",
@@ -98,7 +98,7 @@
       "slug": "comms",
       "title": "Communications",
       "modules": 8,
-      "withRuntime": 0,
+      "withRuntime": 1,
       "withPassingTests": 0,
       "declared": 42,
       "implemented": 0,
@@ -110,12 +110,12 @@
       "slug": "commerce",
       "title": "Commerce and evidence",
       "modules": 9,
-      "withRuntime": 0,
-      "withPassingTests": 0,
+      "withRuntime": 2,
+      "withPassingTests": 2,
       "declared": 49,
       "implemented": 0,
       "requirements": 273,
-      "covered": 0
+      "covered": 45
     },
     {
       "id": "F10",
@@ -291,18 +291,15 @@
       "id": "F01.S01.M04",
       "title": "Listing archive and expiry",
       "scope": "MVP",
-      "runtime": "partial",
+      "runtime": "interface-complete",
       "declared": 6,
-      "implemented": 4,
-      "missing": [
-        "bazaar.listing.close",
-        "bazaar.listing.expire"
-      ],
+      "implemented": 6,
+      "missing": [],
       "requirements": 30,
       "covered": 0,
       "sources": [
         "packages/bazaar/src/listings/archive.ts",
-        "packages/bazaar/src/listings/index.ts"
+        "packages/bazaar/src/listings/lifecycle.ts"
       ]
     },
     {
@@ -1118,7 +1115,7 @@
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 25,
+      "covered": 22,
       "sources": []
     },
     {
@@ -1137,7 +1134,7 @@
       "id": "F06.S02.M02",
       "title": "User location settings",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 7,
       "implemented": 0,
       "missing": [
@@ -1407,7 +1404,7 @@
       "id": "F08.S02.M02",
       "title": "Explicit consent capture",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 5,
       "implemented": 0,
       "missing": [
@@ -1598,7 +1595,7 @@
       "id": "F09.S03.M01",
       "title": "Currency registry",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 4,
       "implemented": 0,
       "missing": [
@@ -1608,7 +1605,7 @@
         "commerce.currency.get"
       ],
       "requirements": 30,
-      "covered": 0,
+      "covered": 23,
       "sources": []
     },
     {
@@ -1634,12 +1631,12 @@
       "id": "F09.S03.M03",
       "title": "Money precision",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "present",
       "declared": 0,
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 0,
+      "covered": 22,
       "sources": []
     },
     {

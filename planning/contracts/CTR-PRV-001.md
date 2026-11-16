@@ -23,7 +23,7 @@ Defines the data classes every field and record must carry, default retention cl
 | CTR-PRV-001.R09 | Routine logs and telemetry carry pseudonymous IDs only and never payload content. IP addresses are truncated or keyed-hashed before storage (ASSUMPTION). | MVP |
 | CTR-PRV-001.R10 | Push and notification previews are generic text by default (for example "New message"). Content previews require explicit user opt-in per device (ASSUMPTION). | MVP |
 | CTR-PRV-001.R11 | Data export (portability) includes the owner's data at its classes; PRIVATE_PERSONAL data of counterparties is redacted; LOCATION_PRECISE is exported only on explicit owner request. | MVP |
-| CTR-PRV-001.R12 | Deletion produces a completion record (`dpr_`-style record is NOT allowed; use `aud_` with deletion scope) that contains no deleted content, only IDs, timestamps and counts. | MVP |
+| CTR-PRV-001.R12 | Deletion produces a completion record: an `aud_` record with deletion scope that contains no deleted content, only IDs, timestamps and counts. | MVP |
 
 ## Data / schema
 
@@ -76,6 +76,10 @@ Conditions:
 - LOCATION_PRECISE to counterparty: a user creates a per-meetup disclosure. It expires at the earlier of meetup end + 2 h or 24 h (ASSUMPTION). Revocation stops future access; it cannot recall copies already seen (state in UI).
 - Federation of LOCATION_COARSE uses the same K_MIN rule as public display.
 
+## States & transitions
+
+Not applicable as a state machine. Retention lifecycle per record: `active` → `expired` (class maximum reached or user deletion) → `purged` (replicas, caches, indexes and exports within 24 h; backups per schedule with replay on restore). `legal_hold` overrides `expired` until released (R07).
+
 ## Commands / queries / events
 
 Disclosure grants for LOCATION_PRECISE are events: `location.disclosure_granted`, `location.disclosure_revoked`, `location.disclosure_expired` (CTR-EVT-001, `max_data_class = LOCATION_PRECISE`, local-only, never federated, never logged in payload). Deletion: `record.deleted` (payload: IDs and counts only; R12).
@@ -110,7 +114,7 @@ Violations: `home_lat` is precise location (R03), misclassified as LOCATION_COAR
 | PRV.CLASS_VIOLATION | false | unprocessable_state / 422 | Write or export would violate the disclosure matrix. |
 | PRV.PRECISE_LOCATION_FORBIDDEN | false | unprocessable_state / 422 | Precise location in public, federated or log path. |
 | PRV.QUERY_BUDGET_EXCEEDED | true | rate_limited / 429 | Location query budget exhausted (R05). |
-| PRV.K_THRESHOLD_NOT_MET | false | not_found / 404 | Cell suppressed for result set size (returned as empty set in list responses; this code is internal for analytics). |
+| PRV.K_THRESHOLD_NOT_MET | false | internal / 500 | Cell suppressed for K_MIN. Never returned to clients (list responses return the suppressed set silently); logged for analytics only. |
 | PRV.HOLD_SCOPE_INVALID | false | validation / 400 | Legal hold missing scope, approval or end date. |
 
 ## Authorization

@@ -86,6 +86,10 @@ Registry entry (one per `schema_id` and version):
 
 `kind` is `upcast` (read path) or `projection` (write-side view for a peer still on an older supported major). A projection must be declared lossy or lossless. Lossy projections are never used for signed records (R08).
 
+## States & transitions
+
+Registry entry status: `draft` → `active` (on publish) → `deprecated` (on `schema.deprecate`) → `retired` (after `supported_until`). `retired` is terminal. Reads of retired versions return `SCH.RETIRED`.
+
 ## Commands / queries / events
 
 Registry operations (F15 internal, not client-facing):
@@ -94,7 +98,7 @@ Registry operations (F15 internal, not client-facing):
 |---|---|
 | `schema.publish` | Adds version as `active`. Requires compatibility check pass. |
 | `schema.deprecate` | Sets `deprecated_at` and `supported_until`. Emits `schema.deprecated`. |
-| `schema.retire` | Sets `retired`. Only after `supported_until` and federation notice (R-FED). |
+| `schema.retire` | Sets `retired`. Only after `supported_until` and federation peer notice (CTR-FED-001). |
 
 Events: `schema.published`, `schema.deprecated`, `schema.retired` (CTR-EVT-001 envelope; `aggregate_type = schema`; registry IDs are dotted `schema_id` strings, not CTR-ID-001 entity IDs. ASSUMPTION).
 

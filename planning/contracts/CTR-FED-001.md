@@ -100,6 +100,66 @@ Quarantine stops new inbound and outbound sync without modifying local records (
 | `peer.*` (above) | `peer.admitted`, `peer.restricted`, `peer.quarantined`, `peer.restored`, `peer.revoked` | Admin and F12 actions; audited (CTR-CAP-001 R08). |
 | key lifecycle | `key.revoked`, `key.compromised` | Signed by the key owner or the peer's trust root. |
 
+## Examples
+
+Valid batch (one accepted event, one with a signature failure in the ack):
+
+```json
+{
+  "fed_version": "1.0.0",
+  "batch_id": "dlv_01HZX3Q7R9S1T3V5W7X9Y1Z3AB",
+  "sender_node": "nod_01HZX3K0M2N4P6Q8R0S2T4V6WB",
+  "sent_at": "2026-11-16T11:00:03.120Z",
+  "events": [
+    {
+      "event_id": "evt_01HZX3K9Q7M2V8T4W6Y0B5N1CD",
+      "event_type": "listing.published",
+      "aggregate_type": "listing",
+      "aggregate_id": "lst_01HZX3M0J4R8S2A6C9E3F5G7H1",
+      "revision": 3,
+      "actor_ref": {"kind": "user", "ref": "acc_01HZX3J7N2P5Q8R1S4T6V0W9ZB"},
+      "occurred_at": "2026-11-16T09:12:04.317Z",
+      "recorded_at": "2026-11-16T09:12:04.402Z",
+      "provenance": {"origin_node": "nod_01HZX3K0M2N4P6Q8R0S2T4V6WB", "source_kind": "federated_import"},
+      "correlation_id": "cor_01HZX3K2C5D7F9G1H3J5K7M9NB",
+      "idempotency_key": "9f2c1d7e-4b8a-4e61-9c3d-a0b1c2d3e4f5",
+      "schema_version": "1.0.0",
+      "max_data_class": "PUBLIC",
+      "audience": "public",
+      "expires_at": "2026-12-10T09:12:04.317Z",
+      "signature": {"alg": "Ed25519", "key_id": "key_01HZX3W0X2Y4Z6A8B0C2D4E6FG", "value": "Qm9ndXNfc2lnbmF0dXJlX3ZhbHVlX2Zvcl9kb2NfZXhhbXBsZV9vbmx5X25vdF9yZWFsXzAxMjM0NTY3ODlBQkNE"},
+      "payload": {"title": "Used road bike", "price": {"amount_minor": "15000", "currency": "EUR", "exponent": 2}}
+    }
+  ]
+}
+```
+
+Ack for the batch: `evt_01HZX3K9Q7M2V8T4W6Y0B5N1CD` → `accepted`; a second event with a bad signature → `rejected`, `FED.SIGNATURE_INVALID`.
+
+Invalid event (violations listed below):
+
+```json
+{
+  "event_id": "evt_01HZX3K9Q7M2V8T4W6Y0B5N1CD",
+  "event_type": "listing.published",
+  "aggregate_type": "listing",
+  "aggregate_id": "lst_01HZX3M0J4R8S2A6C9E3F5G7H1",
+  "revision": 3,
+  "actor_ref": {"kind": "user", "ref": "acc_01HZX3J7N2P5Q8R1S4T6V0W9ZB"},
+  "occurred_at": "2026-11-16T09:12:04.317Z",
+  "provenance": {"origin_node": "nod_01HZX3K0M2N4P6Q8R0S2T4V6WB", "source_kind": "federated_import"},
+  "correlation_id": "cor_01HZX3K2C5D7F9G1H3J5K7M9NB",
+  "idempotency_key": "9f2c1d7e-4b8a-4e61-9c3d-a0b1c2d3e4f5",
+  "schema_version": "1.0.0",
+  "max_data_class": "LOCATION_PRECISE",
+  "audience": "public",
+  "expires_at": "2026-12-10T09:12:04.317Z",
+  "payload": {"title": "Used road bike", "home_lat": 52.5200}
+}
+```
+
+Violations: `signature` absent on a federated event (CTR-EVT-001 R05, `EVT.SIGNATURE_REQUIRED` at the producer; `FED.ENVELOPE_MALFORMED` on receipt); `max_data_class` = `LOCATION_PRECISE` (R03, `FED.DATA_CLASS_NOT_ALLOWED`); `payload.home_lat` is precise location (CTR-PRV-001 R03); `correlation_id` and `idempotency_key` are present (must be omitted or re-keyed on export, CTR-EVT-001 R13, R08 here); `audience: public` with a non-PUBLIC class (R04 and R02).
+
 ## Verification order (inbound, per event)
 
 1. Batch size and rate (R10, R11). Failure → `FED.SIZE_EXCEEDED` or `FED.RATE_LIMITED` for the whole batch.

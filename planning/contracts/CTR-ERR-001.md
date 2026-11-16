@@ -80,6 +80,10 @@ The shape, code registry, retry semantics and privacy rules for every error retu
 | unavailable | 503 | Dependency down (retryable) |
 | internal | 500 | Unexpected (retryable only where the code says so) |
 
+## States & transitions
+
+Not applicable. Error responses are stateless.
+
 ## Commands / queries / events
 
 Not applicable. Errors are responses. Federation acknowledgements carry per-event `code` values from the same registry (CTR-FED-001). Events do not carry error envelopes.

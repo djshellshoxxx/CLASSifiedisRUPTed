@@ -22,7 +22,7 @@ Schemas, states and transitions for payment claims, counterparty attestations, e
 | CTR-COM-001.R08 | Each claim binds: `trx_` ID, claimant party, counterparty party, direction, amount_minor, currency, quote_id (if cross-currency), method, evidence digests, and `claim_hash` (SHA-256 of JCS of the claim body). | MVP |
 | CTR-COM-001.R09 | On-chain verification requires exact match of: chain (CAIP-2), asset (CAIP-19), recipient address, amount ≥ expected amount, confirmations ≥ chain finality threshold for `FINAL` (ASSUMPTION thresholds published per chain). Partial amounts stay `CLAIMED` with `COM.AMOUNT_MISMATCH` recorded. | MVP |
 | CTR-COM-001.R10 | Uniqueness: (chain, tx_hash) may verify at most one claim. Duplicate → `COM.DUPLICATE_TX_REF`. | MVP |
-| CTR-COM-001.R11 | Each verifier adapter has a registry ID (`fpr_`-independent adapter ID, F09 registry). Adapter results are stored with their raw response digest and adapter ID. Adapters are untrusted until registered and signed. | MVP |
+| CTR-COM-001.R11 | Each verifier adapter has an ID in the F09 adapter registry and acts as a `sys_` principal scoped to verification. Adapter results are stored with their raw response digest and adapter ID. Adapters are untrusted until registered and signed. | MVP |
 | CTR-COM-001.R12 | Reorg: each poll re-reads transaction status. A dropped or replaced transaction moves `EXTERNALLY_VERIFIED` → `CLAIMED` (or `COUNTERPARTY_ATTESTED`) and `FINAL` → `REVERSED`. Each move is a new state event. | MVP |
 | CTR-COM-001.R13 | Append-only: each transition appends a `clm.state_changed` event with `state_version` (CTR-EVT-001). No in-place update of state. | MVP |
 | CTR-COM-001.R14 | Attestation: counterparty signs `claim_hash` with its registered key (Ed25519, ASSUMPTION). Signatures evidence an assertion; they do not prove physical handover or delivery (PROJECT_SPEC.md). | MVP |
@@ -80,7 +80,7 @@ Claim:
     "counterparty": {"type": "string", "pattern": "^acc_[0-9A-HJKMNP-TV-Z]{26}$"},
     "direction": {"enum": ["claimant_paid","claimant_received"]},
     "amount_minor": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,38})$"},
-    "currency": {"$ref": "quote#/$defs/currency"},
+    "currency": {"$ref": "urn:classrupt:contract:CTR-COM-001:quote:1.0.0#/$defs/currency"},
     "quote_id": {"type": ["string","null"], "pattern": "^qte_[0-9A-HJKMNP-TV-Z]{26}$"},
     "method": {"enum": ["cash","bank_transfer","onchain_transfer","external_card","in_kind_compensation","other_external"]},
     "external_ref": {
@@ -135,6 +135,53 @@ All events are CTR-EVT-001 envelopes with `aggregate_type = claim`, `max_data_cl
 | any | clm.submitted (new claim) | Superseding claim references prior `claim_id` | new claim in CLAIMED | Prior claim remains as history. |
 
 Forbidden transitions return `COM.INVALID_TRANSITION`. Cash and in-kind claims reaching `clm.verified` return `COM.CASH_NOT_VERIFIABLE` (R07).
+
+## Examples
+
+Valid claim (cross-currency, on-chain, pinned quote; `claim_hash` shown as a placeholder digest of the claim body):
+
+```json
+{
+  "claim_id": "clm_01HZX3S8T0V2W4X6Y8Z0A2B4CD",
+  "transaction_id": "trx_01HZX3T1V3W5X7Y9Z1A3B5C7DE",
+  "claimant": "acc_01HZX3J7N2P5Q8R1S4T6V0W9ZB",
+  "counterparty": "acc_01HZX3R2S4T6V8W0X2Y4Z6A8BC",
+  "direction": "claimant_paid",
+  "amount_minor": "250000",
+  "currency": {"kind": "asset", "code": "eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "exponent": 6},
+  "quote_id": "qte_01HZX3U4W6X8Y0Z2A4B6C8D0EF",
+  "method": "onchain_transfer",
+  "external_ref": {"chain": "eip155:1", "tx_hash": "0x9f1c2e7d4a6b8c0e2f4a6b8d0c2e4f6a8b0c2d4e6f8a0b2c4d6e8f0a1b2c3d4e", "recipient": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F", "asset": "eip155:1/erc20:0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"},
+  "evidence": [{"kind": "chain_transaction", "digest_sha256": "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b", "source": "external_adapter"}],
+  "state": "CLAIMED",
+  "state_version": 1,
+  "claim_hash": "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+  "schema_version": "1.0.0"
+}
+```
+
+Invalid (violations listed below):
+
+```json
+{
+  "claim_id": "clm_01HZX3S8T0V2W4X6Y8Z0A2B4CD",
+  "transaction_id": "trx_01HZX3T1V3W5X7Y9Z1A3B5C7DE",
+  "claimant": "acc_01HZX3J7N2P5Q8R1S4T6V0W9ZB",
+  "counterparty": "acc_01HZX3R2S4T6V8W0X2Y4Z6A8BC",
+  "direction": "claimant_paid",
+  "amount_minor": 2500.00,
+  "currency": {"kind": "fiat", "code": "EUR", "exponent": 2},
+  "method": "cash",
+  "platform_wallet": "wlt_01HZX3V6W8X0Y2Z4A6B8C0D2EF",
+  "evidence": [],
+  "state": "PAID",
+  "state_version": 0,
+  "claim_hash": "not-a-digest",
+  "schema_version": "1.0.0"
+}
+```
+
+Violations: `amount_minor` is a float, not a decimal string (R02); `platform_wallet` is a custody field (R01, `COM.CUSTODY_FORBIDDEN`); `state` = `PAID` is not in the state set (R05); `state_version` below minimum 1 (Data); `claim_hash` not 64 hex (Data); `quote_id` absent although the currency is in a different asset class than the agreed one, if applicable (conditional rule, Data); `method` = `cash` cannot be `FINAL` or `EXTERNALLY_VERIFIED` (R07) — stated here as the state ceiling for the record.
 
 ## Validation and errors
 

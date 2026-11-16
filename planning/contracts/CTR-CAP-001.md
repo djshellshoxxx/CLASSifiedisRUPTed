@@ -78,6 +78,10 @@ Grant record:
 
 Decision record: `dec_` ID, `principal` (kind, ref), `action`, `resource` (type, ID), `outcome` (`ALLOW` | `DENY`), `reason_code` (`NO_RELATION`, `NO_GRANT`, `GRANT_EXPIRED`, `GRANT_REVOKED`, `SCOPE_MISMATCH`, `STATE_FORBIDS`, `DUAL_APPROVAL_MISSING`, `STALE_VERSION`, `ALLOW_OWNER`, `ALLOW_PARTICIPANT`, `ALLOW_GRANT`), `decided_at`, `policy_version`.
 
+## States & transitions
+
+Grant status: `active` → `revoked` (explicit revoke; terminal) or `active` → `expired` (`constraints.expires_at` passed; terminal). Pending approval is not a grant status: a privileged grant is created only after all approvals are recorded (R07), so no grant exists in an approval-pending state. `max_uses` exhaustion moves status to `expired` (ASSUMPTION).
+
 ## Commands / queries / events
 
 | Command | Event(s) | Notes |

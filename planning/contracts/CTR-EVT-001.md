@@ -80,7 +80,11 @@ Notes:
 - `audience` and `expires_at` are federation-scoped optional fields. They are REQUIRED on federated events and signed with the envelope (CTR-FED-001).
 - `recorded_at` is forbidden on submissions and required on stored events (R01). This is enforced in the write path, not in the schema.
 - `payload_digest` (stored form only) = SHA-256 of JCS(payload). Used by R08.
-- Event IDs use the `evt` prefix; correlation IDs use any valid prefix from CTR-ID-001 registry (typically `cor_` is NOT registered; see Assumptions).
+- Event IDs use the `evt` prefix. Correlation IDs use the `cor` prefix (CTR-ID-001 registry).
+
+## States & transitions
+
+Not applicable. Event records are append-only (R08). Aggregate lifecycle states belong to each module's `workflow_state_machine`.
 
 ## Commands / queries / events
 
@@ -197,7 +201,7 @@ Producers are authorized per command (CTR-CAP-001). Event subscribers receive on
 ## Assumptions & open decisions
 
 - ASSUMPTION: Ed25519 and RFC 8785 JCS are the canonical signing choices; to be confirmed by F16 cryptographic review (S3-04, S3-03).
-- ASSUMPTION: correlation IDs use a valid CTR-ID-001 prefix. No dedicated `cor` prefix exists in the CTR-ID-001 registry. Adding one is a MINOR change to CTR-ID-001 and is OPEN for F15 review. Until then the example uses the placeholder prefix as shown and must be updated before implementation.
+- ASSUMPTION: the `cor` prefix added to CTR-ID-001 is accepted by F15 review (MINOR change to the registry).
 - ASSUMPTION: 64 KiB payload limit and 7-day idempotency retention.
 - PROVISIONAL (D01 default, unapproved): signed envelope with explicit federation fields.
 - OPEN: whether `event_type` should be a separate registry entry rather than a string convention (CTR-SCH-001).

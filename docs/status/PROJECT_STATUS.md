@@ -2,7 +2,8 @@
 
 ## November 16, 2026 owner listing history continuation
 
-A separate candidate stacks on encrypted-storage PR #38. Listing publication now
+PR #39 continues from encrypted-storage PR #38, which passed Alpha verification
+43912138849 and CLI setup 43912139045 and merged at `32c9d7e`. Listing publication now
 records an append-only snapshot of publishable fields. Later public-field edits
 of an unpublished listing that has previously been published record immutable
 local revisions; draft and private-only edits do not create snapshots. The
@@ -28,12 +29,19 @@ backfill remain unfinished. Declared value changes are marked material in the
 alpha; separate sell-term pricing is not implemented. A local snapshot is owner
 asserted evidence, not proof of peer acceptance or real-world handover.
 
-Focused verification passed 21 listing/vault tests, including history privacy,
+Full local verification passed 511/511 domain/integration tests on the serial
+retry. The first run passed 510/511 with an unchanged currency benchmark failure
+(0.06595 ms against 0.05 ms); its isolated 23-test suite and the full retry passed
+without changing assertions or thresholds. GitHub Alpha verification 43914550908
+passed on `3f814c0`, including its browser journeys. CLI platform verification
+43914550773 remains a separate merge gate. Focused verification passed 21
+listing/vault tests, including history privacy,
 owner authorization, pagination, rate/cap rollback, corrupt-read rejection and
 canonical-key restore failures. Review found and fixed publication-status labels,
 missing read-side hash checks and post-normalization backup-key validation; final
-review reported no additional high-confidence defects. Full integration and
-candidate browser checks are recorded separately before merge.
+review reported no additional high-confidence defects. The generated inventory now reports 31/148 runtime modules, 10/688 exact
+specified interfaces and 442/4510 requirements with passing mapped tests. These
+counts are traceability measures, not a completion percentage.
 
 ## November 16, 2026 encrypted persistence continuation
 

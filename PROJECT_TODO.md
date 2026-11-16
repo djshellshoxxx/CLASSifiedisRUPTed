@@ -5,7 +5,8 @@ Current evidence: [project status](docs/status/PROJECT_STATUS.md), [generated fe
 - [x] Specify all 148 modules and resolve current strict specification errors/warnings.
 - [x] Consolidate the reviewed runnable alpha and expose retained-listing search, local barter inbox, and draft/unpublished editing on PR #37.
 - [x] Qualify and merge consolidated alpha PR #37 after successful Alpha verification and six CLI platform jobs.
-- [ ] Qualify encrypted domain persistence, migration, tamper detection and recovery on the new candidate before merging.
+- [x] Qualify and merge encrypted domain persistence, migration and tamper detection through PR #38.
+- [ ] Finish platform qualification and merge owner listing history PR #39.
 - [ ] Complete remaining encrypted-storage load/rotation/recovery contracts after the implemented row-encryption and migration slice.
 - [ ] Finish canonical identity/device rotation, revocation and recovery contracts.
 - [ ] Finish published editing and material-change offer reconfirmation after the owner history slice; complete kind-specific terms, quantity/variant inventory and media workflows.

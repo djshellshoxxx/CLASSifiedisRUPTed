@@ -1,1 +1,1 @@
-export { createIdentity, unlockIdentity, didFromPublicKey, publicKeyFromDid, encodeBase64url, decodeBase64url, seal, unseal, validateSealed, type UnlockedIdentity, type ProtectedIdentity, type Sealed } from './identity.ts';
+export { createIdentity, unlockIdentity, didFromPublicKey, publicKeyFromDid, encodeBase64url, decodeBase64url, seal, unseal, validateSealed, IdentityCryptoError, type IdentityCryptoStage, type UnlockedIdentity, type ProtectedIdentity, type Sealed } from './identity.ts';

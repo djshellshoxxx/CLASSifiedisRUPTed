@@ -5,6 +5,19 @@ describe what is on the integration branch, with the pull request that introduce
 
 ## Unreleased
 
+### Parallel continuation (2026-11-16)
+
+- Owner closure reasons, signed expiry withdrawals, automatic local expiry/30-day
+  archive maintenance, and re-download of verified publication/withdrawal evidence.
+- Idle/hidden-tab vault lock, page-local unlock backoff, safe crypto failure-stage
+  diagnostics, and session guards for delayed results/downloads and failed startup.
+- Pure exact-money conversion/arithmetic/allocation with independent Python
+  vectors and a deterministic browser bundle CI check. Target performance remains
+  unqualified; existing alpha wire amounts are not migrated.
+- Opt-in signed-consent core and notification signer-chain validation fixes.
+  Consent product composition/backup/quarantine are still pending.
+- Milestone handoffs and independent review records under `docs/handoffs/`.
+
 ### Consolidated (2026-11-11)
 
 - Stage 3 specifications as data and the Stage 4 kernel (PR #8) and the local alpha with vault,

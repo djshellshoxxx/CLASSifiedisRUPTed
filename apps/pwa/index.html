@@ -61,7 +61,13 @@
 </p>
 <p id="network" class="note">
 </p>
+<label for="vault-idle-minutes">Lock after inactivity</label>
+<select id="vault-idle-minutes" aria-describedby="vault-lock-note">
+<option value="1">1 minute</option><option value="5">5 minutes</option><option value="15" selected>15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option>
+</select>
+<p id="vault-lock-note" class="note">This session locks after inactivity or 5 minutes in a hidden tab. Keep an encrypted backup of saved records.</p>
 </section>
+<section id="location-preferences" aria-label="Location preferences"></section>
 <section id="listing-editor" hidden></section>
 <section aria-labelledby="listing-title">
 <h2 id="listing-title">Create a listing</h2>
@@ -99,6 +105,8 @@
 </section>
 <section>
 <h2>Your listings</h2>
+<p id="listing-maintenance-status" role="status" aria-live="polite"></p>
+<p class="note">While your vault is open, expired and closed listings are maintained locally. Closed or expired listings archive after 30 days. Share their signed withdrawals with peers; nothing is sent automatically.</p>
 <div id="listings" class="cards">
 </div>
 </section>
@@ -125,7 +133,7 @@
 <option value="">Any area</option><option value="5">5 km</option><option value="10">10 km</option><option value="25">25 km</option><option value="50">50 km</option><option value="100">100 km</option>
 </select></label>
 </div>
-<p id="search-location-note" class="note">A radius needs a coarse area. Results include overlapping regions, not exact distances. No device location is requested.</p>
+<p id="search-location-note" class="note">A radius needs a coarse area. Results include overlapping regions, not exact distances. Searching does not request device location.</p>
 <label>Peer listing order<select id="search-sort" name="sort" aria-describedby="search-ranking-note">
 <option value="retained">Default retained order</option><option value="ranked">Recent + coarse-distance ranking</option>
 </select></label>

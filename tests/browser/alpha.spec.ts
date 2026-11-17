@@ -27,6 +27,72 @@ async function listing(page: Page, title: string, amount = '12500') {
   await expect(page.locator('#listings').getByRole('heading', { name: title, exact: true })).toBeVisible();
 }
 
+test('idle vault lock clears private views and preserves saved listings', async ({ page }) => {
+  await page.clock.install();
+  await create(page, 'idle-lock');
+  await listing(page, 'Saved before idle lock');
+  await page.getByLabel('Title', { exact: true }).fill('Private unsaved draft');
+  await page.getByLabel('Lock after inactivity').selectOption('1');
+  await page.clock.fastForward(60_001);
+  await expect(page.locator('#workspace')).toBeHidden();
+  await expect(page.locator('#status')).toContainText('locked after inactivity');
+  await expect(page.locator('#principal')).toBeEmpty();
+  await expect(page.locator('#listings')).toBeEmpty();
+  await unlock(page, 'idle-lock');
+  await expect(page.locator('#listings')).toContainText('Saved before idle lock');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Lock after inactivity')).toHaveValue('15');
+});
+
+test('owner closes a listing and can download its verified withdrawal after reopening', async ({ page }) => {
+  await create(page, 'closure');
+  await listing(page, 'Finished guitar');
+  const publication = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Publish signed file', exact: true }).click();
+  await publication;
+  await page.getByText('Close this listing', { exact: true }).click();
+  await page.getByLabel('Closure reason').selectOption('sold');
+  await page.getByLabel('I confirm this listing is finished.').check();
+  const withdrawal = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Confirm closure', exact: true }).click();
+  const first = await withdrawal;
+  const firstPath = await first.path();
+  if (!firstPath) throw new Error('Withdrawal download is missing');
+  const signed = await readFile(firstPath, 'utf8');
+  await expect(page.locator('#listings')).toContainText('closed');
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await unlock(page, 'closure');
+  const again = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download signed withdrawal', exact: true }).click();
+  const secondPath = await (await again).path();
+  if (!secondPath) throw new Error('Re-downloaded withdrawal is missing');
+  expect(await readFile(secondPath, 'utf8')).toBe(signed);
+});
+
+test('unlock performs local expiry and later archive without automatically exporting', async ({ page }) => {
+  await page.clock.install();
+  await create(page, 'lifecycle-sweep');
+  await listing(page, 'Aging listing');
+  const publication = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Publish signed file', exact: true }).click();
+  await publication;
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  const downloads: string[] = [];
+  page.on('download', file => downloads.push(file.suggestedFilename()));
+  // The vault is closed: move wall time without a month-long timer tick.
+  await page.clock.setSystemTime(await page.evaluate(() => Date.now() + 31 * 86_400_000));
+  await unlock(page, 'lifecycle-sweep');
+  await expect(page.locator('#listings')).toContainText('expired');
+  await expect(page.locator('#listing-maintenance-status')).toContainText('1 expired');
+  await expect(page.getByRole('button', { name: 'Download signed withdrawal', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await page.clock.setSystemTime(await page.evaluate(() => Date.now() + 30 * 86_400_000));
+  await unlock(page, 'lifecycle-sweep');
+  await expect(page.locator('#listings')).toContainText('archived');
+  await expect(page.getByRole('button', { name: 'Restore listing', exact: true })).toBeVisible();
+  expect(downloads).toEqual([]);
+});
+
 test('local listing contents and identifiers stay encrypted on disk across lock and unlock', async ({ page }) => {
   const principal = await create(page, 'encrypted-disk');
   const title = 'Private disk encryption canary';
@@ -231,16 +297,43 @@ test('listing edits preserve exact amounts, publish public fields, and clear dra
   await page.getByRole('button', { name: 'Unpublish', exact: true }).click();
   await page.getByRole('button', { name: 'Edit listing', exact: true }).click();
   await expect(page.getByLabel('Private listing notes', { exact: true })).toHaveValue('Private seller detail');
+  await page.getByLabel('Edit title', { exact: true }).fill('Revised guitar');
+  await page.getByLabel('Edit condition', { exact: true }).selectOption('good');
+  await page.getByRole('button', { name: 'Save listing changes', exact: true }).click();
+  const history = page.locator('#listings > article > details').filter({ has: page.getByText('Local revision history', { exact: true }) });
+  await history.getByText('Local revision history', { exact: true }).click();
+  await history.getByRole('button', { name: 'Load revision history', exact: true }).click();
+  await expect(history.getByRole('status')).toHaveText('2 local revision snapshots loaded.');
+  await expect(history).toContainText('Material change');
+  await expect(history).toContainText('Saved locally; not published');
+  await expect(history).toContainText('Published locally');
+  await expect(history).not.toContainText('Private seller detail');
+  await page.getByRole('button', { name: 'Edit listing', exact: true }).click();
   await page.getByLabel('Edit title', { exact: true }).fill('Unsubmitted edit');
   await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
   await expect(page.locator('#listing-editor')).toBeEmpty();
   await page.reload(); await unlock(page, 'editor');
-  await expect(page.locator('#listings')).toContainText('Edited guitar');
+  await expect(page.locator('#listings')).toContainText('Revised guitar');
   await expect(page.locator('#listings')).not.toContainText('Unsubmitted edit');
 });
 
-test('encrypted backup restores listings and identity into a new empty vault', async ({ page }) => {
+test('encrypted backup restores listings, identity and private coarse area into a new empty vault', async ({ page }) => {
   const principal = await create(page, 'source');
+  const home = page.getByLabel('Home area tile (5-character geohash)', { exact: true });
+  const visibility = page.getByLabel('Area visible when you copy it to a new listing', { exact: true });
+  await home.fill('u4pru');
+  await visibility.selectOption('L1');
+  await page.getByRole('button', { name: 'Save area preferences', exact: true }).click();
+  await expect(page.locator('#status')).toContainText('Area preferences saved privately');
+  const listingArea = page.locator('#listing-form [name="region"]');
+  await expect(listingArea).toHaveValue('c2b2');
+  await page.getByRole('button', { name: 'Use visible area for new listing', exact: true }).click();
+  await expect(listingArea).toHaveValue('u4pr');
+  await page.getByRole('button', { name: 'Use saved area for regional search', exact: true }).click();
+  await expect(page.locator('#search-area')).toHaveValue('u4pru');
+  await visibility.selectOption('L0');
+  await page.getByRole('button', { name: 'Save area preferences', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Use visible area for new listing', exact: true })).toBeHidden();
   await listing(page, 'Backup-only lamp');
   await page.locator('#backup-password').fill(password);
   const pending = page.waitForEvent('download', { timeout: 20000 });
@@ -249,9 +342,11 @@ test('encrypted backup restores listings and identity into a new empty vault', a
   if (!path) throw new Error('Backup download has no path');
   const backup = await readFile(path);
   expect(backup.toString()).not.toContain('Backup-only lamp');
+  expect(backup.toString()).not.toContain('"homeCell5"');
   expect(backup.toString()).not.toContain(password);
   await expect(page.locator('#backup-password')).toHaveValue('');
   await page.getByRole('button', { name: 'Lock vault' }).click();
+  await expect(page.locator('#location-preferences')).toBeEmpty();
   await page.locator('#access details summary').click();
   await page.locator('[name="restore-name"]').fill('restored');
   await page.locator('[name="restore-password"]').fill(password);
@@ -261,9 +356,75 @@ test('encrypted backup restores listings and identity into a new empty vault', a
   await expect(page.locator('#status')).toContainText('Backup restored');
   expect(await page.locator('#principal').textContent()).toBe(principal);
   await expect(page.locator('#listings')).toContainText('Backup-only lamp');
+  await expect(home).toHaveValue('u4pru');
+  await expect(visibility).toHaveValue('L0');
+  await expect(page.getByRole('button', { name: 'Use visible area for new listing', exact: true })).toBeHidden();
   await page.reload();
   await unlock(page, 'restored');
   await expect(page.locator('#listings')).toContainText('Backup-only lamp');
+  await expect(home).toHaveValue('u4pru');
+  await page.getByRole('button', { name: 'Clear saved area', exact: true }).click();
+  await expect(home).toHaveValue('');
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await unlock(page, 'restored');
+  await expect(home).toHaveValue('');
+});
+
+test('archive signs a withdrawal, survives encrypted backup and restores unpublished', async ({ page }) => {
+  await create(page, 'archive-source');
+  await listing(page, 'Restorable canoe');
+  await downloadedAction(page, 'Publish signed file');
+  page.once('dialog', dialog => dialog.accept());
+  const withdrawal = JSON.parse((await downloadedAction(page, 'Archive')).toString());
+  expect(withdrawal.type).toBe('classrup.alpha.tombstone/v1');
+  await expect(page.locator('#listings')).toContainText('archived');
+  await expect(page.getByRole('button', { name: 'Publish signed file', exact: true })).toHaveCount(0);
+  await page.locator('#backup-password').fill(password);
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download encrypted backup' }).click();
+  const path = await (await pending).path();
+  if (!path) throw new Error('Backup unavailable');
+  const backup = await readFile(path);
+  expect(backup.toString()).not.toContain('Restorable canoe');
+  await page.getByRole('button', { name: 'Lock vault' }).click();
+  await page.locator('#access details summary').click();
+  await page.locator('[name="restore-name"]').fill('archive-restored');
+  await page.locator('[name="restore-password"]').fill(password);
+  await page.locator('#restore-file').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: backup });
+  await page.getByRole('button', { name: 'Restore backup', exact: true }).click();
+  await expect(page.locator('#status')).toContainText('Backup restored');
+  await page.getByRole('button', { name: 'Restore listing', exact: true }).click();
+  await expect(page.locator('#listings')).toContainText('unpublished');
+  await expect(page.getByRole('button', { name: 'Publish signed file', exact: true })).toBeVisible();
+  await page.reload(); await unlock(page, 'archive-restored');
+  await expect(page.locator('#listings')).toContainText('unpublished');
+  const republished = JSON.parse((await downloadedAction(page, 'Publish signed file')).toString());
+  expect(republished.seq).toBe(3); expect(republished.prev).toBe(withdrawal.cid);
+});
+
+test('owner listing pages expose records beyond 50 and reset after locking', async ({ page }) => {
+  await create(page, 'listing-pages');
+  page.on('dialog', dialog => dialog.accept());
+  for (let index = 0; index < 51; index++) {
+    await listing(page, `Archived page item ${index}`);
+    const newest = page.locator('#listings > article').first();
+    await newest.getByRole('button', { name: 'Archive', exact: true }).click();
+    await expect(page.locator('#status')).toContainText('Archived locally');
+  }
+  await expect(page.locator('#listings > article')).toHaveCount(50);
+  await page.getByRole('button', { name: 'Next listings', exact: true }).click();
+  await expect(page.locator('#listings > article')).toHaveCount(1);
+  await expect(page.locator('#listings')).toContainText('Archived page item 0');
+  await expect(page.locator('#listings')).not.toContainText('Archived page item 50');
+  await page.getByRole('button', { name: 'Previous listings', exact: true }).click();
+  await expect(page.locator('#listings > article')).toHaveCount(50);
+  await expect(page.locator('#listings')).toContainText('Archived page item 50');
+  await page.getByRole('button', { name: 'Next listings', exact: true }).click();
+  await expect(page.locator('#listings > article')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await unlock(page, 'listing-pages');
+  await expect(page.locator('#listings > article')).toHaveCount(50);
+  await expect(page.getByRole('button', { name: 'Previous listings', exact: true })).toHaveCount(0);
 });
 
 test('concurrent tabs cannot both acquire a vault writer', async ({ page, context }) => {

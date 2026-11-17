@@ -121,7 +121,7 @@ export function prefDefinitions(options: PreferenceOptions) {
     try {
       envelope = structuredClone(await options.signStatement(PREFERENCE_MIRROR_STATEMENT, payload, seq, state?.data.lastMirrorCid ?? null));
       const verified = await options.verifyStatement(envelope);
-      if (verified.author !== principal || verified.type !== PREFERENCE_MIRROR_STATEMENT || canonicalJson(verified.payload) !== canonicalJson(payload) || verified.cid !== envelope.cid) return err(appError('FORBIDDEN'));
+      if (verified.author !== principal || verified.seq !== seq || envelope['prev'] !== (state?.data.lastMirrorCid ?? null) || verified.type !== PREFERENCE_MIRROR_STATEMENT || canonicalJson(verified.payload) !== canonicalJson(payload) || verified.cid !== envelope.cid) return err(appError('FORBIDDEN'));
     } catch { return err(appError('VALIDATION_FAILED')); }
     const saved = ctx.tx.repo(stateRepo).put('state', { mirrorSeq: seq, lastMirrorCid: envelope.cid }, { expectedRevision: state?.revision ?? 0 });
     if (!saved.ok) return saved;
@@ -216,7 +216,7 @@ export function prefDefinitions(options: PreferenceOptions) {
       const parsed = verified.type === PREFERENCE_MIRROR_STATEMENT ? mirrorStatementSchema.safeParse(verified.payload) : undefined;
       if (!parsed?.success) return err(appError('VALIDATION_FAILED'));
       const p = parsed.data;
-      if (verified.author !== p.userDid || !hasActiveConsent(ctx.tx, p.userDid, relay.relayId, undefined, ctx.clock.now())) return err(appError('PRECONDITION_FAILED'));
+      if (verified.seq !== p.seq || verified.author !== p.userDid || !hasActiveConsent(ctx.tx, p.userDid, relay.relayId, undefined, ctx.clock.now())) return err(appError('PRECONDITION_FAILED'));
       const repo = ctx.tx.repo(mirrorRepo);
       const cur = repo.get(p.userDid);
       const receipt = async (r: { seq: number; cid: string; receiptAt: string }) => ok({ seq: r.seq, relayReceiptAt: r.receiptAt, relayReceiptSig: await relay.signReceipt({ userDid: p.userDid, seq: r.seq, statementCid: r.cid, relayReceiptAt: r.receiptAt }) });

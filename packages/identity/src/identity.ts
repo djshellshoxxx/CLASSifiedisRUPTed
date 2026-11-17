@@ -7,6 +7,21 @@ const encoder = new TextEncoder();
 const MAX_SECRET_BYTES = 16 * 1024 * 1024;
 const DOMAIN = encoder.encode('classrup.sealed/v1;scrypt=131072,8,1;xchacha20poly1305');
 
+export type IdentityCryptoStage = 'generate-key' | 'export-public-key' | 'export-private-key' | 'import-private-key' | 'import-public-key' | 'sign' | 'verify';
+/** Fixed diagnostic labels only. Native exception messages and cryptographic input never escape. */
+export class IdentityCryptoError extends Error {
+  readonly stage: IdentityCryptoStage;
+  constructor(stage: IdentityCryptoStage) {
+    super(`Browser cryptography failed during ${stage}.`);
+    this.name = 'IdentityCryptoError';
+    this.stage = stage;
+  }
+}
+async function cryptoOperation<T>(stage: IdentityCryptoStage, operation: () => Promise<T>): Promise<T> {
+  try { return await operation(); }
+  catch { throw new IdentityCryptoError(stage); }
+}
+
 export interface Sealed {
   readonly format: 'classrup.sealed/v1';
   readonly kdf: 'scrypt-131072-8-1';
@@ -68,7 +83,7 @@ function signingIdentity(principal: string, initial: CryptoKey): UnlockedIdentit
     async sign(bytes) {
       if (!key) throw new Error('Identity locked');
       const used = key;
-      const signature = new Uint8Array(await crypto.subtle.sign('Ed25519', used, bytes.slice()));
+      const signature = new Uint8Array(await cryptoOperation('sign', () => crypto.subtle.sign('Ed25519', used, bytes.slice())));
       if (key !== used) throw new Error('Identity locked');
       return signature;
     },
@@ -78,12 +93,12 @@ function signingIdentity(principal: string, initial: CryptoKey): UnlockedIdentit
 
 export async function createIdentity(passphrase: string): Promise<{ identity: UnlockedIdentity; protectedIdentity: ProtectedIdentity }> {
   passphraseBytes(passphrase).fill(0);
-  const pair = await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']) as CryptoKeyPair;
-  const principal = didFromPublicKey(new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey)));
-  const privateBytes = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
+  const pair = await cryptoOperation('generate-key', () => crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify'])) as CryptoKeyPair;
+  const principal = didFromPublicKey(new Uint8Array(await cryptoOperation('export-public-key', () => crypto.subtle.exportKey('raw', pair.publicKey))));
+  const privateBytes = new Uint8Array(await cryptoOperation('export-private-key', () => crypto.subtle.exportKey('pkcs8', pair.privateKey)));
   try {
     const secret = await seal(privateBytes, passphrase);
-    const key = await crypto.subtle.importKey('pkcs8', privateBytes, 'Ed25519', false, ['sign']);
+    const key = await cryptoOperation('import-private-key', () => crypto.subtle.importKey('pkcs8', privateBytes, 'Ed25519', false, ['sign']));
     return { identity: signingIdentity(principal, key), protectedIdentity: { format: 'classrup.identity-key/v1', principal, secret } };
   } finally { privateBytes.fill(0); }
 }
@@ -97,11 +112,14 @@ export async function unlockIdentity(input: unknown, passphrase: string): Promis
   const publicBytes = publicKeyFromDid(value.principal);
   const privateBytes = await unseal(value.secret, passphrase);
   try {
-    const key = await crypto.subtle.importKey('pkcs8', privateBytes.slice(), 'Ed25519', false, ['sign']);
-    const publicKey = await crypto.subtle.importKey('raw', publicBytes, 'Ed25519', false, ['verify']);
+    const importBytes = privateBytes.slice();
+    let key: CryptoKey;
+    try { key = await cryptoOperation('import-private-key', () => crypto.subtle.importKey('pkcs8', importBytes, 'Ed25519', false, ['sign'])); }
+    finally { importBytes.fill(0); }
+    const publicKey = await cryptoOperation('import-public-key', () => crypto.subtle.importKey('raw', publicBytes, 'Ed25519', false, ['verify']));
     const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const signature = await crypto.subtle.sign('Ed25519', key, challenge);
-    if (!await crypto.subtle.verify('Ed25519', publicKey, signature, challenge)) throw new Error('Identity key mismatch');
+    const signature = await cryptoOperation('sign', () => crypto.subtle.sign('Ed25519', key, challenge));
+    if (!await cryptoOperation('verify', () => crypto.subtle.verify('Ed25519', publicKey, signature, challenge))) throw new Error('Identity key mismatch');
     return signingIdentity(value.principal, key);
   } finally { privateBytes.fill(0); }
 }

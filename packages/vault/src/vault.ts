@@ -1,8 +1,9 @@
 import { ok, type Storage, type StoredRecord, type RepoDef, type Tx, type Result, type TxMode } from '@classrup/kernel';
 import { type IndexedDbOptions } from '@classrup/kernel/browser';
 import { openEncryptedStorage } from './encrypted-storage.ts';
-import { createIdentity, unlockIdentity, seal, unseal, type ProtectedIdentity, type UnlockedIdentity, type Sealed } from '@classrup/identity';
+import { createIdentity, unlockIdentity, seal, unseal, IdentityCryptoError, type ProtectedIdentity, type UnlockedIdentity, type Sealed } from '@classrup/identity';
 import { signEnvelope, verifyEnvelope } from '@classrup/federation';
+import { createUnlockBackoff, type UnlockBackoff } from './session-policy.ts';
 
 const KEY_TENANT = 'local-vault';
 const KEY_TYPE = 'vault.identity';
@@ -12,6 +13,7 @@ const MAX_BACKUP_BYTES = 16 * 1024 * 1024;
 const encoder = new TextEncoder();
 const STORAGE_IDENTITY_FORMAT = 'classrup.vault-identity/v2';
 const decoder = new TextDecoder('utf-8', { fatal: true });
+const unlockBackoffs = new WeakMap<object, Map<string, UnlockBackoff>>();
 
 /** Explicit domain schema and indexes; unknown record types never pass restore. */
 export interface BackupCodec {
@@ -20,6 +22,8 @@ export interface BackupCodec {
   validate?(input: unknown): Promise<void>;
   /** Rebuild derived state after trust validation; applied only during restore. */
   restoreData?(input: unknown, principal: string): Promise<unknown>;
+  /** Optional canonical storage key for data with a compound uniqueness invariant. */
+  recordId?(input: unknown): string;
   indexes(input: unknown): readonly [string | null, string | null, string | null, string | null];
 }
 export function backupCodec<T, K extends string>(repo: RepoDef<T, K>): BackupCodec {
@@ -55,11 +59,16 @@ export interface Vault {
 export async function openVault(options: VaultOptions): Promise<Vault> {
   if (!/^[A-Za-z0-9 _-]{1,80}$/.test(options.name)) throw new Error('Use a vault name of 1–80 letters, digits, spaces, _ or -');
   const protectedStorage = await openEncryptedStorage({ ...options, name: `classrup-vault:${options.name}` });
-  return vaultFromStorage(protectedStorage.storage, options.codecs, protectedStorage.unlock);
+  const factory = options.indexedDB ?? globalThis.indexedDB;
+  let byName = unlockBackoffs.get(factory);
+  if (!byName) { byName = new Map(); unlockBackoffs.set(factory, byName); }
+  let backoff = byName.get(options.name);
+  if (!backoff) { backoff = createUnlockBackoff(); byName.set(options.name, backoff); }
+  return vaultFromStorage(protectedStorage.storage, options.codecs, protectedStorage.unlock, backoff);
 }
 
 /** Composition seam for contract tests; production callers use openVault's IndexedDB adapter. */
-export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = [], unlockStorage?: (passphrase: string, required: boolean, replacement?: object) => Promise<void>): Vault {
+export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = [], unlockStorage?: (passphrase: string, required: boolean, replacement?: object) => Promise<void>, backoff = createUnlockBackoff()): Vault {
   const byType = new Map(codecs.map(codec => [codec.type, codec]));
   if (byType.size !== codecs.length || byType.has(KEY_TYPE)) throw new Error('Invalid backup codecs');
   let session: UnlockedVault | undefined;
@@ -112,7 +121,11 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           const out: StoredRecord[] = [];
           for (const codec of codecs) {
             const rows = tx.records.query({ tenant: identity.principal, type: codec.type, filters: [], orderSlot: 0, dir: 'asc', limit: MAX_RECORDS + 1 });
-            for (const row of rows) out.push({ ...row, data: codec.parse(row.data) });
+            for (const row of rows) {
+              const data = codec.parse(row.data);
+              if (codec.recordId && codec.recordId(data) !== row.id) throw new Error('Backup record key mismatch');
+              out.push({ ...row, data });
+            }
             if (out.length > MAX_RECORDS) throw new Error('Backup record limit exceeded');
           }
           return out;
@@ -144,22 +157,31 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
       } catch (error) { created.identity.lock(); throw error; }
     }),
     unlock: passphrase => exclusive(async () => {
+      backoff.check();
       const stored = await key();
       if (!stored) throw new Error('Vault does not exist');
       let protectedIdentity = stored.data;
       let requiresEncryption = false;
-      if (protectedIdentity && typeof protectedIdentity === 'object' && (protectedIdentity as { format?: unknown }).format === STORAGE_IDENTITY_FORMAT) {
-        const wrapper = protectedIdentity as Record<string, unknown>;
-        if (Object.keys(wrapper).sort().join(',') !== 'format,sealed') throw new Error('Invalid vault identity');
-        const bytes = await unseal(wrapper.sealed, passphrase);
-        try {
-          const payload = JSON.parse(decoder.decode(bytes)) as Record<string, unknown>;
-          if (!payload || Object.keys(payload).sort().join(',') !== 'identity,storageFormat' || payload.storageFormat !== 'classrup.storage-row/v1') throw new Error('Invalid vault identity');
-          protectedIdentity = payload.identity;
-          requiresEncryption = true;
-        } finally { bytes.fill(0); }
+      let identity: UnlockedIdentity;
+      try {
+        if (protectedIdentity && typeof protectedIdentity === 'object' && (protectedIdentity as { format?: unknown }).format === STORAGE_IDENTITY_FORMAT) {
+          const wrapper = protectedIdentity as Record<string, unknown>;
+          if (Object.keys(wrapper).sort().join(',') !== 'format,sealed') throw new Error('Invalid vault identity');
+          const bytes = await unseal(wrapper.sealed, passphrase);
+          try {
+            const payload = JSON.parse(decoder.decode(bytes)) as Record<string, unknown>;
+            if (!payload || Object.keys(payload).sort().join(',') !== 'identity,storageFormat' || payload.storageFormat !== 'classrup.storage-row/v1') throw new Error('Invalid vault identity');
+            protectedIdentity = payload.identity;
+            requiresEncryption = true;
+          } finally { bytes.fill(0); }
+        }
+        identity = await unlockIdentity(protectedIdentity, passphrase);
+        backoff.succeeded();
+      } catch (error) {
+        // An unavailable browser primitive is not a wrong passphrase attempt.
+        if (!(error instanceof IdentityCryptoError)) backoff.failed();
+        throw error;
       }
-      const identity = await unlockIdentity(protectedIdentity, passphrase);
       try {
         const replacement = !requiresEncryption && unlockStorage ? await wrapIdentity(protectedIdentity as ProtectedIdentity, passphrase) : undefined;
         await unlockStorage?.(passphrase, requiresEncryption, replacement);
@@ -192,6 +214,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           if (ids.has(id)) throw new Error('Duplicate backup record');
           ids.add(id);
           const parsedData = codec.parse(row.data);
+          if (codec.recordId && codec.recordId(parsedData) !== row.id) throw new Error('Backup record key mismatch');
           return { record: { ...row, data: parsedData } as unknown as StoredRecord, idx: codec.indexes(parsedData) };
         });
         for (const entry of records) {
@@ -200,6 +223,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
             const normalized = codec.parse(await codec.restoreData(entry.record.data, identity.principal));
             entry.record = { ...entry.record, data: normalized };
             entry.idx = codec.indexes(normalized);
+            if (codec.recordId && codec.recordId(normalized) !== entry.record.id) throw new Error('Backup record key mismatch');
           }
           await codec.validate?.(entry.record.data);
         }

@@ -10,8 +10,10 @@ The PWA registers the local definitions, drains the durable outbox on unlock and
 
 The alpha producer emits `mutiny.coordination.observed` only after a newly accepted signed statement is stored. Recipients come from the verified proposal roster and the actor comes from the verified statement author. Repeated files and rejected signatures produce no new notice. The router suppresses the local user's own actions and the current barter block list. UUID subject IDs support a link to barter coordination; older opaque subject IDs remain usable without alerts. A notification reports local acceptance of evidence, not unanimous consent, payment or settlement.
 
-Retention runs on unlock and the first command after an hour (including clock rollback). The inbox supports 500 retained notifications; pages show 20 rows. External push/email, quiet hours, messaging alerts, full identity lifecycle alerts and complete IOX export remain unfinished. No browser Notification permission or network delivery is requested. The existing alpha keeps local domain records unencrypted at rest.
+Retention runs on unlock and the first command after an hour (including clock rollback). The inbox supports 500 retained notifications; pages show 20 rows. External push/email, quiet hours, messaging alerts, full identity lifecycle alerts and complete IOX export remain unfinished. No browser Notification permission or network delivery is requested. The production vault encrypts local domain rows at rest.
 
 ## Verification
 
 `tests/integration/privacy-notify.test.ts` exercises the public entry points through the kernel bus, preference changes, privacy redaction, absence of sync delivery, encrypted backup roundtrip, foreign-owner rejection and mandatory security preferences. Domain tests cover the three notification modules and two privacy libraries.
+
+Signer callbacks are checked against the exact requested sequence and previous CID before channel consent or preference changes commit. Relay preference mirrors reject disagreement between envelope and payload sequences.

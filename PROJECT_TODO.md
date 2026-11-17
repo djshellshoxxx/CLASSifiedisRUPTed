@@ -5,10 +5,19 @@ Current evidence: [project status](docs/status/PROJECT_STATUS.md), [generated fe
 - [x] Specify all 148 modules and resolve current strict specification errors/warnings.
 - [x] Consolidate the reviewed runnable alpha and expose retained-listing search, local barter inbox, and draft/unpublished editing on PR #37.
 - [x] Qualify and merge consolidated alpha PR #37 after successful Alpha verification and six CLI platform jobs.
-- [ ] Qualify encrypted domain persistence, migration, tamper detection and recovery on the new candidate before merging.
+- [x] Qualify and merge encrypted domain persistence, migration and tamper detection through PR #38.
+- [ ] Finish platform qualification and merge owner listing history PR #39.
+- [x] Implement owner closure, signed expiry, bounded unlocked-vault maintenance, and verified withdrawal re-download; final-source browser CI passed; purge and full retention remain pending.
+- [x] Implement session idle/hidden lock, local unlock backoff and stale-result/export guards; canonical device/session recovery remains pending.
+- [x] Implement exact-money arithmetic and signed-consent foundations with fresh independent review.
+- [x] Implement encrypted coarse-location preferences, optional one-shot GPS snapping, and explicit listing/search copies.
+- [x] Move signed barter admission and matching to a cancellable background worker with offline asset packaging.
+- [x] Implement an opt-in currency registry with authenticated snapshot admission and immutable currency bindings.
+- [ ] Supply an authenticated release snapshot and canonical vault/usage adapters before enabling registry-backed commerce in the PWA.
+- [ ] Qualify money performance on its specified target; wire consent adapters, wording UI, backup validation and quarantine before enabling it in the PWA.
 - [ ] Complete remaining encrypted-storage load/rotation/recovery contracts after the implemented row-encryption and migration slice.
 - [ ] Finish canonical identity/device rotation, revocation and recovery contracts.
-- [ ] Implement listing revision history, material-change handling, kind-specific terms, quantity/variant inventory and media workflows.
+- [ ] Finish published editing and material-change offer reconfirmation after the owner history slice; complete kind-specific terms, quantity/variant inventory and media workflows.
 - [ ] Implement purchase offers, negotiations, payment claims, settlement evidence and receipts.
 - [ ] Finish barter matching profiles, execution, handover and recovery beyond signed coordination evidence.
 - [ ] Implement private messaging, consent capture/revocation and safe-meetup workflows.
@@ -18,4 +27,4 @@ Current evidence: [project status](docs/status/PROJECT_STATUS.md), [generated fe
 - [ ] Reconcile historical security findings with runtime controls and negative tests; none are closed solely by preserving their reports.
 - [ ] Complete requirement-level acceptance, fuzz/security testing and manual accessibility qualification.
 
-The generated inventory currently finds runtime code in 31/148 modules and passing mapped tests for 442/4510 requirements. These are inventory/traceability measures, not a completion percentage or evidence that all requirements in those modules are met. Continue from the current integration head and inspect its CI before adding or merging work.
+The generated inventory measures source paths, interfaces and passing mapped tests; it is not a completion percentage or evidence that all requirements in those modules are met. Continue from PR #42 using the [parallel integration handoff](docs/handoffs/20261116-parallel-integration.md) and its exact-source CI evidence before adding or merging work. Latest reviewed source `bdd2971` passed all 63 browser journeys and six platform jobs; this is not full-product completion.

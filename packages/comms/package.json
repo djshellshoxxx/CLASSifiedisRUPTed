@@ -15,5 +15,8 @@
     "@classrup/i18n": "workspace:*",
     "@classrup/governance": "workspace:*"
   },
-  "description": "Specification-only package; no runtime entry point implemented yet."
+  "description": "Explicit signed consent core with owner-supplied subject and wording adapters; other communication modules remain specified.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
 }

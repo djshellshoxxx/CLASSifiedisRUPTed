@@ -11,7 +11,7 @@ Requires Node >=22.18.0 and the pinned pnpm 10.28.0. See the [CLI setup guide](d
 ```sh
 git clone https://github.com/djshellshoxxx/CLASSifiedisRUPTed.git
 cd CLASSifiedisRUPTed
-git switch integration/classrup-completion   # until this branch is merged to main
+git switch main   # qualified baseline; unmerged feature PRs are separate candidates
 corepack pnpm install --frozen-lockfile
 corepack pnpm run setup --non-interactive
 corepack pnpm run doctor
@@ -22,12 +22,19 @@ Use `pnpm run setup` and `pnpm run doctor`: both bare names collide with pnpm's 
 
 ## Implemented scope and limits
 
-- Ed25519 identities, encrypted signing-key storage, explicit lock/unlock, per-vault IndexedDB persistence and signed/encrypted record backup into a new vault.
+- Owner archive/recovery records with a 90-day local-clock restore window, signed withdrawals, encrypted-backup support and owner listing pagination. Owners can close listings with a reason and download their current verified signed file again. While unlocked, bounded maintenance expires publications and archives closed/expired listings after 30 days. Restore returns listings unpublished. Complete purge remains unfinished; legacy archives have no invented deadline.
+- Owner-only local listing history with hashed public-field snapshots, publication-status labels, material-change markers, pagination and backup support. New history begins with this version; published editing and buyer reconfirmation remain unfinished.
+- Ed25519 identities, encrypted signing-key storage, lock/unlock, per-vault IndexedDB persistence and signed/encrypted record backup into a new vault. Sessions default to a 15-minute idle lock (configurable 1–60) and lock after five minutes hidden. Local unlock backoff survives reopening within the same page; it is not an offline guessing defense.
 - Single-item listing lifecycle, exact minor-unit values, signed public projections, explicit file exchange, retained peer verification and revision/fork checks.
 - Browser editing for draft/unpublished listings, preserving exact values and private notes. Saving an edit never publishes it; published items must be explicitly unpublished first.
 - Bounded deterministic barter graph enumeration, independently checked against small-graph oracles; signed alpha proposal, consent and reservation state transitions with explicit consistency limits.
+- Barter signature admission and matching run in a bounded background worker. Cancelling or locking terminates the worker and rejects stale results. The worker asset is included in the public offline cache; signing keys and vault storage remain outside it.
+- Private coarse-area preferences, optional one-time device positioning reduced to a geohash tile, and explicit copying into a new listing or local search. Owner settings survive encrypted backup and reopening; precise sharing is not implemented.
 - Local inbox for accepted signed barter updates, with read controls, preferences, retry status and encrypted-backup support. No push/email delivery is configured.
 - Terminal installation/configuration diagnostics, static browser build, public-asset-only offline cache and cross-platform CI definitions.
+- Exact money arithmetic, rational conversion and allocation as a headless 38-digit library, independently checked against Python vectors. Existing alpha wire amounts retain their previous bounds; this library does not add payment settlement.
+- An opt-in currency registry validates a snapshot against a configured release signer and preserves immutable decimal/chain bindings. Registry seeding and commerce UI remain disabled until an authenticated snapshot, downstream usage adapters and the canonical-vault integration exist. No exchange-rate provider is configured.
+- An opt-in signed-consent core with revision/participant/wording binding and monotonic revocation. Its product adapters, backup codecs and quarantine are pending, so it is not enabled in the PWA.
 
 Signing keys, exported backups and local domain rows are encrypted. Existing plaintext vaults migrate atomically after successful unlock. Storage uses authenticated row encryption, opaque row keys and an authenticated inventory; table names, row counts and ciphertext sizes remain visible. Alpha backup covers registered domain records and identity, not the complete media/outbox/device-rotation recovery protocol. Keep the original vault passphrase for backup and restore. Browser origin changes create separate storage locations.
 

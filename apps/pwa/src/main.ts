@@ -1,21 +1,42 @@
+import { archiveBackupCodec } from './archive-backup.ts';
+import { protectVaultSession, runForSession } from './vault-session.ts';
 import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
 import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
 import { mountBarter } from './barter.ts';
 import { mountNotifications } from './notifications.ts';
 import { drainNotificationDelivery } from './notification-delivery.ts';
 import { bindActionsToSession, createActionQueue } from './action-queue.ts';
+import { listingHistory } from './listing-history.ts';
+import { listingClosure } from './listing-closure.ts';
+import { createListingMaintenance } from './listing-maintenance.ts';
 import { mountListingEditor } from './listing-editor.ts';
+import { mountLocationPreferences } from './location-preferences.ts';
 import { localNotificationDefinitions, localNotificationBackupCodecs } from '../../../packages/notify/src/index.ts';
 import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
 import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
-import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord } from '../../../packages/bazaar/src/index.ts';
-import { discoveryDefinitions, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
+import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
+import { discoveryDefinitions, locationDefinitions, locationBackupCodecs, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
 
 const codecs = [
+  ...locationBackupCodecs(backupCodec),
   ...localNotificationBackupCodecs(backupCodec),
   ...barterCodecs,
+  archiveBackupCodec,
+  {
+    ...backupCodec(listingRevisionRepo),
+    recordId(input: unknown) {
+      const row = listingRevisionRepo.schema.parse(input);
+      return listingRevisionId(row.listingId, row.revisionNo);
+    },
+    validate: validateListingRevision,
+    async restoreData(input: unknown, principal: string) {
+      const row = listingRevisionRepo.schema.parse(input);
+      if (row.ownerId !== principal) throw new Error('Backup history belongs to another principal');
+      return row;
+    },
+  },
   {
     ...backupCodec(listingRepo),
     async restoreData(input: unknown, principal: string) {
@@ -41,11 +62,20 @@ let unlocked: UnlockedVault | undefined;
 let bus: Bus | undefined;
 const queueAction = createActionQueue();
 let appliedPeerSearch = defaultPeerSearch();
+let listingCursor: string | undefined;
+const listingPages: (string | undefined)[] = [];
+function resetListingPage() { listingCursor = undefined; listingPages.length = 0; }
 let barter: ReturnType<typeof mountBarter> | undefined;
 let notifications: ReturnType<typeof mountNotifications> | undefined;
 let notificationOutbox: OutboxDispatcher | undefined;
 let lastNotificationSweep = 0;
 let listingEditor: ReturnType<typeof mountListingEditor> | undefined;
+let locationPreferences: ReturnType<typeof mountLocationPreferences> | undefined;
+let sessionProtection: ReturnType<typeof protectVaultSession> | undefined;
+let closingSession: Promise<void> | undefined;
+let storageCloseFailed = false;
+let listingMaintenance: ReturnType<typeof createListingMaintenance> | undefined;
+let maintenanceTimer: ReturnType<typeof setInterval> | undefined;
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
   if (!value) throw new Error(`Missing interface element: ${id}`);
@@ -59,10 +89,15 @@ function report(error: unknown): void {
 }
 function action(fn: () => Promise<void>): Promise<void> {
   return queueAction(async () => {
+    const startedSession = unlocked;
     element('error').hidden = true;
     const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')].map(button => ({ button, disabled: button.disabled }));
     buttons.forEach(({ button }) => { button.disabled = true; });
-    try { await fn(); } catch (error) { report(error); }
+    try { await fn(); } catch (error) {
+      // An automatic lock may revoke an in-flight action. Keep its private result
+      // and any obsolete error out of the newly locked (or replaced) session.
+      if (!startedSession || unlocked === startedSession) report(error);
+    }
     finally { buttons.forEach(({ button, disabled }) => { button.disabled = disabled; }); }
   });
 }
@@ -72,37 +107,51 @@ function current() {
   return { vault: unlocked, bus, context: { actor: { kind: 'user' as const, id: unlocked.principal, roles: ['member'] }, tenantId: unlocked.principal } };
 }
 async function command(name: string, input: unknown): Promise<unknown> {
-  const { bus, context } = current();
-  const result = await bus.dispatch(context, name, input, { idempotencyKey: ids.next() });
-  if (!result.ok) throw new Error(`${result.error.code}: the operation was not applied. Check your input and current listing state.`);
-  await syncNotifications();
-  return result.value.value;
+  const { bus, context, vault } = current();
+  return runForSession(vault, () => unlocked, async () => {
+    const result = await bus.dispatch(context, name, input, { idempotencyKey: ids.next() });
+    if (!result.ok) throw new Error(result.error.code === 'BAZAAR_ARCHIVE_HOLD_ACTIVE'
+      ? 'This listing has an active inventory hold. Withdraw from its proposal in Barter coordination, then try again.'
+      : `${result.error.code}: the operation was not applied. Check your input and current listing state.`);
+    return result.value.value;
+  }, syncNotifications);
 }
 async function syncNotifications(): Promise<void> {
-  if (!notificationOutbox) return;
+  const session = unlocked;
+  const outbox = notificationOutbox;
+  const inbox = notifications;
+  if (!session || !outbox) return;
   try {
     const { bus, context, vault } = current();
     const now = Date.now();
     if (lastNotificationSweep === 0 || now - lastNotificationSweep >= 3600000 || now < lastNotificationSweep) {
       const swept = await bus.dispatch(context, 'notify.notification.sweep', {});
+      if (unlocked !== session) return;
       if (!swept.ok) throw new Error('Inbox maintenance failed');
       lastNotificationSweep = now;
     }
-    const pending = await drainNotificationDelivery(notificationOutbox, vault.storage, bus.registry);
-    await notifications?.refresh();
+    const pending = await drainNotificationDelivery(outbox, vault.storage, bus.registry);
+    if (unlocked !== session) return;
+    await inbox?.refresh();
+    if (unlocked !== session) return;
     element('notification-delivery-status').textContent = pending
       ? 'Some local updates could not be processed. Review barter coordination for the current state.' : '';
   } catch {
+    if (unlocked !== session) return;
     // The domain command has already committed. An inbox failure must not report it as rolled back.
     element('notification-delivery-status').textContent = 'Local notifications are unavailable. Your saved changes remain intact.';
   }
 }
 async function query(name: string, input: unknown): Promise<unknown> {
-  const { bus, context } = current(); const result = await bus.query(context, name, input);
-  if (!result.ok) throw new Error(`${result.error.code}: could not read local data.`);
-  return result.value.value;
+  const { bus, context, vault } = current();
+  return runForSession(vault, () => unlocked, async () => {
+    const result = await bus.query(context, name, input);
+    if (!result.ok) throw new Error(`${result.error.code}: could not read local data.`);
+    return result.value.value;
+  });
 }
-function download(name: string, content: unknown): void {
+function download(session: UnlockedVault, name: string, content: unknown): void {
+  if (unlocked !== session) throw new Error('Vault session ended. Unlock before exporting.');
   const url = URL.createObjectURL(new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = name; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -116,7 +165,8 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string): HTM
   const output = document.createElement(tag); if (text !== undefined) output.textContent = text; return output;
 }
 function button(text: string, fn: () => Promise<void>) {
-  const output = node('button', text); output.addEventListener('click', () => { void vaultAction(fn); }); return output;
+  const session = unlocked;
+  const output = node('button', text); output.addEventListener('click', () => { if (unlocked === session) void vaultAction(fn); }); return output;
 }
 // The alpha editor declares CAD amounts in cents. Other signed currency codes may
 // be custom, so keep their exact minor units until the currency registry is available.
@@ -134,8 +184,10 @@ function card(title: string, description: string, detail: string, value?: MoneyV
   article.append(node('p', detail));
   return article;
 }
-async function refresh(): Promise<void> {
-  const page = z.object({ items: z.array(z.object({ id: z.string(), revision: z.number(), data: listingSchema })) }).parse(await query('bazaar.listing.list', {}));
+async function refreshListings(): Promise<void> {
+  const session = current().vault;
+  const loadedCursor = listingCursor;
+  const page = z.object({ items: z.array(z.object({ id: z.string(), revision: z.number(), data: listingSchema })), nextCursor: z.string().optional() }).parse(await query('bazaar.listing.list', listingCursor ? { cursor: listingCursor } : {}));
   const list = element('listings'); list.replaceChildren();
   if (!page.items.length) list.append(node('p', 'No listings yet. Save your first local draft above.'));
   for (const item of page.items) {
@@ -145,17 +197,53 @@ async function refresh(): Promise<void> {
     if (item.data.status === 'draft' || item.data.status === 'unpublished') actions.append(button('Publish signed file', async () => {
       const response = z.object({ envelope: z.unknown() }).parse(await command('bazaar.listing.publish', { listingId: item.id, expectedRevision: item.revision }));
       const verified = await verifyEnvelope(response.envelope);
-      download(`listing-${item.id}.json`, verified); message('Published locally. Save and share the signed file explicitly; nothing was sent.'); await refresh();
+      download(session, `listing-${item.id}.json`, verified); message('Published locally. Save and share the signed file explicitly; nothing was sent.'); await refresh();
     }));
     if (item.data.status === 'published') actions.append(button('Unpublish', async () => {
       const response = z.object({ envelope: z.unknown() }).parse(await command('bazaar.listing.unpublish', { listingId: item.id, expectedRevision: item.revision }));
-      download(`withdraw-listing-${item.id}.json`, response.envelope); message('Unpublished locally. Share the signed withdrawal with peers who retained your listing.'); await refresh();
+      download(session, `withdraw-listing-${item.id}.json`, response.envelope); message('Unpublished locally. Share the signed withdrawal with peers who retained your listing.'); await refresh();
     }));
-    if (item.data.status === 'unpublished') actions.append(button('Archive', async () => {
-      await command('bazaar.listing.archive', { listingId: item.id, expectedRevision: item.revision }); message('Listing archived.'); await refresh();
+    if (item.data.status !== 'archived') actions.append(button('Archive', async () => {
+      if (!confirm('Archive this listing? You can restore it for 90 days. Published listings also need their signed withdrawal shared with peers.')) return;
+      const result = z.object({ restoreUntil: z.string(), envelope: z.unknown().optional() }).parse(await command('bazaar.listing.archive', { listingId: item.id, expectedRevision: item.revision }));
+      if (result.envelope) download(session, `withdraw-listing-${item.id}.json`, result.envelope);
+      message(`Archived locally. Restore until ${new Date(result.restoreUntil).toLocaleString()}.${result.envelope ? ' Share the downloaded withdrawal with peers who retained this listing.' : ''}`);
+      await refresh();
     }));
-    article.append(actions); list.append(article);
+    if (item.data.status === 'archived') actions.append(button('Restore listing', async () => {
+      const records = z.object({ items: z.array(z.object({ id: z.string(), revision: z.int().positive(), data: archiveRecordRepo.schema })) }).parse(await query('bazaar.archive_record.list_mine', { listingId: item.id, status: 'archived' }));
+      if (records.items.length !== 1) throw new Error('No unique restore record is available for this archived listing.');
+      const record = records.items[0]!;
+      await command('bazaar.listing.restore', { archiveRecordId: record.id, expectedRevision: record.revision });
+      message('Listing restored as unpublished. Review and publish it when ready.'); await refresh();
+    }));
+    if (item.data.publicationCid) actions.append(button(item.data.status === 'published' ? 'Download signed listing again' : 'Download signed withdrawal', async () => {
+      const result = z.object({ envelope: z.unknown() }).parse(await query('bazaar.listing.publication', { listingId: item.id }));
+      download(session, `${item.data.status === 'published' ? 'listing' : 'withdraw-listing'}-${item.id}.json`, result.envelope);
+      message('Verified signed file downloaded. Share it explicitly with peers.');
+    }));
+    if (['published', 'unpublished', 'expired'].includes(item.data.status)) article.append(listingClosure(item, {
+      active: () => unlocked === session, action: vaultAction, command,
+      download: (name, value) => download(session, name, value), message, refresh,
+    }));
+    article.append(actions, listingHistory(item.id, { query, action: vaultAction })); list.append(article);
   }
+  const navigation = node('nav'); navigation.setAttribute('aria-label', 'My listing pages'); navigation.className = 'actions';
+  if (listingPages.length) navigation.append(button('Previous listings', async () => {
+    if (listingCursor !== loadedCursor) return;
+    const prior = listingCursor; const cursor = listingPages.pop(); listingCursor = cursor;
+    try { await refreshListings(); } catch (error) { listingPages.push(cursor); listingCursor = prior; throw error; }
+  }));
+  if (page.nextCursor) navigation.append(button('Next listings', async () => {
+    if (listingCursor !== loadedCursor) return;
+    const prior = listingCursor; listingPages.push(prior); listingCursor = page.nextCursor;
+    try { await refreshListings(); } catch (error) { listingPages.pop(); listingCursor = prior; throw error; }
+  }));
+  list.append(navigation);
+}
+async function refresh(): Promise<void> {
+  await listingMaintenance?.run();
+  await refreshListings();
   await refreshPeers();
   await barter?.refresh();
 }
@@ -176,34 +264,121 @@ async function refreshPeers(): Promise<void> {
 async function connect(session: UnlockedVault): Promise<void> {
   resetPeerSearch();
   unlocked = session;
+  sessionProtection?.dispose();
+  element<HTMLSelectElement>('vault-idle-minutes').value = '15';
+  sessionProtection = protectVaultSession({ document,
+    lock: reason => lockSession(session, reason === 'hidden' ? 'Vault locked after 5 minutes in a hidden tab.' : 'Vault locked after inactivity.'),
+    onError: () => {}, // lockSession reports close failures for both manual and automatic locks.
+  });
   const definitions = bazaarDefinitions({ categoryAllowed: id => id === CATEGORY,
     signProjection: async (type, payload, seq, prev) => ({ ...await signEnvelope(session.identity, { type, payload, seq, prev, createdAt: new Date().toISOString() }) }),
     verifyProjection: input => verifyEnvelope(input),
   });
   const barterRuntime = createBarterRuntime(session);
   const notifyDefinitions = localNotificationDefinitions({ localPrincipal: () => session.principal, isBlocked: barterRuntime.isBlocked, isThreadMuted: () => false });
-  const registry = createRegistry().add(...definitions.all, ...discoveryDefinitions({ verifyEnvelope }).all, ...barterRuntime.definitions, ...notifyDefinitions.all);
+  const registry = createRegistry().add(...definitions.all, ...discoveryDefinitions({ verifyEnvelope }).all,
+    ...locationDefinitions({ localPrincipal: () => session.principal }).all, ...barterRuntime.definitions, ...notifyDefinitions.all);
   bus = createBus({ registry, storage: session.storage,
     clock: createSystemClock(), ids,
     authz: { authorize: (actor, _capability, _resource, context) => context.tenantId === session.principal && actor.kind === 'user' && actor.id === session.principal && unlocked === session ? { allow: true } : { allow: false, code: 'FORBIDDEN' } },
     origin: `vault:${session.principal}` });
   element('access').hidden = true; element('workspace').hidden = false; element('principal').textContent = session.principal;
   barter?.destroy();
-  barter = mountBarter({ container: element('barter'), session, command, query, action: vaultAction, message, download, refreshListings: refresh, setMatchingPolicy: barterRuntime.setMatchingPolicy });
+  const sessionMessage = (text: string) => { if (unlocked === session) message(text); };
+  barter = mountBarter({ container: element('barter'), session, command, query, action: vaultAction, message: sessionMessage,
+    download: (name, content) => download(session, name, content), refreshListings: refresh, setMatchingPolicy: barterRuntime.setMatchingPolicy });
   notificationOutbox = createOutboxDispatcher({ registry, storage: session.storage, clock: createSystemClock(), ids, origin: `vault:${session.principal}` });
   lastNotificationSweep = 0;
   notifications?.destroy();
-  notifications = mountNotifications({ container: element('notifications'), command, query, action: vaultAction, message, synchronize: syncNotifications });
+  notifications = mountNotifications({ container: element('notifications'), command, query, action: vaultAction, message: sessionMessage, synchronize: syncNotifications });
   listingEditor?.destroy();
-  listingEditor = mountListingEditor({ container: element('listing-editor'), command, action: vaultAction, message, saved: refresh });
-  await syncNotifications();
-  await refresh(); message('Vault unlocked. Local changes are persisted in this browser.');
+  listingEditor = mountListingEditor({ container: element('listing-editor'), command, action: vaultAction, message: sessionMessage, saved: refresh });
+  locationPreferences?.destroy();
+  const locationView = mountLocationPreferences({ container: element('location-preferences'), command, query, action: vaultAction, message: sessionMessage,
+    geolocation: navigator.geolocation,
+    applyToListing(cell) {
+      if (unlocked !== session) return;
+      const input = element<HTMLFormElement>('listing-form').elements.namedItem('region') as HTMLInputElement;
+      input.value = cell; input.focus();
+      sessionMessage('Coarse area copied into your new listing form. Review it before saving or publishing.');
+    },
+    applyToSearch(cell) {
+      if (unlocked !== session) return;
+      const input = element<HTMLInputElement>('search-area'); input.value = cell; input.focus();
+      sessionMessage('Home region copied into the local search form. Select Apply search to use it.');
+    },
+  });
+  locationPreferences = locationView;
+  listingMaintenance?.dispose();
+  listingMaintenance = createListingMaintenance({ command, isActive: () => unlocked === session,
+    onStatus(status) {
+      if (unlocked !== session) return;
+      const summary = `${status.expired} expired; ${status.archived} archived.`;
+      element('listing-maintenance-status').textContent = status.phase === 'failed'
+        ? `Local listing maintenance paused after ${status.processed} records. ${summary} It will retry while this vault is open.`
+        : status.pending ? `Checking local listing lifecycle: ${status.processed} records. ${summary}`
+          : `Local listing lifecycle checked. ${summary}`;
+    },
+  });
+  if (maintenanceTimer !== undefined) clearInterval(maintenanceTimer);
+  let maintenanceQueued = false;
+  maintenanceTimer = setInterval(() => {
+    if (maintenanceQueued || unlocked !== session) return;
+    maintenanceQueued = true;
+    void vaultAction(refresh).finally(() => { maintenanceQueued = false; });
+  }, 60_000);
+  await runForSession(session, () => unlocked, syncNotifications);
+  await runForSession(session, () => unlocked, () => locationView.refresh());
+  await runForSession(session, () => unlocked, refresh);
+  sessionMessage('Vault unlocked. Local changes are persisted in this browser.');
 }
 function clearLocalViews() {
+  sessionProtection?.dispose(); sessionProtection = undefined;
+  listingMaintenance?.dispose(); listingMaintenance = undefined;
+  if (maintenanceTimer !== undefined) clearInterval(maintenanceTimer);
+  maintenanceTimer = undefined;
+  element('listing-maintenance-status').textContent = '';
+  resetListingPage();
   listingEditor?.destroy(); listingEditor = undefined;
+  locationPreferences?.destroy(); locationPreferences = undefined;
   notifications?.destroy(); notifications = undefined; notificationOutbox = undefined; lastNotificationSweep = 0;
   element('notification-delivery-status').textContent = '';
 }
+function clearVaultViews(): void {
+  // Invalidate queued actions and hide private DOM before waiting for persistence.
+  unlocked = undefined; bus = undefined;
+  barter?.destroy(); barter = undefined;
+  clearLocalViews();
+  element('workspace').hidden = true; element('access').hidden = false;
+  element('listings').replaceChildren(); element('peers').replaceChildren(); element('principal').textContent = '';
+  element('error').hidden = true; element('error').textContent = '';
+  element<HTMLInputElement>('backup-password').value = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
+}
+async function finishStorageClose(close: () => Promise<void>): Promise<void> {
+  const previous = closingSession;
+  const pending = (async () => {
+    await previous;
+    try { await close(); }
+    catch { storageCloseFailed = true; report(new Error('Vault locked. Closing storage failed; reload before reopening.')); }
+  })();
+  closingSession = pending;
+  await pending;
+  if (closingSession === pending) closingSession = undefined;
+}
+async function waitForStorageClose(): Promise<void> {
+  await closingSession;
+  if (storageCloseFailed) throw new Error('Closing storage failed. Reload before reopening a vault.');
+}
+async function lockSession(session: UnlockedVault, status: string): Promise<void> {
+  if (unlocked !== session) return;
+  clearVaultViews();
+  message(status);
+  await finishStorageClose(() => session.lock());
+}
+element<HTMLSelectElement>('vault-idle-minutes').addEventListener('change', event => {
+  const input = event.currentTarget as HTMLSelectElement;
+  sessionProtection?.setIdleMinutes(Number(input.value));
+});
 element<HTMLFormElement>('unlock-form').addEventListener('submit', event => {
   event.preventDefault(); const form = event.currentTarget as HTMLFormElement;
   const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -215,22 +390,23 @@ element<HTMLFormElement>('unlock-form').addEventListener('submit', event => {
     }
     let vault: Awaited<ReturnType<typeof openVault>> | undefined;
     try {
+      await waitForStorageClose();
       if (!globalThis.isSecureContext || !crypto.subtle) throw new Error('Open this application on localhost or HTTPS to use browser cryptography.');
       vault = await openVault({ name, codecs });
       await connect(submitter?.value === 'create' ? await vault.create(passphrase) : await vault.unlock(passphrase));
     }
-    catch (error) { await vault?.close(); barter?.destroy(); barter = undefined; clearLocalViews(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; throw error; }
+    catch (error) {
+      clearVaultViews();
+      if (vault) { const failedVault = vault; await finishStorageClose(() => failedVault.close()); }
+      if (storageCloseFailed) throw new Error('Vault opening failed and storage could not close. Reload before reopening.');
+      throw error;
+    }
     finally { (form.elements.namedItem('passphrase') as HTMLInputElement).value = ''; }
   });
 });
 element('lock').addEventListener('click', () => { void vaultAction(async () => {
-  const session = unlocked; barter?.destroy(); barter = undefined; unlocked = undefined; bus = undefined;
-  clearLocalViews();
-  element('workspace').hidden = true; element('access').hidden = false;
-  element('listings').replaceChildren(); element('peers').replaceChildren(); element('principal').textContent = '';
-  element<HTMLInputElement>('backup-password').value = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
-  if (session) await session.lock();
-  message('Vault locked.');
+  const session = unlocked;
+  if (session) await lockSession(session, 'Vault locked.');
 }); });
 element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
   event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const data = new FormData(form);
@@ -238,7 +414,7 @@ element<HTMLFormElement>('listing-form').addEventListener('submit', event => {
     await command('bazaar.listing.create', { listingId: ids.next(), title: String(data.get('title')), description: String(data.get('description')),
       kind: data.get('kind'), condition: data.get('condition'), categoryId: CATEGORY, regionCell: data.get('region'),
       value: { amount: String(data.get('amount')), currency: listingCurrency.code }, barterOptIn: data.get('barter') === 'on' });
-    form.reset(); message('Draft saved locally. It has not been shared.'); await refresh();
+    resetListingPage(); form.reset(); message('Draft saved locally. It has not been shared.'); await refresh();
   });
 });
 element<HTMLInputElement>('peer-file').addEventListener('change', event => { const input = event.currentTarget as HTMLInputElement;
@@ -247,7 +423,9 @@ element<HTMLInputElement>('peer-file').addEventListener('change', event => { con
   void vaultAction(async () => {
     try {
       if (!session || unlocked !== session) throw new Error('Unlock the original vault and select the file again.');
-      await command('discovery.listing.retain', { envelope: await readFile(file, MAX_ENVELOPE_BYTES) });
+      const envelope = await readFile(file, MAX_ENVELOPE_BYTES);
+      if (unlocked !== session) throw new Error('Unlock the original vault and select the file again.');
+      await command('discovery.listing.retain', { envelope });
       message('Peer statement verified and retained locally.'); await refreshPeers(); await barter?.refresh();
     } finally { if (input.files?.[0] === file) input.value = ''; }
   });
@@ -272,7 +450,8 @@ element('reset-peer-search').addEventListener('click', () => { void vaultAction(
 }); });
 element('backup').addEventListener('click', () => { void vaultAction(async () => {
   const password = element<HTMLInputElement>('backup-password');
-  try { download('classrup-encrypted-backup.json', await current().vault.exportBackup(password.value)); message('Encrypted backup downloaded. Keep its passphrase separately.'); }
+  const session = current().vault;
+  try { download(session, 'classrup-encrypted-backup.json', await session.exportBackup(password.value)); message('Encrypted backup downloaded. Keep its passphrase separately.'); }
   finally { password.value = ''; }
 }); });
 element<HTMLFormElement>('restore-form').addEventListener('submit', event => {
@@ -287,12 +466,18 @@ element<HTMLFormElement>('restore-form').addEventListener('submit', event => {
     }
     let vault: Awaited<ReturnType<typeof openVault>> | undefined;
     try {
+      await waitForStorageClose();
       vault = await openVault({ name, codecs });
       const backup = await readFile(file, 24 * 1024 * 1024);
       await connect(await vault.restoreBackup(backup, passphrase));
       form.reset(); message('Backup restored into this new vault. Peer availability must be checked again.');
     }
-    catch (error) { await vault?.close(); barter?.destroy(); barter = undefined; clearLocalViews(); unlocked = undefined; bus = undefined; element('workspace').hidden = true; element('access').hidden = false; element('listings').replaceChildren(); element('peers').replaceChildren(); throw error; }
+    catch (error) {
+      clearVaultViews();
+      if (vault) { const failedVault = vault; await finishStorageClose(() => failedVault.close()); }
+      if (storageCloseFailed) throw new Error('Vault restore failed and storage could not close. Reload before reopening.');
+      throw error;
+    }
     finally { if (input.files?.[0] === file) input.value = ''; (form.elements.namedItem('restore-password') as HTMLInputElement).value = ''; }
   });
 });

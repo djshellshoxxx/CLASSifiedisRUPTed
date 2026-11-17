@@ -123,7 +123,7 @@ export function optDefinitions(options: ChannelOptions) {
     try {
       const envelope = structuredClone(await options.signStatement(CHANNEL_CONSENT_STATEMENT, payload, seq, previous));
       const verified = await options.verifyStatement(envelope);
-      if (verified.author !== signer || verified.type !== CHANNEL_CONSENT_STATEMENT || canonicalJson(verified.payload) !== canonicalJson(payload) || verified.cid !== envelope.cid) return err(appError('FORBIDDEN'));
+      if (verified.author !== signer || verified.seq !== seq || envelope['prev'] !== previous || verified.type !== CHANNEL_CONSENT_STATEMENT || canonicalJson(verified.payload) !== canonicalJson(payload) || verified.cid !== envelope.cid) return err(appError('FORBIDDEN'));
       return ok(envelope);
     } catch { return err(appError('VALIDATION_FAILED')); }
   }

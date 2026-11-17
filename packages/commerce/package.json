@@ -13,7 +13,13 @@
     "@classrup/privacy": "workspace:*",
     "@classrup/platform": "workspace:*",
     "@classrup/i18n": "workspace:*",
-    "@classrup/governance": "workspace:*"
+    "@classrup/governance": "workspace:*",
+    "@noble/hashes": "2.4.0"
   },
-  "description": "Specification-only package; no runtime entry point implemented yet."
+  "description": "Exact money primitives and a vault currency registry requiring an authenticated release snapshot; other commerce workflows remain incomplete.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./valuation/precision": "./src/valuation/precision/index.ts",
+    "./valuation/currency": "./src/valuation/currency/index.ts"
+  }
 }

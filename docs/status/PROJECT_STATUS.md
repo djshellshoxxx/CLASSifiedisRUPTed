@@ -1,5 +1,207 @@
 # Project status
 
+## November 16, 2026 second parallel implementation wave
+
+PR #42 now also includes encrypted coarse-location preferences, cancellable
+background barter matching with offline assets, and an opt-in currency registry.
+Each implementation team supplied a handoff and transferred ownership to a fresh
+reviewer. Review fixed stale location precision copying, GPS supersession,
+concurrent-save draft loss, foreign-vault currency imports, unsupported-chain
+activation, cancellation feedback and encoding batches for large statements.
+
+The location workflow is composed in the PWA with real commands and backup
+codecs. Worker discovery and proposal revalidation use the unchanged signed
+admission/matching contracts. The currency registry remains unmounted pending
+authentic signed release data, canonical vault/usage adapters and encrypted
+backup integration; its tested import validator alone is not a complete recovery
+workflow. No payment, precise sharing or private messaging workflow is claimed.
+
+Focused review suites passed: location 16, currency plus money 27, and worker
+plus matching/admission 24. Shared bounded typecheck, build, doctor, strict
+specifications, dependencies, tooling, independent money vectors and bundle
+budget passed. At final source `bdd2971c675d996a6a8e38b8a36362b549790274`, the combined
+local run completed 630/631. Its only failure was the unchanged filter-validation
+timing check (2.332 ms versus its 1 ms limit); the same filter suite passed alone
+without changing that limit. This is passing execution across runs, not one green
+local full-suite result. GitHub [Alpha run 43962230354](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43962230354)
+passed the combined domain step and all **63 Chromium/Firefox/WebKit journeys**.
+All six Linux/Windows/macOS Node 22/24 jobs passed in
+[platform run 43962230320](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43962230320).
+The qualified source is `bdd2971`; later documentation-only commits preserve
+that exact runtime/tooling/test tree. The generated inventory is 35/148 runtime paths,
+15/688 statically recognized interfaces and 484/4510 passing mapped requirements.
+Module constants are not resolved by the conservative interface scanner, so those
+counts understate interfaces such as the new location and currency operations.
+They are not feature-completion percentages. See the machine-readable validation
+summary for report digests. The [security evidence matrix](SECURITY_EVIDENCE_20261116_PARALLEL.md)
+maps all 51 historical findings to current controls and remaining closure evidence;
+all remain open. The product and full release qualification remain incomplete.
+Previous-wave checks below qualify only their named candidates.
+
+## November 16, 2026 parallel completion checkpoint
+
+Draft [PR #42](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/42) continues
+PR #41. The tested source candidate is `36428ccc8a1ccf365418748abd7cc6ee2dc2bfb3`.
+Implementation teams handed their checkpoints to fresh reviewers; the combined
+[handoff](../handoffs/20261116-parallel-integration.md) records each result and
+remaining dependency. This remains an incomplete development alpha.
+
+Owners can close listings with a reason, automatically expire/archive them while
+the vault is unlocked, and download verified publication/withdrawal evidence
+again after reopening. Maintenance is bounded and resumable, creates no automatic
+downloads and stops on lock. Existing owner recovery and encrypted backup paths
+are retained. Complete purge and cross-domain evidence retention remain open.
+
+Vault sessions now default to a 15-minute idle lock (session setting 1–60) and a
+five-minute hidden-tab lock. Local unlock backoff survives reconnects within one
+page. Fixed cryptographic stage errors expose no native details and perform no
+retry. Independent review corrected stale asynchronous exports, suppressed close
+failures, private DOM left after failed startup, and overlapping closure promises.
+These controls do not implement delegated-device recovery or fix upstream WebKit.
+
+Money now has exact pure bigint arithmetic/conversion/allocation, 331 independent
+Python vectors, 40,000 property cases and a 2,355-byte gzip browser bundle. The
+existing alpha wire schema is not migrated. The opt-in consent core binds
+participants, revision hashes and wording, retains conflicts and supports
+monotonic revocation; fresh review fixed withdrawal-capacity exhaustion and
+first-seen key validity during replay. Consent remains disabled in the PWA until
+domain adapters, confirmation UI, backup validation and quarantine exist.
+Existing notifications additionally enforce signer-chain and mirror-sequence
+bindings.
+
+Local validation: typecheck, build, setup/doctor, dependencies, whitespace,
+32 CLI/tooling tests and strict specifications (148 modules, zero errors/warnings)
+pass. The first combined attempt reported 585/589 passed with a now-fixed export
+allowlist error, two timeouts and a currency performance failure. It was interrupted
+during prolonged runner shutdown. The visible serial retry completed 588/589 with
+only the unchanged 60-second barter saturation timeout. That exact test then
+passed alone in 50.296 seconds, without changing its threshold. All 589 distinct
+assertions have passing local execution across those runs; there is no single
+green final local full-suite claim. Failures are preserved in the
+[validation summary](20261116-parallel-validation.json).
+
+GitHub [Alpha verification](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43957906791)
+at `36428cc` passed its combined domain test step and preceding checks; browser
+journeys reported 51 passed and six failures: the lifecycle test used an unsupported
+month-long timer jump, and the older history test opened the new closure panel.
+Both test harness defects were repaired in `7bf7d51` with all assertions/limits
+retained; [its Alpha rerun](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43959971234)
+passed all 57 browser journeys and the combined domain step. All six platform
+jobs also passed on that repaired candidate. All six Linux/Windows/macOS Node
+22/24 [platform jobs](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43957906779)
+passed on that same candidate. Local Chromium is blocked before assertions by
+the host's required-socket denial; 57 browser definitions loading is not a pass.
+
+The generated inventory is now 33/148 module paths, 15/688 exact interfaces and
+464/4510 requirements with mapped passing tests from the local serial report.
+These measure traceability, not feature completion. Money's unchanged 2 ms
+allocation p99 budget and specified Android hardware remain unqualified. Offers,
+Deals/payment claims/receipts, private messaging, full recovery/federation,
+services/rentals/auctions, full privacy lifecycle, accessibility and other
+requirements in the audit remain incomplete. No merge, release or deployment
+was performed.
+
+## November 16, 2026 archive recovery and owner pagination continuation
+
+Continues from `edcb583` (PR #40, stacked on owner-history PR #39). New archives
+have owner-only lifecycle evidence, an exact 90-day restore deadline, revision
+checks and atomic archived/restored events. Draft and published listings can now
+be archived directly. Published archive creates and verifies a chained signed
+withdrawal in the same transaction; a bad signer or active inventory hold blocks
+the action without committing changes. Restoring preserves listing data and
+history, returns the listing as unpublished, and never republishes automatically.
+Publishing again continues from the withdrawal's signed chain position.
+
+The PWA exposes archive confirmation and restore actions. Published archive
+explicitly downloads the withdrawal for sharing. Archive evidence is included in
+encrypted backups; restore validates lifecycle dates and ownership before any
+records commit. Owner listing pages now show the newest 50 first with Previous
+and Next controls. Pagination resets on lock and draft creation; queued duplicate
+navigation callbacks cannot advance from a stale page. Owner-scoped cursors are
+validated by the kernel repository.
+
+This remains a bounded F01.S01.M04 implementation. Automatic expiry, close reasons,
+auto-archive/purge sweeps, release-holds confirmation and complete account deletion
+are unfinished. Legacy archived listings have no dated recovery record and do not
+acquire an invented restore deadline. Existing archive output now follows the
+specified archiveRecordId/restoreUntil shape. Archive records use UUIDv7 IDs;
+prior compound-key history storage is unchanged. The 90-day deadline is based on
+the local clock and cannot provide a trusted wall clock against device tampering.
+The historical 51-row planning security tracker remains open.
+
+Verification: 24 listing/discovery tests and 3 production archive-backup tests
+passed; 32 CLI/tooling tests passed. Review reproduced and fixed a real-clock
+deadline race and rejection of duplicate active archive evidence. Typecheck with
+`GOMEMLIMIT=256MiB GOMAXPROCS=2 --singleThreaded`, build, setup/doctor, dependency
+checks and strict specifications (148 modules, zero errors/warnings) pass. An
+uncapped compiler attempt was host-killed before the bounded passing check.
+
+The first full domain run was host-killed (exit 137). A memory-bounded fork-pool
+retry then passed 520/520 tests on the earlier implementation. After the final
+two review fixes, the full retry completed 519 of 522 assertions with no failed
+assertions; the fork runner emitted an internal incomplete-report warning and
+exited 1 with three Mutiny saturation/rollback/tombstone tests pending. The same
+file failed to finish under an isolated fork retry, then passed all 16 assertions
+under the normal thread pool with the unchanged 60-second saturation-test limit
+(the saturation test took 30.1 seconds). All 522 unique assertions therefore have
+passing execution evidence across the final full run and the isolated file retry;
+there is no claim of a single all-green final full-suite run. The earlier full
+report and incomplete final report are distinguished rather than rewritten.
+
+Two browser journeys cover signed archive/backup/recovery and pagination beyond
+50 listings. Playwright loads their definitions, but local execution fails before
+any assertion because the pinned Chromium executable is unavailable; its download
+returned corrupt archives. Final-head CI must qualify these workflows before
+merge. Earlier candidate heads passed Linux CLI smoke on Node 22/24; their Alpha
+browser checks do not qualify the later clock/duplicate-record fixes. Predecessor
+PR #39's Alpha workflow passed, but its CLI matrix still has unresolved macOS jobs.
+No merge or full-project completion is claimed. Generated inventory: 31/148 runtime
+module paths, 13/688 exact specified interfaces, 442/4510 requirements with passing
+mapped tests; these are traceability counts rather than completion percentages.
+
+## November 16, 2026 owner listing history continuation
+
+PR #39 continues from encrypted-storage PR #38, which passed Alpha verification
+43912138849 and CLI setup 43912139045 and merged at `32c9d7e`. Listing publication now
+records an append-only snapshot of publishable fields. Later public-field edits
+of an unpublished listing that has previously been published record immutable
+local revisions; draft and private-only edits do not create snapshots. The
+owner-only history list/get queries verify hashes, canonical compound keys and
+ownership before returning data. The PWA exposes lazy, paginated history with
+safe text rendering and separate labels for published snapshots and saved,
+unpublished edits. Private notes never enter history, hashes or edited events.
+
+History, listing updates and content-free edited events commit together. There
+are at most 100 snapshots per listing and 20 public-field owner edits per hour;
+limit failures roll back the attempted listing change. Unpublish/archive remain
+available at the history limit. A canonical backup-key callback prevents duplicate
+logical history revisions under different record IDs; restore checks it before
+and after normalization. History is included in the encrypted alpha backup with
+hash and owner validation. Other registered backup scopes remain compatible.
+
+This is an alpha history slice, not the complete F01.S01.M02 contract. It uses
+compound local storage IDs instead of canonical revision UUIDs; existing alpha
+command input/output shapes remain. Published editing is disabled pending policy
+and offer reconfirmation wiring. Sell-term/variant sibling ports, buyer notices,
+canonical signed hash binding, full evidence retention/purge and historical
+backfill remain unfinished. Declared value changes are marked material in the
+alpha; separate sell-term pricing is not implemented. A local snapshot is owner
+asserted evidence, not proof of peer acceptance or real-world handover.
+
+Full local verification passed 511/511 domain/integration tests on the serial
+retry. The first run passed 510/511 with an unchanged currency benchmark failure
+(0.06595 ms against 0.05 ms); its isolated 23-test suite and the full retry passed
+without changing assertions or thresholds. GitHub Alpha verification 43914550908
+passed on `3f814c0`, including its browser journeys. CLI platform verification
+43914550773 remains a separate merge gate. Focused verification passed 21
+listing/vault tests, including history privacy,
+owner authorization, pagination, rate/cap rollback, corrupt-read rejection and
+canonical-key restore failures. Review found and fixed publication-status labels,
+missing read-side hash checks and post-normalization backup-key validation; final
+review reported no additional high-confidence defects. The generated inventory now reports 31/148 runtime modules, 10/688 exact
+specified interfaces and 442/4510 requirements with passing mapped tests. These
+counts are traceability measures, not a completion percentage.
+
 ## November 16, 2026 encrypted persistence continuation
 
 Consolidation PR #37 at `a189787` passed Alpha verification run 43889531898 and

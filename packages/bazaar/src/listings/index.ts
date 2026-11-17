@@ -1,24 +1,15 @@
-import { appError, boundedString, canonicalJson, defineCommand, defineEvent, defineQuery, defineRepo, err, money, ok, timestamp, uuidv7, z, type CommandContext, type QueryContext, type SignedEnvelope, type StoredRecord } from '@classrup/kernel';
+import { archiveDefinitions } from './archive.ts';
+import { listingLifecycleDefinitions } from './lifecycle.ts';
+export { archiveRecordRepo, archiveRecordSchema, RESTORE_WINDOW_MS, AUTO_ARCHIVE_AFTER_MS } from './archive.ts';
+import { appError, canonicalJson, defineCommand, defineEvent, defineQuery, err, ok, timestamp, uuidv7, z, type CommandContext, type QueryContext, type SignedEnvelope, type StoredRecord } from '@classrup/kernel';
 import { publicListingSchema, tombstoneSchema, type PublicListingProjection, type VerifiedStatement } from '@classrup/discovery';
 
-const text = (min: number, max: number) => boundedString({ min, max }).refine(v => v === v.normalize('NFC') && !/[\p{Cc}\p{Cf}]/u.test(v));
-const fields = {
-  title: text(3, 120), description: boundedString({ max: 5000 }), categoryId: uuidv7(),
-  condition: z.enum(['new', 'like_new', 'good', 'fair', 'poor', 'for_parts']).optional(),
-  tags: z.array(text(2, 30)).max(10).default([]), locale: z.string().min(2).max(35).default('en'),
-  regionCell: z.string().regex(/^[0123456789bcdefghjkmnpqrstuvwxyz]{4,5}$/).optional(),
-  barterOptIn: z.boolean().default(false), value: money({ sign: 'nonNegative' }).optional(),
-  privateNotes: boundedString({ max: 2000 }).default(''),
-};
-export const listingSchema = z.strictObject({ ...fields, ownerId: z.string(), kind: z.enum(['sell', 'wanted', 'giveaway']),
-  status: z.enum(['draft', 'published', 'unpublished', 'archived']), onHand: z.int().min(0).max(1),
-  publicationCid: z.string().optional(), expiresAt: timestamp().optional(),
-});
-export type Listing = z.output<typeof listingSchema>;
-export const listingRepo = defineRepo({ type: 'bazaar.listing', schema: listingSchema, indexes: { owner: d => d.ownerId, status: d => d.status } });
-export const publicationRepo = defineRepo({ type: 'bazaar.publication', schema: z.strictObject({ envelope: z.custom<SignedEnvelope>(v => typeof v === 'object' && v !== null), listingId: z.string() }), indexes: { listing: d => d.listingId } });
-const holdSchema = z.strictObject({ listingId: z.string(), ownerId: z.string(), subjectId: z.string(), revisionHash: z.string(), expiresAt: timestamp(), state: z.enum(['active', 'released']) });
-export const inventoryHoldRepo = defineRepo({ type: 'bazaar.inventory_hold', schema: holdSchema, indexes: { listing: d => d.listingId, state: d => d.state, expiry: d => d.expiresAt, subject: d => d.subjectId } });
+import { fields, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, type Listing } from './model.ts';
+export { listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, type Listing } from './model.ts';
+
+import { changedPublicFields, listingHistoryDefinitions, recordListingRevision } from './history.ts';
+export { listingRevisionRepo, listingRevisionSchema, listingRevisionId, validateListingRevision, type ListingRevision } from './history.ts';
+
 const holdChanged = defineEvent('bazaar.inventory.changed', 1, 'P2', z.strictObject({ listingId: z.string(), state: z.enum(['active', 'released']) }));
 const changed = defineEvent('bazaar.listing.changed', 1, 'P3', z.strictObject({ listingId: z.string(), action: z.string() }));
 export interface BazaarOptions {
@@ -74,13 +65,19 @@ export function bazaarDefinitions(options: BazaarOptions) {
   });
   const edit = defineCommand({ name: 'bazaar.listing.edit', module: 'F01.S01.M02', capability: 'bazaar.listing.edit', idempotent: true,
     input: z.strictObject({ ...fields, listingId: uuidv7(), expectedRevision: z.int().min(1) }),
-    handler(ctx, input) {
+    async handler(ctx, input) {
       const found = owned(ctx, input.listingId); if (!found.ok) return found;
       if (found.value.data.status !== 'draft' && found.value.data.status !== 'unpublished') return err(appError('CONFLICT_STATE'));
       if (!options.categoryAllowed(input.categoryId) || (found.value.data.kind !== 'wanted' && !input.condition)) return err(appError('PRECONDITION_FAILED'));
       const { listingId, expectedRevision, ...data } = input;
       const saved = ctx.tx.repo(listingRepo).put(listingId, { ...found.value.data, ...data }, { expectedRevision });
-      if (!saved.ok) return saved; emitChange(ctx, saved.value, 'edited'); return ok(saved.value);
+      if (!saved.ok) return saved;
+      const changedFields = changedPublicFields(found.value.data, saved.value.data);
+      if (found.value.data.publicationCid && changedFields.length) {
+        const revision = await recordListingRevision(ctx, saved.value, 'owner_edit', changedFields);
+        if (!revision.ok) return revision;
+      }
+      emitChange(ctx, saved.value, 'edited'); return ok(saved.value);
     },
   });
   const publish = defineCommand({ name: 'bazaar.listing.publish', module: 'F01.S01.M03', capability: 'bazaar.listing.publish', idempotent: true,
@@ -100,6 +97,8 @@ export function bazaarDefinitions(options: BazaarOptions) {
       if (!saved.ok) return saved;
       const publication = ctx.tx.repo(publicationRepo).put(signed.value.cid, { envelope: signed.value, listingId: record.id }, { expectedRevision: 0 });
       if (!publication.ok) return publication;
+      const history = await recordListingRevision(ctx, saved.value, 'system', []);
+      if (!history.ok) return history;
       emitChange(ctx, saved.value, 'published'); return ok({ listing: saved.value, envelope: signed.value, delivery: 'local-file-exchange' as const });
     },
   });
@@ -128,18 +127,30 @@ export function bazaarDefinitions(options: BazaarOptions) {
       if (!pub.ok) return pub; emitChange(ctx, saved.value, 'unpublished'); return ok({ listing: saved.value, envelope: signed.value });
     },
   });
-  const archive = defineCommand({ name: 'bazaar.listing.archive', module: 'F01.S01.M04', capability: 'bazaar.listing.archive', idempotent: true,
-    input: z.strictObject({ listingId: uuidv7(), expectedRevision: z.int().min(1) }),
-    handler(ctx, input) {
-      const found = owned(ctx, input.listingId); if (!found.ok) return found;
-      if (found.value.data.status !== 'unpublished' || held(ctx, input.listingId)) return err(appError('CONFLICT_STATE'));
-      const saved = ctx.tx.repo(listingRepo).put(input.listingId, { ...found.value.data, status: 'archived' }, { expectedRevision: input.expectedRevision });
-      if (!saved.ok) return saved; emitChange(ctx, saved.value, 'archived'); return ok(saved.value);
-    },
+  const endings = listingLifecycleDefinitions({ emitChange,
+    endPublication: (ctx, record, reason) => sign('classrup.alpha.tombstone/v1',
+      { target: record.data.publicationCid, reason, listingId: record.id, ownerId: record.data.ownerId, revision: record.revision + 1 },
+      nextSeq(ctx, record.data.publicationCid), record.data.ownerId, record.data.publicationCid ?? null),
   });
+  const { archive, close, expire, sweep } = endings;
   const get = defineQuery({ name: 'bazaar.listing.get', module: 'F01.S01.M01', capability: 'bazaar.listing.read', input: z.strictObject({ listingId: uuidv7() }), handler: (ctx, input) => owned(ctx, input.listingId) });
-  const list = defineQuery({ name: 'bazaar.listing.list', module: 'F01.S01.M01', capability: 'bazaar.listing.read', input: z.strictObject({ cursor: z.string().max(500).optional() }),
-    handler(ctx, input) { if (ctx.actor.kind !== 'user') return err(appError('FORBIDDEN')); return ctx.tx.repo(listingRepo).query({ where: { owner: ctx.actor.id }, limit: 50, ...input }); },
+  const publication = defineQuery({ name: 'bazaar.listing.publication', module: 'F01.S01.M03', capability: 'bazaar.listing.read',
+    input: z.strictObject({ listingId: uuidv7() }), async handler(ctx, input) {
+      const found = owned(ctx, input.listingId); if (!found.ok) return found;
+      const cid = found.value.data.publicationCid;
+      if (!cid) return err(appError('NOT_FOUND'));
+      const current = ctx.tx.repo(publicationRepo).get(cid);
+      if (!current || current.data.listingId !== input.listingId || current.data.envelope.cid !== cid) return err(appError('VALIDATION_FAILED'));
+      try {
+        await validatePublicationRecord(current.data, options.verifyProjection);
+        const verified = await options.verifyProjection(current.data.envelope);
+        const expectedType = found.value.data.status === 'published' ? 'classrup.bazaar.listing/v1' : 'classrup.alpha.tombstone/v1';
+        if (verified.author !== found.value.data.ownerId || verified.type !== expectedType) return err(appError('VALIDATION_FAILED'));
+      } catch { return err(appError('VALIDATION_FAILED')); }
+      return ok({ envelope: structuredClone(current.data.envelope) });
+    } });
+  const list = defineQuery({ name: 'bazaar.listing.list', module: 'F01.S01.M01', capability: 'bazaar.listing.read', input: z.strictObject({ cursor: z.string().max(2000).optional() }),
+    handler(ctx, input) { if (ctx.actor.kind !== 'user') return err(appError('FORBIDDEN')); return ctx.tx.repo(listingRepo).query({ where: { owner: ctx.actor.id }, dir: 'desc', limit: 50, ...input }); },
   });
   const reserve = defineCommand({ name: 'bazaar.inventory.reserve', module: 'F01.S03.M01', capability: 'bazaar.inventory.reserve', idempotent: true,
     input: z.strictObject({ listingId: uuidv7(), expectedRevision: z.int().min(1), holdId: uuidv7(), subjectId: uuidv7(), revisionHash: z.string().min(16).max(200), expiresAt: timestamp() }),
@@ -171,7 +182,10 @@ export function bazaarDefinitions(options: BazaarOptions) {
       return saved;
     },
   });
-  return { create, edit, publish, unpublish, archive, get, list, reserve, release, all: [create, edit, publish, unpublish, archive, get, list, reserve, release] as const };
+  const history = listingHistoryDefinitions();
+  const lifecycle = archiveDefinitions();
+  return { create, edit, publish, unpublish, archive, close, expire, sweep, get, list, publication, reserve, release, history, lifecycle,
+    all: [create, edit, publish, unpublish, get, list, publication, reserve, release, ...endings.all, ...history.all, ...lifecycle.all] as const };
 }
 
 /** Local single-item promise only; never implies a remote/global inventory lock. */

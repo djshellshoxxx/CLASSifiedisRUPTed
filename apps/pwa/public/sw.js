@@ -2,7 +2,7 @@
 const BUILD_ID = '__BUILD_ID__';
 const CACHE_PREFIX = `classrup-public-v1:${encodeURIComponent(self.registration.scope)}:`;
 const CACHE_NAME = `${CACHE_PREFIX}${BUILD_ID}`;
-const ASSETS = ['./', './index.html', './app.js', './styles.css', './manifest.webmanifest', './icon.svg']
+const ASSETS = ['./', './index.html', './app.js', './matching-worker.js', './styles.css', './manifest.webmanifest', './icon.svg']
   .map(asset => new URL(asset, self.registration.scope).href);
 const ALLOWED = new Set(ASSETS);
 

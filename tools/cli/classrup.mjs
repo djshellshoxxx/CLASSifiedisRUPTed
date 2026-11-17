@@ -179,7 +179,7 @@ export async function build(root = ROOT) {
   await fs.mkdir(staging, { recursive: true });
   try {
     const html = await fs.readFile(path.join(source, 'index.html'), 'utf8');
-    await bundle({ entryPoints: [path.join(source, 'src/main.ts')], outfile: path.join(staging, 'app.js'), bundle: true, format: 'esm', platform: 'browser', target: ['es2022'], minify: true, sourcemap: false, write: true });
+    await bundle({ entryPoints: { app: path.join(source, 'src/main.ts'), 'matching-worker': path.join(source, 'src/matching-worker.ts') }, outdir: staging, bundle: true, format: 'esm', platform: 'browser', target: ['es2022'], minify: true, sourcemap: false, write: true });
     await fs.cp(path.join(source, 'public'), staging, { recursive: true }).catch(error => { if (error.code !== 'ENOENT') throw error; });
     // A source may change during copying: check the staged tree before reading or rewriting sw.js.
     await assertSafePublicAssets(staging);
@@ -191,7 +191,7 @@ export async function build(root = ROOT) {
     if (worker !== undefined) {
       const hash = createHash('sha256');
       hash.update(worker);
-      for (const asset of ['index.html', 'app.js', 'styles.css', 'manifest.webmanifest', 'icon.svg']) {
+      for (const asset of ['index.html', 'app.js', 'matching-worker.js', 'styles.css', 'manifest.webmanifest', 'icon.svg']) {
         hash.update(asset); hash.update(await fs.readFile(path.join(staging, asset)));
       }
       await fs.writeFile(workerPath, worker.replaceAll('__BUILD_ID__', hash.digest('hex')));

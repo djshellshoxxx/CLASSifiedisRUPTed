@@ -1,7 +1,19 @@
-import { describe, expect, it } from 'vitest';
-import { createIdentity, unlockIdentity, didFromPublicKey, publicKeyFromDid, encodeBase64url, decodeBase64url } from './identity.ts';
+import { describe, expect, it, vi } from 'vitest';
+import { createIdentity, unlockIdentity, didFromPublicKey, publicKeyFromDid, encodeBase64url, decodeBase64url, IdentityCryptoError } from './identity.ts';
 
 describe('local identity key protection', () => {
+  it('reports the exact failed native stage without retrying or exposing native exception data', async () => {
+    const native = new Error('private diagnostic canary');
+    const generate = vi.spyOn(crypto.subtle, 'generateKey').mockRejectedValueOnce(native);
+    try {
+      const error = await createIdentity('example correct long passphrase').catch(error => error as unknown);
+      expect(error).toBeInstanceOf(IdentityCryptoError);
+      expect(error).toMatchObject({ stage: 'generate-key', message: 'Browser cryptography failed during generate-key.' });
+      expect(String(error)).not.toContain('canary');
+      expect(error).not.toHaveProperty('cause');
+      expect(generate).toHaveBeenCalledTimes(1);
+    } finally { generate.mockRestore(); }
+  });
   it('binds a did:key to the Ed25519 public key and canonical base64url', () => {
     const publicKey = new Uint8Array(32).fill(7);
     expect(publicKeyFromDid(didFromPublicKey(publicKey))).toEqual(publicKey);

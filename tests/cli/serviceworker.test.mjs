@@ -23,9 +23,9 @@ function harness({ failInstall = false, cacheNames = [] } = {}) {
 }
 test('worker pre-caches only fixed public assets without credentials', async () => {
   const h = harness(); await h.lifecycle('install');
-  assert.equal(h.added.length, 6);
+  assert.equal(h.added.length, 7);
   assert.ok(h.added.every(request => request.credentials === 'omit' && request.url.startsWith(h.scope)));
-  assert.deepEqual(h.added.map(request => new URL(request.url).pathname), ['/classrup/', '/classrup/index.html', '/classrup/app.js', '/classrup/styles.css', '/classrup/manifest.webmanifest', '/classrup/icon.svg']);
+  assert.deepEqual(h.added.map(request => new URL(request.url).pathname), ['/classrup/', '/classrup/index.html', '/classrup/app.js', '/classrup/matching-worker.js', '/classrup/styles.css', '/classrup/manifest.webmanifest', '/classrup/icon.svg']);
 });
 test('failed precache rejects installation and deletes only the incomplete new cache', async () => {
   const h = harness({ failInstall: true });

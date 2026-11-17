@@ -52,3 +52,18 @@ identity still uses the original passphrase. There is no password reset,
 delegated device identity, device rotation/revocation, recovery notice or
 72-hour dispute workflow in this slice. Users must review coordination after a
 restore; a copied signing identity can create conflicting commitments.
+
+The PWA binds `createVaultAutoLock` to trusted user activity and tab visibility.
+Default idle timeout is 15 minutes, configurable from 1–60 for that session;
+five continuous minutes hidden also locks. Throttled timers cannot refresh an
+already expired deadline. Lock hides and clears private views before storage
+closure; stale asynchronous results cannot export into a replacement session.
+Failed closure is visible and requires reload before reopening.
+
+After three failed unlock attempts, local exponential backoff starts at one
+second and caps at one minute. It survives closing/reopening the same vault in
+one page, but resets on reload and is not an offline password-guessing defense.
+Native Ed25519 errors report only a fixed operation stage, without key bytes,
+native error details or retries. This diagnostic change does not fix the known
+upstream WebKit defect. Device recovery and the conflicting canonical F07 session
+policy remain separate unfinished contracts.

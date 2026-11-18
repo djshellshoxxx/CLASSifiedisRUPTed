@@ -123,11 +123,10 @@ export function mountLocationPreferences(ports: LocationPorts) {
     const home = cell.value;
     const publicLevel = level.value as PublicLocationLevel;
     const selectedEntry = entryMode;
-    const revision = saved.revision ?? 0;
     const submittedInputs = inputGeneration;
     run(async () => {
       await ports.command('discovery.location.set_home', { ...(home ? { cell5: home } : {}), publicLevel,
-        entryMode: selectedEntry, expectedRevision: revision, ...(selectedEntry === 'device_gps_once' ? { fromGpsOnce: true } : {}) });
+        entryMode: selectedEntry, expectedRevision: saved.revision ?? 0, ...(selectedEntry === 'device_gps_once' ? { fromGpsOnce: true } : {}) });
       if (!active) return; await refresh(inputGeneration !== submittedInputs);
       if (active) ports.message('Area preferences saved privately. Existing listings are unchanged; use the copy buttons when needed.');
     });

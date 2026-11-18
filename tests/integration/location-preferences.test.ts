@@ -181,3 +181,18 @@ it('preserves edits made during a save and refreshes the revision used by the ne
   expect(f.command).toHaveBeenLastCalledWith('discovery.location.set_home', expect.objectContaining({ cell5: 'dr5ru', expectedRevision: 2 }));
   f.ui.destroy();
 });
+
+it('saves a second queued edit against the revision from the first save', async () => {
+  const f = mount(); await f.ui.refresh();
+  const home = f.nodes.find(n => n.id === 'location-home-cell')!;
+  const form = f.nodes.find(n => n.tag === 'form')!;
+  let finishFirst!: () => void;
+  f.command.mockImplementationOnce(() => new Promise<undefined>(resolve => { finishFirst = () => resolve(undefined); }));
+  f.query.mockResolvedValueOnce({ publicLevel: 'L1', homeCell5: 'c2b2q', publicCell: 'c2b2', revision: 2 });
+  home.value = 'c2b2q'; home.fire('input'); form.fire('submit'); await Promise.resolve();
+  home.value = 'dr5ru'; home.fire('input'); form.fire('submit');
+  finishFirst(); await Promise.all(f.tasks);
+  expect(f.command).toHaveBeenNthCalledWith(1, 'discovery.location.set_home', expect.objectContaining({ cell5: 'c2b2q', expectedRevision: 1 }));
+  expect(f.command).toHaveBeenNthCalledWith(2, 'discovery.location.set_home', expect.objectContaining({ cell5: 'dr5ru', expectedRevision: 2 }));
+  f.ui.destroy();
+});

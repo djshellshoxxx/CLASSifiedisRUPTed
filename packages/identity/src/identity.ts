@@ -5,6 +5,7 @@ import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 
 const encoder = new TextEncoder();
 const MAX_SECRET_BYTES = 16 * 1024 * 1024;
+const MAX_KEY_GENERATION_ATTEMPTS = 3;
 const DOMAIN = encoder.encode('classrup.sealed/v1;scrypt=131072,8,1;xchacha20poly1305');
 
 export type IdentityCryptoStage = 'generate-key' | 'export-public-key' | 'export-private-key' | 'import-private-key' | 'import-public-key' | 'sign' | 'verify';
@@ -20,6 +21,17 @@ export class IdentityCryptoError extends Error {
 async function cryptoOperation<T>(stage: IdentityCryptoStage, operation: () => Promise<T>): Promise<T> {
   try { return await operation(); }
   catch { throw new IdentityCryptoError(stage); }
+}
+
+async function generateIdentityKeyPair(): Promise<CryptoKeyPair> {
+  // A native provider can reject a fresh key before returning it (WebKit bug 307095).
+  // OperationError is not proof of that cause; keep recovery bounded and generation-only.
+  for (let attempt = 1; ; attempt++) {
+    try { return await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']) as CryptoKeyPair; }
+    catch (error) {
+      if (attempt >= MAX_KEY_GENERATION_ATTEMPTS || !(error instanceof DOMException) || error.name !== 'OperationError') throw error;
+    }
+  }
 }
 
 export interface Sealed {
@@ -93,7 +105,7 @@ function signingIdentity(principal: string, initial: CryptoKey): UnlockedIdentit
 
 export async function createIdentity(passphrase: string): Promise<{ identity: UnlockedIdentity; protectedIdentity: ProtectedIdentity }> {
   passphraseBytes(passphrase).fill(0);
-  const pair = await cryptoOperation('generate-key', () => crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify'])) as CryptoKeyPair;
+  const pair = await cryptoOperation('generate-key', generateIdentityKeyPair);
   const principal = didFromPublicKey(new Uint8Array(await cryptoOperation('export-public-key', () => crypto.subtle.exportKey('raw', pair.publicKey))));
   const privateBytes = new Uint8Array(await cryptoOperation('export-private-key', () => crypto.subtle.exportKey('pkcs8', pair.privateKey)));
   try {

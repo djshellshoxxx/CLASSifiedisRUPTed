@@ -1,0 +1,4 @@
+# These files participate in the feature registry's exact-source digest and stale check.
+/planning/modules.yaml text eol=lf
+**/module.spec.yaml text eol=lf
+/packages/platform/src/configuration/feature/registry.generated.ts text eol=lf

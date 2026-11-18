@@ -17,14 +17,16 @@
     "setup": "node tools/cli/classrup.mjs setup",
     "doctor": "node tools/cli/classrup.mjs doctor",
     "dev": "node tools/cli/classrup.mjs dev",
-    "build": "node tools/cli/classrup.mjs build",
+    "build": "node packages/platform/scripts/gen-registry.mjs --check --strict && node tools/cli/classrup.mjs build",
     "preview": "node tools/cli/classrup.mjs preview",
     "test:cli": "node --test tests/cli/*.test.mjs",
     "test:browser": "playwright test",
     "test:browser:crypto": "playwright test --config playwright.crypto.config.ts",
     "configure": "node tools/cli/classrup.mjs configure",
     "test:tooling": "node --test tests/tooling/*.test.mjs",
-    "status": "node tools/status/status.mjs"
+    "status": "node tools/status/status.mjs",
+    "registry:generate": "node packages/platform/scripts/gen-registry.mjs --strict",
+    "registry:check": "node packages/platform/scripts/gen-registry.mjs --check --strict"
   },
   "devDependencies": {
     "@classrup/discovery": "workspace:*",

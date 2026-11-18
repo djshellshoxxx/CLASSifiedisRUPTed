@@ -1,0 +1,91 @@
+{
+  "checkedAt": "2026-11-18 08:36:12 UTC",
+  "directApplicationEvidence": {
+    "run": 44260769800,
+    "job": 134657774064,
+    "source": "336839cdf5fb912e3f2eb84c2fecba12243b26ec",
+    "browserPassed": 65,
+    "browserFailed": 1,
+    "failedTest": "[webkit] idle vault lock clears private views and preserves saved listings",
+    "stage": "generate-key",
+    "nativeExceptionClass": "not captured by sanitized application error",
+    "nativeRootCause": "Leading-zero MPI truncation is strongly supported inference, not traced for this individual invocation"
+  },
+  "reviewedNativeFix": {
+    "sha": "e6eb9ebd41d6a54df8db2dc86603c3a8139abf5b",
+    "date": "2026-10-09T11:17:37Z",
+    "reviewer": "Javier Fernandez",
+    "bug": 307095,
+    "upstreamStatedApproximateGenerationFailureRate": "1/128 for Ed25519",
+    "behavior": "Preserve 32-byte q/d widths in generation, SPKI/PKCS8 import and JWK export; reject short SPKI inputs before padded conversion.",
+    "url": "https://github.com/WebKit/WebKit/commit/e6eb9ebd41d6a54df8db2dc86603c3a8139abf5b"
+  },
+  "candidates": [
+    {
+      "name": "Pinned Playwright",
+      "version": "1.64.1",
+      "webkitRevision": "2370",
+      "webkitSource": "56453fdfe0b0ca6258c23e6453b34f70b885d13f",
+      "fixed": false
+    },
+    {
+      "name": "Latest stable Playwright",
+      "version": "1.65.1",
+      "published": "2026-11-13T21:46:58Z",
+      "webkitSource": "5b391e6d3b14d549908dad2c6695999291313f30",
+      "bootstrapBlob": "ab31e39a60fcc511607003e8d8a87bdc201287d4",
+      "bootstrapFixPresent": false,
+      "fixed": false
+    },
+    {
+      "name": "Official npm next",
+      "version": "1.66.0-alpha-2026-11-18",
+      "gitHead": "8124fc39233c4c349b9dbebd4abc4103738eae81",
+      "webkitRevision": "2395",
+      "webkitSource": "aa697ddd0312b191de5fb13b580f19159d39c26f",
+      "bootstrapBlob": "cca97804759b711b6470df17be044c8eae424293",
+      "bootstrapFixPresent": false,
+      "fixed": false,
+      "prerelease": true
+    },
+    {
+      "name": "Latest stable WebKitGTK",
+      "version": "2.54.2",
+      "released": "2026-10-23",
+      "tag": "webkitgtk-2.54.2",
+      "commit": "b95c91b1c0ee43cc86d25ff7af73038f67a88e04",
+      "fixed": true,
+      "dropInPlaywrightReplacement": false
+    }
+  ],
+  "nativeJwkInvestigation": {
+    "status": "source-only feasibility, not browser-verified",
+    "path": "CryptoKeyOKP::importJwk -> platformCheckPairedKeys -> GCryptRFC8032::validateEd25519KeyPair",
+    "finding": "Native JWK import preserves decoded 32-byte d/x and pair validator zero-pads computed public material; avoids defective PKCS8 MPI conversion.",
+    "limitations": [
+      "Does not repair generateKey",
+      "Requires strict PKCS8 representation handling and independent cross-browser vectors",
+      "Base64 private seed would introduce a transient immutable JavaScript string; security review needed",
+      "Do not treat this source inspection as an implemented or qualified adaptation"
+    ]
+  },
+  "noChanges": {
+    "repository": true,
+    "dependencies": true,
+    "remoteState": true
+  },
+  "sources": [
+    "https://api.github.com/repos/WebKit/WebKit/commits/e6eb9ebd41d6a54df8db2dc86603c3a8139abf5b",
+    "https://api.github.com/repos/microsoft/playwright/contents/browser_patches/webkit/UPSTREAM_CONFIG.sh?ref=v1.64.1",
+    "https://api.github.com/repos/microsoft/playwright/releases/latest",
+    "https://api.github.com/repos/microsoft/playwright/contents/browser_patches/webkit/UPSTREAM_CONFIG.sh?ref=v1.65.1",
+    "https://api.github.com/repos/microsoft/playwright/contents/browser_patches/webkit/patches/bootstrap.diff?ref=v1.65.1",
+    "https://api.github.com/repos/microsoft/playwright/contents/browser_patches/webkit/UPSTREAM_CONFIG.sh?ref=8124fc39233c4c349b9dbebd4abc4103738eae81",
+    "https://api.github.com/repos/microsoft/playwright/contents/browser_patches/webkit/patches/bootstrap.diff?ref=8124fc39233c4c349b9dbebd4abc4103738eae81",
+    "https://api.github.com/repos/WebKit/WebKit/contents/Source/WebCore/crypto/gcrypt/CryptoKeyOKPGCrypt.cpp?ref=b95c91b1c0ee43cc86d25ff7af73038f67a88e04",
+    "https://webkitgtk.org/2026/10/23/webkitgtk2.54.2-released.html",
+    "https://playwright.dev/docs/browsers",
+    "https://api.github.com/repos/WebKit/WebKit/contents/Source/WebCore/crypto/keys/CryptoKeyOKP.cpp?ref=56453fdfe0b0ca6258c23e6453b34f70b885d13f",
+    "https://api.github.com/repos/WebKit/WebKit/contents/Source/WebCore/crypto/gcrypt/GCryptRFC8032.cpp?ref=56453fdfe0b0ca6258c23e6453b34f70b885d13f"
+  ]
+}

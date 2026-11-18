@@ -11,7 +11,7 @@ Requires Node >=22.18.0 and the pinned pnpm 10.28.0. See the [CLI setup guide](d
 ```sh
 git clone https://github.com/djshellshoxxx/CLASSifiedisRUPTed.git
 cd CLASSifiedisRUPTed
-git switch main   # qualified baseline; unmerged feature PRs are separate candidates
+git switch main   # canonical branch; see the execution report for current qualification
 corepack pnpm install --frozen-lockfile
 corepack pnpm run setup --non-interactive
 corepack pnpm run doctor
@@ -35,8 +35,11 @@ Use `pnpm run setup` and `pnpm run doctor`: both bare names collide with pnpm's 
 - Exact money arithmetic, rational conversion and allocation as a headless 38-digit library, independently checked against Python vectors. Existing alpha wire amounts retain their previous bounds; this library does not add payment settlement.
 - An opt-in currency registry validates a snapshot against a configured release signer and preserves immutable decimal/chain bindings. Registry seeding and commerce UI remain disabled until an authenticated snapshot, downstream usage adapters and the canonical-vault integration exist. No exchange-rate provider is configured.
 - An opt-in signed-consent core with revision/participant/wording binding and monotonic revocation. Its product adapters, backup codecs and quarantine are pending, so it is not enabled in the PWA.
+- An opt-in feature catalog and dependency registry contains 18 feature definitions, 148 module definitions and 565 dependency edges, with deterministic generation, immutable catalog data and four read-only query definitions. Build and CI reject stale generated output. Catalog registration and default states describe compiled specification policy; they do not establish runtime implementation or enable a feature for a user. PWA controls, runtime flag adapters, relay mounting, backup diagnostics, unknown-module quarantine and target-device qualification remain separate work. See the [package scope](packages/platform/README.md).
 
 Signing keys, exported backups and local domain rows are encrypted. Existing plaintext vaults migrate atomically after successful unlock. Storage uses authenticated row encryption, opaque row keys and an authenticated inventory; table names, row counts and ciphertext sizes remain visible. Alpha backup covers registered domain records and identity, not the complete media/outbox/device-rotation recovery protocol. Keep the original vault passphrase for backup and restore. Browser origin changes create separate storage locations.
+
+Fresh identity creation allows at most three sequential native Ed25519 generation attempts, retrying only genuine `DOMException` values named `OperationError`. Recovery ends before key export or persistence; unlocking and restoring never regenerate an existing identity. The pinned WebKit build still has a deterministic leading-zero private-key import defect. This remains a compatibility limitation despite the new-key availability mitigation; see the [native diagnostic and review](docs/reviews/20261117-exhaustive-consolidation/native-keygen-review.md).
 
 The alpha signed-file protocol uses per-subject chains and explicitly experimental statement types where full federation contracts are not implemented. It is not interoperable canonical relay federation. Peer statements are claims, not proof of physical availability. Reservations only protect local inventory; conflicting peer commitments freeze coordination. No payment custody or atomic physical exchange is provided.
 
@@ -48,6 +51,7 @@ Services, rentals, auctions, live messaging, relay delivery, full identity rotat
 corepack pnpm typecheck
 corepack pnpm spec:check
 corepack pnpm deps:check
+corepack pnpm registry:check
 corepack pnpm test --reporter=json --outputFile=test-results/domain.json
 corepack pnpm run test:cli
 corepack pnpm run test:tooling
@@ -58,7 +62,11 @@ corepack pnpm run test:browser
 
 Trace coverage requires executed passing results; source comments never establish passing coverage. The non-strict report is not a release gate. Browser tests require Playwright's browser installations.
 
-- [PR consolidation review](docs/status/PR_CONSOLIDATION_20261117.md)
+- [Completed main qualification](docs/reviews/20261117-exhaustive-consolidation/main-qualification-20261118.json): main `5a502aa` passed its own 695 domain assertions, 27 tooling tests, 72 browser journeys and all six platform jobs. Later sources require their own qualification.
+- [Consolidation execution and current outcome](docs/status/CONSOLIDATION_EXECUTION_20261117.md) · [All 57 branch dispositions](docs/status/CONSOLIDATION_BRANCH_DISPOSITIONS_20261118.md)
+- [52-branch / 47-PR starting inventory](docs/status/BRANCH_CONSOLIDATION_20261117.md) · [Inventory JSON](docs/status/BRANCH_CONSOLIDATION_20261117.json)
+- [Earlier 25-PR review](docs/status/PR_CONSOLIDATION_20261117.md) · [Future domain CLI specification](docs/future-cli-spec.md)
+- [Current bounded security review](docs/reviews/20261117-exhaustive-consolidation/security-review.md) · [Registry integration review](docs/reviews/20261117-exhaustive-consolidation/registry-independent-review.md)
 - [Project status](docs/status/PROJECT_STATUS.md) · [Feature status (generated)](docs/status/FEATURE_STATUS.md) · [Branch ledger](docs/status/BRANCH_LEDGER.md) · [Changelog](CHANGELOG.md)
 - [User guide](docs/wiki/User-Guide.md) · [Developer guide](docs/wiki/Developer-Guide.md) · [Wiki source and publication status](docs/wiki/README.md)
 - [Integration plan / evidence](planning/LOCAL_ALPHA_20261109.md)

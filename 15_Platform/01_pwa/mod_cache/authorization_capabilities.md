@@ -1,35 +1,57 @@
-# PS-114-05 — authorization capabilities
+# PS-114-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-114-05. **Owner:** [15_Platform/01_pwa/mod_cache](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_cache. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_cache. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the authorization capabilities process for cache within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-114-05.R01 | Cache serves only same-origin requests; cross-origin responses are never cached. | MVP |
+| PS-114-05.R02 | Cached data is served to the device's current session only; after logout nothing is served to an unauthenticated page other than public routes. | MVP |
+| PS-114-05.R03 | Service worker registration uses the origin scope `/` and is restricted by CSP `worker-src 'self'`. | MVP |
+| PS-114-05.R04 | Cache APIs are not exposed to third-party scripts (no third-party script loading, per platform policy). | MVP |
 
-## Requirements to specify
-- [ ] PS-114-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-114-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-114-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+No capability records. Access is governed by origin and session state.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Actor | Action | Outcome |
+|---|---|---|
+| same-origin page, signed in | read cached PUBLIC or REGION_COARSE | ALLOW |
+| same-origin page, signed out | read cached PUBLIC | ALLOW |
+| same-origin page, signed out | read any authenticated route | DENY (not cached) |
+| cross-origin | any | DENY (not cached) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+None on server.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Not applicable.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Not applicable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-114-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Enforced by service worker scope and server headers (R02 relies on PS-114-02.R03).
+
+## Failure, idempotency, concurrency, offline
+Not applicable.
+
+## Privacy, retention, abuse
+Cache poisoning mitigated by same-origin rule and hash manifest.
+
+## Observability & budgets
+None beyond local counters.
+
+## Tests
+- TEST-PS-114-05-01 (integration): cross-origin response not cached.
+- TEST-PS-114-05-02 (integration): signed-out page cannot read cached authenticated data.
+- TEST-PS-114-05-03 (contract): CSP header includes `worker-src 'self'`.
+- TEST-PS-114-05-04 (security): third-party script cannot access cache API (test harness).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix tested in browsers in CI matrix.
+2. CSP verified.
+3. No cross-origin caching.
+
+## Assumptions & open decisions
+- ASSUMPTION: public routes are identified by the route allowlist.
+- Security review by Security Lead pending; no audit claimed.

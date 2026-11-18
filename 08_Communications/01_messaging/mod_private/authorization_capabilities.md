@@ -1,35 +1,73 @@
 # PS-060-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-060-05. **Owner:** [08_Communications/01_messaging/mod_private](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_private. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_private. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01, R02, R04 participant, R05, R07, R10, R11), CTR-PRV-001 (PRIVATE_PERSONAL), CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for private within 01_messaging. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-060-05.R01 | Actions evaluated on the owning `acc_` of a participant `prf_`; `prf_` is never a principal. | MVP |
+| PS-060-05.R02 | Only the two participants of a thread may read its messages, states or attachments. | MVP |
+| PS-060-05.R03 | No public, search-engine or federated read path exists for messages. | MVP |
+| PS-060-05.R04 | Operators have no read access to message bodies. Moderators read a reported thread only under case grant with dual control, and only the reported messages plus three messages of context (ASSUMPTION). | MVP |
+| PS-060-05.R05 | Relation rule for `StartThread` derived from owning modules' events at decision time (CTR-CAP-001 R05). | MVP |
+| PS-060-05.R06 | Default deny. | MVP |
 
-## Requirements to specify
-- [ ] PS-060-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-060-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-060-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field visibility (CTR-CAP-001 R10):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | public | participant | sys (retention) | case (mod_, dual control) | never |
+|---|---|---|---|---|---|
+| `body`, `sent_at`, `sender_prf_id` | | Y | | reported messages only | |
+| `thread_state`, per-participant state | | own only | | | other participant's state |
+| thread IDs and counts | | Y | Y (aggregate) | | |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Action | Actor | Scope | Result |
+|---|---|---|---|
+| `thread.open` | participant | relation | allow with R02 eligibility |
+| `message.send` | participant | thread | allow when open |
+| `message.read` | participant | thread | allow |
+| `message.delete_for_all` | sender | own message | allow within window |
+| `thread.block` | participant | thread | allow |
+| `message.moderate_read` | `mod_` | case | reported messages only, dual control |
+| `message.retain_purge` | `sys_` | global | purge only, no read |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Denied actions produce no state change; decision records store outcome only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `SYS.NOT_FOUND` | false | `err.sys.not_found` |
+| `SYS.FORBIDDEN` | false | `err.sys.forbidden` |
+| `PRIVMSG.NOT_ELIGIBLE` | false | `err.privmsg.not_eligible` |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-060-05`; scenarios and fixtures to be detailed in Prompt 3.
+Non-participants and blocked users receive `SYS.NOT_FOUND` for thread reads (CTR-ERR-001 R08).
+
+## Authorization
+Relation rules derived at decision time; revocation of a block takes effect at next decision (zero cache, CTR-CAP-001 R09).
+
+## Failure, idempotency, concurrency, offline
+Re-authorized each retry. Local message cache only while session is authenticated; purged at logout.
+
+## Privacy, retention, abuse
+Moderator reads emit `aud_` with `msg_id` list, purpose and approvers. Operators never read bodies; retention jobs never decrypt or read bodies beyond deletion.
+
+## Observability & budgets
+`privmsg_authz_deny_total{action}`; alert on mass `message.read` denials from one account.
+
+## Tests
+- TEST-PS-060-05-01 (unit): matrix per principal × action.
+- TEST-PS-060-05-02 (negative): third party cannot read thread; response identical to non-existent thread.
+- TEST-PS-060-05-03 (integration): block removes read for next request.
+- TEST-PS-060-05-04 (negative): moderator read outside reported messages rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix implemented; default deny verified.
+2. Non-participant responses indistinguishable from missing thread.
+3. Moderator reads limited to reported messages under dual control.
+4. Operators cannot read bodies.
+
+## Assumptions & open decisions
+- ASSUMPTION: three messages of context for moderator reads.
+- PROVISIONAL (D10 default, unapproved): key handling and E2E not in MVP; operator no-read rule holds without E2E.

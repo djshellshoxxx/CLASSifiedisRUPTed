@@ -1,35 +1,60 @@
-# PS-060-04 — commands queries events
+# PS-060-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-060-04. **Owner:** [08_Communications/01_messaging/mod_private](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_private. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_private. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03, envelope), CTR-ERR-001, CTR-SCH-001, CTR-CAP-001 (`message.*`, `thread.*`), CTR-ID-001, CTR-PRV-001 (R10 previews).
 
-## Purpose and scope
-Define the commands queries events process for private within 01_messaging. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-060-04.R01 | Every write carries `idempotency_key` (26-char ULID); thread writes carry `expected_revision`. | MVP |
+| PS-060-04.R02 | `SendMessage` p95 ≤ 300 ms server-side; response returns `msg_id` and `revision`. | MVP |
+| PS-060-04.R03 | Event payloads carry IDs, states and revisions; never body text, sender names or previews. | MVP |
+| PS-060-04.R04 | Push payload is generic text ("New message"); body only if the device opted in (CTR-PRV-001 R10). | MVP |
+| PS-060-04.R05 | Query `ListThreads` (paged, 20 per page) and `ListMessages` (cursor, 50 per page) return participant-visible data only. | MVP |
+| PS-060-04.R06 | Schema IDs `messaging.thread_opened`, `messaging.message_sent`, `messaging.thread_blocked`, `messaging.message_deleted` at 1.0.0. | MVP |
+| PS-060-04.R07 | Typing indicators and presence. | Future (excluded for metadata reasons; re-open only with D05/D10 decisions) |
 
-## Requirements to specify
-- [ ] PS-060-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-060-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-060-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Payload | Error codes |
+|---|---|---|
+| `RequestContact` | `recipient_prf_id`, `idempotency_key` | `NOT_ELIGIBLE`, `CONTACT_LIMIT`, `RATE_LIMITED` |
+| `AcceptContact` | `thread_id`, `expected_revision` | `NOT_ELIGIBLE`, `THREAD_CLOSED` |
+| `StartThread` | `counterparty_prf_id` | `NOT_ELIGIBLE` |
+| `SendMessage` | `thread_id`, `body`, `attachment_ids?`, `idempotency_key` | `BODY_*`, `THREAD_CLOSED`, `NOT_ELIGIBLE`, `RATE_LIMITED`, `ATTACH.NOT_AVAILABLE` |
+| `MarkRead` | `thread_id`, `msg_id` | `SYS.NOT_FOUND` |
+| `DeleteForMe` / `DeleteForAll` | `msg_id`, `expected_revision` | `DELETE_WINDOW_CLOSED` |
+| `CloseThread` / `Block` | `thread_id`, `expected_revision` | `SYS.NOT_FOUND` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Participant actions only (PS-060-05).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+- Duplicate send with same key returns original message; different body with same key → `EVT.IDEMPOTENCY_KEY_REUSED`.
+- Offline sends queued (D08 PROVISIONAL), ordered per thread; attachments must be `available` before send.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-060-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Events carry no sender identity beyond `prf_` of the participant pair and no body. `actor_ref` is `acc_` in audit only.
+
+## Observability & budgets
+`privmsg_cmd_total{command,result}`; no thread or message IDs as labels.
+
+## Tests
+- TEST-PS-060-04-01 (contract): payloads validate.
+- TEST-PS-060-04-02 (integration): duplicate send returns same `msg_id`; one event.
+- TEST-PS-060-04-03 (contract): event lint: no body, no sender name.
+- TEST-PS-060-04-04 (contract): push payload contains only generic text by default.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Commands, queries and events implemented as listed.
+2. Idempotency verified.
+3. Event and push payloads contain no content.
+4. Pagination limits enforced.
+
+## Assumptions & open decisions
+- ASSUMPTION: `aggregate_type = thread` and `message` registered in CTR-SCH-001.
+- PROVISIONAL (D08 default, unapproved): offline queue.

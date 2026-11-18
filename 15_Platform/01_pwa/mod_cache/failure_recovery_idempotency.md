@@ -1,35 +1,52 @@
-# PS-114-06 — failure recovery idempotency
+# PS-114-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-114-06. **Owner:** [15_Platform/01_pwa/mod_cache](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_cache. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_cache. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for cache within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-114-06.R01 | Storage quota exceeded: evict LRU non-pinned entries until write succeeds; if still failing, skip caching (page still works). | MVP |
+| PS-114-06.R02 | Corrupted entry (hash or parse failure on read) is deleted and refetched. | MVP |
+| PS-114-06.R03 | Service worker update failure keeps the previous active build. | MVP |
+| PS-114-06.R04 | The cache never holds writes; pending writes live in the D08 PROVISIONAL pending queue, not in cache storage. | MVP |
 
-## Requirements to specify
-- [ ] PS-114-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-114-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-114-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Pinned entries: shell assets for active build (not evictable).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Activation idempotent by build_id.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`CACHE.QUOTA_EXCEEDED` and `CACHE.CORRUPT_ENTRY` are local codes; not user-visible except as stale-data notice.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Not applicable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-114-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Multiple tabs share cache; activation waits for all tabs to close the old build or uses skipWaiting only after user accepts update.
+- Browser clears storage: app falls back to network; no crash.
+- Offline with no cache: shows offline page with retry.
+
+## Privacy, retention, abuse
+Eviction and purge delete data fully.
+
+## Observability & budgets
+Local counters; no network telemetry.
+
+## Tests
+- TEST-PS-114-06-01 (integration): quota fill evicts LRU and keeps shell.
+- TEST-PS-114-06-02 (integration): corrupt entry refetched once.
+- TEST-PS-114-06-03 (chaos): failed build install keeps previous build.
+- TEST-PS-114-06-04 (offline): no cache plus offline shows offline page with retry control.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Quota behavior verified.
+2. No writes stored in cache (scan).
+3. Offline page accessible (a11y check).
+
+## Assumptions & open decisions
+- ASSUMPTION: LRU policy.
+- D08 PROVISIONAL (D08 default, unapproved).

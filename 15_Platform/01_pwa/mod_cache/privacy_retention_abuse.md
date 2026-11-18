@@ -1,35 +1,58 @@
-# PS-114-07 — privacy retention abuse
+# PS-114-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-114-07. **Owner:** [15_Platform/01_pwa/mod_cache](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_cache. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_cache. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for cache within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-114-07.R01 | Never cache responses of classes PRIVATE_PERSONAL, FINANCIAL_EVIDENCE, SECRET or LOCATION_PRECISE. | MVP |
+| PS-114-07.R02 | Region cache holds the coarse cell only (LOCATION_COARSE), with max-age 1 h (D05 PROVISIONAL). | MVP |
+| PS-114-07.R03 | Purge on logout, account switch and session revoke (PS-114-03). | MVP |
+| PS-114-07.R04 | Shared device: no cached data survives "clear data" (mod_install). | MVP |
+| PS-114-07.R05 | Query strings are dropped from keys unless allowlisted; identifiers in paths are normalized to route templates in telemetry. | MVP |
 
-## Requirements to specify
-- [ ] PS-114-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-114-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-114-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Class | Retention |
+|---|---|---|
+| PUBLIC entries | PUBLIC | until expiry (max 5 min) or eviction |
+| REGION_COARSE entries | LOCATION_COARSE | until expiry (max 1 h) |
+| shell assets | PUBLIC | active build lifetime |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Account deletion purges on next client start.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Not applicable.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See authorization_capabilities.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-114-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge idempotent.
+
+## Privacy, retention, abuse
+- Shared-device risk: cached public listings reveal browsing only if device is shared; purge rules limit exposure.
+- Abuse: cache used to store pages for offline phishing; mitigated by same-origin and hash manifest.
+- Privacy: no telemetry with URLs; route templates only.
+
+## Observability & budgets
+Route-template counters only.
+
+## Tests
+- TEST-PS-114-07-01 (integration): response with PRIVATE_PERSONAL class header is not cached.
+- TEST-PS-114-07-02 (integration): region entry expires at 1 h.
+- TEST-PS-114-07-03 (integration): "clear data" leaves no entries.
+- TEST-PS-114-07-04 (unit): query string with `user=` is stripped from key.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Class-based caching rules verified.
+2. Clear-data verified.
+3. Privacy Lead review pending.
+
+## Assumptions & open decisions
+- ASSUMPTION: route allowlist defines cacheable classes.
+- D05 PROVISIONAL (D05 default, unapproved).
+- D07 PROVISIONAL (D07 default, unapproved).

@@ -11,7 +11,7 @@
 | PS-059-02.R04 | Images are re-encoded to the stored format with metadata stripped; PDFs are rejected if they contain JavaScript, embedded files or launch actions. | MVP |
 | PS-059-02.R05 | Antivirus scan must return `passed` before the attachment becomes available (see PS-059-03). | MVP |
 | PS-059-02.R06 | File name sanitized: NFC, control characters removed, ≤ 100 code points; path separators removed. | MVP |
-| PS-059-02.R07 | Attachment upload rejected when the message's text contains a contact pattern on the same rules as PS-056-02 R02 is NOT applied; attachments are not text-scanned in MVP (ASSUMPTION). | MVP |
+| PS-059-02.R07 | Attachments are not scanned for contact patterns in MVP (ASSUMPTION); message text rules belong to mod_private. | MVP |
 
 ## Data / schema
 Maps to [domain_schema.md](domain_schema.md).

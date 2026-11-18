@@ -1,35 +1,64 @@
 # PS-114-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-114-01. **Owner:** [15_Platform/01_pwa/mod_cache](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_cache. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_cache. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001, CTR-SCH-001. This module has no server database entity; all records are device-local.
 
-## Purpose and scope
-Define the domain schema process for cache within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-114-01.R01 | Build manifest lists every precached asset with `url`, `sha256` and `build_id`. | MVP |
+| PS-114-01.R02 | Runtime cache entries store only response bodies of allowed classes (PS-114-02.R02) with `fetched_at` and `expires_at`. | MVP |
+| PS-114-01.R03 | Cache names are `classrupt-<build_id>-shell` and `classrupt-<build_id>-data`. | MVP |
+| PS-114-01.R04 | Cache keys are normalized `GET` URLs with query string removed unless on the allowlist. | MVP |
+| PS-114-01.R05 | Quota accounting record: total bytes per cache, updated on write and eviction. | MVP |
 
-## Requirements to specify
-- [ ] PS-114-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-114-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-114-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+build_manifest  (static file, built per release)
+{
+  "build_id": "2026.11.1-a1b2c3", "schema_version": "1.0.0",
+  "precache": [ { "url": "/assets/app.4f9c.js", "sha256": "<hex>", "bytes": 182044 } ],
+  "locales": ["en", "de"]
+}
+```
+Runtime entry (IndexedDB-backed cache metadata):
+```json
+{ "key": "GET /api/listings/public?region=DE-BE-C1", "class": "PUBLIC|REGION_COARSE",
+  "fetched_at": "<RFC 3339>", "expires_at": "<RFC 3339>", "bytes": 4096 }
+```
+No record stores an account ID, token or precise location.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-114-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+See [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+See [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+See [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-114-01-01 (unit): manifest entry with mismatched sha256 is not installed.
+- TEST-PS-114-01-02 (unit): query parameter not on allowlist is stripped from key.
+- TEST-PS-114-01-03 (property): cache names change with every `build_id`.
+- TEST-PS-114-01-04 (contract): no entry contains account or location identifiers.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Manifest verified before activation.
+2. No identifier fields in cache metadata (scan).
+3. Quota accounting matches stored bytes in fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: shell precache ≤ 5 MB; data cache quota 50 MB.
+- Retention of device cache: D07 default, PROVISIONAL (D07 default, unapproved).

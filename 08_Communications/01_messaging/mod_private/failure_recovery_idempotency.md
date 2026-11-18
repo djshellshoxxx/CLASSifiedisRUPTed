@@ -1,35 +1,56 @@
-# PS-060-06 — failure recovery idempotency
+# PS-060-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-060-06. **Owner:** [08_Communications/01_messaging/mod_private](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_private. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_private. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03, offline), CTR-PRV-001 (RET-EPH), CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for private within 01_messaging. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-060-06.R01 | Message commit and thread revision update are atomic with the event (transaction or outbox). | MVP |
+| PS-060-06.R02 | Duplicate sends return the original `msg_id`; no duplicate message. | MVP |
+| PS-060-06.R03 | Per-thread ordering by server `revision`; out-of-order device deliveries are re-sorted on read. | MVP |
+| PS-060-06.R04 | Client retries only retryable codes, max 5 attempts, backoff with jitter; client timeout 5 s. | MVP |
+| PS-060-06.R05 | Offline sends queued; ineligible at relay time → `not_applied` and kept visible to sender. | MVP |
+| PS-060-06.R06 | Delivery to recipient device is at-least-once with client de-duplication by `msg_id`. | MVP |
 
-## Requirements to specify
-- [ ] PS-060-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-060-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-060-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record (7 days). Device queue entry: `client_msg_id`, `thread_id`, `body_digest`, `status`. Queue bodies encrypted on device and purged on ack (RET-EPH).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry rules apply to all send, contact and state commands.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Device queue: `queued` → `sent` (server ack) or `not_applied`. `not_applied` items visible with reason; never silently dropped.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Non-retryable codes → `not_applied`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Re-authorized server-side on each attempt.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-060-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Crash between commit and relay push: push retried from outbox; recipient de-duplicates.
+- Block during queue: queued items → `not_applied` with `NOT_ELIGIBLE` (identical text as non-eligible).
+- Queue limits: 200 messages or 7 days per device (ASSUMPTION).
+- Relay outage: send button remains available; sending state shown; no auto-resend after 7 days.
+
+## Privacy, retention, abuse
+Queued bodies deleted on logout, account switch and when `not_applied` is dismissed. Rate limit 60 messages per 10 minutes per sender (ASSUMPTION).
+
+## Observability & budgets
+`privmsg_outbox_lag_seconds` p95 ≤ 3 s; `privmsg_queue_not_applied_total{code}`. No content in metrics.
+
+## Tests
+- TEST-PS-060-06-01 (integration): crash after commit before push; exactly one delivered message per client.
+- TEST-PS-060-06-02 (concurrency): block and send race; `not_applied` on loser.
+- TEST-PS-060-06-03 (offline): 200-item queue cap enforced; 201st refused with user message.
+- TEST-PS-060-06-04 (property): replays preserve per-thread order.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No duplicate messages under fault injection.
+2. Ordering holds across devices.
+3. No queued message disappears without a visible state.
+4. Queue purged on logout.
+
+## Assumptions & open decisions
+- ASSUMPTION: queue cap 200 messages / 7 days; rate limit 60 per 10 minutes.
+- PROVISIONAL (D08 default, unapproved): local pending queue until authenticated relay acknowledgment.

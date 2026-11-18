@@ -112,6 +112,67 @@ workspace types because source worktree node_modules symlinks pointed to the
 parent checkout's packages; relinking local `@classrup` packages to this worktree
 resolved the setup error without any source modification.
 
+### Hosted Firefox follow-up
+
+Parent reported candidate #45 Alpha run `44225235696` passed 64 cases and failed
+both newly added Firefox visible-focus cases at 390px/1280px. The failure was
+`focus.visible === false`; Chromium and WebKit passed. This is retained as a
+failed candidate, not a passing run.
+
+The original adapted test called `.focus()` on the backup button after
+pointer-driven setup and then pressed Enter. It did not verify that real
+keyboard navigation had established `:focus-visible` on the button. Inspection
+of `apps/pwa/index.html` confirms the backup password input is immediately
+followed by the backup button with no intermediate focusable controls.
+
+Follow-up test change uses native Tab from the filled password input, asserts
+the input was focused and the button becomes focused and `:focus-visible`,
+then presses Enter. All error focus, outline-style, minimum-width and rendered
+alpha assertions remain unchanged. This improves the validity of the keyboard
+journey and makes its modality precondition observable. Programmatic focus
+inheriting pointer modality is a plausible explanation for the original
+Firefox result; it remains unconfirmed until the exact-head hosted rerun. If
+the error still lacks visible focus after the verified keyboard precondition,
+the remaining problem requires product/browser-interaction investigation.
+
+Pinned Firefox became available through the parent's successful official
+fallback installation at
+`PLAYWRIGHT_BROWSERS_PATH=/workspace/scratch/f78bd6f6beec/playwright-browsers`.
+Unlike system Chromium, this browser launches successfully on the host.
+
+Controlled local comparison on the unchanged application:
+
+- Correction commit `8d4672c68a0f5591c52e0da2940d2a5d35778689`: **2/2 focused
+  Firefox cases passed**, 390px and 1280px, 10.8 seconds. The keyboard-button
+  precondition and all error-outline assertions passed.
+- Temporarily restored only the preceding test harness from `f301b65`:
+  **2/2 failed** at the exact hosted assertion, `focus.visible` received false
+  at `alpha.spec.ts:501`. No application code changed between runs.
+- Restored the committed correction after the comparison. Working tree clean;
+  no acceptance assertion, CSS rule or runtime behavior changed.
+
+This reproduces the original failure and confirms that the keyboard-navigation
+precondition resolves it locally. The evidence supports a test-harness modality
+defect for this journey rather than a failure of visible focus after real Tab
+navigation. Full exact-head hosted qualification of the consolidated PR remains
+the parent's gate; local focused passes do not substitute for that combined run.
+
 Parent independently verified exact-head remote CI: Alpha run `43981540981` and CLI run `43981539765` succeeded for `64cfc398ea3ba2449da0ed7adbfe8d99261bbc05`. This reviewer did not fetch those run logs independently and leaves final integration and CI reporting to the parent.
 
 No GitHub mutation, merge, release or deployment was performed by this reviewer. No manual accessibility, target-device performance or full release qualification is implied.
+
+
+## Final integration record (parent)
+
+The corrected remote source is `0c2e9e2992c359fd60f827983bd5e3f432bc8771`.
+[Alpha verification 44227269816](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44227269816)
+passed all 66 Chromium/Firefox/WebKit journeys and preceding domain, type,
+specification, dependency and build checks.
+[CLI setup 44227269875](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44227269875)
+passed both Linux Node 22/24 jobs. PR #45 merged as
+`03145774e5865fd7eac6ff6c4751a25ce6aa9422` after that evidence.
+
+The merged tree `4fe932b5f4bd2fea15654031ef85d9c21367b677` retains the #46 documentation
+and matches the qualified corrected source in application, package, tooling,
+test, workflow, dependency and configuration paths. The initial failed Firefox
+harness is retained above as actual evidence; it was corrected, not skipped.

@@ -1,35 +1,58 @@
-# PS-051-05 — authorization capabilities
+# PS-047-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-05. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_relevance. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001 (R02 ordering: no sensitive inputs).
 
-## Purpose and scope
-Define the authorization capabilities process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** CTR-CAP-001 grant model PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-051-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-05.R01 | Model draft and activation need `global` scope with purpose; activation needs two approvers. | MVP |
+| PS-047-05.R02 | Ranking service reads model config; no end user reads model weights beyond public summary. | MVP |
+| PS-047-05.R03 | No actor may add a PRIVATE_PERSONAL or LOCATION_PRECISE feature (PS-047-02 R02) — no grant overrides this. | MVP |
+| PS-047-05.R04 | Operators cannot read per-user ranking logs; aggregated metrics only. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Capabilities: `ranking_model.create`, `ranking_model.consent`, `ranking_model.withdraw`, `ranking_model.read`, `search.rank` (service scope).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Principal | Action | Scope | Outcome |
+|---|---|---|---|
+| F06 operator (`ope`) | ranking_model.create | global, purpose | ALLOW |
+| second operator | ranking_model.consent | global | ALLOW if distinct |
+| drafter | ranking_model.consent own draft | global | DENY → CAP.SELF_APPROVAL_FORBIDDEN |
+| search service (`sys`) | search.rank | service scope | ALLOW |
+| end user | ranking_model.read | none | DENY except public summary |
+| any actor | feature with PRIVATE_PERSONAL class | any | DENY → RELEV.FEATURE_FORBIDDEN (no grant applies) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Grants ≤ 72 h expiry (CTR-CAP-001 R06).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` for operator attempts at forbidden features; `SYS.NOT_FOUND` for user access to non-public model fields.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Server-side at each call.
+
+## Failure, idempotency, concurrency, offline
+Revocation applies at next decision.
+
+## Privacy, retention, abuse
+Operator access to per-user logs is denied entirely (R04); exceptions only via case scope under CTR-PRV-001 dual control (not applicable to ranking logs by default).
+
+## Observability & budgets
+`relevance_authz_decisions_total{action,outcome,reason_code}`.
+
+## Tests
+- TEST-PS-047-05-01 (unit): matrix rows.
+- TEST-PS-047-05-02 (security): self-consent blocked.
+- TEST-PS-047-05-03 (privacy): grant does not enable forbidden feature.
+- TEST-PS-047-05-04 (security): operator cannot read per-user ranking logs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix uses CTR-CAP-001 vocabulary.
+2. Zero forbidden features accepted under any grant.
+3. Zero per-user log reads by operators.
+
+## Assumptions & open decisions
+- PROVISIONAL (CTR-CAP-001, unapproved).

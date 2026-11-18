@@ -1,35 +1,53 @@
-# PS-051-10 — import export backup rollback
+# PS-047-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-10. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_relevance. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R11), CTR-FED-001 (no federation), CTR-SCH-001 (R07).
 
-## Purpose and scope
-Define the import export backup rollback process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** D07 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-051-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-10.R01 | Public export of model summaries (weights, status, scope); no user data. | MVP |
+| PS-047-10.R02 | No model import from peers or files; models enter only via PS-047-03 workflow. | MVP |
+| PS-047-10.R03 | Backups restore model history; shadow comparison rows restored as aggregates. | MVP |
+| PS-047-10.R04 | Forward-only schema; upcast on read. | MVP |
+| PS-047-10.R05 | Flag `relevance.enabled` off serves the baseline order (recency only) with `model_status = DISABLED`. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Export: `export_id`, `schema_version`, `models[]` (summary), `sha256`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+`ranking_model.export` query (public summary).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Export changes no state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`RELEV.IMPORT_NOT_ALLOWED` (403).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Public summary export; full model export operator-only with dual control.
+
+## Failure, idempotency, concurrency, offline
+Export idempotent per snapshot ID.
+
+## Privacy, retention, abuse
+No user-level data in exports.
+
+## Observability & budgets
+`relevance_export_total`; p95 ≤ 5 s (ASSUMPTION).
+
+## Tests
+- TEST-PS-047-10-01 (contract): public export contains no per-user data.
+- TEST-PS-047-10-02 (negative): import attempt rejected.
+- TEST-PS-047-10-03 (backup): restored shadow rows are aggregates only.
+- TEST-PS-047-10-04 (rollback): flag off serves recency-only baseline with DISABLED status.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Exports have no user-level data.
+2. No import path exists.
+3. Rollback serves a flagged baseline.
+
+## Assumptions & open decisions
+- ASSUMPTION: baseline order is recency-only.
+- PROVISIONAL (D07 default, unapproved).

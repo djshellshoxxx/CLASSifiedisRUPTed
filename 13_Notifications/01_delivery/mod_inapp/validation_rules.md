@@ -1,35 +1,62 @@
 # PS-103-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-02. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_inapp. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-ID-001, CTR-PRV-001 (R03, R10), CTR-EVT-001 (R06).
 
-## Purpose and scope
-Define the validation rules process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-103-02.R01 | `template_key` must be in the template registry (owned by F13 root) and active. Else `INAPP.TEMPLATE_UNKNOWN`. | MVP |
+| PS-103-02.R02 | `params` keys must match the template's declared parameter names; values are strings ≤ 64 characters, no newlines, no URLs. Else `INAPP.PARAM_INVALID`. | MVP |
+| PS-103-02.R03 | Total `params` ≤ 512 bytes serialized. Else `INAPP.PAYLOAD_TOO_LARGE`. | MVP |
+| PS-103-02.R04 | Parameter values must not match the forbidden classes: coordinates, street-address patterns, currency amounts with symbols, email or phone patterns. Else `INAPP.PARAM_FORBIDDEN_CLASS` (producer error, never shown to the user). | MVP |
+| PS-103-02.R05 | `source_ref` must be a CTR-ID-001 valid ID or a domain event reference. | MVP |
+| PS-103-02.R06 | Inbox cursor is an opaque token ≤ 64 characters encoding `inbox_revision`; malformed → `INAPP.CURSOR_INVALID`. | MVP |
 
-## Requirements to specify
-- [ ] PS-103-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Module prefix `INAPP`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Code | Category | HTTP | Retryable | `details.rule` |
+|---|---|---|---|---|
+| `INAPP.TEMPLATE_UNKNOWN` | validation | 400 | false | `template_key` |
+| `INAPP.PARAM_INVALID` | validation | 400 | false | `params` |
+| `INAPP.PAYLOAD_TOO_LARGE` | payload_too_large | 413 | false | `params` |
+| `INAPP.PARAM_FORBIDDEN_CLASS` | validation | 400 | false | `params` (producer-facing; logs only) |
+| `INAPP.CURSOR_INVALID` | validation | 400 | false | `cursor` |
+| `INAPP.STATE_NOT_ALLOWED` | unprocessable_state | 422 | false | `inbox_state` |
+| `SYS.NOT_FOUND` | not_found | 404 | false | — (returned for another account's `ntf_`) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Order: template, parameter names, size, forbidden classes, source reference.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Validation failures create no `ntf_`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`INAPP.PARAM_FORBIDDEN_CLASS` details never echo the value (CTR-ERR-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Producers must hold `ntf.create` (PS-103-05); recipients see only their own items.
+
+## Failure, idempotency, concurrency, offline
+Duplicate source deliveries are accepted and deduped (PS-103-06).
+
+## Privacy, retention, abuse
+The forbidden-class scanner runs on every write and on template registration (CI check).
+
+## Observability & budgets
+Counter `inapp_validation_error_total{code, producer}` where `producer` is the template's owning module label.
+
+## Tests
+- `TEST-PS-103-02-01` unit: each code on exact condition only.
+- `TEST-PS-103-02-02` negative: parameter containing a coordinate pair → `INAPP.PARAM_FORBIDDEN_CLASS`, value not echoed.
+- `TEST-PS-103-02-03` negative: 513-byte params → `INAPP.PAYLOAD_TOO_LARGE`.
+- `TEST-PS-103-02-04` contract: all registered templates pass CI forbidden-class scan.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No notification with a forbidden class is stored.
+2. Error bodies never echo parameter values.
+3. Template registry CI check blocks non-compliant templates.
+
+## Assumptions & open decisions
+- ASSUMPTION: the forbidden-class scanner is a deterministic pattern check; it is a defense-in-depth layer, not a guarantee.
+- D05 (geoprivacy), PROVISIONAL default: no location in notifications (unapproved).

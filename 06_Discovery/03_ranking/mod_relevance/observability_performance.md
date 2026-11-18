@@ -1,35 +1,51 @@
-# PS-051-08 — observability performance
+# PS-047-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-08. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_relevance. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (metric rules), CTR-ERR-001.
 
-## Purpose and scope
-Define the observability performance process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** Budgets ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-051-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-08.R01 | `search_rank_latency_ms` p95 ≤ 50 ms (1000 candidates). | MVP |
+| PS-047-08.R02 | Reason-code distribution counted per model version. | MVP |
+| PS-047-08.R03 | Shadow-vs-active comparison metrics (rank correlation, top-10 overlap) recorded per day. | MVP |
+| PS-047-08.R04 | No labels with listing IDs, user IDs or scores per person. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Metrics: `search_rank_latency_ms`, `search_rank_reason_total{code,model_version}`, `ranking_shadow_overlap_top10`, `search_rank_fallback_total`, `search_rank_partial_total`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Counters per PS-047-03 transition.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`relevance_validation_reject_total{code}`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Aggregated metrics only.
+
+## Failure, idempotency, concurrency, offline
+Fallback and partial rates alerted.
+
+## Privacy, retention, abuse
+Metrics RET-OPS (30 days).
+
+## Observability & budgets
+Alerts: p95 > 50 ms for 10 min; fallback share > 1% for 1 h (ASSUMPTION); shadow top-10 overlap below 0.5 before activation review (ASSUMPTION).
+
+## Tests
+- TEST-PS-047-08-01 (lint): forbidden label keys absent.
+- TEST-PS-047-08-02 (load): 1000 candidates p95 ≤ 50 ms.
+- TEST-PS-047-08-03 (alert): seeded fallback share fires alert.
+- TEST-PS-047-08-04 (unit): shadow metrics computed on fixture pair.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics present with specified labels.
+2. Load budget met.
+3. Alerts fire within 5 minutes.
+
+## Assumptions & open decisions
+- ASSUMPTION: thresholds above.

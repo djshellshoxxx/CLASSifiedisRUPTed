@@ -1,35 +1,54 @@
 # PS-036-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-036-06. **Owner:** [04_Auctions/02_auction_integrity/mod_anti](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_anti. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_anti. **Parent:** [mod_anti SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for anti within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-036-06.R01 | Evaluation is idempotent per (`auc_`, `bid_sequence`); replays produce the same schedule. | MVP |
+| PS-036-06.R02 | Extension write is CAS on `schedule_revision` under the auction lock. | MVP |
+| PS-036-06.R03 | Schedule update and extension log row commit atomically. | MVP |
+| PS-036-06.R04 | Missed evaluation (consumer down) is caught up within 60 s of recovery by replaying the bid log from `last_evaluated_sequence`. | MVP |
+| PS-036-06.R05 | `effective_end` read by close is final: the close job takes the auction lock and reads `effective_end` once. | MVP |
 
-## Requirements to specify
-- [ ] PS-036-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-036-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-036-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Schedule row: `last_evaluated_sequence`, `schedule_revision`. Extension log is the source for replay.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`anti.evaluate_bid` outbox emits `auction.extended` once per log row.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+No transition moves ENDED back to ENDED-able states. Recovery never decreases `effective_end` (PS-036-02 R03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`, `ANTISNIP.CLOCK_SKEW`. Non-retryable: `ANTISNIP.POLICY_UNKNOWN`, `SYS.CONFLICT` requires re-read.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Evaluator and catch-up job run as `sys`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-036-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Duplicate bid event: ignored by sequence (PS-036-02 R07).
+- Crash between schedule update and log insert: prevented by R03; if store is not atomic, the reconciliation job recomputes from bid log and repairs the log within 60 s.
+- Clock skew across nodes: server time of acceptance comes from the bid record; evaluator never reads its own clock for the window test beyond bid time.
+- Offline: not applicable (server-only logic).
+
+## Privacy, retention, abuse
+Recovery logs contain IDs and sequence numbers only.
+
+## Observability & budgets
+Metrics: `antisnip_replays_total`, `antisnip_reconciliation_repairs_total` (should be 0 in steady state), `antisnip_catchup_seconds`.
+
+## Tests
+- TEST-PS-036-06-01 (fault): kill after schedule update before log insert → reconciliation repairs within 60 s.
+- TEST-PS-036-06-02 (concurrency): two evaluators for same bid → one log row.
+- TEST-PS-036-06-03 (replay): replay full auction log → identical final `effective_end`.
+- TEST-PS-036-06-04 (timing): consumer outage 5 min → catch-up completes within 60 s of restart.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Replay determinism holds across fault suite.
+2. No duplicate log rows.
+3. Close reads a consistent `effective_end` in all fault tests.
+
+## Assumptions & open decisions
+- ASSUMPTION: 60 s catch-up target.
+- No offline decisions in this module (see D08 for client writes; not applicable here).

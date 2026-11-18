@@ -1,35 +1,56 @@
 # PS-103-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-08. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_inapp. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09), CTR-EVT-001 (R04).
 
-## Purpose and scope
-Define the observability performance process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-103-08.R01 | Metrics carry no `acc_`, `ntf_` or parameter labels. | MVP |
+| PS-103-08.R02 | Queue-to-delivery p95 ≤ 2 s; p99 ≤ 10 s. | MVP |
+| PS-103-08.R03 | Sync p95 ≤ 300 ms; list p95 ≤ 200 ms; mark_read p95 ≤ 150 ms. | MVP |
+| PS-103-08.R04 | Unread-count discrepancy between server and client sync is measured on sampled sessions (target 0 after sync). | MVP |
 
-## Requirements to specify
-- [ ] PS-103-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Metric | Type | Labels |
+|---|---|---|
+| `inapp_created_total` | counter | `template_key`, `outcome` (queued, suppressed, duplicate) |
+| `inapp_transition_total` | counter | `from`, `to` |
+| `inapp_queue_to_delivery_seconds` | histogram | none |
+| `inapp_sync_latency_seconds` | histogram | none |
+| `inapp_dead_letter_depth` | gauge | `producer` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Spans `inapp.<command>` with `request_id`, code, duration, page size.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Dashboards: queued depth, delivery lag, suppression ratio by template.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`inapp_validation_error_total{code, producer}`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards: operations role, aggregate.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Alerts: queue-to-delivery p99 > 10 s for 5 min (page); dead-letter depth > 1 000 (page); suppression ratio jump > 3× baseline (ticket).
+
+## Privacy, retention, abuse
+Metrics exclude identifiers; suppression ratios are reported with K_MIN aggregation for small templates.
+
+## Observability & budgets
+Capacity: 5 000 notifications per second per node at launch (ASSUMPTION). Storage ≤ 1 KB per notification row.
+
+## Tests
+- `TEST-PS-103-08-01` load: 5 000 creates/s for 10 min meet R02.
+- `TEST-PS-103-08-02` contract: no identifier labels.
+- `TEST-PS-103-08-03` alert: forced dead-letter growth pages within 5 min.
+- `TEST-PS-103-08-04` log scan: no parameter values in logs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics and alerts documented and tested.
+2. Latency budgets met in staging.
+3. Log scan finds zero parameter values.
+
+## Assumptions & open decisions
+- ASSUMPTION: capacity values are reference-node estimates.
+- D07 (retention), PROVISIONAL default applies to metric retention (unapproved).

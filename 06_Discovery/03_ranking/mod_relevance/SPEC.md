@@ -1,44 +1,50 @@
 # F06.S03.M01 — relevance
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F06.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Marketplace Lead (F01/F02/F06 accountable; F10 Privacy Lead consulted on features). **Parent:** F06.S03.
 
 ## Purpose and business behavior
-Provide relevance as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Score and order candidate listings for a search query from five declared features: text match from the index, recency, cell-hop distance, listing completeness, and a reputation band. Weights live in a versioned model that moves through shadow comparison before activation. Each result carries up to three reason codes so people can see why it appeared. The module uses no precise location, no personal data and no raw reputation score (D05 PROVISIONAL, unapproved; weights OPEN).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a seeker, I see results ordered by a clear mix of text match, freshness, nearby areas, and listing completeness.
+- As a seeker, I see short reasons such as "Text match" or "Nearby area" for each result.
+- As an operator, I can compare a new model against the live one before it serves anyone.
 
 ## Scope
-- Required process spec: `relevance_domain_model.md` (not yet authored)
-- Required process spec: `relevance_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `relevance_validation_and_authorization.md` (not yet authored)
-- Required process spec: `relevance_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `relevance_interfaces_and_events.md` (not yet authored)
-- Required process spec: `relevance_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `relevance_acceptance_and_property_tests.md` (not yet authored)
+- PS-047-01 domain_schema.md
+- PS-047-02 validation_rules.md
+- PS-047-03 workflow_state_machine.md
+- PS-047-04 commands_queries_events.md
+- PS-047-05 authorization_capabilities.md
+- PS-047-06 failure_recovery_idempotency.md
+- PS-047-07 privacy_retention_abuse.md
+- PS-047-08 observability_performance.md
+- PS-047-09 contract_and_acceptance_tests.md
+- PS-047-10 import_export_backup_rollback.md
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+`search.rank` (service query), `ranking_model.draft`, `ranking_model.activate`, `ranking_model.retire`, `ranking_model.export`. Events `ranking_model.*`. Contracts in PS-047-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F06.S01.M01 index (text scores), F06.S01.M02 query (parsed query), F06.S02.M03 proximity (cell registry and hop distance), F07 reputation bands, F01 listing completeness. Downstream: F06.S03.M02 fairness (constraints on the ordered list), F06.S01.M03 filter (sort choice), F13 notifications only via saved searches.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `rmv_` ranking models and reason-code vocabulary. Listing data F01; reputation bands F07; text index F06.S01.M01.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Ranking that leaks location through distance; reputation becoming a proxy for identity; keyword stuffing; undisclosed weight changes; models served before comparison. No personal data is stored or used beyond declared bands.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 canonical process files at SPEC-DRAFT-COMPLETE; default weights and recency constant set by F06; reputation band use approved by F10; reason-code wording approved by F06.
 
 ## Required process specification inventory
-- [ ] `relevance_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `relevance_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-047-01
+- [x] [validation_rules.md](validation_rules.md) — PS-047-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-047-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-047-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-047-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-047-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-047-07
+- [x] [observability_performance.md](observability_performance.md) — PS-047-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-047-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-047-10

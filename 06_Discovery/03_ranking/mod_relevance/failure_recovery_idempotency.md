@@ -1,35 +1,55 @@
-# PS-051-06 — failure recovery idempotency
+# PS-047-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-06. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_relevance. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** D08 PROVISIONAL (offline cached results). No ranking quality guarantee.
 
-## Requirements to specify
-- [ ] PS-051-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-06.R01 | If no ACTIVE model exists for scope, serve the last retired-but-recent ACTIVE model for up to 24 h, flagged `model_status = FALLBACK`; otherwise `RELEV.MODEL_NOT_ACTIVE` (503). | MVP |
+| PS-047-06.R02 | Index or candidate-source failure → search returns `SYS.UNAVAILABLE` or partial results with `coverage < 1.0`; never silent empty results. | MVP |
+| PS-047-06.R03 | Model activation idempotent per `(model_id, version)`. | MVP |
+| PS-047-06.R04 | Shadow job retries are no-ops per `(model_id, day)`. | MVP |
+| PS-047-06.R05 | Offline clients show cached results for ≤ 24 h, flagged stale, and never re-rank locally (D08). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Served ranking stores `model_id`, `model_status`, `coverage`. No per-user record kept.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Retry-safe per PS-047-04.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+No new states.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`, `RELEV.MODEL_NOT_ACTIVE`. Non-retryable: `RELEV.*` validation codes.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Ranking service identity only for `search.rank`.
+
+## Failure, idempotency, concurrency, offline
+- Shard down: partial results with coverage flag.
+- Shadow comparison job fails midway: rerun from checkpoint; no duplicate comparison rows.
+- Fallback past 24 h: `RELEV.MODEL_NOT_ACTIVE`.
+
+## Privacy, retention, abuse
+Failure logs contain model IDs and codes only.
+
+## Observability & budgets
+`search_rank_fallback_total`, `search_rank_partial_total`, `search_rank_unavailable_total`.
+
+## Tests
+- TEST-PS-047-06-01 (failure): no ACTIVE model → fallback flagged; after 24 h → 503.
+- TEST-PS-047-06-02 (partial): shard failure yields coverage flag, not silent empty results.
+- TEST-PS-047-06-03 (idempotency): duplicate activation → one ACTIVE.
+- TEST-PS-047-06-04 (offline): client cache older than 24 h is not shown.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No silent empty result on failure (TEST-PS-047-06-02).
+2. Fallback never exceeds 24 h.
+3. Shadow reruns create no duplicate rows.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24-hour fallback and offline cache limits.
+- PROVISIONAL (D08 default, unapproved).

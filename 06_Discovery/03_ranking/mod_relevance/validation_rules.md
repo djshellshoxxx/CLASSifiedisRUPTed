@@ -1,35 +1,54 @@
-# PS-051-02 — validation rules
+# PS-047-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-02. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_relevance. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R02 ordering, forbidden classes), CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the validation rules process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** Feature limits and candidate caps are ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-051-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-02.R01 | Weights sum to exactly 1.00 and each within [0.00, 1.00]; else `RELEV.WEIGHTS_INVALID` (422). | MVP |
+| PS-047-02.R02 | Any feature input declared with class PRIVATE_PERSONAL or LOCATION_PRECISE, or any field named `lat`, `lon`, `email`, `phone`, `name`, `birth`, `address`, or a raw reputation score → `RELEV.FEATURE_FORBIDDEN` (422). | MVP |
+| PS-047-02.R03 | `recency_tau_days` in [7, 90]; else `RELEV.WEIGHTS_INVALID` (422). | MVP |
+| PS-047-02.R04 | Query inputs: page size ≤ 50; candidate pool ≤ 1000 per query (excess truncated by recency, logged as count only). | MVP |
+| PS-047-02.R05 | Query with unknown `locale` or `category_group` → `RELEV.MODEL_NOT_ACTIVE` (503, retryable) when no ACTIVE model exists for scope. | MVP |
+| PS-047-02.R06 | Activation requires two approvers → else `RELEV.APPROVAL_MISSING` (422). | MVP |
+| PS-047-02.R07 | Explanations per result ≤ 3 reason codes from the fixed list (PS-047-04). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Check order: feature list (R02) → weights and ranges (R01, R03) → scope (R05) → query limits (R04). Forbidden-feature check runs at model draft, not only at query time.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Applies to `ranking_model.draft`, `ranking_model.activate`, and `search.rank` (query).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Gates only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`RELEV.*` non-retryable except `RELEV.MODEL_NOT_ACTIVE` (retryable, 503).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+R06 approvals; others via PS-047-05.
+
+## Failure, idempotency, concurrency, offline
+Validation deterministic.
+
+## Privacy, retention, abuse
+Rejected feature names are logged as codes, not values.
+
+## Observability & budgets
+`relevance_validation_reject_total{code}`.
+
+## Tests
+- TEST-PS-047-02-01 (unit): one case per R01–R07 code.
+- TEST-PS-047-02-02 (boundary): weights sum 1.00 passes; 1.01 fails; tau 7 and 90 pass; 6 and 91 fail.
+- TEST-PS-047-02-03 (negative): feature named `lat` rejected at draft.
+- TEST-PS-047-02-04 (property): random weight vectors summing to 1.00 pass exactly.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every rule maps to a test and a code.
+2. Forbidden features rejected at draft time.
+3. Boundary tests pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: ranges and caps above (OPEN, F06).

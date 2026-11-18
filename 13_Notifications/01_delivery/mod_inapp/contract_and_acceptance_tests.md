@@ -1,35 +1,53 @@
 # PS-103-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-09. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_inapp. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-103-09.R01 | Every row of the PS-103-03 table has a test; non-table pairs expect `INAPP.STATE_NOT_ALLOWED`. | MVP |
+| PS-103-09.R02 | Contract tests validate producer, recipient and event schemas and all error codes in CI. | MVP |
+| PS-103-09.R03 | Each producer module (listings, cycles, auctions, bookings, messages) has an integration test that creates at least one template-conforming notification. | MVP |
+| PS-103-09.R04 | Template CI check runs on every registry change (forbidden-class scan, parameter names). | MVP |
 
-## Requirements to specify
-- [ ] PS-103-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: synthetic accounts, blocks, templates for each producer, two devices per account. No real personal data.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Test IDs `TEST-PS-103-09-nn`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+All six states and eight rows exercised.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative corpus for each code in PS-103-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Table-driven suite of PS-103-05 matrix.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection: producer retries, relay outage, offline queue flush, two-device races.
+
+## Privacy, retention, abuse
+Leakage and retention tests from PS-103-07.
+
+## Observability & budgets
+Load and alert tests from PS-103-08.
+
+## Tests
+- `TEST-PS-103-09-01` unit: transition table exhaustive.
+- `TEST-PS-103-09-02` contract: schemas validate; event payloads omit `params`.
+- `TEST-PS-103-09-03` integration: listing-created producer notification appears in recipient inbox within 2 s.
+- `TEST-PS-103-09-04` integration: blocked sender notification suppressed.
+- `TEST-PS-103-09-05` offline: read and dismiss queued and flushed once.
+- `TEST-PS-103-09-06` e2e (keyboard and screen reader): inbox list navigable; unread state announced; focus order preserved after dismiss; WCAG 2.1 AA (ASSUMPTION scope).
+- `TEST-PS-103-09-07` privacy: template CI check rejects a template with a coordinate placeholder.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100 % of transitions and codes covered in CI.
+2. Producer integration tests pass for all listed producers.
+3. Accessibility tests pass for inbox screens.
+
+## Assumptions & open decisions
+- ASSUMPTION: producer modules provide template stubs before this suite runs.
+- D08 (PWA offline writes), PROVISIONAL default applies to TEST-PS-103-09-05 (unapproved).

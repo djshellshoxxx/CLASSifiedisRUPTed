@@ -1,35 +1,57 @@
 # PS-103-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-05. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_inapp. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R02, R04, R05, R10, R11), CTR-PRV-001 (R10).
 
-## Purpose and scope
-Define the authorization capabilities process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-103-05.R01 | Capabilities used: `ntf.create` (sys_, producers), `ntf.read` (recipient), `ntf.update` (recipient read and dismiss), `ntf.administer` (operators, aggregate only). | MVP |
+| PS-103-05.R02 | Recipients see only items where `recipient_ref` equals their own `acc_` (self scope). Pseudonym views resolve to the same `acc_`. | MVP |
+| PS-103-05.R03 | Producers create notifications only for templates they own (registry check). | MVP |
+| PS-103-05.R04 | Operators have no content read capability for inboxes. | MVP |
+| PS-103-05.R05 | Blocked-sender suppression is evaluated at creation using the block relation owned by F08 (by ID only). | MVP |
 
-## Requirements to specify
-- [ ] PS-103-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Actor | Action | Resource / scope | Outcome |
+|---|---|---|---|
+| `sys_` producer (owns template) | `ntf.create` | template's recipient | ALLOW |
+| `sys_` producer (not owner) | `ntf.create` | template | DENY `SYS.FORBIDDEN` |
+| `acc_` recipient | `ntf.read`, `ntf.update` | own `ntf_` (self) | ALLOW |
+| `acc_` other | any | another's `ntf_` | DENY `SYS.NOT_FOUND` |
+| `ope_` | any | any inbox | DENY (no content capability); aggregate counts ALLOW (`ntf.administer`) |
+| `mod_` | any | any inbox | DENY |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Field visibility (CTR-CAP-001 R10): `params`, `template_key`, timestamps = `owner`; `source_ref` = `owner`; `recipient_ref` = `never` for non-owner actors.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+No grants needed for recipient self actions. Producer identities are registered in the template registry.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization does not change state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.NOT_FOUND` for other accounts' items; `SYS.FORBIDDEN` for unregistered producers.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Authorization re-checked on sync retries; token expiry during offline queue flush requires re-authentication before queued operations are sent (D08 interplay, ASSUMPTION).
+
+## Privacy, retention, abuse
+Operator aggregate counts are bucketed; no per-account counts below K_MIN (CTR-PRV-001 R04 applied to aggregates).
+
+## Observability & budgets
+`inapp_authz_denied_total{capability,actor_kind}`.
+
+## Tests
+- `TEST-PS-103-05-01` unit: matrix rows return outcomes.
+- `TEST-PS-103-05-02` negative: `acc_` reads another's `ntf_` → `SYS.NOT_FOUND`.
+- `TEST-PS-103-05-03` negative: producer for another template → `SYS.FORBIDDEN`.
+- `TEST-PS-103-05-04` negative: operator reads `params` → denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No operator or moderator can read inbox content.
+2. Producer registration enforced per template.
+3. Cross-account access returns not-found in all paths.
+
+## Assumptions & open decisions
+- ASSUMPTION: block relation is read from F08 by ID; this module stores no block list.
+- D10 (auth and portability), PROVISIONAL default: pseudonyms resolve to one `acc_` for inbox scope (unapproved).

@@ -1,35 +1,61 @@
 # PS-103-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-03. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_inapp. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R08), CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-103-03.R01 | Only the transitions in the table are reachable. Others → `INAPP.STATE_NOT_ALLOWED`. | MVP |
+| PS-103-03.R02 | Delivery to the inbox is visible to the recipient's sync within 2 s of creation (p95, ASSUMPTION). | MVP |
+| PS-103-03.R03 | `read` and `dismissed` are recipient-driven and monotonic: `dismissed` is terminal; `read` never reverts to unread. | MVP |
+| PS-103-03.R04 | A suppressed notification (preference or block) is recorded but never becomes visible. | MVP |
+| PS-103-03.R05 | Undelivered items expire after 30 days; delivered items expire after 90 days (D07 PROVISIONAL). | MVP |
 
-## Requirements to specify
-- [ ] PS-103-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+States: `suppressed`, `queued`, `delivered`, `read`, `dismissed`, `expired`. Stored in `ntf_inapp.inbox_state`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [PS-103-04](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | `ntf.suppressed` | recipient preference off for template, or sender blocked (user-to-user templates) | suppressed | none visible |
+| (none) | `ntf.queued` | not suppressed; dedupe key new | queued | inbox revision +1 |
+| queued | `ntf.delivered` | recipient inbox sync or push-ack received | delivered | `delivered_at` set; visible in inbox |
+| queued | `ntf.expired` | 30 days elapsed | expired | removed from queue |
+| delivered | `ntf.read` | recipient marks read (or opens) | read | `read_at` set; unread count −1 |
+| delivered, read | `ntf.dismissed` | recipient dismisses | dismissed | `dismissed_at` set; hidden from list |
+| delivered, read, dismissed | `ntf.expired` | 90 days elapsed | expired | content params cleared; row kept as ID and codes |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+`ntf.read` on an already read item is a no-op returning the same state (idempotent).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Invalid transitions → `INAPP.STATE_NOT_ALLOWED`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Only the recipient transitions `read` and `dismissed`. Producers create `queued` or `suppressed` items only.
+
+## Failure, idempotency, concurrency, offline
+Concurrent read and dismiss: `dismissed` wins over `read` (monotonic rule). Offline transitions are queued per D08.
+
+## Privacy, retention, abuse
+On `expired` after 90 days, `params` is cleared so that archived rows carry no content.
+
+## Observability & budgets
+`inapp_transition_total{from,to}`; `inapp_queue_to_delivery_seconds` histogram.
+
+## Tests
+- `TEST-PS-103-03-01` unit: exhaustive state × event matrix.
+- `TEST-PS-103-03-02` property: `dismissed` is terminal; `read` never reverts.
+- `TEST-PS-103-03-03` integration: blocked sender's user-to-user notification is `suppressed` and not visible.
+- `TEST-PS-103-03-04` integration: 30-day queued expiry removes the item and clears queue entry.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Table is the sole source of transitions.
+2. Suppressed items are never visible in any API response (test corpus).
+3. Delivery latency budget met in staging.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day and 90-day windows are defaults for Platform and F10 review.
+- D08 (PWA offline writes), PROVISIONAL default: read and dismiss are queued locally until relay acknowledgement (unapproved).

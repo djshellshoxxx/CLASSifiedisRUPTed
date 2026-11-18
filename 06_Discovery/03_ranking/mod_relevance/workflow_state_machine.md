@@ -1,35 +1,58 @@
-# PS-051-03 — workflow state machine
+# PS-047-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-03. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_relevance. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (revision), CTR-CAP-001 (approvals).
 
-## Purpose and scope
-Define the workflow state machine process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** Shadow period 7 days ASSUMPTION. Dual approval ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-051-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-03.R01 | Model status set exactly DRAFT, SHADOW, ACTIVE, RETIRED. | MVP |
+| PS-047-03.R02 | A SHADOW model is computed on live candidates but never served; shadow results are compared with ACTIVE results for 7 days (ASSUMPTION) before activation is allowed. | MVP |
+| PS-047-03.R03 | Activation retires the previous ACTIVE model for the same scope in the same transaction. | MVP |
+| PS-047-03.R04 | RETIRED is terminal; rollback creates a new DRAFT from a retired model's values. | MVP |
+| PS-047-03.R05 | Other transitions → `RELEV.INVALID_TRANSITION` (409). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+`state_version` increments per transition; activated versions immutable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | ranking_model.drafted | PS-047-02 pass | DRAFT | None |
+| DRAFT | ranking_model.shadowed | validation pass | SHADOW | Shadow computation starts |
+| SHADOW | ranking_model.activated | 7-day comparison recorded; two approvers | ACTIVE | Previous ACTIVE → RETIRED |
+| ACTIVE, SHADOW | ranking_model.retired | replaced, or dual-approved stop | RETIRED | Serving falls back to prior ACTIVE if any |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Terminal: RETIRED.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`RELEV.INVALID_TRANSITION` (409); `RELEV.APPROVAL_MISSING` (422).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Two distinct approvers; drafter cannot approve (CAP.SELF_APPROVAL_FORBIDDEN).
+
+## Failure, idempotency, concurrency, offline
+Activation transaction; concurrent activations → one wins. Shadow job idempotent per `(model_id, day)`.
+
+## Privacy, retention, abuse
+Shadow comparison stores aggregate metrics only.
+
+## Observability & budgets
+`ranking_model_transitions_total{from,to}`; alert if two ACTIVE models exist in one scope (must be 0).
+
+## Tests
+- TEST-PS-047-03-01 (state): every table row passes.
+- TEST-PS-047-03-02 (shadow): activation without 7-day comparison rejected.
+- TEST-PS-047-03-03 (race): simultaneous activations → one ACTIVE.
+- TEST-PS-047-03-04 (rollback): retired model values produce new DRAFT, not reactivation.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No activation without shadow comparison (TEST-PS-047-03-02).
+2. Never two ACTIVE models per scope.
+3. Retired models immutable.
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day shadow window.
+- OPEN (F06): shadow metric definitions.

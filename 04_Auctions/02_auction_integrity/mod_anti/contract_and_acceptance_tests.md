@@ -1,35 +1,51 @@
 # PS-036-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-036-09. **Owner:** [04_Auctions/02_auction_integrity/mod_anti](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_anti. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_anti. **Parent:** [mod_anti SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-SCH-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for anti within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-036-09.R01 | Contract tests validate all commands and events against CTR-SCH-001. | MVP |
+| PS-036-09.R02 | Property tests: monotonic `effective_end`, cap never exceeded, out-of-order equivalence. | MVP |
+| PS-036-09.R03 | Boundary tests at window start, window end and cap. | MVP |
+| PS-036-09.R04 | Accessibility: schedule change (extension) announced to screen readers in the auction view. | MVP |
 
-## Requirements to specify
-- [ ] PS-036-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-036-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-036-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `fixtures/anti/late_bid_chain.json`, `cap_reached.json`, `out_of_order_permutations.json` (names proposed; created in implementation phase). Synthetic accounts only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay of recorded bid logs through the evaluator.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Each state in PS-036-03 has positive and negative tests.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+100% coverage of ANTISNIP codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests from PS-036-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-036-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Chaos: duplicate events, consumer outage, process crash between writes.
+
+## Privacy, retention, abuse
+Fixtures use placeholder IDs only.
+
+## Observability & budgets
+Suite ≤ 5 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-036-09-01 (contract): all commands and events validate.
+- TEST-PS-036-09-02 (property): 10,000 random sequences satisfy monotonicity and cap.
+- TEST-PS-036-09-03 (boundary): bid at window start extends; one millisecond before does not.
+- TEST-PS-036-09-04 (e2e): auction with late bids reaches cap and closes at final effective end.
+- TEST-PS-036-09-05 (a11y): extension announcement passes screen-reader checks.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All property and boundary tests pass.
+2. E2E cap scenario passes.
+3. Error-code coverage 100%.
+
+## Assumptions & open decisions
+- ASSUMPTION: WCAG 2.1 AA as CI accessibility mapping.
+- OPEN: maximum total auction duration (base end plus extensions) for product policy. See [DECISIONS.md](../../../DECISIONS.md) D03.

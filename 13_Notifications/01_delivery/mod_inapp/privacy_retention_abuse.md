@@ -1,35 +1,64 @@
 # PS-103-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-07. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_inapp. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R03, R04, R06, R10, R12), CTR-FED-001 (R03, not federated), CTR-CAP-001 (R04).
 
-## Purpose and scope
-Define the privacy retention abuse process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-103-07.R01 | In-app notification text is produced client-side from template keys and short parameters; no server-rendered free text. | MVP |
+| PS-103-07.R02 | Parameters are labels (for example a pseudonymous display name, a listing title truncated to 64 characters, a count). No coordinates, addresses, amounts, contact data, or message content. | MVP |
+| PS-103-07.R03 | Notifications are not federated and not exported to peers. | MVP |
+| PS-103-07.R04 | Expiry clears `params` (PS-103-03 R05) so archived rows carry no content. | MVP |
+| PS-103-07.R05 | On a shared device, the inbox respects the app lock when enabled (ASSUMPTION); sensitive templates use neutral wording by default (CTR-PRV-001 R10). | MVP |
 
-## Requirements to specify
-- [ ] PS-103-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention (D07, PROVISIONAL):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Record | Retention | After expiry |
+|---|---|---|
+| `ntf_inapp` (queued) | 30 days | removed |
+| `ntf_inapp` (delivered, read, dismissed) | 90 days | `params` cleared; ID, state and timestamps kept 12 months, then deleted |
+| Operation log | 7 days | deleted |
+| Dead-letter rows | 30 days after resolution | deleted |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Legal holds apply per case (CTR-PRV-001 R07) only where a notification is evidence in an open case; the hold references `cas_`, not the notification content.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+Account deletion (F10) removes all `ntf_inapp` rows for the account within 24 h (CTR-PRV-001 R06); operation logs are removed with the account.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Deletion does not change the recipient's other items.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Forbidden-class scan on creation (PS-103-02 R04).
+
+## Authorization
+Owner-only reads; no operator content access (PS-103-05 R04).
+
+## Failure, idempotency, concurrency, offline
+Retention jobs idempotent by `ntf_id` cursor.
+
+## Privacy, retention, abuse
+- Abuse 1 (notification flooding): per-producer rate class through `mod_rate` (`ntf.create`); per-recipient cap of 200 undelivered items (ASSUMPTION).
+- Abuse 2 (harassment by notification): blocked senders suppressed at creation (PS-103-03 R04); report path via `mod_flags`.
+- Abuse 3 (phishing through in-app notices): templates are registered; no links to external sites; only deep links to app routes.
+- Abuse 4 (inference through notification timing): not mitigated in MVP; documented residual risk.
+
+## Observability & budgets
+Logs: template key, state, `ntf_id`. No parameter values.
+
+## Tests
+- `TEST-PS-103-07-01` privacy: parameters contain no coordinates, amounts or contacts in fixture corpus.
+- `TEST-PS-103-07-02` retention: `params` cleared at 90 days; row removed at 12 months.
+- `TEST-PS-103-07-03` account deletion: all rows removed within 24 h in staging drill.
+- `TEST-PS-103-07-04` abuse: 201st undelivered item for one recipient refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No server-rendered free text in any notification path.
+2. Account deletion propagates within 24 h.
+3. Blocked-sender suppression verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: 200-item undelivered cap and 12-month metadata retention are placeholders pending F10 review.
+- D05 (geoprivacy), PROVISIONAL default: no location in notifications (unapproved).
+- D07 (retention), PROVISIONAL default: minimal retention with legal-hold exceptions (unapproved).

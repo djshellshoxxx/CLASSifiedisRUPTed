@@ -1,35 +1,60 @@
 # PS-036-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-036-05. **Owner:** [04_Auctions/02_auction_integrity/mod_anti](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_anti. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_anti. **Parent:** [mod_anti SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for anti within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-036-05.R01 | Only `sys` may evaluate bids and change `effective_end`. No user, seller or operator can set an extension directly. | MVP |
+| PS-036-05.R02 | Policy publication requires `ope` with dual control (CTR-CAP-001 R07) and purpose `auction_integrity`. A principal cannot approve its own policy (`CAP.SELF_APPROVAL_FORBIDDEN`). | MVP |
+| PS-036-05.R03 | Schedule is readable by all users (public). | MVP |
+| PS-036-05.R04 | Advisory signals (reputation F07.S03.M01, signals F12.S03.M02) are readable by `sys` only and cannot alter the extension rule. | MVP |
 
-## Requirements to specify
-- [ ] PS-036-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-036-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-036-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Action matrix:
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Principal | Action | Resource | Outcome |
+|---|---|---|---|
+| sys | `auc.execute` | evaluate bid | ALLOW |
+| user, any | `auc.execute` | evaluate bid | DENY → `SYS.FORBIDDEN` |
+| user, seller | `auc.update` | schedule | DENY → `SYS.FORBIDDEN` |
+| user, anyone | `auc.read` | schedule | ALLOW (public) |
+| ope, one approval | `anti.publish_policy` | policy | DENY (dual control) |
+| ope, two approvals (not self) | `anti.publish_policy` | policy | ALLOW |
+| sys | `anti.publish_policy` | policy | DENY |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command maps to a row. Decision records hold outcome and reason only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization re-checked per command; policy approvals are per publication.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` for non-sys attempts on extension; `CAP.SELF_APPROVAL_FORBIDDEN` for self-approval.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-036-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Capability IDs: `auc.execute`, `auc.read`, `anti.publish_policy`.
+
+## Failure, idempotency, concurrency, offline
+Decision TTL zero for evaluation. Revocation of an operator takes effect at next decision.
+
+## Privacy, retention, abuse
+Advisory signal reads by `sys` create `dec_` records with reason code only.
+
+## Observability & budgets
+Metric `antisnip_authz_denials_total{action,code}`. Alert on any `auc.execute` denial from non-sys principal.
+
+## Tests
+- TEST-PS-036-05-01 (negative): each matrix row returns stated outcome.
+- TEST-PS-036-05-02 (negative): seller attempt to extend returns `SYS.FORBIDDEN`.
+- TEST-PS-036-05-03 (integration): self-approved policy rejected.
+- TEST-PS-036-05-04 (integration): advisory signal cannot change extension outcome (fixture with high-risk signal).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix tests pass with zero unlisted outcomes.
+2. Signal-independence test passes on all fixtures.
+3. No code path allows user-driven schedule writes.
+
+## Assumptions & open decisions
+- ASSUMPTION: policy approvals within 72 h of publication request.
+- OPEN: whether a policy change can be scheduled for future auctions only. See [DECISIONS.md](../../../DECISIONS.md) D10.

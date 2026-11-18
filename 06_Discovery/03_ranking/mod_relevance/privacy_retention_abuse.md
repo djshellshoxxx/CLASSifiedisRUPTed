@@ -1,35 +1,57 @@
-# PS-051-07 — privacy retention abuse
+# PS-047-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-07. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_relevance. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R02, R03, R04), CTR-FED-001 (R02), CTR-CAP-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** D05 PROVISIONAL (cell-hop distance only). OPEN (F10): whether reputation bands alone are acceptable input.
 
-## Requirements to specify
-- [ ] PS-051-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-07.R01 | Distance uses registered cell hops only (PS-047-01 R05); no coordinates, no precise center. | MVP |
+| PS-047-07.R02 | Reputation enters as band 0–3 only (PS-047-01 R06). | MVP |
+| PS-047-07.R03 | Ranking logs and explanations contain model ID and reason codes only; no per-user score history. | MVP |
+| PS-047-07.R04 | Ranking outputs never federated. | MVP |
+| PS-047-07.R05 | Config retention RET-ACC; logs RET-OPS (30 days). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Model config: no personal data. Logs: pseudonymous request IDs only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+No personal data in events.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Not applicable.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`RELEV.FEATURE_FORBIDDEN` (PS-047-02 R02).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Per PS-047-05.
+
+## Failure, idempotency, concurrency, offline
+Cached offline results are purged on logout (CTR-PRV-001 cache rule).
+
+## Privacy, retention, abuse
+Abuse controls:
+- Keyword stuffing to game text score: text feature capped and normalized; seller text quality flagged by F12 (ASSUMPTION).
+- Reputation farming: band changes require F07 thresholds; band cannot exceed weight 0.20 (ASSUMPTION).
+- Location inference from ordering: only cell hops used; hop bands coarse.
+- Model tampering: activation requires two approvers and shadow comparison.
+
+## Observability & budgets
+`relevance_privacy_log_violations_total` must be 0.
+
+## Tests
+- TEST-PS-047-07-01 (lint): no coordinate or identity feature.
+- TEST-PS-047-07-02 (log scan): no per-user score in logs.
+- TEST-PS-047-07-03 (cap): reputation weight above 0.20 rejected.
+- TEST-PS-047-07-04 (federation): ranking outputs absent from federation batches.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero forbidden features in any model.
+2. Zero per-user scores in logs.
+3. Reputation weight capped at 0.20.
+
+## Assumptions & open decisions
+- ASSUMPTION: reputation weight cap 0.20.
+- OPEN (F10): reputation band input acceptability.

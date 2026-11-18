@@ -26,7 +26,7 @@ Applies to `rental_handoff.schedule` and `rental_handoff.attest`.
 Gates only; see PS-042-03.
 
 ## Validation & errors
-All `RNTHAND.*` codes non-retryable except none. Diagnostics carry rule ID, never location or photo data.
+All `RNTHAND.*` codes are non-retryable. Diagnostics carry rule ID, never location or photo data.
 
 ## Authorization
 R07 only.

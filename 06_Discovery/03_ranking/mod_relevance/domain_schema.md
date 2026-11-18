@@ -1,35 +1,67 @@
-# PS-051-01 — domain schema
+# PS-047-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-051-01. **Owner:** [06_Discovery/03_ranking/mod_relevance](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_relevance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_relevance. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (forbidden feature classes), CTR-ID-001 (`rmv_` PENDING registry entry, proposed owner F06), CTR-SCH-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the domain schema process for relevance within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** Weights and decay constants are ASSUMPTION (OPEN, F06). No ranking quality is claimed.
 
-## Requirements to specify
-- [ ] PS-051-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-051-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-051-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-01.R01 | `ranking_model` holds weights for exactly five features: `text`, `recency`, `distance`, `quality`, `reputation_band`. | MVP |
+| PS-047-01.R02 | Weights are decimals with 2 places in [0.00, 1.00] and sum to 1.00 exactly. | MVP |
+| PS-047-01.R03 | Feature definitions are versioned; a model references feature versions by ID. | MVP |
+| PS-047-01.R04 | Model status ∈ {DRAFT, SHADOW, ACTIVE, RETIRED}; at most one ACTIVE per locale and category group. | MVP |
+| PS-047-01.R05 | Distance input is cell-hop distance (0, 1, 2, or beyond) from registered cells only; no coordinates. | MVP |
+| PS-047-01.R06 | Reputation input is a band 0–3 from F07, never a raw score or identity field. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+```json
+{
+  "model_id": "rmv_<26> (PENDING)",
+  "status": "DRAFT | SHADOW | ACTIVE | RETIRED",
+  "scope": {"locale": "BCP 47", "category_group": "string"},
+  "weights": {"text": "0.00-1.00", "recency": "0.00-1.00", "distance": "0.00-1.00", "quality": "0.00-1.00", "reputation_band": "0.00-1.00"},
+  "recency_tau_days": "integer 7-90 (ASSUMPTION default 30)",
+  "distance_scores": {"0": 1.0, "1": 0.6, "2": 0.3, "beyond": 0.0},
+  "feature_versions": {"text": "v", "recency": "v", "distance": "v", "quality": "v", "reputation_band": "v"},
+  "state_version": "integer >= 1",
+  "schema_version": "1.0.0"
+}
+```
+Data classes: model config PUBLIC. Ranking candidates reference listings (PUBLIC or per listing class). No personal data is stored in the model.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Not applicable; see PS-047-04.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See PS-047-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See PS-047-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-051-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Model read by service; model writes by F06 operators with dual approval (PS-047-05).
+
+## Failure, idempotency, concurrency, offline
+Model snapshot id stored with every served ranking for reproducibility.
+
+## Privacy, retention, abuse
+Config RET-ACC (life of model). Per-query ranking logs: model ID and reason codes only.
+
+## Observability & budgets
+`relevance_model_invalid_total{code}`.
+
+## Tests
+- TEST-PS-047-01-01 (unit): weights sum to 1.00; 1.01 rejected.
+- TEST-PS-047-01-02 (lint): no coordinate, identity or raw score field.
+- TEST-PS-047-01-03 (unit): distance table uses cell hops only.
+- TEST-PS-047-01-04 (integration): two ACTIVE models in one scope rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Model schema registered with owner F06 and digest.
+2. Forbidden fields absent (TEST-PS-047-01-02).
+3. TEST-PS-047-01-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: five-feature model, default weights to be set by F06 (OPEN).
+- PENDING CTR-ID-001 `rmv` prefix registration.

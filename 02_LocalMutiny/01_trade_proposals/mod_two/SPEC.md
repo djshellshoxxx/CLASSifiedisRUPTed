@@ -1,6 +1,6 @@
 # F02.S01.M01 — two
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.S01.
+**Status:** SPEC-DRAFT-COMPLETE. **Owner:** Unassigned. **Parent:** F02.S01.
 
 ## Purpose and business behavior
 Provide two as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.

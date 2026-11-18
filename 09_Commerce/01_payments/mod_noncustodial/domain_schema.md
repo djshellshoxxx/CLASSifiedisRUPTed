@@ -6,9 +6,9 @@
 | ID | Requirement (measurable) | Priority |
 |---|---|---|
 | PS-069-01.R01 | Stores direct payment instructions only. No balance, wallet, payout or platform-account field exists; any such field is rejected with `COM.CUSTODY_FORBIDDEN`. | MVP |
-| PS-069-01.R02 | One `route` = one (`trx_`, party `acc_`, method, destination). `method` ∈ {`on_chain`, `cash`, `in_kind_compensation`, `other_external`}. | MVP |
+| PS-069-01.R02 | One `route` = one (`trx_`, party `acc_`, method, destination). `method` ∈ {`cash`, `bank_transfer`, `onchain_transfer`, `external_card`, `in_kind_compensation`, `other_external`}. | MVP |
 | PS-069-01.R03 | Max 5 non-withdrawn routes per (`trx_`, party). Unique on (`trx_`, party, method, `destination_hash`). | MVP |
-| PS-069-01.R04 | `on_chain` routes carry CAIP-2 `chain`, CAIP-19 `asset` and `destination`, validated by the registered rail adapter (PS-069-02). | MVP |
+| PS-069-01.R04 | `onchain_transfer` routes carry CAIP-2 `chain`, CAIP-19 `asset` and `destination`, validated by the registered rail adapter (PS-069-02). | MVP |
 | PS-069-01.R05 | `contact_hint` (off-platform handle for cash or other routes) is ≤ 200 characters, PRIVATE_PERSONAL, encrypted at rest with a KMS key (ASSUMPTION), readable by the counterparty only. | MVP |
 | PS-069-01.R06 | `adapter` registry rows: `adapter_id`, `rail`, `chain`, `finality_confirmations`, `status`, signing `key_` ID. Unregistered adapters are untrusted (CTR-COM-001 R11). | MVP |
 | PS-069-01.R07 | Route records and `contact_hint` are never federated in MVP (CTR-FED-001 R03; financial evidence deferred). | MVP |
@@ -20,9 +20,9 @@
 | `trx_id` | `^trx_[0-9A-HJKMNP-TV-Z]{26}$` | FINANCIAL_EVIDENCE |
 | `party_ref` | `acc_` ID; must be a participant of `trx_id` | PSEUDONYMOUS |
 | `method` | enum, 4 values (R02) | FINANCIAL_EVIDENCE |
-| `chain` | CAIP-2 or null (null unless `on_chain`) | PSEUDONYMOUS |
-| `asset` | CAIP-19 (`on_chain`) or ISO 4217 alpha-3 (`fiat`) | PSEUDONYMOUS |
-| `destination` | string ≤ 128 chars or null; `on_chain` only | PSEUDONYMOUS (public on chain; linkable, see PS-069-07) |
+| `chain` | CAIP-2 or null (null unless `onchain_transfer`) | PSEUDONYMOUS |
+| `asset` | CAIP-19 (`onchain_transfer`) or ISO 4217 alpha-3 (`fiat`) | PSEUDONYMOUS |
+| `destination` | string ≤ 128 chars or null; `onchain_transfer` only | PSEUDONYMOUS (public on chain; linkable, see PS-069-07) |
 | `destination_hash` | SHA-256 hex, 64 chars, of JCS(destination) | PSEUDONYMOUS |
 | `contact_hint` | string ≤ 200 chars or null; `cash` and `other_external` only | PRIVATE_PERSONAL |
 | `status` | enum `DECLARED`, `SUPERSEDED`, `WITHDRAWN`, `SUSPENDED`, `EXPIRED` | PSEUDONYMOUS |

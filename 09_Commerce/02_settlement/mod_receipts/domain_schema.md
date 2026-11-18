@@ -19,7 +19,7 @@
 | `trx_id` | `trx_` ID | FINANCIAL_EVIDENCE |
 | `claimant_ref` / `counterparty_ref` | `acc_` | PSEUDONYMOUS |
 | `direction` | enum `payer_to_payee`, `payee_to_payer` | FINANCIAL_EVIDENCE |
-| `method` | enum `on_chain`, `cash`, `in_kind_compensation`, `other_external` (route from PS-069) | FINANCIAL_EVIDENCE |
+| `method` | enum `cash`, `bank_transfer`, `onchain_transfer`, `external_card`, `in_kind_compensation`, `other_external` (route from PS-069) | FINANCIAL_EVIDENCE |
 | `amount_minor` | decimal string, 1–39 digits | FINANCIAL_EVIDENCE |
 | `currency` | fiat or asset object (CTR-COM-001) | FINANCIAL_EVIDENCE |
 | `quote_id` | `qte_` or null (required if cross-currency) | FINANCIAL_EVIDENCE |

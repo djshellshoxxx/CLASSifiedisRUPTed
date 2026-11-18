@@ -1,35 +1,61 @@
-# PS-043-05 — authorization capabilities
+# PS-043-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-043-05. **Owner:** [05_Rentals/02_rental_lifecycle/mod_return](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_return. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_return. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-COM-001 (party rights).
 
-## Purpose and scope
-Define the authorization capabilities process for return within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** CTR-CAP-001 grant model PROVISIONAL. Verb mapping ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-043-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-043-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-043-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-043-05.R01 | Default deny on every return action. | MVP |
+| PS-043-05.R02 | Renter declares; owner confirms or opens damage; system closes. No other principal writes return state. | MVP |
+| PS-043-05.R03 | Non-participants receive `SYS.NOT_FOUND`. | MVP |
+| PS-043-05.R04 | `renter_note` and checklist visible to the two participants and case-scoped `mod` only. | MVP |
+| PS-043-05.R05 | `global` and `ope` single approval cannot read notes (CTR-CAP-001 R04, R07). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Capabilities: `rental_return.create`, `rental_return.attest`, `rental_return.consent` (owner confirm), `rental_return.read`, `rental_return.moderate`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Principal | Action | Scope | Outcome |
+|---|---|---|---|
+| renter | rental_return.attest (declare) | participant | ALLOW |
+| owner | rental_return.consent (confirm) | participant | ALLOW inside window |
+| owner | rental_return.attest (report damage) | participant | ALLOW inside window |
+| system | rental_return.create / close | none | ALLOW (sys, scope return only) |
+| participant | rental_return.read | participant | ALLOW |
+| non-participant | any | none | DENY → SYS.NOT_FOUND |
+| mod | rental_return.moderate | case | ALLOW with case grant |
+| ope | rental_return.read | global | DENY → SYS.FORBIDDEN |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Participation derived at decision time (CTR-CAP-001 R05).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` only for records the actor already knows; else `SYS.NOT_FOUND`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-043-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Server-side on every read (CTR-CAP-001 R11).
+
+## Failure, idempotency, concurrency, offline
+Revocation at next decision.
+
+## Privacy, retention, abuse
+Operator access to notes requires case scope and dual control; each `mod` read writes `aud_` (CTR-CAP-001 R08).
+
+## Observability & budgets
+`return_authz_decisions_total{action,outcome,reason_code}`.
+
+## Tests
+- TEST-PS-043-05-01 (unit): matrix rows.
+- TEST-PS-043-05-02 (security): owner cannot declare on renter's behalf.
+- TEST-PS-043-05-03 (security): `ope` single approval cannot read notes.
+- TEST-PS-043-05-04 (integration): system scope cannot write `damage_ids` outside the link path.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix matches CTR-CAP-001 vocabulary.
+2. Zero cross-party writes accepted.
+3. Dual control on operator note access.
+
+## Assumptions & open decisions
+- ASSUMPTION: verb mapping pending CTR-CAP-001 review (OPEN, F16).

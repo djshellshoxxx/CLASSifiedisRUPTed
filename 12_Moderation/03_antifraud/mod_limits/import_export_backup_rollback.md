@@ -1,35 +1,51 @@
 # PS-098-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-098-10. **Owner:** [12_Moderation/03_antifraud/mod_limits](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_limits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_limits. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (migration and compatibility), CTR-PRV-001 (R06, R11), CTR-EVT-001 (R08).
 
-## Purpose and scope
-Define the import export backup rollback process for limits within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-098-10.R01 | Policies are not importable from other nodes or other products in MVP. | MVP |
+| PS-098-10.R02 | Export of active and retired policy values (public classes) is available to operators; decision records are operator-only. | MVP |
+| PS-098-10.R03 | Backups are encrypted; restore reproduces policy versions and active pointers; restore does not change `dec_` records. | MVP |
+| PS-098-10.R04 | Schema migrations for `lim_policy` follow CTR-SCH-001 (expand, backfill, contract) with a compatibility window of one MINOR version. | MVP |
+| PS-098-10.R05 | Rollback of a policy is a new activation of an earlier version's values as a new version, never an edit of history. | MVP |
 
-## Requirements to specify
-- [ ] PS-098-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-098-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-098-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Operator export: JSON Lines of policy rows (no decisions), ≤ 10 000 rows per file. Decision export is a separate case-scoped export with dual control (not in this module's MVP scope beyond PS-098-07).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`limits.export_policies` (`lim.read`, operator) → `limits.exported` with count and digest.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore does not replay rollout steps; restored active policies keep their recorded rollout percent.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Export over limit → `LIMITS.EXPORT_TOO_LARGE` (400, non-retryable; use cursor). Restore with active pointer mismatch → restore aborted, alert.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Operator export only; owners do not export policy history.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-098-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Exports idempotent by `export_id`. Restore idempotent by backup ID.
+
+## Privacy, retention, abuse
+Policy exports exclude `created_by` and `approved_by` identifiers (operator pseudonyms), so exports cannot be used to attribute policies to staff.
+
+## Observability & budgets
+Restore ≤ 15 min for 10 000 policies (ASSUMPTION). Metric `limits_backup_last_success_timestamp`.
+
+## Tests
+- `TEST-PS-098-10-01` integration: backup → delete → restore → active pointers and versions equal.
+- `TEST-PS-098-10-02` negative: export excludes approver identifiers.
+- `TEST-PS-098-10-03` migration: expand-backfill-contract on a staging copy with two compatible versions.
+- `TEST-PS-098-10-04` drill: active pointer mismatch aborts restore.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Restore reproduces policy state exactly in test.
+2. Export has no staff identifiers.
+3. Migration path tested against CTR-SCH-001.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO ≤ 15 min and RTO ≤ 4 h are shared defaults with F15.
+- D07 (retention), PROVISIONAL default applies to retired policy history (unapproved).

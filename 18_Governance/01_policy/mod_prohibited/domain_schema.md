@@ -56,3 +56,7 @@ Not applicable to this process; owned by [observability_performance](observabili
 1. TEST-PS-146-01-01, TEST-PS-146-01-02 pass in CI.
 2. Each requirement in this file maps to at least one test above.
 
+
+## Assumptions & open decisions
+- ASSUMPTION: field list is provisional until the module owner review; no detection fields by design.
+- D07 (retention) default applies to decisions: PROVISIONAL (D07 default, unapproved).

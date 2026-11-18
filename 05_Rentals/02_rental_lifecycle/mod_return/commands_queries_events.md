@@ -1,35 +1,60 @@
-# PS-043-04 — commands queries events
+# PS-043-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-043-04. **Owner:** [05_Rentals/02_rental_lifecycle/mod_return](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_return. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_return. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for return within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** D08 PROVISIONAL (offline). D04 OPEN.
 
-## Requirements to specify
-- [ ] PS-043-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-043-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-043-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-043-04.R01 | Every command requires `idempotency_key`; state-changing commands require `expected_revision`. | MVP |
+| PS-043-04.R02 | One `rental_return.*` event per command; `aggregate_type = rental_return`. | MVP |
+| PS-043-04.R03 | Damage reporting delegates to `damage.report` (F05.S02.M03); this module stores only the link. | MVP |
+| PS-043-04.R04 | Deposit release is requested by event `rental_return.closed`; this module does not call deposit commands that move money state. | MVP |
+| PS-043-04.R05 | `return.declare` p95 ≤ 300 ms (ASSUMPTION). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+`return.declare` payload: `return_place_cell?`, `renter_checklist[]`, `renter_note?`. `return.confirm` payload: `owner_result`. Events carry IDs, status, `late_minutes`, `state_version`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Command | Caller | Event | Error codes |
+|---|---|---|---|
+| `return.declare` | renter | rental_return.declared | TOO_EARLY, ALREADY_DECLARED, CHECKLIST_INCOMPLETE, LOCATION_TOO_PRECISE, NOTE_CONTACT_DATA |
+| `return.confirm` | owner | rental_return.confirmed | WINDOW_CLOSED, INVALID_TRANSITION |
+| `return.report_damage` | owner | rental_return.damage_opened | WINDOW_CLOSED, plus DAMAGE.* from `damage.report` |
+| `return.close` | system | rental_return.closed | ALREADY_CLOSED |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Queries: `return.get`, `return.list_by_rental` (participants).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Event mapping in PS-043-03.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-043-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+PS-043-02 gates.
+
+## Authorization
+Caller column is minimum; PS-043-05.
+
+## Failure, idempotency, concurrency, offline
+Same key with different digest → `EVT.IDEMPOTENCY_KEY_REUSED`. A late commit keeps server-time `late_minutes`.
+
+## Privacy, retention, abuse
+Events omit `renter_note` and checklist detail. `max_data_class = PRIVATE_PERSONAL`.
+
+## Observability & budgets
+`return_command_latency_ms` per command.
+
+## Tests
+- TEST-PS-043-04-01 (contract): command and event schema validation.
+- TEST-PS-043-04-02 (idempotency): duplicate declare → one event.
+- TEST-PS-043-04-03 (delegation): report_damage creates a `dmg_` and links it; no amount written here.
+- TEST-PS-043-04-04 (concurrency): confirm racing with close → one wins; other gets `SYS.CONFLICT`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each command maps to one event and one transition.
+2. No amount is stored in this module (TEST-PS-043-04-03).
+3. Deposit release is requested only through `rental_return.closed`.
+
+## Assumptions & open decisions
+- ASSUMPTION: 300 ms budget.
+- PENDING CTR-ID-001 `rtn` prefix and CTR-SCH-001 registration.

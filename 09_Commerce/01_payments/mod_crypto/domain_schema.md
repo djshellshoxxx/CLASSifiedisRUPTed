@@ -1,6 +1,6 @@
 # PS-068-01 — domain schema
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_crypto (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (claim external_ref, currency, R01, R09–R11), CTR-ID-001, CTR-PRV-001, CTR-SCH-001. **Pending:** `chn` adapter prefix and `cur_` asset prefix (CTR-ID-001). **Decisions:** D03, D09 (PROVISIONAL, unapproved).
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_crypto (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (claim external_ref, currency, R01, R09–R11), CTR-ID-001, CTR-PRV-001, CTR-SCH-001. **Pending:** `chn` adapter prefix and `cur_` (PENDING prefix) asset prefix (CTR-ID-001). **Decisions:** D03, D09 (PROVISIONAL, unapproved).
 
 ## Requirements
 | ID | Requirement (measurable) | Priority |

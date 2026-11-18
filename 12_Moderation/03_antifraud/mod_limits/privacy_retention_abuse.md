@@ -1,35 +1,59 @@
 # PS-098-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-098-07. **Owner:** [12_Moderation/03_antifraud/mod_limits](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_limits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_limits. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R04, R05, R06, R09), CTR-CAP-001 (R04, R08), CTR-FED-001 (not applicable: no federation).
 
-## Purpose and scope
-Define the privacy retention abuse process for limits within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-098-07.R01 | No usage counts or account activity history are stored in this module. Decision records keep IDs, quota key, policy version and outcome. | MVP |
+| PS-098-07.R02 | Jurisdiction is a coded value; no precise location is accepted or derived (CTR-PRV-001 R03). | MVP |
+| PS-098-07.R03 | Region-cell scopes are used only for registered cells and apply the K_MIN threshold to any published aggregate (CTR-PRV-001 R04). | MVP |
+| PS-098-07.R04 | Quota denials are not disclosed with counts; users see "limit reached for this type of item" plus the policy's generic help text. | MVP |
+| PS-098-07.R05 | Decision records (`dec_`) retained 90 days; policy records retained as long as referenced by a retained decision, then 12 months. | MVP |
 
-## Requirements to specify
-- [ ] PS-098-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-098-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-098-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Record | Retention (D07, PROVISIONAL) | Deletion |
+|---|---|---|
+| `dec_` quota decisions | 90 days | hard delete |
+| `lim_policy` active or retired | retired + 12 months | hard delete when no retained decision references it |
+| Active-policy cache | 1 h | expire |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No export command. Account-level export does not include quota decisions (they are operational records, ASSUMPTION).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Deletion does not change policy state.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Errors never reveal another account's status.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Decision records readable by operators with dual control only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-098-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Retention jobs idempotent by cursor.
+
+## Privacy, retention, abuse
+- Abuse 1 (quota gaming through multiple accounts): handled by identity controls in F07 and by `mod_risk` signals; this module does not decide account linkage.
+- Abuse 2 (inference of other users' activity from denials): denial body has no counts (PS-098-02).
+- Abuse 3 (geographic profiling): region-cell scope only; no per-user jurisdiction history retained beyond decision records.
+- Abuse 4 (targeting a person with a tight personal limit): personal `acc` scope policies require `rationale_code` ABUSE_PATTERN and dual control.
+
+## Observability & budgets
+Logs: `quota_key`, `policy_version`, outcome, `dec_id`. No `acc_` in metrics; `acc_` appears only in `dec_` records.
+
+## Tests
+- `TEST-PS-098-07-01` privacy: schema scan finds no usage counts.
+- `TEST-PS-098-07-02` privacy: denial response contains no numbers beyond policy version.
+- `TEST-PS-098-07-03` retention: `dec_` removed at 90 days in simulated clock.
+- `TEST-PS-098-07-04` abuse: personal `acc` policy without dual control → denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema contains no usage counter column.
+2. Denial bodies pass the leak test.
+3. Retention jobs verified in staging.
+
+## Assumptions & open decisions
+- ASSUMPTION: 90-day decision retention is a placeholder pending F10 review.
+- D05 (geoprivacy), PROVISIONAL default: coarse public regions and user-initiated precision disclosure (unapproved).
+- D07 (retention), PROVISIONAL default: minimal per-category defaults with legal-hold exceptions (unapproved).

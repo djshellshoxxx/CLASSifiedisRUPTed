@@ -18,7 +18,7 @@ Cash method profile for payment claims. Parties record a cash handover as a `clm
 Command `cash_method.configure` (operator, dual control for changes to ceilings). Events `cash_method.enabled`, `cash_method.disabled`, `cash_method.ceiling_changed`. Claim commands from CTR-COM-001 (`clm.submit`, `clm.attest`, `clm.dispute`).
 
 ## Relationships, dependencies and integration
-Upstream: `trx_` transaction (F09), `cur_` currency registry (09 mod_currency), `qte_` quotes for cross-currency cash (mod_rates). Downstream: notifications (F13), evidence (mod_receipts), reconciliation (mod_reconciliation).
+Upstream: `trx_` transaction (F09), `cur_` (PENDING prefix) currency registry (09 mod_currency), `qte_` quotes for cross-currency cash (mod_rates). Downstream: notifications (F13), evidence (mod_receipts), reconciliation (mod_reconciliation).
 
 ## Data ownership
 Owns cash method configuration only. Claim records belong to CTR-COM-001 (canonical owner F09 Commerce). Consumers reference `clm_` by full ID.

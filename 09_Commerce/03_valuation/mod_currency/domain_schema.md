@@ -1,6 +1,6 @@
 # PS-073-01 — domain schema
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_currency (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (currency object: `kind`, `code`, `exponent`), CTR-ID-001, CTR-SCH-001, CTR-PRV-001 (PUBLIC). **Pending:** `cur_` prefix (CTR-ID-001). **Decisions:** D03 (PROVISIONAL, unapproved).
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_currency (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (currency object: `kind`, `code`, `exponent`), CTR-ID-001, CTR-SCH-001, CTR-PRV-001 (PUBLIC). **Pending:** `cur_` (PENDING prefix) prefix (CTR-ID-001). **Decisions:** D03 (PROVISIONAL, unapproved).
 
 ## Requirements
 | ID | Requirement (measurable) | Priority |
@@ -22,7 +22,7 @@
 | `display` | `{name_key, symbol, decimals_hint}` localization keys, no free text | PUBLIC |
 | `status` | enum | PUBLIC |
 | `version` | integer ≥ 1 | PUBLIC |
-| `adapter_id` | `chn_` or null (assets only) | PUBLIC |
+| `adapter_id` | `chn_` (PENDING prefix) or null (assets only) | PUBLIC |
 | `schema_version` | SemVer | PUBLIC |
 
 ## Commands / queries / events

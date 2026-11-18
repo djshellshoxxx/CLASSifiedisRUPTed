@@ -18,7 +18,7 @@ Exact arithmetic rules for every amount in the commerce path: decimal-string par
 Library-level functions (no network interface): `parse_amount`, `format_amount`, `scale_to_minor`, `convert_minor(amount_minor, rate, rate_scale, base_exp, quote_exp)`. Errors `PREC.*`. No events.
 
 ## Relationships, dependencies and integration
-Upstream: `cur_` exponents (mod_currency), `qte_` rates (mod_rates). Downstream: mod_cash ceilings, mod_crypto amount match, mod_receipts amount format, mod_reconciliation sums, LocalMutiny value balancing (via CTR-COM-001).
+Upstream: `cur_` (PENDING prefix) exponents (mod_currency), `qte_` rates (mod_rates). Downstream: mod_cash ceilings, mod_crypto amount match, mod_receipts amount format, mod_reconciliation sums, LocalMutiny value balancing (via CTR-COM-001).
 
 ## Data ownership
 Owns the rule set and golden vector suite. Owns no data records.

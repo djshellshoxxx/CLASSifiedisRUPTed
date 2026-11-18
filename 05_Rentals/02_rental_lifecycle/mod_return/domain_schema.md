@@ -1,35 +1,75 @@
 # PS-043-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-043-01. **Owner:** [05_Rentals/02_rental_lifecycle/mod_return](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_return. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_return. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (classes, coarse cells), CTR-ID-001 (`rtn_` PENDING registry entry, proposed owner F05), CTR-SCH-001, CTR-EVT-001 (`aggregate_type = rental_return`).
 
-## Purpose and scope
-Define the domain schema process for return within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** D07 retention PROVISIONAL (unapproved). Late-charge policy OPEN (F05).
 
-## Requirements to specify
-- [ ] PS-043-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-043-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-043-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-043-01.R01 | One `rtn_` per rental, created when the rental reaches its end time. Second insert → `RETURN.ALREADY_DECLARED`. | MVP |
+| PS-043-01.R02 | `late_minutes` is a non-negative integer computed by the server as `max(0, declared_at − due_at)` in minutes. Client values ignored. | MVP |
+| PS-043-01.R03 | `return_place_cell` is a registered coarse cell or null; no coordinates or addresses (CTR-PRV-001 R03). | MVP |
+| PS-043-01.R04 | `renter_checklist` uses the handoff checklist codes (`accessories_complete`, `visible_condition_recorded`, `identifier_recorded`, `access_items_returned`) with `ok`, `issue`, `not_applicable`. | MVP |
+| PS-043-01.R05 | `damage_ids` links to `dmg_` records (owned by F05.S02.M03); this record stores no amounts. | MVP |
+| PS-043-01.R06 | No payment, balance or custody field (CTR-COM-001 R01). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+```json
+{
+  "return_id": "rtn_<26>",
+  "rental_id": "rnt_<26>",
+  "renter_ref": "acc_<26>",
+  "owner_ref": "acc_<26>",
+  "due_at": "RFC 3339",
+  "declared_at": "RFC 3339 | null",
+  "late_minutes": "integer >= 0",
+  "return_place_cell": "string | null",
+  "renter_checklist": [{"code": "enum", "result": "ok | issue | not_applicable"}],
+  "renter_note": "string <= 500 | null",
+  "owner_result": "NO_ISSUE | ISSUE_REPORTED | null",
+  "owner_confirmed_at": "RFC 3339 | null",
+  "damage_ids": ["dmg_<26>"],
+  "status": "DUE | OVERDUE | DECLARED | OWNER_CONFIRMED | DAMAGE_OPEN | CLOSED",
+  "closed_reason": "BOTH_CONFIRMED_NO_ISSUE | DAMAGE_RESOLVED | OWNER_WINDOW_CLOSED | CANCELLED | null",
+  "state_version": "integer >= 1",
+  "schema_version": "1.0.0"
+}
+```
+Data classes: `renter_note` PRIVATE_PERSONAL; `late_minutes`, status PRIVATE_PERSONAL; `return_place_cell` LOCATION_COARSE.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Not applicable; see PS-043-04.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See PS-043-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See PS-043-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-043-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Renter and owner read; non-participants `SYS.NOT_FOUND` (PS-043-05).
+
+## Failure, idempotency, concurrency, offline
+`late_minutes` recomputed on every read path; stored value is the value at declaration.
+
+## Privacy, retention, abuse
+Retention RET-PRIV (365 days after last access); held while a linked damage or deposit dispute is open. Never federated.
+
+## Observability & budgets
+`return_schema_reject_total{code}`.
+
+## Tests
+- TEST-PS-043-01-01 (unit): one record per rental; second insert rejected.
+- TEST-PS-043-01-02 (unit): client-supplied `late_minutes` is overwritten by the server value.
+- TEST-PS-043-01-03 (lint): no coordinate or amount field in schema.
+- TEST-PS-043-01-04 (integration): `damage_ids` accept only `dmg_` IDs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema registered with owner F05 and digest.
+2. Zero amount fields (TEST-PS-043-01-03).
+3. TEST-PS-043-01-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: checklist codes mirror handoff codes for comparison.
+- OPEN (F05): whether late minutes feed any charge.

@@ -21,7 +21,7 @@ Commands `currency.register`, `currency.set_status`. Queries `currency.get`, `cu
 Upstream: ISO 4217 code list (maintained externally; updates via reviewed change), CAIP-19 identifiers from chain adapters (mod_crypto). Downstream: mod_rates, mod_precision, mod_cash, mod_crypto, mod_receipts, LocalMutiny `mod_currency` (02_LocalMutiny/04_value_balancing/mod_currency), `mod_offers` and proposal flows. The duplicate slug in LocalMutiny is a consumer only.
 
 ## Data ownership
-Owns `cur_` registry entries and their version history. Does not own claims (CTR-COM-001), quotes (`qte_`, mod_rates) or evidence.
+Owns `cur_` (PENDING prefix) registry entries and their version history. Does not own claims (CTR-COM-001), quotes (`qte_`, mod_rates) or evidence.
 
 ## Risk considerations
 Wrong exponent scales amounts by a factor of 10^k; look-alike asset identifiers (same symbol, different contract); disabling a currency that open claims depend on; registry drift between modules; schema changes breaking signed evidence.

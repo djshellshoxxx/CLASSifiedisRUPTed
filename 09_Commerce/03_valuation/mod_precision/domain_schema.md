@@ -7,7 +7,7 @@
 |---|---|---|
 | PS-074-01.R01 | Amount type: `amount_minor` is a non-negative integer of at most 39 decimal digits, held as a string at every boundary. | MVP |
 | PS-074-01.R02 | Rate type: `rate` decimal string matching `^(0\|[1-9][0-9]{0,17})(\.[0-9]{1,18})?$`, with `rate_scale` = number of fractional digits. | MVP |
-| PS-074-01.R03 | Exponent type: integer 0–18 from `cur_`. | MVP |
+| PS-074-01.R03 | Exponent type: integer 0–18 from `cur_` (PENDING prefix). | MVP |
 | PS-074-01.R04 | Rounding mode: `HALF_EVEN` only (ASSUMPTION; CTR-COM-001 quote `rounding` const). | MVP |
 | PS-074-01.R05 | No floating-point type appears in any commerce schema or API (CTR-COM-001 R02). | MVP |
 

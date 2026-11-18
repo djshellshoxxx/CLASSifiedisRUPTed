@@ -64,3 +64,7 @@ Not applicable to this process; owned by [observability_performance](observabili
 1. TEST-PS-140-01-01, TEST-PS-140-01-02 pass in CI.
 2. Each requirement in this file maps to at least one test above.
 
+
+## Assumptions & open decisions
+- ASSUMPTION: field list is provisional until the module owner review; scenario fields are test-only.
+- D08 (PWA offline writes) governs the production queue this module tests: PROVISIONAL (D08 default, unapproved).

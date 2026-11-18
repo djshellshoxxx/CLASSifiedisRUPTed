@@ -48,3 +48,7 @@ Not applicable to this process; owned by [observability_performance](observabili
 1. TEST-PS-147-01-01, TEST-PS-147-01-02 pass in CI.
 2. Each requirement in this file maps to at least one test above.
 
+
+## Assumptions & open decisions
+- ASSUMPTION: field list is provisional until the module owner review; approval IDs are opaque.
+- D01 (federated protocol) applies only if decisions are exchanged: PROVISIONAL (D01 default, unapproved).

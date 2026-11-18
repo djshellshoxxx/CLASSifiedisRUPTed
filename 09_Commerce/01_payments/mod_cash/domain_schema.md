@@ -8,14 +8,14 @@
 | PS-067-01.R01 | The cash method adds no persisted claim field. The claim is the CTR-COM-001 `clm_` object with `method = "cash"`. | MVP |
 | PS-067-01.R02 | Cash method configuration is a separate record `cashcfg` keyed by (`currency_code`, `region_class`). | MVP |
 | PS-067-01.R03 | `region_class` is an enum (`metro`, `national`, `none`), never a place name or coordinate. | MVP |
-| PS-067-01.R04 | `ceiling_minor` is a decimal string (CTR-COM-001 R02), ≤ 39 digits, scaled by the currency exponent from `cur_`. | MVP |
+| PS-067-01.R04 | `ceiling_minor` is a decimal string (CTR-COM-001 R02), ≤ 39 digits, scaled by the currency exponent from `cur_` (PENDING prefix). | MVP |
 | PS-067-01.R05 | No record holds cash, balance, payout or wallet data (CTR-COM-001 R01, `COM.CUSTODY_FORBIDDEN`). | MVP |
 
 ## Data / schema
 | Field | Type / constraint | Class |
 |---|---|---|
 | `cashcfg_id` | opaque ID, PENDING prefix `ccf` (CTR-ID-001) | PUBLIC |
-| `currency_code` | ISO 4217 alpha-3 or `cur_` reference | PUBLIC |
+| `currency_code` | ISO 4217 alpha-3 or `cur_` (PENDING prefix) reference | PUBLIC |
 | `region_class` | enum `metro` \| `national` \| `none` | PUBLIC |
 | `enabled` | boolean | PUBLIC |
 | `ceiling_minor` | decimal string, `^(0\|[1-9][0-9]{0,38})$` | PUBLIC |

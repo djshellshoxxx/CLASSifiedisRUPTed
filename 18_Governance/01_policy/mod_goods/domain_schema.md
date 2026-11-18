@@ -52,3 +52,7 @@ Not applicable to this process; owned by [observability_performance](observabili
 1. TEST-PS-144-01-01, TEST-PS-144-01-02 pass in CI.
 2. Each requirement in this file maps to at least one test above.
 
+
+## Assumptions & open decisions
+- ASSUMPTION: field list is provisional until the module owner review; attribute list is minimal for MVP.
+- D07 (retention) default applies to versions: PROVISIONAL (D07 default, unapproved).

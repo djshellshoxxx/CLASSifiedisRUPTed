@@ -53,3 +53,7 @@ Not applicable to this process; owned by [observability_performance](observabili
 1. TEST-PS-142-01-01, TEST-PS-142-01-02 pass in CI.
 2. Each requirement in this file maps to at least one test above.
 
+
+## Assumptions & open decisions
+- ASSUMPTION: field list is provisional until the module owner review; row dimensions reviewed with QA Lead.
+- D01 (federated protocol) applies to peer_protocol rows: PROVISIONAL (D01 default, unapproved).

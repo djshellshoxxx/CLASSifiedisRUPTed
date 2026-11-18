@@ -1,35 +1,51 @@
 # PS-033-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-033-10. **Owner:** [04_Auctions/01_auction_lifecycle/mod_bids](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_bids. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_bids. **Parent:** [mod_bids SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the import export backup rollback process for bids within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-033-10.R01 | Bidder exports own bids (JSON, `bids.bid` 1.0.0, ≤ 256 KB). | MVP |
+| PS-033-10.R02 | Public auction archive export (CSV: sequence, amount_minor, currency, bidder_view, status) for closed auctions only. Contains no `acc_`. | MVP |
+| PS-033-10.R03 | Backup restore preserves sequence order, amounts and statuses; restore never re-emits `bids.bid.accepted` events. | MVP |
+| PS-033-10.R04 | Bid import is not supported. Requests are rejected with `SYS.REQUEST_MALFORMED` (reason `not_supported`). | MVP |
+| PS-033-10.R05 | Rollback never edits or deletes accepted bids on closed auctions. Corrections are `VOIDED` with case scope. | MVP |
 
-## Requirements to specify
-- [ ] PS-033-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-033-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-033-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export envelopes: `bids.bid.export` (own bids) and CSV archive header row fixed by schema version.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Exports are queries (`bid.read`). Emits `bids.exported` with count only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable. Restore runs under maintenance lock.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Digest mismatch on restore → `SYS.INTERNAL`, restore halted.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Own-bid export: bidder. Archive export: any user after close. Restore: operator with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-033-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Restore idempotent by backup digest. Exports are generated from a consistent snapshot (revision number recorded in the file).
+
+## Privacy, retention, abuse
+Exports link valid 15 min. Archive CSV is PUBLIC after close, so bidder_view is the only identifier. Export rate limit 5 per day per user.
+
+## Observability & budgets
+Restore ≤ 15 min for 10 million bids (ASSUMPTION). Metrics: `bids_exports_total{kind}`, `bids_restore_total{result}`.
+
+## Tests
+- TEST-PS-033-10-01 (integration): export → restore yields identical sequences and amounts.
+- TEST-PS-033-10-02 (negative): archive CSV contains no `acc_` (scan).
+- TEST-PS-033-10-03 (negative): import request rejected with `not_supported`.
+- TEST-PS-033-10-04 (fault): restore does not emit accepted events.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round-trip test passes.
+2. Archive privacy scan passes on 1,000 closed auctions.
+3. Rollback runbook has no step that edits accepted bids in place.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute download link expiry; no signed export in MVP.
+- PROVISIONAL: D07 retention (unapproved). See [DECISIONS.md](../../../DECISIONS.md).

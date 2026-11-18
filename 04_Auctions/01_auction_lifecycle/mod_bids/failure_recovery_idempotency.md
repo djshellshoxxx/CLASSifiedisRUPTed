@@ -1,35 +1,54 @@
 # PS-033-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-033-06. **Owner:** [04_Auctions/01_auction_lifecycle/mod_bids](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_bids. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_bids. **Parent:** [mod_bids SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for bids within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-033-06.R01 | Placement runs under the auction lock; the lock wait p99 ≤ 50 ms. | MVP |
+| PS-033-06.R02 | Duplicate placement with same key returns original `bid_id` within 24 h. | MVP |
+| PS-033-06.R03 | Two bids at the same revision: the first to acquire the lock is ordered first; the second is re-validated against the new high and rejected with `BIDS.AMOUNT_BELOW_INCREMENT` if no longer valid. No silent acceptance. | MVP |
+| PS-033-06.R04 | Offline bids are held in the pending queue (D08). On acknowledgement, a bid is rejected if the auction is no longer OPEN or the high has moved; a rejected bid is never applied retroactively. | MVP |
+| PS-033-06.R05 | A bid written after the close lock is rejected; ordering uses server sequence. | MVP |
 
-## Requirements to specify
-- [ ] PS-033-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-033-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-033-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record: (`acc_`, command, key, digest, result `bid_id`). Placement lock keyed by `auc_`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries reuse key. Each accepted bid emits exactly one `bids.bid.accepted` (transactional outbox).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+No recovery path changes ACCEPTED to any other state except via PS-033-03 transitions.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`, `SYS.RATE_LIMITED`. `SYS.CONFLICT` requires a fresh read and a new attempt with a new key.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Lock and outbox run as system.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-033-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Timeout after commit: client retries with same key, receives same `bid_id`.
+- Timeout before commit: retry places the bid once.
+- Lock holder crash: lock released by lease expiry (ASSUMPTION 2 s); placement transaction is atomic so no partial bid exists.
+- Offline: pending bids show "not yet placed" and never affect the displayed high bid.
+
+## Privacy, retention, abuse
+Recovery logs contain IDs and codes. Pending queue entries encrypted at rest on device (ASSUMPTION).
+
+## Observability & budgets
+Metrics: `bids_lock_wait_seconds` p99 ≤ 50 ms; `bids_duplicate_replays_total`; `bids_offline_rejected_on_ack_total`; `bids_outbox_lag_seconds` p95 ≤ 2 s.
+
+## Tests
+- TEST-PS-033-06-01 (concurrency): 1,000 concurrent bids on one auction → monotonic sequences, no duplicate sequence, highest bid correct.
+- TEST-PS-033-06-02 (fault): kill after commit, before response → retry returns same `bid_id`.
+- TEST-PS-033-06-03 (offline): queued bid rejected after auction closed on ack; no outbid event emitted.
+- TEST-PS-033-06-04 (fault): lock holder crash → lease expires; next bid proceeds.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero duplicate sequences in concurrency suite.
+2. Zero offline bids applied after close.
+3. Lock wait p99 within budget under load test.
+
+## Assumptions & open decisions
+- ASSUMPTION: 2 s lock lease.
+- PROVISIONAL: offline writes pending until acknowledgement (D08 default, unapproved). See [DECISIONS.md](../../../DECISIONS.md).

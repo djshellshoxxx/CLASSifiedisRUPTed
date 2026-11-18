@@ -18,7 +18,7 @@ Issues pinned, expiring quotes (`qte_`) for cross-currency proposals and claims.
 Commands `quote.issue` (sys), `rate_source.register`, `rate_source.disable`. Queries `quote.get`. Events `quote.issued`, `quote.expired`, `rate_source.registered`, `rate_source.disabled`, `quote.refused` (internal audit). Prefix `qte_` exists in CTR-ID-001; `rsrc` source prefix is PENDING.
 
 ## Relationships, dependencies and integration
-Upstream: `cur_` registry (mod_currency), external rate sources (registered adapters). Downstream: proposals (F02 mod_offers, mod_negotiation), claims (CTR-COM-001 `clm.submit` cross-currency), mod_precision for conversion, LocalMutiny value balancing (consumer).
+Upstream: `cur_` (PENDING prefix) registry (mod_currency), external rate sources (registered adapters). Downstream: proposals (F02 mod_offers, mod_negotiation), claims (CTR-COM-001 `clm.submit` cross-currency), mod_precision for conversion, LocalMutiny value balancing (consumer).
 
 ## Data ownership
 Owns quote records and source registry. Consumers reference `qte_` by full ID.

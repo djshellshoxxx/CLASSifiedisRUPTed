@@ -5,8 +5,8 @@
 ## Requirements
 | ID | Requirement (measurable) | Priority |
 |---|---|---|
-| PS-072-01.R01 | A run `rcn_` records scope (chains, claim-ID range or time window), start and end time, status and coverage counts. | MVP |
-| PS-072-01.R02 | A finding `rfd_` references one `clm_` and a finding type enum; it carries no amounts or party names. | MVP |
+| PS-072-01.R01 | A run `rcn_` (PENDING prefix) records scope (chains, claim-ID range or time window), start and end time, status and coverage counts. | MVP |
+| PS-072-01.R02 | A finding `rfd_` (PENDING prefix) references one `clm_` and a finding type enum; it carries no amounts or party names. | MVP |
 | PS-072-01.R03 | Run status: `complete`, `partial`, `failed`. `complete` requires coverage 100% of in-scope claims. | MVP |
 | PS-072-01.R04 | Findings are immutable except for status and resolution fields. | MVP |
 

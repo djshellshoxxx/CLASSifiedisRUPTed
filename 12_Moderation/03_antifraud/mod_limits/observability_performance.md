@@ -1,35 +1,56 @@
 # PS-098-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-098-08. **Owner:** [12_Moderation/03_antifraud/mod_limits](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_limits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_limits. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R04, R09), CTR-EVT-001 (R04).
 
-## Purpose and scope
-Define the observability performance process for limits within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-098-08.R01 | Metrics carry no `acc_`, `lim_` or cell-level labels finer than the registered region cell. | MVP |
+| PS-098-08.R02 | `limits.check` p95 ≤ 50 ms; p99 ≤ 200 ms. | MVP |
+| PS-098-08.R03 | Decision log lag p95 ≤ 5 s; any `dec_` missing after 60 s raises an alert. | MVP |
+| PS-098-08.R04 | Published quota-denial aggregates by region cell only when the cell passes K_MIN (CTR-PRV-001 R04). | MVP |
 
-## Requirements to specify
-- [ ] PS-098-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-098-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-098-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Metric | Type | Labels |
+|---|---|---|
+| `limits_check_latency_seconds` | histogram | `quota_key` |
+| `limits_decision_total` | counter | `quota_key`, `outcome` |
+| `limits_quota_exceeded_total` | counter | `quota_key`, `policy_version` |
+| `limits_policy_cache_age_seconds` | gauge | `owner_module` |
+| `limits_decision_log_lag_seconds` | histogram | none |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Span `limits.check` with `quota_key`, `policy_version`, outcome.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Dashboard: active policies and rollout percentages.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`limits_validation_error_total{code}`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards: `ope_` aggregate scope.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-098-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Alerts: check p99 > 200 ms for 5 min (page); decision log lag > 60 s (page); policy cache age > 45 min (ticket).
+
+## Privacy, retention, abuse
+Aggregates only. Region-cell denial metrics suppressed when below K_MIN = 5 (CTR-PRV-001 R04).
+
+## Observability & budgets
+Capacity: 2 000 checks per second per node at launch (ASSUMPTION).
+
+## Tests
+- `TEST-PS-098-08-01` load: 2 000 checks/s for 10 min, p95 ≤ 50 ms.
+- `TEST-PS-098-08-02` contract: no account label in metrics.
+- `TEST-PS-098-08-03` privacy: aggregate below K_MIN not published.
+- `TEST-PS-098-08-04` alert: forced decision-log lag fires page.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Latency budgets met in load test.
+2. Metric label sets reviewed and documented.
+3. K_MIN suppression verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: capacity and latency targets are reference-node estimates.
+- D07 (retention), PROVISIONAL default governs metric retention (unapproved).

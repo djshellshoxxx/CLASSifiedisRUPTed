@@ -1,35 +1,51 @@
-# PS-043-08 — observability performance
+# PS-043-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-043-08. **Owner:** [05_Rentals/02_rental_lifecycle/mod_return](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_return. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_return. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the observability performance process for return within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** Budgets ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-043-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-043-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-043-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-043-08.R01 | `return_transitions_total{from,to}` per transition. | MVP |
+| PS-043-08.R02 | `return.declare` p95 ≤ 300 ms (ASSUMPTION). | MVP |
+| PS-043-08.R03 | Histogram of `late_minutes` buckets (0, 1–60, 61–1440, >1440) without per-person labels. | MVP |
+| PS-043-08.R04 | No person-level labels. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Metrics: `return_transitions_total`, `return_command_latency_ms`, `return_late_bucket_total{bucket}`, `return_owner_window_closed_total`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Event count equals `state_version` (daily check).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Counters per PS-043-03 transition.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`return_validation_reject_total{code}`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-043-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Aggregated metrics only.
+
+## Failure, idempotency, concurrency, offline
+Timer lag per PS-043-06.
+
+## Privacy, retention, abuse
+Metrics RET-OPS (30 days).
+
+## Observability & budgets
+Alerts: owner-window closures > 30% over 30 days (ASSUMPTION); timer lag > 15 min; CLOSED without deposit request event (must be 0).
+
+## Tests
+- TEST-PS-043-08-01 (unit): one counter per transition.
+- TEST-PS-043-08-02 (lint): no person-level label.
+- TEST-PS-043-08-03 (load): 200 concurrent declarations hold p95 ≤ 300 ms.
+- TEST-PS-043-08-04 (alert): seeded CLOSED without request fires alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics exist with specified labels.
+2. Load budget met.
+3. Alert fires within 5 minutes.
+
+## Assumptions & open decisions
+- ASSUMPTION: thresholds above.

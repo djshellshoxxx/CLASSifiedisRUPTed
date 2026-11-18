@@ -52,3 +52,7 @@ Not applicable to this process; owned by [observability_performance](observabili
 1. TEST-PS-145-01-01, TEST-PS-145-01-02 pass in CI.
 2. Each requirement in this file maps to at least one test above.
 
+
+## Assumptions & open decisions
+- ASSUMPTION: field list is provisional until the module owner review; rule text itself is not stored.
+- D05 (geoprivacy) governs region granularity: PROVISIONAL (D05 default, unapproved).

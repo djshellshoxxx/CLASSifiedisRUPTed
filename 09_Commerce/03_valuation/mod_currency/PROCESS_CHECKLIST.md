@@ -24,7 +24,7 @@
   - [ ] Rollback test: registry versions preserved
 
 ## Integration gates
-- [ ] Resolve canonical ownership (B-06) and register `cur_` prefix.
+- [ ] Resolve canonical ownership (B-06) and register `cur_` (PENDING prefix) prefix.
 - [ ] Validate typed errors (CURR.* codes), capabilities, events and schema versioning.
 - [ ] Cover rollback, backup/restore, import/export and retention.
 - [ ] Record unresolved choices in DECISIONS.md (D03).

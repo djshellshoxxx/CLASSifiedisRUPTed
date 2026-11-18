@@ -10,5 +10,9 @@
     "@classrup/kernel": "workspace:*",
     "zod": "4.6.7"
   },
-  "description": "Specification-only package; no runtime entry point implemented yet."
+  "description": "Generated read-only feature catalog and dependency graph. Runtime flags and tenant configuration remain separate.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./feature": "./src/configuration/feature/index.ts"
+  }
 }

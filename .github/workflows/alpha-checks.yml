@@ -45,6 +45,7 @@ jobs:
       - run: corepack pnpm typecheck
       - run: corepack pnpm spec:check
       - run: corepack pnpm deps:check
+      - run: corepack pnpm registry:check
       - name: Verify money vectors against the independent Python reference
         run: python3 -I packages/commerce/test/check_money_vectors.py
       - name: Enforce the money browser bundle size budget

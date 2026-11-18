@@ -1,35 +1,61 @@
 # PS-064-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-064-02. **Owner:** [08_Communications/03_meetups/mod_coordination](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_coordination. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_coordination. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001 (LOCATION_PRECISE never in public payloads), CTR-SCH-001, CTR-ID-001.
 
-## Purpose and scope
-Define the validation rules process for coordination within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-064-02.R01 | `window_start` > now + 1 h; `window_end` > `window_start`; duration ≤ 6 h; `window_start` ≤ now + 30 days. | MVP |
+| PS-064-02.R02 | `window_start` and `window_end` on whole minutes; local-time display converted server-side from user timezone (no precise location used). | MVP |
+| PS-064-02.R03 | `venue_ref` must exist in the active public venue registry and be in state `listed`. | MVP |
+| PS-064-02.R04 | `place_text` 0–80 code points, NFC; rejects email, phone, URL, and street-number-plus-street patterns (heuristic). | MVP |
+| PS-064-02.R05 | Exactly one of `venue_ref` or `place_text` may be set; both empty is allowed only while state is `proposed`. | MVP |
+| PS-064-02.R06 | Disclosure `point` must be a valid WGS84 coordinate with ≤ 5 decimal places (about 1 m) and must be inside the venue's bounding box or a registered meeting area (ASSUMPTION). | MVP |
+| PS-064-02.R07 | Validation messages never echo `place_text` or coordinates. | MVP |
 
-## Requirements to specify
-- [ ] PS-064-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-064-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-064-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Maps to [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applies to `ProposeMeetup`, `ProposeReschedule`, `ShareMeetupPoint`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation precedes state change.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | `retryable` | `message_key` | `details[].rule` |
+|---|---|---|---|
+| `COORD.WINDOW_INVALID` | false | `err.coord.window_invalid` | `window` |
+| `COORD.WINDOW_TOO_FAR` | false | `err.coord.window_far` | `horizon` |
+| `COORD.VENUE_NOT_LISTED` | false | `err.coord.venue_not_listed` | `registry` |
+| `COORD.PLACE_TEXT_INVALID` | false | `err.coord.place_invalid` | `forbidden_content` |
+| `COORD.PLACE_CONFLICT` | false | `err.coord.place_conflict` | `exclusive` |
+| `COORD.POINT_INVALID` | false | `err.coord.point_invalid` | `geo` |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation does not authorize; PS-064-05 runs first.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-064-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deterministic for same input and registry version. Venue registry removal after proposal does not invalidate existing meetups; new proposals rejected.
+
+## Privacy, retention, abuse
+`ShareMeetupPoint` values never logged or echoed. Rejections count by rule only.
+
+## Observability & budgets
+`coord_validation_fail_total{code}`; validation p95 ≤ 5 ms.
+
+## Tests
+- TEST-PS-064-02-01 (unit): window boundary cases (1 h, 30 days, 6 h).
+- TEST-PS-064-02-02 (negative): place text containing address pattern rejected; error has no echo.
+- TEST-PS-064-02-03 (property): point with more than 5 decimals rejected.
+- TEST-PS-064-02-04 (privacy): coordinates absent from errors and logs (fixture scan).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All rules enforced server-side.
+2. No echo of place text or coordinates.
+3. Window invariants hold at boundary tests.
+4. Venue registry membership enforced.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1 h minimum lead time; 6 h maximum duration; 30-day horizon.
+- PROVISIONAL (D05 default, unapproved): venue registry and coarse regions.

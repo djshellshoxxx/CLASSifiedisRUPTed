@@ -42,7 +42,7 @@ Per PS-034-05.
 Duplicate `close.run` returns existing record (`CLOSE.ALREADY_CLOSED` with the record ID, HTTP 409 only to non-system callers). Events at-least-once; dedupe on `event_id`.
 
 ## Privacy, retention, abuse
-`auction.closed` omits winner and amounts beyond `winning_amount_minor` only when the auction is publicly priced (ASSUMPTION: amounts already public from bids). Winner identity only in private events.
+`auction.closed` omits winner identity and `trx_id`. `winning_amount_minor` is included only because accepted bid amounts are already PUBLIC (PS-033-07 R01; ASSUMPTION). Winner identity appears only in private events.
 
 ## Observability & budgets
 `close.run` p95 ≤ 500 ms; `close.get` p95 ≤ 150 ms (ASSUMPTION).

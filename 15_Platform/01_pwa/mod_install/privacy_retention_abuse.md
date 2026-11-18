@@ -1,35 +1,55 @@
-# PS-115-07 — privacy retention abuse
+# PS-115-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-115-07. **Owner:** [15_Platform/01_pwa/mod_install](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_install. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_install. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for install within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-115-07.R01 | Install and update state never leaves the device; no analytics in MVP (ASSUMPTION). | MVP |
+| PS-115-07.R02 | No third-party install attribution or SDK. | MVP |
+| PS-115-07.R03 | Manifest is static and same-origin; no user-controlled name or icon. | MVP |
+| PS-115-07.R04 | Device detection uses feature checks, not device fingerprints. | MVP |
+| PS-115-07.R05 | Dismissal cooldown is stored as one timestamp; no profile link. | MVP |
 
-## Requirements to specify
-- [ ] PS-115-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-115-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-115-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Class | Retention |
+|---|---|---|
+| install.dismissed_at | device-local, non-personal | until cleared |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Clear-data removes the cooldown key.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Not applicable.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See authorization_capabilities.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-115-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Not applicable.
+
+## Privacy, retention, abuse
+- Abuse: fake install buttons on phishing sites; the real prompt comes only from the browser, and the app's name is fixed.
+- Abuse: prompt fatigue; cooldown R02 of workflow file.
+- Shared device: clear-data removes caches and cooldown.
+
+## Observability & budgets
+None.
+
+## Tests
+- TEST-PS-115-07-01 (contract): network trace has no install-related requests.
+- TEST-PS-115-07-02 (unit): no third-party script in install path.
+- TEST-PS-115-07-03 (unit): manifest identical across user sessions (hash check).
+- TEST-PS-115-07-04 (integration): clear-data removes cooldown key.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Network scan passes.
+2. Manifest hash constant across sessions.
+3. Privacy Lead review pending.
+
+## Assumptions & open decisions
+- ASSUMPTION: no install analytics in MVP.
+- D07 PROVISIONAL (D07 default, unapproved) for local data lifetime.

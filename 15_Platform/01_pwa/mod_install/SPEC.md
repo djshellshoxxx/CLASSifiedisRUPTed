@@ -1,44 +1,46 @@
 # F15.S01.M03 — install
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F15.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead. **Parent:** [F15.S01 pwa](../SPEC.md).
 
 ## Purpose and business behavior
-Provide install as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Make ClassRup installable as a web app. This module owns the manifest, icons, the install control and its guided fallback for browsers without a prompt (iOS Safari), the update notice, and the clear-data control. The install flow never asks for permissions, never prompts automatically, and never sends install state to the server.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant on Android Chrome, I can install ClassRup from a button I choose to press.
+- As a participant on iPhone, I get clear steps to add ClassRup to my home screen.
+- As a participant on a shared phone, I can clear the app's local data before handing it over.
 
 ## Scope
-- Required process spec: `install_domain_model.md` (not yet authored)
-- Required process spec: `install_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `install_validation_and_authorization.md` (not yet authored)
-- Required process spec: `install_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `install_interfaces_and_events.md` (not yet authored)
-- Required process spec: `install_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `install_acceptance_and_property_tests.md` (not yet authored)
+- In scope: manifest, icons, install control states, iOS instructions, update notice, clear-data guard.
+- Out of scope: offline cache contents (mod_cache), pending-write queue (mod_offline), push permission (mod_push), native store packaging (Future).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+No server interface. Local operations `install.show_prompt`, `install.show_instructions`, `update.apply`, `data.clear`. See [commands_queries_events.md](commands_queries_events.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: cache (F15.S01.M02), build pipeline and release checks (F17.S03.M01). Downstream: none. Contracts: CTR-ERR-001, CTR-PRV-001. Edges per DEPENDENCY_MATRIX.md.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns the manifest and icon artifacts and one device-local cooldown key. Owns no server records.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Privacy: install analytics would reveal device and habit; excluded in MVP.
+- Abuse: phishing copies and fake install buttons; mitigated by fixed manifest and browser-only prompts.
+- Data loss: update reload or clear-data can discard unsent writes; guarded by pending-queue checks.
+- Accessibility: install and instructions must work by keyboard and screen reader.
+- No platform custody of money.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Process specs PS-115-01 to PS-115-10 at SPEC-DRAFT-COMPLETE; installability checks defined for CI; Privacy Lead and Accessibility Lead reviews pending.
 
 ## Required process specification inventory
-- [ ] `install_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `install_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `install_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `install_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `install_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `install_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `install_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-115-01
+- [x] [validation_rules.md](validation_rules.md) — PS-115-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-115-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-115-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-115-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-115-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-115-07
+- [x] [observability_performance.md](observability_performance.md) — PS-115-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-115-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-115-10

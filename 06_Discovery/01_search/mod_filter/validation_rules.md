@@ -1,35 +1,55 @@
 # PS-044-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-044-02. **Owner:** [06_Discovery/01_search/mod_filter](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_filter. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_filter. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-COM-001 (amount format), CTR-PRV-001 (cells), CTR-ERR-001.
 
-## Purpose and scope
-Define the validation rules process for filter within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** Limits in R02, R05 and R07 are ASSUMPTION (OPEN, F06).
 
-## Requirements to specify
-- [ ] PS-044-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-044-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-044-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-044-02.R01 | Enum facets accept only declared values; unknown → `FILTER.FACET_UNKNOWN` (400). | MVP |
+| PS-044-02.R02 | Facet count ≤ 12 and keyword tokens ≤ 8 → `FILTER.TOO_MANY_FACETS` (400). | MVP |
+| PS-044-02.R03 | Price bounds match `^(0\|[1-9][0-9]{0,38})$`; `min ≤ max`; mixed currencies → `FILTER.PRICE_CURRENCY_MIXED` (422); malformed → `COM.AMOUNT_INVALID` (400). | MVP |
+| PS-044-02.R04 | `region_cells` each registered; unknown → `FILTER.REGION_UNKNOWN` (400); more than 5 → `FILTER.REGION_TOO_MANY` (400). | MVP |
+| PS-044-02.R05 | Date span `available_to − available_from` ≤ 365 days → else `FILTER.DATE_SPAN_EXCEEDED` (400). | MVP |
+| PS-044-02.R06 | Keywords ≤ 100 characters after NFKC normalization → else `FILTER.KEYWORDS_TOO_LONG` (400). | MVP |
+| PS-044-02.R07 | Saved searches per `acc_` ≤ 20 → `FILTER.SAVED_LIMIT` (422). | MVP |
+| PS-044-02.R08 | Any coordinate-like key (`lat`, `lon`, `lng`, `address`, `center`) → `FILTER.PRECISE_LOCATION_REJECTED` (400). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Check order: unknown keys (R01, R08) → shape → counts (R02, R04, R06) → ranges (R03, R05) → quota (R07).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Applies to `filter.evaluate`, `filter.save`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Gates only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+All `FILTER.*` codes non-retryable. Error bodies name the facet, not the submitted value.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-044-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+None beyond ownership for saved-search commands.
+
+## Failure, idempotency, concurrency, offline
+Validation is deterministic. Offline filter edits are revalidated on sync.
+
+## Privacy, retention, abuse
+Rejected keyword text not logged or echoed.
+
+## Observability & budgets
+`filter_validation_reject_total{code}`. Validation p95 ≤ 5 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-044-02-01 (unit): one case per R01–R08 code.
+- TEST-PS-044-02-02 (boundary): 12 facets and 13 facets; 365-day and 366-day spans.
+- TEST-PS-044-02-03 (negative): latitude key rejected with no coordinate echoed.
+- TEST-PS-044-02-04 (property): random facet sets never bypass limits.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each rule maps to a test and a code.
+2. No coordinate values appear in logs (TEST-PS-044-02-03).
+3. Boundary tests pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: limits above (OPEN, F06).

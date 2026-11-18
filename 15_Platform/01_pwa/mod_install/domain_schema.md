@@ -1,35 +1,59 @@
 # PS-115-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-115-01. **Owner:** [15_Platform/01_pwa/mod_install](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_install. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_install. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001. This module has no server database entity; all state is device-local.
 
-## Purpose and scope
-Define the domain schema process for install within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-115-01.R01 | Web app manifest: `name` "ClassRup", `short_name` "ClassRup", `start_url` "/", `display` "standalone", `lang` from build default, `theme_color` from design token. | MVP |
+| PS-115-01.R02 | Icons: 192 px and 512 px PNG, plus a 512 px maskable icon with safe zone. | MVP |
+| PS-115-01.R03 | Install state enum on device: `not_installed`, `install_available`, `installed`, `update_waiting`. | MVP |
+| PS-115-01.R04 | Local keys (`localStorage`, try/catch): `install.dismissed_at` only. No other key. | MVP |
 
-## Requirements to specify
-- [ ] PS-115-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-115-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-115-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+manifest.webmanifest  (static, build-time)
+{ "name": "ClassRup", "short_name": "ClassRup", "start_url": "/", "display": "standalone",
+  "background_color": "<token>", "theme_color": "<token>",
+  "icons": [ { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+             { "src": "/icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" } ] }
+```
+Manifest fields are fixed at build time. No user input reaches the manifest (anti-spoofing).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Local install state is derived, not stored, except `install.dismissed_at`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-115-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+See [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+See [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+See [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-115-01-01 (contract): manifest validates against the W3C manifest fields used; CI fails on missing icon.
+- TEST-PS-115-01-02 (unit): manifest build contains no user-derived value.
+- TEST-PS-115-01-03 (unit): `install.dismissed_at` is the only key written by this module.
+- TEST-PS-115-01-04 (a11y): maskable icon safe zone check (visual).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Manifest and icons present in build artifacts.
+2. Only one localStorage key written (scan).
+3. Icons pass safe-zone review.
+
+## Assumptions & open decisions
+- ASSUMPTION: product name "ClassRup" is the app name; final branding is out of scope.
+- No Dxx applies.

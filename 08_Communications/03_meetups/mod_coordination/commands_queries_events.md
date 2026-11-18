@@ -1,35 +1,59 @@
-# PS-064-04 — commands queries events
+# PS-064-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-064-04. **Owner:** [08_Communications/03_meetups/mod_coordination](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_coordination. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_coordination. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001, CTR-SCH-001, CTR-CAP-001 (`meetup.*`), CTR-PRV-001 (LOCATION_PRECISE rules), CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for coordination within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-064-04.R01 | All writes carry `idempotency_key` and `expected_revision` (except propose). | MVP |
+| PS-064-04.R02 | `ShareMeetupPoint` requires TLS and returns no point in its response. | MVP |
+| PS-064-04.R03 | Events never carry `place_text`, coordinates or venue details beyond `venue_ref`. | MVP |
+| PS-064-04.R04 | `GetMeetup` returns full details to participants only; a point is returned only to the grantee within the disclosure window. | MVP |
+| PS-064-04.R05 | Schema IDs for the seven `meetup.*` events at 1.0.0. | MVP |
+| PS-064-04.R06 | Calendar export (ICS) of meetup windows without place. | Future |
 
-## Requirements to specify
-- [ ] PS-064-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-064-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-064-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Payload | Error codes |
+|---|---|---|
+| `ProposeMeetup` | `thread_id`, `exchange_ref`, `window_start`, `window_end`, `venue_ref?` or `place_text?`, `idempotency_key` | `WINDOW_*`, `VENUE_NOT_LISTED`, `PLACE_*`, `NOT_ELIGIBLE` (from mod_private relation) |
+| `AcceptMeetup` / `CancelMeetup` / `ConfirmCompleted` | `meetup_id`, `expected_revision` | `STATE_INVALID`, `SYS.NOT_FOUND` |
+| `ProposeReschedule` | `meetup_id`, new window, `expected_revision` | `WINDOW_*`, `RESCHEDULE_LIMIT`, `STATE_INVALID` |
+| `ReportNoShow` | `meetup_id` | `STATE_INVALID` |
+| `ShareMeetupPoint` | `meetup_id`, `point` | `POINT_INVALID`, `STATE_INVALID` |
+| `RevokeMeetupPoint` | `meetup_id` | `SYS.NOT_FOUND` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Queries: `GetMeetup(meetup_id)`; `ListMeetupsForThread(thread_id)`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-064-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Duplicate proposals with same key return the same `meetup_id`. Point sharing offline is not queued (sensitive; must be online) — ASSUMPTION.
+
+## Privacy, retention, abuse
+Events carry IDs and states only. Point sharing never logged.
+
+## Observability & budgets
+`coord_cmd_total{command,result}`; no meetup or venue IDs as labels.
+
+## Tests
+- TEST-PS-064-04-01 (contract): payloads validate.
+- TEST-PS-064-04-02 (integration): duplicate propose returns same ID.
+- TEST-PS-064-04-03 (contract): event lint finds no place text or coordinates.
+- TEST-PS-064-04-04 (negative): non-grantee `GetMeetup` returns no point field (absent).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Commands, queries and events implemented as listed.
+2. Idempotency verified.
+3. No point or place text in events or responses to non-grantees.
+4. Event lint passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: `aggregate_type = meetup` registered in CTR-SCH-001 once prefix assigned.
+- PROVISIONAL (D08 default, unapproved): point sharing requires online connection, which is stricter than the default queue.

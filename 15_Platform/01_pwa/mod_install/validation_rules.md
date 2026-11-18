@@ -1,35 +1,55 @@
 # PS-115-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-115-02. **Owner:** [15_Platform/01_pwa/mod_install](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_install. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_install. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001.
 
-## Purpose and scope
-Define the validation rules process for install within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-115-02.R01 | Build fails if the manifest misses any field in PS-115-01.R01 or an icon file is missing or has the wrong pixel size. | MVP |
+| PS-115-02.R02 | Build fails if any manifest string contains an environment variable or user-supplied value. | MVP |
+| PS-115-02.R03 | Install prompt is shown only when the browser has supplied a deferred prompt event and the user activated the install control. | MVP |
+| PS-115-02.R04 | Install control is shown only in states `install_available` or, on iOS Safari, `not_installed` (instructions view). | MVP |
 
-## Requirements to specify
-- [ ] PS-115-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-115-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-115-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Check | Rule | Error code | Retryable | message_key |
+|---|---|---|---|---|
+| manifest field | R01 | INSTALL.MANIFEST_INVALID (build) | false | n/a (build failure) |
+| icon size | R01 | INSTALL.ICON_INVALID (build) | false | n/a (build failure) |
+| manifest content | R02 | INSTALL.MANIFEST_DYNAMIC_VALUE (build) | false | n/a (build failure) |
+| prompt availability | R03 | INSTALL.PROMPT_UNAVAILABLE | true | err.install.prompt_unavailable |
+| control state | R04 | INSTALL.NOT_SUPPORTED | false | err.install.not_supported |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Build checks run in CI. Runtime codes are local.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Runtime errors are shown as plain text with a next step (for example, use the browser menu).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Not applicable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-115-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Checks deterministic; offline behavior is unaffected.
+
+## Privacy, retention, abuse
+None sent to server.
+
+## Observability & budgets
+CI report lists each check result.
+
+## Tests
+- TEST-PS-115-02-01 (unit): build with missing `short_name` fails.
+- TEST-PS-115-02-02 (unit): 191 px icon fails.
+- TEST-PS-115-02-03 (integration): install control absent when no prompt and not iOS.
+- TEST-PS-115-02-04 (unit): manifest with `${ENV}` placeholder fails build.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each rule has failing fixture.
+2. Build gate in CI blocks release on failure.
+3. No runtime manifest mutation.
+
+## Assumptions & open decisions
+- ASSUMPTION: iOS detection uses user-agent feature checks (no fingerprinting; see R05 of privacy file).

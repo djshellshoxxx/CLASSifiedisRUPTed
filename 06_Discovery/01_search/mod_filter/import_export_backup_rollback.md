@@ -1,35 +1,53 @@
-# PS-044-10 — import export backup rollback
+# PS-044-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-044-10. **Owner:** [06_Discovery/01_search/mod_filter](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_filter. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_filter. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R11 export), CTR-FED-001 (R03), CTR-SCH-001 (R07).
 
-## Purpose and scope
-Define the import export backup rollback process for filter within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** D07 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-044-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-044-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-044-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-044-10.R01 | Owner export of own saved searches as JSON, schema versioned. | MVP |
+| PS-044-10.R02 | No import of saved searches from peers or files in MVP. | MVP |
+| PS-044-10.R03 | Backups restore deletions (CTR-PRV-001 R06). | MVP |
+| PS-044-10.R04 | Forward-only schema; upcast on read. | MVP |
+| PS-044-10.R05 | Flag `filter.saved.enabled` off stops new saves and digests; existing saved searches remain readable and deletable. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Export: `export_id`, `schema_version`, `searches[]`, `sha256`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+`filter.export` query by owner; `saved_search.exported` audit event.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Export changes no status.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` for non-owner export.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-044-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Owner only.
+
+## Failure, idempotency, concurrency, offline
+Export idempotent per request key.
+
+## Privacy, retention, abuse
+Export file 24 h link; removed after download or 7 days (ASSUMPTION).
+
+## Observability & budgets
+`filter_export_total`; p95 ≤ 5 s for ≤ 20 searches (ASSUMPTION).
+
+## Tests
+- TEST-PS-044-10-01 (contract): export validates.
+- TEST-PS-044-10-02 (negative): inbound saved search from peer rejected.
+- TEST-PS-044-10-03 (backup): purged search not restored.
+- TEST-PS-044-10-04 (rollback): flag off blocks saves; deletion still works.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export contains only the owner's searches.
+2. No inbound saved-search data accepted.
+3. Rollback keeps deletion available.
+
+## Assumptions & open decisions
+- ASSUMPTION: export and removal windows.
+- PROVISIONAL (D07 default, unapproved).

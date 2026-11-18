@@ -1,35 +1,56 @@
-# PS-064-10 — import export backup rollback
+# PS-064-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-064-10. **Owner:** [08_Communications/03_meetups/mod_coordination](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_coordination. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_coordination. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R11 export: LOCATION_PRECISE only on explicit owner request; RET-LOC), CTR-SCH-001, CTR-CAP-001, CTR-FED-001 (never federated).
 
-## Purpose and scope
-Define the import export backup rollback process for coordination within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-064-10.R01 | Owner export includes owner's meetup windows, states and place text; LOCATION_PRECISE points are excluded unless the owner explicitly requests them. | MVP |
+| PS-064-10.R02 | Counterparty points, counterparty place text and moderator notes are never exported. | MVP |
+| PS-064-10.R03 | Backups encrypted; include meetup records; point ciphertext backed up only within RET-LOC and purged with the rest. | MVP |
+| PS-064-10.R04 | Restore never re-activates an expired point; expired disclosures are not restored. | MVP |
+| PS-064-10.R05 | Restore re-runs expiry sweep before the service accepts traffic. | MVP |
+| PS-064-10.R06 | Import of meetup records from other platforms. | Future (not permitted in MVP) |
 
-## Requirements to specify
-- [ ] PS-064-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-064-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-064-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`meetup.export` 1.0.0: `export_id`, `generated_at`, `meetups[]` (`meetup_id`, `exchange_ref`, `window_start`, `window_end`, `state`, `venue_ref`, `place_text`, optional `points[]` only when explicitly requested), `schema_version`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`RequestMeetupExport` (owner; `include_points` boolean, default false); event `meetup.export_ready` with `export_id` only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+`queued` → `ready` (24 h) → `expired`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `COORD.EXPORT_RATE_LIMIT` | true | `err.coord.export_rate_limit` |
+| `COORD.RESTORE_EXPIRED_POINT` | false | `err.coord.restore_expired` |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: owner (`meetup.read`); `include_points` requires explicit confirmation step. Restore: operator with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-064-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent per `export_id`. Restore staged; expiry sweep before cutover.
+
+## Privacy, retention, abuse
+Export deleted at 24 h (RET-EPH). Export with points is LOCATION_PRECISE: link not shareable in notifications; 24 h expiry. Backups 35 days (ASSUMPTION).
+
+## Observability & budgets
+`coord_export_total{result,include_points}`; no coordinates.
+
+## Tests
+- TEST-PS-064-10-01 (contract): export validates.
+- TEST-PS-064-10-02 (integration): default export has no points.
+- TEST-PS-064-10-03 (integration): restore does not reinstate expired points.
+- TEST-PS-064-10-04 (integration): counterparty place text absent from export.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Default export contains no points.
+2. Restore keeps expiry.
+3. Export link expires at 24 h.
+4. Backup drill recorded.
+
+## Assumptions & open decisions
+- ASSUMPTION: backup retention 35 days.
+- PROVISIONAL (D05 default, unapproved): points exported only on explicit request.

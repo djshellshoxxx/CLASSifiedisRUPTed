@@ -1,35 +1,54 @@
 # PS-099-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-099-06. **Owner:** [12_Moderation/03_antifraud/mod_rate](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_rate. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_rate. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R03), CTR-FED-001 (R11, R13), CTR-EVT-001 (R03 for policy commands).
 
-## Purpose and scope
-Define the failure recovery idempotency process for rate within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-099-06.R01 | Each class declares `fail_mode`: `closed` (deny), `open_throttled` (allow with a local per-instance limit at 25 % of policy rate), or `open` (allow, read-only classes only). | MVP |
+| PS-099-06.R02 | Authentication classes (`auth.*`, recovery) are `closed`. Message send and listing creation are `open_throttled`. Public reads are `open`. | MVP |
+| PS-099-06.R03 | Store failure detection within 2 s; fallback to local limiter immediately after detection. | MVP |
+| PS-099-06.R04 | Edge retries of the same request ID do not consume a second token (60 s dedupe window, PS-099-04). | MVP |
+| PS-099-06.R05 | Federation batches over the per-peer limit are rejected with `FED.RATE_LIMITED` and retry-after; nothing is dropped silently. | MVP |
 
-## Requirements to specify
-- [ ] PS-099-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-099-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-099-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Local fallback limiter state is per-instance, in memory, and not shared. Fallback decisions are counted in `rate_fallback_total{class_id}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Policy load is atomic: the new policy becomes active only after full validation (PS-099-03).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Store recovery returns classes to shared limiting; local buckets are discarded.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`RATE.STORE_UNAVAILABLE` (503, retryable true) only for `closed` classes; `open_throttled` and `open` classes never return it.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Not affected by failure modes.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-099-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Clock skew across nodes: GCRA uses the node's monotonic clock for TAT deltas; cross-node sync is not required for correctness, so skew only changes fairness, bounded by the 25 % fallback.
+- Offline clients: honor `retry_after_ms`; the PWA queue (D08) does not retry before that time.
+- Timeouts: consume 50 ms; on timeout, class fail mode applies.
+
+## Privacy, retention, abuse
+Fallback does not change what is stored (nothing is stored).
+
+## Observability & budgets
+Alert: fallback active > 5 min (page); denial rate for any class > 5× its 7-day baseline for 10 min (page, possible attack or misconfiguration).
+
+## Tests
+- `TEST-PS-099-06-01` fault injection: store down → `closed` classes deny, `open_throttled` allows at 25 %.
+- `TEST-PS-099-06-02` integration: edge retry of same request ID consumes one token.
+- `TEST-PS-099-06-03` integration: federation batch over limit → `FED.RATE_LIMITED` with retry-after; batch not partially applied.
+- `TEST-PS-099-06-04` clock skew 2 s across nodes: fairness within 10 % of single-node reference.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Fail mode table reviewed and applied to every registered class.
+2. No `closed` class is open during store outage in test.
+3. No federated batch dropped silently.
+
+## Assumptions & open decisions
+- ASSUMPTION: 25 % fallback fraction and 2 s detection are defaults.
+- D01 (federated protocol), PROVISIONAL default: per-peer limits with explicit retry-after (unapproved).
+- D08 (PWA offline writes), PROVISIONAL default: pending queue honors retry-after (unapproved).

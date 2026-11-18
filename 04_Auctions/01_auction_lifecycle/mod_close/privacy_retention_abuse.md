@@ -1,35 +1,51 @@
 # PS-034-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-034-07. **Owner:** [04_Auctions/01_auction_lifecycle/mod_close](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_close. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_close. **Parent:** [mod_close SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-EVT-001, CTR-COM-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for close within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-034-07.R01 | Winner identity and close hash are PRIVATE_PERSONAL until confirmation, then FINANCIAL_EVIDENCE. `reserve_met` is PUBLIC. | MVP |
+| PS-034-07.R02 | Close record is retained for the dispute window (14 days, CTR-COM-001 R16) plus 24 months (PROVISIONAL, D07 default); then `winner` is replaced by a tombstone token, amounts remain. | MVP |
+| PS-034-07.R03 | Public archive of closed auctions contains end state, amounts and bidder pseudonyms only. | MVP |
+| PS-034-07.R04 | Seller-linked winner detection (PS-034-02 R05) sends IDs and rule enum to F04.S02.M03 only. | MVP |
+| PS-034-07.R05 | Cancellations per seller: ≤ 20 per 30 days before review flag (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-034-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-034-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-034-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention fields: `retain_until`, `legal_hold` (F10 only), `tombstone_token`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retention job runs as `sys`; emits `auction.close_record.purged` with counts.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+ACTIVE → ARCHIVED (+14 days after terminal state) → PSEUDONYMIZED (+24 months). UNSOLD and CANCELLED records follow the same schedule.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Export or purge under legal hold → `SYS.CONFLICT` (reason `legal_hold`).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Winner and seller may export their own closed-auction records. Purge is `sys`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-034-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge idempotent per record; never purges a record with an open confirmation or dispute.
+
+## Privacy, retention, abuse
+Abuse: shill-award (seller-linked winner), cancellation abuse to deny buyers, close-timing manipulation. Controls: R04, R05, server-only close. Pseudonyms do not hide the transaction from the two parties.
+
+## Observability & budgets
+Metrics: `close_seller_flags_total`, `close_cancellations_total`, `close_records_purged_total`. No winner identifiers in logs.
+
+## Tests
+- TEST-PS-034-07-01 (lint): field classes per R01; winner absent from public projection.
+- TEST-PS-034-07-02 (integration): purge skipped while confirmation pending.
+- TEST-PS-034-07-03 (integration): public archive contains no `acc_`.
+- TEST-PS-034-07-04 (abuse): 21st cancellation in 30 days flags seller, no automatic ban.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retention schedule matches R02.
+2. Public archive privacy scan passes.
+3. Seller flags contain no account identifiers.
+
+## Assumptions & open decisions
+- ASSUMPTION: 20 cancellations per 30 days threshold.
+- PROVISIONAL: D07 retention default (unapproved). Legal periods OPEN. See [DECISIONS.md](../../../DECISIONS.md).

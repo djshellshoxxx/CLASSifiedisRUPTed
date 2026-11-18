@@ -1,35 +1,51 @@
 # PS-099-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-099-10. **Owner:** [12_Moderation/03_antifraud/mod_rate](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_rate. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_rate. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (policy schema versions), CTR-EVT-001 (R08 for policy events), CTR-FED-001 (R11).
 
-## Purpose and scope
-Define the import export backup rollback process for rate within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-099-10.R01 | No bucket state is exported or backed up. Backups contain only policy files and their signatures. | MVP |
+| PS-099-10.R02 | Policy import is allowed only as a signed artifact from F16; no free-form import exists. | MVP |
+| PS-099-10.R03 | Rollback = activate a previously signed policy version; the old version is re-verified before activation. | MVP |
+| PS-099-10.R04 | Policy schema changes follow CTR-SCH-001 with a one-MINOR compatibility window. | MVP |
+| PS-099-10.R05 | Restore after data-center failover starts with empty buckets and the last active policy. | MVP |
 
-## Requirements to specify
-- [ ] PS-099-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-099-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-099-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Backup content: signed policy files (JSON, version history of 10 entries kept). No other data.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`rate.policy_load` (PS-099-04) is the only import path.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback sets a new active version identical to the old file (new `policy_version` label with `rollback_of` field).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Signature failure → `rate.policy_rejected` with `reason_code` `SIGNATURE_INVALID`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Policy load requires F16 signing key (PS-099-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-099-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Empty bucket start after failover is a fairness event for one window; accepted per PS-099-07 R01 trade-off.
+
+## Privacy, retention, abuse
+Policy files contain no subject data, so export is not a privacy concern. Class definitions published for transparency only if F10 approves.
+
+## Observability & budgets
+Restore of policy set ≤ 1 min (ASSUMPTION).
+
+## Tests
+- `TEST-PS-099-10-01` integration: failover with empty buckets and last policy: limits resume within one window.
+- `TEST-PS-099-10-02` negative: unsigned policy import rejected.
+- `TEST-PS-099-10-03` rollback: prior signed version reactivates with the same behavior on the reference corpus.
+- `TEST-PS-099-10-04` schema migration: old-minor policy loads under new minor.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Backups contain zero bucket data.
+2. Rollback produces identical decisions to the earlier version on the test corpus.
+3. Unsigned import rejected in test.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO and RTO are not meaningful for buckets; RTO for policy restore is ≤ 1 min.
+- D07 (retention), PROVISIONAL default: policy history retained 12 months (unapproved).

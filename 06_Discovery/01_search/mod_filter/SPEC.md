@@ -1,44 +1,50 @@
 # F06.S01.M03 — filter
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F06.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Marketplace Lead (F01/F02/F06 accountable). **Parent:** F06.S01.
 
 ## Purpose and business behavior
-Provide filter as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Define the facet filters a person applies to local search (category, listing type, condition, price in one currency, coarse region cells, availability dates, keywords), validate them, normalize them to a stable hash, evaluate them against the search index without precise location, and manage saved searches with daily digests. Filters narrow results; they never reveal precise location or rank listings.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a seeker, I narrow results by category, price range in my currency, and two or three nearby coarse areas.
+- As a seeker, I save a search and get one digest a day when new matches appear.
+- As an operator, I see filter error rates without seeing keywords or who saved what.
 
 ## Scope
-- Required process spec: `filter_domain_model.md` (not yet authored)
-- Required process spec: `filter_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `filter_validation_and_authorization.md` (not yet authored)
-- Required process spec: `filter_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `filter_interfaces_and_events.md` (not yet authored)
-- Required process spec: `filter_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `filter_acceptance_and_property_tests.md` (not yet authored)
+- PS-044-01 domain_schema.md
+- PS-044-02 validation_rules.md
+- PS-044-03 workflow_state_machine.md
+- PS-044-04 commands_queries_events.md
+- PS-044-05 authorization_capabilities.md
+- PS-044-06 failure_recovery_idempotency.md
+- PS-044-07 privacy_retention_abuse.md
+- PS-044-08 observability_performance.md
+- PS-044-09 contract_and_acceptance_tests.md
+- PS-044-10 import_export_backup_rollback.md
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+`filter.evaluate`, `filter.save`, `filter.pause`, `filter.resume`, `filter.delete`, `filter.list`, `filter.export`. Events `saved_search.*`. Contracts in PS-044-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F06.S01.M01 index (postings), F06.S02 geoprivacy (registered cells, query budget), F01 taxonomy (facet enums). Downstream: F06.S03 ranking (sort input), F13 notifications (digests), F07 accounts (ownership).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `sfl_` saved searches and filter normalization rules. Listing data belongs to F01; cells to F10 registry.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Keyword and facet combinations that identify a person or a home area; saved-search digests leaking to other users; scraping through repeated filters; currency mixing producing wrong price matches. Pseudonyms do not hide saved interests from the owner's digest.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 canonical process files at SPEC-DRAFT-COMPLETE; saved-search classification approved by F10; facet taxonomy confirmed by F01; quotas approved.
 
 ## Required process specification inventory
-- [ ] `filter_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `filter_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `filter_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `filter_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `filter_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `filter_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `filter_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-044-01
+- [x] [validation_rules.md](validation_rules.md) — PS-044-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-044-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-044-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-044-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-044-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-044-07
+- [x] [observability_performance.md](observability_performance.md) — PS-044-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-044-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-044-10

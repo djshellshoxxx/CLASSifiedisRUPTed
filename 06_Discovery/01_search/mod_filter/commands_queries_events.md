@@ -1,35 +1,59 @@
-# PS-044-04 — commands queries events
+# PS-044-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-044-04. **Owner:** [06_Discovery/01_search/mod_filter](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_filter. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_filter. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for filter within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** D08 PROVISIONAL (offline saved-search edits).
 
-## Requirements to specify
-- [ ] PS-044-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-044-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-044-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-044-04.R01 | `filter.evaluate` is a query; it writes no event and no record. | MVP |
+| PS-044-04.R02 | `filter.evaluate` p95 ≤ 150 ms for ≤ 10 000 candidate postings (ASSUMPTION). | MVP |
+| PS-044-04.R03 | Saved-search commands require `idempotency_key`; state changes require `expected_revision`. | MVP |
+| PS-044-04.R04 | One `saved_search.*` event per saved-search command (`aggregate_type = saved_search`). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+`filter.evaluate` request: `filter`, `page` (≤ 50, cursor), `sort`. Response: result IDs, `filter_hash`, `ranking_model` reference (`rmv_` PENDING). Events carry IDs, status and state version only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Command or query | Caller | Event | Error codes |
+|---|---|---|---|
+| `filter.evaluate` (query) | any (pseudonym view ok) | none | FACET_UNKNOWN, TOO_MANY_FACETS, PRICE_CURRENCY_MIXED, REGION_UNKNOWN, PRECISE_LOCATION_REJECTED |
+| `filter.save` | owner | saved_search.saved | SAVED_LIMIT, plus validation codes |
+| `filter.pause` | owner | saved_search.paused | INVALID_TRANSITION |
+| `filter.resume` | owner | saved_search.resumed | INVALID_TRANSITION |
+| `filter.delete` | owner | saved_search.deleted | INVALID_TRANSITION |
+| `filter.list` (query) | owner | none | none |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Event mapping in PS-044-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+PS-044-02 gates before execution.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-044-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Saved-search commands: owner only. Evaluation: unauthenticated allowed for PUBLIC listings only (CTR-CAP-001 R04 `public` visibility, ASSUMPTION).
+
+## Failure, idempotency, concurrency, offline
+Same key with different digest → `EVT.IDEMPOTENCY_KEY_REUSED`. Offline saved-search edits queue as pending (D08).
+
+## Privacy, retention, abuse
+Evaluation logs carry `filter_hash` and counts only, never keywords. Events omit the filter body.
+
+## Observability & budgets
+`filter_evaluate_latency_ms` histogram; `filter_evaluate_total{outcome}`.
+
+## Tests
+- TEST-PS-044-04-01 (contract): command and query schemas validate.
+- TEST-PS-044-04-02 (query purity): evaluate writes no event or record.
+- TEST-PS-044-04-03 (idempotency): duplicate save → one saved search.
+- TEST-PS-044-04-04 (budget): 10 000-posting fixture meets p95 ≤ 150 ms.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Evaluation is side-effect free (TEST-PS-044-04-02).
+2. Each saved-search command maps to one event.
+3. Latency budget met under fixture.
+
+## Assumptions & open decisions
+- ASSUMPTION: 150 ms p95 budget.
+- PENDING CTR-ID-001 `sfl` prefix and CTR-SCH-001 registration.

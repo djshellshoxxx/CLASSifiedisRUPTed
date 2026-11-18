@@ -1,35 +1,56 @@
-# PS-044-07 — privacy retention abuse
+# PS-044-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-044-07. **Owner:** [06_Discovery/01_search/mod_filter](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_filter. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_filter. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (classes, retention, query budget), CTR-FED-001 (R03), CTR-CAP-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for filter within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** D05 PROVISIONAL. D07 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-044-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-044-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-044-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-044-07.R01 | Saved searches PRIVATE_PERSONAL, RET-PRIV (365 days after last access). | MVP |
+| PS-044-07.R02 | Ad-hoc filters cached only in RET-EPH (24 h) on the device or server cache. | MVP |
+| PS-044-07.R03 | Never federated (CTR-FED-001 R03). Saved searches never exported to peers. | MVP |
+| PS-044-07.R04 | Logs carry `filter_hash`, counts and codes; never keywords or cell IDs per person. | MVP |
+| PS-044-07.R05 | Evaluations per `acc_` count against the location query budget when a region facet is used (30 per 24 h, CTR-PRV-001 R05). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Retention metadata on saved searches.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+`record.deleted` IDs and counts only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Deleted saved search purged within 24 h.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`PRV.QUERY_BUDGET_EXCEEDED` (429) when R05 budget spent.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-044-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Per PS-044-05.
+
+## Failure, idempotency, concurrency, offline
+Deletion propagates to caches and digests (CTR-PRV-001 R06).
+
+## Privacy, retention, abuse
+Abuse controls:
+- Scraping by repeated evaluations: rate limit per client (ASSUMPTION) with `SYS.RATE_LIMITED`.
+- Triangulation via narrowing facets: region query budget and CR-13 alert.
+- Keyword profiling: saved-search keywords never used outside the owner's digest.
+
+## Observability & budgets
+`filter_privacy_log_violations_total` must be 0.
+
+## Tests
+- TEST-PS-044-07-01 (log scan): seeded keywords absent from logs.
+- TEST-PS-044-07-02 (retention): saved search purged 24 h after deletion.
+- TEST-PS-044-07-03 (budget): 31st region-faceted query in 24 h → 429.
+- TEST-PS-044-07-04 (federation): export and federation paths exclude saved searches.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero keyword values in logs.
+2. Budget enforced for region facets.
+3. No saved-search data in any export or federation payload.
+
+## Assumptions & open decisions
+- OPEN (F10): PRIVATE_PERSONAL class for saved searches.
+- ASSUMPTION: client rate limit value.

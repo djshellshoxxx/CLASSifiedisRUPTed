@@ -1,35 +1,51 @@
-# PS-044-08 — observability performance
+# PS-044-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-044-08. **Owner:** [06_Discovery/01_search/mod_filter](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_filter. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_filter. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (metric and log rules), CTR-ERR-001.
 
-## Purpose and scope
-Define the observability performance process for filter within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** Budgets ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-044-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-044-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-044-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-044-08.R01 | `filter_evaluate_latency_ms` p95 ≤ 150 ms (ASSUMPTION). | MVP |
+| PS-044-08.R02 | Validation latency p95 ≤ 5 ms. | MVP |
+| PS-044-08.R03 | Partial-result rate reported per shard. | MVP |
+| PS-044-08.R04 | No labels with keyword text or cell IDs per person. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Metrics: `filter_evaluate_latency_ms`, `filter_evaluate_total{outcome}`, `filter_validation_reject_total{code}`, `filter_partial_results_total`, `saved_search_digest_sent_total`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Not applicable beyond counters.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Not applicable.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Validation counter per code.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-044-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Aggregated metrics only.
+
+## Failure, idempotency, concurrency, offline
+Digest lag alert.
+
+## Privacy, retention, abuse
+Metrics RET-OPS (30 days).
+
+## Observability & budgets
+Alerts: p95 evaluate > 150 ms for 10 min; partial-result rate > 1% for 15 min; digest lag > 2 h (ASSUMPTION).
+
+## Tests
+- TEST-PS-044-08-01 (lint): forbidden label keys absent.
+- TEST-PS-044-08-02 (load): 500 evaluations per second fixture meets p95 ≤ 150 ms.
+- TEST-PS-044-08-03 (alert): seeded shard failure raises partial-result alert.
+- TEST-PS-044-08-04 (unit): counters increment once per call.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics present with specified labels.
+2. Load budget met on fixture.
+3. Alert fires within 5 minutes.
+
+## Assumptions & open decisions
+- ASSUMPTION: thresholds above.

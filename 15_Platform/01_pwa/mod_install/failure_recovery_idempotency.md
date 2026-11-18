@@ -1,35 +1,50 @@
-# PS-115-06 — failure recovery idempotency
+# PS-115-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-115-06. **Owner:** [15_Platform/01_pwa/mod_install](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_install. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_install. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for install within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-115-06.R01 | If the prompt event is missing or fails, show manual instructions; no error page. | MVP |
+| PS-115-06.R02 | If service worker update fails, keep the current build and retry on next load. | MVP |
+| PS-115-06.R03 | If storage is blocked (private browsing), the app runs; install-dismissal cooldown is not persisted. | MVP |
+| PS-115-06.R04 | Update reload preserves drafts by saving them to the pending queue before reload (D08 PROVISIONAL). | MVP |
 
-## Requirements to specify
-- [ ] PS-115-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-115-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-115-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+None beyond `install.dismissed_at`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+All operations idempotent (PS-115-04.R03).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Runtime codes use message keys so the client shows localized text.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Not applicable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-115-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Two tabs: install state is per browser; update applies in all tabs after reload.
+- Browser update blocked by policy: app remains on current build; no loop of reload prompts.
+
+## Privacy, retention, abuse
+Failure logs are local only and contain codes.
+
+## Observability & budgets
+Local counters only.
+
+## Tests
+- TEST-PS-115-06-01 (integration): missing prompt shows instructions.
+- TEST-PS-115-06-02 (integration): update failure keeps current build.
+- TEST-PS-115-06-03 (integration): private mode runs without persisting cooldown.
+- TEST-PS-115-06-04 (integration): draft saved to queue before update reload.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each failure path has a test.
+2. No reload loop in fixtures.
+3. Draft preservation verified.
+
+## Assumptions & open decisions
+- D08 PROVISIONAL (D08 default, unapproved).

@@ -1,9 +1,35 @@
 # Changelog
 
 All notable changes are recorded here. This project has no tagged release yet; entries
-describe what is on the integration branch, with the pull request that introduced each change.
+describe what is integrated into main, with the pull request that introduced each change.
 
 ## Unreleased
+
+### Exhaustive consolidation (2026-11-18)
+
+- [PR #48](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/48) extracts the
+  feature-catalog generator, immutable dependency registry and four opt-in read-only
+  query definitions from draft #8 into the current kernel. Catalog membership does
+  not enable product functionality. PWA controls, runtime flag adapters, relay composition,
+  backup/quarantine integration and target-device qualification remain unfinished.
+- Generation and build checks reject stale output. Independent review repaired
+  partial-write retry cleanup and checkout line-ending staleness, with focused
+  regression coverage. Existing vault and signed-record formats are unchanged.
+- Fresh native Ed25519 generation recovers from eligible `OperationError` failures
+  within three sequential attempts, before key export or persistence. New identity,
+  vault and real-browser regressions cover recovery, exhaustion and preserved
+  identity after reopening. Existing-key imports remain unchanged; the affected
+  WebKit engine's deterministic import defect is still unresolved. The
+  [native diagnostic and review](docs/reviews/20261117-exhaustive-consolidation/native-keygen-review.md)
+  preserves both failed raw probes and the mitigation's evidence boundary.
+- [PR #50](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/50) records the
+  exhaustive 52-branch / 47-PR starting inventory, bounded security review, corrected
+  WebKit evidence and adapted client-owned future CLI specification. Domain CLI
+  commands remain planned. Stacked draft #49 was closed as superseded after the
+  independent documentation merge.
+- The pre-existing high Picomatch development-toolchain advisory remains unresolved;
+  the dependency audit exits 1. The product remains a development alpha. See the
+  [dated security review](docs/reviews/20261117-exhaustive-consolidation/security-review.md).
 
 ### Parallel continuation (2026-11-16)
 

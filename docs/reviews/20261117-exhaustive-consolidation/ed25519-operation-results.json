@@ -1,0 +1,41 @@
+{
+  "attempts": 512,
+  "completed": 505,
+  "failures": [
+    {
+      "attempt": 102,
+      "stage": "generate",
+      "errorName": "OperationError"
+    },
+    {
+      "attempt": 130,
+      "stage": "generate",
+      "errorName": "OperationError"
+    },
+    {
+      "attempt": 131,
+      "stage": "generate",
+      "errorName": "OperationError"
+    },
+    {
+      "attempt": 136,
+      "stage": "generate",
+      "errorName": "OperationError"
+    },
+    {
+      "attempt": 271,
+      "stage": "generate",
+      "errorName": "OperationError"
+    },
+    {
+      "attempt": 280,
+      "stage": "generate",
+      "errorName": "OperationError"
+    },
+    {
+      "attempt": 318,
+      "stage": "generate",
+      "errorName": "OperationError"
+    }
+  ]
+}

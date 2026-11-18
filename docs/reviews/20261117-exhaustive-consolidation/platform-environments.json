@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "scope": "Exact-source PR platform executions; post-merge main execution is recorded separately in verification.json.",
+  "sourceHead": "e331e56165304c98a1c2bdd26692772b586e499d",
+  "runId": 44271649100,
+  "runUrl": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100",
+  "runAttempt": 1,
+  "jobs": [
+    {
+      "jobId": 134689916172,
+      "jobName": "clean-install (macos-latest, 22.18.0)",
+      "jobUrl": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100/job/134689916172",
+      "sourceHead": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "conclusion": "success",
+      "operatingSystem": [
+        "macOS",
+        "26.7.2",
+        "25G332"
+      ],
+      "runnerImage": [
+        "Image: macos-26-arm64",
+        "Version: 20261102.0473.1"
+      ],
+      "node": "v22.18.0",
+      "cliAssertions": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "logBytes": 29689,
+      "logSha256": "0cfea3e9a20f50f5d7af5fe1325d2d44f6fc35bfd2f158b36fa8cb848825b835"
+    },
+    {
+      "jobId": 134689916205,
+      "jobName": "clean-install (ubuntu-latest, 22.18.0)",
+      "jobUrl": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100/job/134689916205",
+      "sourceHead": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "conclusion": "success",
+      "operatingSystem": [
+        "Ubuntu",
+        "26.04.1",
+        "LTS"
+      ],
+      "runnerImage": [
+        "Image: ubuntu-26.04",
+        "Version: 20261111.196.1"
+      ],
+      "node": "v22.18.0",
+      "cliAssertions": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "logBytes": 44272,
+      "logSha256": "381458d24266afa2701ff5b827557760e0666bed8b4ed6eaf6d5f3a9e4729c35"
+    },
+    {
+      "jobId": 134689916229,
+      "jobName": "clean-install (windows-latest, 22.18.0)",
+      "jobUrl": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100/job/134689916229",
+      "sourceHead": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "conclusion": "success",
+      "operatingSystem": [
+        "Microsoft Windows Server 2025",
+        "10.0.26100",
+        "Datacenter"
+      ],
+      "runnerImage": [
+        "Image: windows-2025-vs2026",
+        "Version: 20261103.298.1"
+      ],
+      "node": "v22.18.0",
+      "cliAssertions": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "logBytes": 30319,
+      "logSha256": "076426db766d3a364367f5543735ae2a2c9f55def48092fe65d5a1f35ffec76a"
+    },
+    {
+      "jobId": 134689916253,
+      "jobName": "clean-install (ubuntu-latest, 24.x)",
+      "jobUrl": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100/job/134689916253",
+      "sourceHead": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "conclusion": "success",
+      "operatingSystem": [
+        "Ubuntu",
+        "26.04.1",
+        "LTS"
+      ],
+      "runnerImage": [
+        "Image: ubuntu-26.04",
+        "Version: 20261111.196.1"
+      ],
+      "node": "v24.22.2",
+      "cliAssertions": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "logBytes": 39133,
+      "logSha256": "279579a79d35068f57cf973704f69b3316d52f32e7cc819dacb8e1b7043f988a"
+    },
+    {
+      "jobId": 134689916265,
+      "jobName": "clean-install (windows-latest, 24.x)",
+      "jobUrl": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100/job/134689916265",
+      "sourceHead": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "conclusion": "success",
+      "operatingSystem": [
+        "Microsoft Windows Server 2025",
+        "10.0.26100",
+        "Datacenter"
+      ],
+      "runnerImage": [
+        "Image: windows-2025-vs2026",
+        "Version: 20261103.298.1"
+      ],
+      "node": "v24.22.2",
+      "cliAssertions": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "logBytes": 25181,
+      "logSha256": "60cf6d3915dd1942fd18817aedad5703bd8167282cad252eb747c5de024b8f68"
+    },
+    {
+      "jobId": 134689916274,
+      "jobName": "clean-install (macos-latest, 24.x)",
+      "jobUrl": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100/job/134689916274",
+      "sourceHead": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "conclusion": "success",
+      "operatingSystem": [
+        "macOS",
+        "26.7.2",
+        "25G332"
+      ],
+      "runnerImage": [
+        "Image: macos-26-arm64",
+        "Version: 20261112.0504.1"
+      ],
+      "node": "v24.22.3",
+      "cliAssertions": {
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "logBytes": 24370,
+      "logSha256": "c736345acdc9dbbba703326632b6b266c15ec331be7103912b72bd76320a6cce"
+    }
+  ]
+}

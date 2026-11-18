@@ -1,0 +1,19 @@
+[
+  {
+    "name": "leading-zero",
+    "stage": "private-import",
+    "errorName": "DataError"
+  },
+  {
+    "name": "all-zero",
+    "stage": "private-import",
+    "errorName": "DataError"
+  },
+  {
+    "name": "nonzero-control",
+    "stage": "complete",
+    "preserved": true,
+    "matches": true,
+    "verifies": true
+  }
+]

@@ -1,0 +1,27 @@
+name: Pinned WebKit crypto diagnosis
+on:
+  push:
+    branches: [diagnostic/webkit-keygen-20261118]
+permissions:
+  contents: read
+jobs:
+  native-crypto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24.x
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm exec playwright install --with-deps webkit
+      - name: Execute unchanged native crypto probes
+        run: corepack pnpm run test:browser:crypto --project=webkit --reporter=line
+      - name: Preserve diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pinned-webkit-crypto-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: error

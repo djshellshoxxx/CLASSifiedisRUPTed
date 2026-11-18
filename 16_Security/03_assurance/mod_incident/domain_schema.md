@@ -29,7 +29,7 @@
 }
 ```
 - `approx_subject_count` is bucketed (0, 1–9, 10–99, 100+) to avoid precise exposure metrics (ASSUMPTION).
-- Class of `incident_id`-linked timeline text: `PRIVATE_PERSONAL` at most; free text is validated by [validation_rules.md](validation_rules.md).
+- Timeline text is classed PRIVATE_PERSONAL at most; free text is validated by [validation_rules.md](validation_rules.md).
 
 ## Commands / queries / events
 See [commands_queries_events.md](commands_queries_events.md).

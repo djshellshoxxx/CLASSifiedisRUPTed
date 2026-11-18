@@ -1,0 +1,337 @@
+{
+  "review_date": "2026-11-17",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "initial_open_pr_count": 25,
+  "review_baseline": "50abc470139a613f4404bdb9fb442f4011c13932",
+  "merged_runtime_main": "2b3193148029a4af64e8f3fe68373b6ca55620f9",
+  "merged_runtime_source": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+  "merged_runtime_tree": "0e28f4284ca1e23c9d36bb03ea1aae21b8f39bc7",
+  "reviewed_prs": [
+    {
+      "number": 1,
+      "title": "docs: Prompt 3 contract foundations and honest specification NO-GO audit",
+      "head": "docs/prompt3-foundations-20261022",
+      "sha": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/1",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 2,
+      "title": "docs: client-owned CLASS contracts and specification checkpoints",
+      "head": "docs/client-owned-foundations-20261024",
+      "sha": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/2",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 3,
+      "title": "Mock-backed ClassRup framework demo (app/)",
+      "head": "claude/pensive-mendel-30x81m",
+      "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/3",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 4,
+      "title": "[Draft] ClassRup mock framework: checkpoint from Haiku wave 1",
+      "head": "work/classrup-haiku-framework",
+      "sha": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/4",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 5,
+      "title": "Mock framework: continuation from PR #4 history with detail-page announcement check",
+      "head": "claude/classifiedisrupted-continue-lcuuwg",
+      "sha": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/5",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 6,
+      "title": "docs: update README and TODOs to current planning status",
+      "head": "claude/vigilant-newton-nva2l6",
+      "sha": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/6",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 7,
+      "title": "Verify mock demo journeys across Chromium, Firefox and WebKit",
+      "head": "milestone/framework-browser-verification",
+      "sha": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "base": "work/classrup-haiku-framework",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/7",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 8,
+      "title": "Stage 3 specs as data + Stage 4 kernel (local-first hybrid architecture)",
+      "head": "claude/bold-mccarthy-qklhl6",
+      "sha": "a403614bb34d3d176d4693730e512e14959718b8",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8",
+      "disposition": "keep_draft",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 12,
+      "title": "docs: source-pin PR #10 alpha CI qualification and next development gate",
+      "head": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "sha": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/12",
+      "disposition": "consolidate_docs",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 13,
+      "title": "docs: add separate ClassRup User and Developer Wiki guides",
+      "head": "chatgpt/zero-codex/docs-wiki-20261110",
+      "sha": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/13",
+      "disposition": "consolidate_docs",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 14,
+      "title": "audit: source-pinned read-only observability boundary review",
+      "head": "chatgpt/zero-codex/audit-observability-20261110",
+      "sha": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/14",
+      "disposition": "consolidate_docs",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 18,
+      "title": "docs: Stage 3 developer-ready specs for services, rentals, accessibility, governance",
+      "head": "claude/happy-newton-4yttpa",
+      "sha": "e402bd56352ae62cb3adcd3ba201a94a06b6217d",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/18",
+      "disposition": "archive_proposal",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 25,
+      "title": "docs(planning): hard-slices lane \u2014 baseline, subsystem maps and candidate designs (paused)",
+      "head": "claude/difficult-project-parts-dcqlup",
+      "sha": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "base": "codex/local-alpha-20261109",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/25",
+      "disposition": "consolidate_docs",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 26,
+      "title": "Discovery: coarse location regions and search filters (unreviewed, parked)",
+      "head": "agents/discovery/coarse-filters",
+      "sha": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "base": "integration/classrup-completion",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/26",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 29,
+      "title": "Notifications: channel consent, in-app preferences and inbox (unreviewed, parked)",
+      "head": "agents/notify/prefs-inapp",
+      "sha": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "base": "integration/classrup-completion",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/29",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 30,
+      "title": "Governance: goods taxonomy and prohibited items (unreviewed, parked)",
+      "head": "agents/governance/taxonomy-prohibited",
+      "sha": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "base": "integration/classrup-completion",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/30",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 31,
+      "title": "Privacy: data classification and metadata minimization (unreviewed, parked)",
+      "head": "agents/privacy/classification-metadata-consent",
+      "sha": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "base": "integration/classrup-completion",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/31",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 32,
+      "title": "Moderation: rate limiting, account limits and fraud signals (unreviewed, parked)",
+      "head": "agents/moderation/rate-limits-signals",
+      "sha": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "base": "integration/classrup-completion",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/32",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 33,
+      "title": "CI: stop duplicate runs and choose OS and browser matrices from the change (not yet run)",
+      "head": "agents/ci/trim-workflows",
+      "sha": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "base": "integration/classrup-completion",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/33",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 34,
+      "title": "Handoff record for the 2026-11-11 pause and wave-1 working material",
+      "head": "agents/orchestration/wave1-handoff",
+      "sha": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "base": "integration/classrup-completion",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/34",
+      "disposition": "consolidate_docs",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 36,
+      "title": "docs: Stage 3 planning \u2014 review findings and canonical contracts (WIP)",
+      "head": "claude/wonderful-cori-ynhlsb",
+      "sha": "3a5c9e36e22a635104dfecf41641b438c95fa239",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/36",
+      "disposition": "archive_proposal",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 40,
+      "title": "Refresh executed feature inventory and verified continuation status",
+      "head": "codex/verified-status-20261116",
+      "sha": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "base": "codex/listing-history-20261116",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/40",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 41,
+      "title": "Add owner archive recovery and listing pagination",
+      "head": "codex/classrup-features-20261116",
+      "sha": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "base": "codex/verified-status-20261116",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/41",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 42,
+      "title": "Complete listing lifecycle, protect vault sessions, and add reviewed location, matching and commerce foundations",
+      "head": "codex/parallel-completion-20261116",
+      "sha": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "base": "codex/classrup-features-20261116",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/42",
+      "disposition": "superseded",
+      "disposition_is_feature_completion": false
+    },
+    {
+      "number": 43,
+      "title": "Apply the queued location-save revision fix after the historical stack merge",
+      "head": "codex/parallel-completion-20261116",
+      "sha": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "base": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/43",
+      "disposition": "merged",
+      "disposition_is_feature_completion": false
+    }
+  ],
+  "validation": {
+    "domain": {
+      "numTotalTests": 632,
+      "numPassedTests": 632,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "success": true,
+      "report_sha256": "2aa1394624de7ad1a685d1b3f2054cf16a50405de6d27b4c949ce2700a1bed2c",
+      "command": "corepack pnpm test --reporter=json --outputFile=../review-evidence/consolidated-domain.json"
+    },
+    "typecheck": "passed",
+    "specifications": {
+      "specified": 148,
+      "total": 148,
+      "errors": 0,
+      "warnings": 0
+    },
+    "dependencies": {
+      "errors": 0
+    },
+    "location_preferences_tests": 10,
+    "old_implementation_regression": "failed as expected: second queued command received revision 1 instead of 2",
+    "github_qualified_source": {
+      "head": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "alpha_run_id": 43981540981,
+      "browser_passed": 63,
+      "cli_run_id": 43981539765,
+      "platform_jobs_passed": 6
+    },
+    "documentation": {
+      "source_heads_retained": [
+        "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+        "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+        "1ee040492345e607b431707fd7f08528bbf2db77",
+        "566778cdf72399df4696e1d6f6675412813e6d5a",
+        "6406a0369098fdb7aa58b5a4e85325560857815f"
+      ],
+      "archived_wiki_files": 6,
+      "archived_proposal_paths": 179,
+      "previously_preserved_pr36_blobs": 10,
+      "independent_navigation_targets_passed": 92,
+      "historical_banner_links_passed": 32,
+      "active_runtime_changes": 0
+    },
+    "keyboard_focus_port": {
+      "pr": 45,
+      "head": "9fc467d633b5c3ec96d5a4a04b92547bc599a950",
+      "alpha_run_id": 44225235696,
+      "cli_run_id": 44225235689,
+      "hosted_status": "in_progress",
+      "local_browser_status": "blocked before assertions by Chromium process-singleton socket denial; pinned download invalid",
+      "viewports": [
+        390,
+        1280
+      ],
+      "focused_cases_discovered": 6
+    }
+  },
+  "remaining_pr8": {
+    "head": "a403614bb34d3d176d4693730e512e14959718b8",
+    "typecheck_diagnostics": 86,
+    "registry_check": "failed during kernel import",
+    "tests": {
+      "numTotalTests": 93,
+      "numPassedTests": 20,
+      "numFailedTests": 73,
+      "numPendingTests": 0,
+      "success": false
+    },
+    "runtime_commit_test_changes": 0,
+    "typecheck_sha256": "51abd64d63e7cecc153a0f4d995d5d8edce7ed7c567174bab382a847d844e51e",
+    "test_report_sha256": "d0622398cdff5ece5d4c90ce7c618f12da9f670e4e2574347b998f27cdaaa25f"
+  },
+  "branches_deleted": [],
+  "branches_force_pushed": [],
+  "release_or_deployment": false
+}

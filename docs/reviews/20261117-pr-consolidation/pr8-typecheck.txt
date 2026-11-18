@@ -1,0 +1,96 @@
+
+> classrup@ typecheck /workspace/scratch/f78bd6f6beec/classrupted-pr8-review
+> tsc -p tsconfig.json --noEmit
+
+packages/auctions/src/index.ts(2,36): error TS2307: Cannot find module './auction_integrity/index.ts' or its corresponding type declarations.
+packages/auctions/src/index.ts(3,36): error TS2307: Cannot find module './auction_lifecycle/index.ts' or its corresponding type declarations.
+packages/bazaar/src/index.ts(2,28): error TS2307: Cannot find module './inventory/index.ts' or its corresponding type declarations.
+packages/bazaar/src/index.ts(3,32): error TS2307: Cannot find module './listing_types/index.ts' or its corresponding type declarations.
+packages/bazaar/src/index.ts(4,27): error TS2307: Cannot find module './listings/index.ts' or its corresponding type declarations.
+packages/bazaar/src/index.ts(5,26): error TS2307: Cannot find module './pricing/index.ts' or its corresponding type declarations.
+packages/commerce/src/index.ts(2,27): error TS2307: Cannot find module './payments/index.ts' or its corresponding type declarations.
+packages/commerce/src/index.ts(3,29): error TS2307: Cannot find module './settlement/index.ts' or its corresponding type declarations.
+packages/commerce/src/index.ts(4,28): error TS2307: Cannot find module './valuation/index.ts' or its corresponding type declarations.
+packages/comms/src/index.ts(2,26): error TS2307: Cannot find module './meetups/index.ts' or its corresponding type declarations.
+packages/comms/src/index.ts(3,28): error TS2307: Cannot find module './messaging/index.ts' or its corresponding type declarations.
+packages/comms/src/index.ts(4,30): error TS2307: Cannot find module './negotiation/index.ts' or its corresponding type declarations.
+packages/discovery/src/index.ts(2,29): error TS2307: Cannot find module './geoprivacy/index.ts' or its corresponding type declarations.
+packages/discovery/src/index.ts(3,26): error TS2307: Cannot find module './ranking/index.ts' or its corresponding type declarations.
+packages/discovery/src/index.ts(4,25): error TS2307: Cannot find module './search/index.ts' or its corresponding type declarations.
+packages/federation/src/index.ts(2,26): error TS2307: Cannot find module './interop/index.ts' or its corresponding type declarations.
+packages/federation/src/index.ts(3,27): error TS2307: Cannot find module './protocol/index.ts' or its corresponding type declarations.
+packages/federation/src/index.ts(4,29): error TS2307: Cannot find module './relay_sync/index.ts' or its corresponding type declarations.
+packages/governance/src/index.ts(2,28): error TS2307: Cannot find module './community/index.ts' or its corresponding type declarations.
+packages/governance/src/index.ts(3,25): error TS2307: Cannot find module './policy/index.ts' or its corresponding type declarations.
+packages/i18n/src/index.ts(2,39): error TS2307: Cannot find module './internationalization/index.ts' or its corresponding type declarations.
+packages/identity/src/index.ts(2,27): error TS2307: Cannot find module './accounts/index.ts' or its corresponding type declarations.
+packages/identity/src/index.ts(3,27): error TS2307: Cannot find module './profiles/index.ts' or its corresponding type declarations.
+packages/identity/src/index.ts(4,24): error TS2307: Cannot find module './trust/index.ts' or its corresponding type declarations.
+packages/kernel/src/index.ts(107,109): error TS2305: Module '"./storage/tx.ts"' has no exported member 'SignedEnvelope'.
+packages/kernel/src/index.ts(107,149): error TS2305: Module '"./storage/tx.ts"' has no exported member 'SyncEntry'.
+packages/kernel/src/index.ts(112,24): error TS2305: Module '"./storage/machines.ts"' has no exported member 'syncMachine'.
+packages/kernel/src/index.ts(113,52): error TS2305: Module '"./storage/driver.ts"' has no exported member 'SyncState'.
+packages/kernel/src/kernel.meta.test.ts(7,24): error TS2305: Module '"./storage/machines.ts"' has no exported member 'syncMachine'.
+packages/kernel/src/storage/contract-suite.ts(215,74): error TS7006: Parameter 'h' implicitly has an 'any' type.
+packages/kernel/src/storage/contract-suite.ts(220,67): error TS7006: Parameter 'h' implicitly has an 'any' type.
+packages/kernel/src/storage/contract-suite.ts(223,67): error TS7006: Parameter 'h' implicitly has an 'any' type.
+packages/kernel/src/storage/scope.ts(7,43): error TS2305: Module '"./tx.ts"' has no exported member 'SignedEnvelope'.
+packages/kernel/src/storage/scope.ts(7,59): error TS2305: Module '"./tx.ts"' has no exported member 'SyncEntry'.
+packages/kernel/src/storage/scope.ts(98,30): error TS7006: Parameter 'e' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(18,3): error TS2305: Module '"./driver.ts"' has no exported member 'SyncRow'.
+packages/kernel/src/storage/sqlite.ts(49,3): error TS2739: Type '{ consumer: string; eventId: string; tenant: string; type: string; envelope: string; attempts: number; errorCode: string; deadAt: string; }' is missing the following properties from type 'DeadLetterRow': replayCount, lastReplayedAt
+packages/kernel/src/storage/sqlite.ts(107,5): error TS2741: Property 'remove' is missing in type '{ append: (r: Omit<OutboxRow, "seq">) => number; get: (eventId: string) => OutboxRow | undefined; pending: (q: PendingQuery) => OutboxRow[]; oldestUndelivered: (consumer: string, types: readonly string[]) => OutboxRow | undefined; purgeBefore: (at: string) => number; }' but required in type '{ append(row: Omit<OutboxRow, "seq">): number; get(eventId: string): OutboxRow | undefined; pending(q: PendingQuery): OutboxRow[]; oldestUndelivered(consumer: string, types: readonly string[]): OutboxRow | undefined; purgeBefore(occurredAt: string): number; remove(eventId: string): void; }'.
+packages/kernel/src/storage/sqlite.ts(131,5): error TS2741: Property 'remove' is missing in type '{ get: (c: string, e: string) => InboxRow | undefined; upsert: (r: InboxRow) => undefined; }' but required in type '{ get(consumer: string, eventId: string): InboxRow | undefined; upsert(row: InboxRow): void; remove(consumer: string, eventId: string): void; }'.
+packages/kernel/src/storage/sqlite.ts(160,7): error TS2322: Type '(consumer: any, limit: any) => DeadLetterRow[]' is not assignable to type '(q: DeadLetterListQuery) => DeadLetterRow[]'.
+  Target signature provides too few arguments. Expected 2 or more, but got 1.
+packages/kernel/src/storage/sqlite.ts(160,14): error TS7006: Parameter 'consumer' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(160,24): error TS7006: Parameter 'limit' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(165,21): error TS7006: Parameter 'at' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(168,13): error TS7006: Parameter 'id' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(172,16): error TS7006: Parameter 'r' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(173,15): error TS7006: Parameter 'now' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(173,20): error TS7006: Parameter 'limit' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(181,14): error TS7006: Parameter 'q' implicitly has an 'any' type.
+packages/kernel/src/storage/sqlite.ts(194,7): error TS2322: Type '(t: string, ref: string) => BlobRow | undefined' is not assignable to type '(tenant: string, ref: string) => (Omit<BlobRow, "bytes"> & { readonly bytesPresent: boolean; } & { readonly bytes: Uint8Array<ArrayBufferLike> | null; }) | undefined'.
+  Type 'BlobRow | undefined' is not assignable to type '(Omit<BlobRow, "bytes"> & { readonly bytesPresent: boolean; } & { readonly bytes: Uint8Array<ArrayBufferLike> | null; }) | undefined'.
+    Type 'BlobRow' is not assignable to type 'Omit<BlobRow, "bytes"> & { readonly bytesPresent: boolean; } & { readonly bytes: Uint8Array<ArrayBufferLike> | null; }'.
+      Property 'bytesPresent' is missing in type 'BlobRow' but required in type '{ readonly bytesPresent: boolean; }'.
+packages/kernel/src/storage/storage.ts(42,43): error TS2345: Argument of type 'DriverKind' is not assignable to parameter of type 'TxEnv | undefined'.
+  Type 'string' is not assignable to type 'TxEnv'.
+packages/kernel/src/storage/tx.ts(640,11): error TS2304: Cannot find name 'syncStore'.
+packages/kernel/src/sync/sender.test.ts(6,15): error TS2305: Module '"../storage/tx.ts"' has no exported member 'SignedEnvelope'.
+packages/kernel/src/sync/sender.test.ts(34,25): error TS7006: Parameter 'e' implicitly has an 'any' type.
+packages/kernel/src/sync/sender.test.ts(43,26): error TS18046: 'retried.value' is of type 'unknown'.
+packages/kernel/src/sync/sender.ts(14,15): error TS2305: Module '"../storage/tx.ts"' has no exported member 'SignedEnvelope'.
+packages/kernel/src/sync/sender.ts(14,31): error TS2305: Module '"../storage/tx.ts"' has no exported member 'SyncEntry'.
+packages/kernel/src/sync/sender.ts(80,24): error TS18046: 'res.value' is of type 'unknown'.
+packages/kernel/src/sync/sender.ts(80,80): error TS18046: 'res.value' is of type 'unknown'.
+packages/kernel/src/sync/sender.ts(82,48): error TS18046: 'res.value' is of type 'unknown'.
+packages/kernel/src/sync/sender.ts(100,85): error TS7006: Parameter 'e' implicitly has an 'any' type.
+packages/kernel/src/sync/sender.ts(110,23): error TS18046: 'r.value' is of type 'unknown'.
+packages/kernel/src/sync/sender.ts(111,18): error TS18046: 'r.value' is of type 'unknown'.
+packages/kernel/src/sync/sender.ts(112,11): error TS18046: 'r.value' is of type 'unknown'.
+packages/moderation/src/index.ts(2,28): error TS2307: Cannot find module './antifraud/index.ts' or its corresponding type declarations.
+packages/moderation/src/index.ts(3,25): error TS2307: Cannot find module './policy/index.ts' or its corresponding type declarations.
+packages/moderation/src/index.ts(4,28): error TS2307: Cannot find module './reporting/index.ts' or its corresponding type declarations.
+packages/mutiny/src/index.ts(2,34): error TS2307: Cannot find module './cycle_execution/index.ts' or its corresponding type declarations.
+packages/mutiny/src/index.ts(3,33): error TS2307: Cannot find module './cycle_matching/index.ts' or its corresponding type declarations.
+packages/mutiny/src/index.ts(4,34): error TS2307: Cannot find module './trade_proposals/index.ts' or its corresponding type declarations.
+packages/mutiny/src/index.ts(5,34): error TS2307: Cannot find module './value_balancing/index.ts' or its corresponding type declarations.
+packages/notify/src/index.ts(2,27): error TS2307: Cannot find module './delivery/index.ts' or its corresponding type declarations.
+packages/notify/src/index.ts(3,30): error TS2307: Cannot find module './preferences/index.ts' or its corresponding type declarations.
+packages/platform/src/configuration/feature/registry.ts(3,36): error TS2307: Cannot find module './registry.generated.ts' or its corresponding type declarations.
+packages/platform/src/configuration/tenants/schema.ts(4,46): error TS2307: Cannot find module './text.ts' or its corresponding type declarations.
+packages/platform/src/index.ts(2,32): error TS2307: Cannot find module './configuration/index.ts' or its corresponding type declarations.
+packages/privacy/src/index.ts(2,32): error TS2307: Cannot find module './data_controls/index.ts' or its corresponding type declarations.
+packages/privacy/src/index.ts(3,38): error TS2307: Cannot find module './security_boundaries/index.ts' or its corresponding type declarations.
+packages/rentals/src/index.ts(2,33): error TS2307: Cannot find module './rental_catalog/index.ts' or its corresponding type declarations.
+packages/rentals/src/index.ts(3,35): error TS2307: Cannot find module './rental_lifecycle/index.ts' or its corresponding type declarations.
+packages/security/src/cryptography/signatures/primitives/jcs.ts(47,14): error TS2550: Property 'isWellFormed' does not exist on type 'string'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2024' or later.
+packages/security/src/cryptography/signatures/primitives/jcs.ts(66,16): error TS2550: Property 'isWellFormed' does not exist on type 'string'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2024' or later.
+packages/security/src/cryptography/signatures/primitives/jcs.ts(154,14): error TS2550: Property 'isWellFormed' does not exist on type 'string'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2024' or later.
+packages/security/src/index.ts(2,24): error TS2307: Cannot find module './authz/index.ts' or its corresponding type declarations.
+packages/security/src/index.ts(3,31): error TS2307: Cannot find module './cryptography/index.ts' or its corresponding type declarations.
+packages/services/src/index.ts(2,34): error TS2307: Cannot find module './service_booking/index.ts' or its corresponding type declarations.
+packages/services/src/index.ts(3,34): error TS2307: Cannot find module './service_catalog/index.ts' or its corresponding type declarations.
+ ELIFECYCLE  Command failed with exit code 1.

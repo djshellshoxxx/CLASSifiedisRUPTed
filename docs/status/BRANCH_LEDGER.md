@@ -1,4 +1,12 @@
-# Branch consolidation review — 2026-11-16
+# Branch consolidation review
+
+## Current consolidation — November 17, 2026
+
+See the [complete 25-PR review and disposition table](PR_CONSOLIDATION_20261117.md) and [source/validation record](PR_CONSOLIDATION_20261117.json). PR #43 is merged; #26/#29/#30/#31/#32/#33/#40/#41/#42 were closed after their integration was proved. Five additive documentation heads are consolidated with provenance; obsolete mock/planning branches and generated-spec proposals are explicitly distinguished from adopted runtime changes. PR #8 retains unique incomplete work and remains a draft.
+
+The documentation integration uses a normal merge from main `2b3193148029a4af64e8f3fe68373b6ca55620f9`, preserving the queued-save correction. Historical source branches remain available. Earlier candidate and pause instructions below apply only to their dated snapshots.
+
+## Historical review — November 16, 2026
 
 ## Latest parallel continuation
 

@@ -53,7 +53,7 @@ corepack pnpm run doctor
 corepack pnpm dev
 ```
 
-Until the alpha branch is merged, check out its exact reviewed branch or commit before installing. Use the source SHA recorded in the milestone handoff; the repository's default branch may not contain this implementation.
+The default `main` branch now contains the runnable development alpha. Use `git switch main` for that baseline, or check out an exact reviewed candidate SHA when reproducing a particular test result. Consult [current project status](status/PROJECT_STATUS.md) for the evidence and remaining qualification of that candidate.
 
 Open the URL printed by `dev` (default `http://127.0.0.1:4173/`). Create/unlock identity in the browser. `dev` rebuilds once at startup; restart it after editing source. Stop with Ctrl+C. If pnpm's pinned executable is already on PATH, the `corepack` prefix is optional.
 
@@ -90,7 +90,9 @@ Export browser data using the application's recovery flow before a substantial a
 - Permission failure: use a writable user-owned checkout. Normal setup does not need root.
 - Missing build: run `corepack pnpm build`; compilation errors are blocking and propagate nonzero.
 
-## Verification evidence
+## Historical verification evidence
+
+The table below records the original CLI implementation checkpoint. Later platform and browser results are recorded with their source commits in [current project status](status/PROJECT_STATUS.md); the historical entries are not the present qualification summary.
 
 | Environment | Source | Checks | Status |
 | --- | --- | --- | --- |

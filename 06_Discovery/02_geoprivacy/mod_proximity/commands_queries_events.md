@@ -1,35 +1,56 @@
-# PS-049-04 — commands queries events
+# PS-045-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-049-04. **Owner:** [06_Discovery/02_geoprivacy/mod_proximity](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_proximity. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_proximity. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-PRV-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the commands queries events process for proximity within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** D05 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-049-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-049-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-049-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-04.R01 | `proximity.query` is a read; it writes only the budget counter (RET-EPH). | MVP |
+| PS-045-04.R02 | Query p95 ≤ 100 ms (ASSUMPTION) for ring 2 (≤ 19 cells). | MVP |
+| PS-045-04.R03 | Registry changes emit `cell.*` events with `max_data_class = LOCATION_COARSE`. | MVP |
+| PS-045-04.R04 | Events never include active counts below K_MIN. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+`proximity.query` request: `cell_id`, `ring`. Response: list of `{cell_id, ring_distance, count_bucket}`, plus `budget_remaining`. Counts are buckets (`5-9`, `10-24`, `25+`), not exact values (ASSUMPTION).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Command or query | Caller | Event | Error codes |
+|---|---|---|---|
+| `proximity.query` (query) | anonymous or session | none (budget counter only) | RING_TOO_LARGE, PRECISE_CENTER_REJECTED, CELL_UNKNOWN, QUERY_BUDGET_EXCEEDED |
+| `cell.register` | registry admin | cell.registered | SYS.FORBIDDEN, SYS.CONFLICT |
+| `cell.refresh` (system) | system | cell.published / cell.merged_up / cell.suppressed | SYS.UNAVAILABLE |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Per PS-045-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+PS-045-02 gates.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-049-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+PS-045-05.
+
+## Failure, idempotency, concurrency, offline
+Refresh idempotent per cycle. Query degrades to last published snapshot (≤ 30 min old) with `stale: true`.
+
+## Privacy, retention, abuse
+Events carry cell IDs and states only. No query input stored.
+
+## Observability & budgets
+`proximity_query_latency_ms`; `proximity_query_total{outcome}`.
+
+## Tests
+- TEST-PS-045-04-01 (contract): query and event schemas validate.
+- TEST-PS-045-04-02 (query purity): query writes no record except budget counter.
+- TEST-PS-045-04-03 (K_MIN): response includes no bucket for cells below 5.
+- TEST-PS-045-04-04 (budget): 19-cell ring 2 query meets p95 ≤ 100 ms on fixture.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Query stores no input (TEST-PS-045-04-02).
+2. No sub-K_MIN counts in responses or events.
+3. Latency budget met.
+
+## Assumptions & open decisions
+- ASSUMPTION: 100 ms p95 target; bucket boundaries.
+- PENDING CTR-SCH-001 registration of cell and proximity response schemas.

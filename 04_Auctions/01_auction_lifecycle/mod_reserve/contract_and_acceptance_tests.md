@@ -1,35 +1,51 @@
 # PS-035-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-035-09. **Owner:** [04_Auctions/01_auction_lifecycle/mod_reserve](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Parent:** [mod_reserve SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-SCH-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for reserve within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-035-09.R01 | Contract tests validate all commands and events against CTR-SCH-001. | MVP |
+| PS-035-09.R02 | Invariant tests: MET iff qualifying bid exists; no raise after first bid; no change after MET. | MVP |
+| PS-035-09.R03 | Negative tests scan every public and bidder-facing response for reserve values. | MVP |
+| PS-035-09.R04 | Accessibility: "reserve met" and "reserve not met" status announced in the auction header. | MVP |
 
-## Requirements to specify
-- [ ] PS-035-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-035-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-035-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `fixtures/reserve/no_reserve.json`, `reserve_equal_bid.json`, `reserve_one_unit_below.json`, `raise_race.json` (names proposed; created in implementation phase). Synthetic accounts only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Recorded bid events replayed against reserve state.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Each state in PS-035-03 has positive and negative tests.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+100% coverage of RESERVE codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests from PS-035-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-035-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Chaos: race between raise and bid, duplicate commands, offline ack after first bid.
+
+## Privacy, retention, abuse
+Fixtures use synthetic reserve values; scans verify absence in responses.
+
+## Observability & budgets
+Suite ≤ 5 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-035-09-01 (contract): all commands and events validate.
+- TEST-PS-035-09-02 (property): invariant R02 across 1,000 random sequences.
+- TEST-PS-035-09-03 (boundary): equal bid sets MET; one unit below does not.
+- TEST-PS-035-09-04 (negative): response scan finds no reserve value for non-seller callers.
+- TEST-PS-035-09-05 (a11y): status announcement passes checks.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Invariant and boundary tests pass.
+2. Zero reserve values in non-seller responses across the scan.
+3. Error-code coverage 100%.
+
+## Assumptions & open decisions
+- ASSUMPTION: WCAG 2.1 AA as CI accessibility mapping.
+- OPEN: display of reserve status before first bid. See [DECISIONS.md](../../../DECISIONS.md) D10.

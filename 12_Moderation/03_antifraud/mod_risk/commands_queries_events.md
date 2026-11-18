@@ -1,35 +1,64 @@
 # PS-100-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-100-04. **Owner:** [12_Moderation/03_antifraud/mod_risk](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_risk. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_risk. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for risk within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-100-04.R01 | `risk.assess` is internal (`sys_`), idempotent on (subject_ref, trigger correlation_id). | MVP |
+| PS-100-04.R02 | Assess p95 ≤ 500 ms asynchronous; the triggering command never waits for the assessment. | MVP |
+| PS-100-04.R03 | Reviewer and step-up commands require `Idempotency-Key` and `expected_revision`. | MVP |
+| PS-100-04.R04 | Events are `risk.<past-tense verb>`; payloads contain IDs, state, tier-free category codes only. | MVP |
 
-## Requirements to specify
-- [ ] PS-100-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-100-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-100-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Body | Event |
+|---|---|---|
+| `risk.assess` (sys_) | `subject_type`, `subject_ref`, `trigger`, `signal_refs[]`, `correlation_id` | `risk.assessed` (+ routing events) |
+| `risk.clear` (reviewer) | `rsk_id`, `expected_revision`, `case_ref` | `risk.cleared` |
+| `risk.escalate` (reviewer) | `rsk_id`, `expected_revision`, `case_ref` | `risk.escalated` |
+| `risk.step_up_result` (F07 callback) | `rsk_id`, `expected_revision`, `verified: bool` | `risk.cleared` or `risk.expired` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Queries: `risk.get_status` (subject: generic state only), `risk.list_queue` (reviewer, case scope, cursor ≤ 100).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Example:
+```http
+POST /internal/v1/risk/assess   (sys_ only)
+{"subject_type": "lst", "subject_ref": "lst_01JA30...", "trigger": "publish", "signal_refs": ["sig_01JA31..."], "correlation_id": "cor_01JA32..."}
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+202 {"rsk_id": "rsk_01JA33...", "state": "assessed", "revision": 1}
+```
+Event payload: `rsk_id`, `subject_type`, `subject_ref`, `state`, `category_codes`, `model_version`. No tier in events sent to subject-facing consumers; tier is visible to case-scoped consumers only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Event per transition in [PS-100-03](workflow_state_machine.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-100-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Codes in [PS-100-02](validation_rules.md).
+
+## Authorization
+Capabilities in [PS-100-05](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Retry rules in [PS-100-06](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Events carry no feature values or signal values. `signal_refs` appear only in case-scoped events.
+
+## Observability & budgets
+Span `risk.<command>` with `request_id`, code, tier bucket (not subject ID).
+
+## Tests
+- `TEST-PS-100-04-01` contract: schemas validate; subject-facing events omit tier.
+- `TEST-PS-100-04-02` integration: duplicate `risk.assess` for the same trigger → one assessment.
+- `TEST-PS-100-04-03` integration: listing publish does not wait for assessment (latency test).
+- `TEST-PS-100-04-04` negative: `acc_` credential calls `risk.assess` → denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each command and event documented with schema, idempotency and error list.
+2. Trigger commands never block on risk assessment (measured).
+3. No subject-facing event reveals tier or signal references.
+
+## Assumptions & open decisions
+- ASSUMPTION: asynchronous assessment means a listing may be publicly visible briefly unless the hold is applied synchronously for `critical` prior results; F01 decides the publish-time policy (PENDING F01 confirmation).
+- D07 (retention), PROVISIONAL default applies to assessments (unapproved).

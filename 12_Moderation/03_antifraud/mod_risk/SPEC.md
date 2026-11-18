@@ -1,44 +1,43 @@
 # F12.S03.M01 — risk
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F12.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role; named person UNASSIGNED). **Parent:** F12.S03.
 
 ## Purpose and business behavior
-Provide risk as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Assess how risky a specific subject (an account, listing, service, rental, auction or cycle proposal) looks, using signals from `mod_signals`, limit hits and reports, and turn the result into one of four tiers. The tier triggers only holds on public visibility, step-up verification or routing to a human reviewer. Risk never blocks consent, a committed exchange or a payment claim, never moves money, and is never shown to the subject as a number.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a seller, my new listing is either published or shown as "under review", and I can ask for a human review.
+- As a trust reviewer, I see the category codes behind a hold and can clear or escalate it with a case reference.
+- As a barter participant, my consent is never withdrawn by the system because another party is under risk review.
 
 ## Scope
-- Required process spec: `risk_domain_model.md` (not yet authored)
-- Required process spec: `risk_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `risk_validation_and_authorization.md` (not yet authored)
-- Required process spec: `risk_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `risk_interfaces_and_events.md` (not yet authored)
-- Required process spec: `risk_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `risk_acceptance_and_property_tests.md` (not yet authored)
+- Subject assessments (`rsk_`) with tier, up to three category codes and expiry.
+- Holds on public visibility, step-up requests to identity, review routing and escalation.
+- Out of scope: signal collection (`mod_signals`), rate and quota limits (`mod_rate`, `mod_limits`), account identity and recovery (F07), payment evidence and settlement (F09), dispute handling (F09.S02).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal `risk.assess` (sys_); reviewer commands `risk.clear`, `risk.escalate`; F07 callback `risk.step_up_result`; queries `risk.get_status`, `risk.list_queue`; events `risk.assessed`, `risk.review_routed`, `risk.step_up_requested`, `risk.hold_applied`, `risk.cleared`, `risk.escalated`, `risk.expired`. Details in PS-100-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream (DEPENDENCY_MATRIX): F12.S03.M02 `mod_signals`, F12.S03.M04 `mod_limits`. Downstream: F04.S02.M03 (auction integrity consumers), F09.S01.M01 (claim handling reads claimed status only). Contracts: CTR-PRV-001, CTR-COM-001 (claim status as input), CTR-CAP-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+This module owns `rsk_` assessments and their hold state. Listing and auction visibility is owned by F01 and F04; accounts by F07; payment claims by F09; signals by `mod_signals`. Risk holds visibility only.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Discriminatory scoring through proxies; feedback loops that hide legitimate sellers; rival-driven flagging; gaming by sophisticated actors; explanations leaking features; holds that interfere with commitments. No platform custody of money: a hold never freezes funds or deposits.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Trust&Safety Lead and F10 approval of the feature allow-list and tier thresholds (not yet obtained); fairness and regression gates defined; privacy review scheduled (not performed).
 
 ## Required process specification inventory
-- [ ] `risk_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `risk_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `risk_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `risk_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `risk_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `risk_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `risk_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-100-01, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [validation_rules.md](validation_rules.md) — PS-100-02, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-100-03, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-100-04, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-100-05, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-100-06, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-100-07, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [observability_performance.md](observability_performance.md) — PS-100-08, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-100-09, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-100-10, SPEC-DRAFT-COMPLETE (pending approval)

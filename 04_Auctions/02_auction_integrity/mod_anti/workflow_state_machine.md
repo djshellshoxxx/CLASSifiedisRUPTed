@@ -1,35 +1,59 @@
 # PS-036-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-036-03. **Owner:** [04_Auctions/02_auction_integrity/mod_anti](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_anti. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_anti. **Parent:** [mod_anti SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-CAP-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the workflow state machine process for anti within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-036-03.R01 | Schedule states: `NORMAL`, `IN_WINDOW` (bid accepted in window, extension pending evaluation, transient), `EXTENDED` (effective end pushed), `EXTENSION_CAP_REACHED`, `ENDED` (handed to F04.S01.M03). | MVP |
+| PS-036-03.R02 | `ENDED` is terminal. No extension is possible after the close job reads `effective_end` under lock. | MVP |
+| PS-036-03.R03 | `EXTENSION_CAP_REACHED` is terminal for extensions but not for bids; bids continue to be accepted until effective end. | MVP |
+| PS-036-03.R04 | Each transition emits one event with `schedule_revision`. | MVP |
 
-## Requirements to specify
-- [ ] PS-036-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-036-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-036-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`schedule_state` and `schedule_revision` on the auction embedded schedule.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions from `anti.evaluate_bid` and from close (`ENDED`).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| NORMAL | bids.bid.accepted | t in window and count < max | EXTENDED | Log row; new effective end; event |
+| NORMAL | bids.bid.accepted | t in window and count = max | EXTENSION_CAP_REACHED | Event `auction.extension_cap_reached` |
+| NORMAL, EXTENDED | bids.bid.accepted | t not in window | (unchanged) | No event beyond bid |
+| EXTENDED | bids.bid.accepted | t in window and count < max | EXTENDED | Log row; end pushed |
+| EXTENDED | bids.bid.accepted | t in window and count = max | EXTENSION_CAP_REACHED | Event |
+| NORMAL, EXTENDED, EXTENSION_CAP_REACHED | close handoff | now ≥ effective end | ENDED | Close record (F04.S01.M03) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Forbidden transitions return `ANTISNIP.INVALID_TRANSITION` (409, not retryable).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`ANTISNIP.INVALID_TRANSITION`; `ANTISNIP.POLICY_PINNED` for policy change attempts.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-036-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Evaluation is `sys`. Policy publication is `ope` dual control.
+
+## Failure, idempotency, concurrency, offline
+Evaluation idempotent per (`auc_`, `bid_sequence`). Concurrent evaluations serialized by auction lock (CAS on `schedule_revision`). Crash during evaluation: recompute from log and last evaluated sequence.
+
+## Privacy, retention, abuse
+Events carry `auc_` and `bid_id` only.
+
+## Observability & budgets
+Metrics: `antisnip_extensions_total`, `antisnip_cap_reached_total`, `antisnip_evaluation_lag_seconds` p95 ≤ 1 s.
+
+## Tests
+- TEST-PS-036-03-01 (unit): every row in table; other pairs rejected.
+- TEST-PS-036-03-02 (property): `extension_count` never exceeds `max_extensions`.
+- TEST-PS-036-03-03 (fault): crash mid-evaluation → replay yields identical schedule.
+- TEST-PS-036-03-04 (integration): bid after cap in window does not extend but is accepted.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Cap property passes with zero violations.
+2. Replay determinism verified across fault suite.
+3. Terminal ENDED verified: no extension after close read.
+
+## Assumptions & open decisions
+- ASSUMPTION: a bid after the cap is still accepted before effective end.
+- Boundary with F04.S02.M02 `mod_sniping` (detection and reporting) is PROVISIONAL. See [DECISIONS.md](../../../DECISIONS.md).

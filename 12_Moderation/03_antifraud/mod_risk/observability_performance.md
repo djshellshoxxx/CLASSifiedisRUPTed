@@ -1,35 +1,56 @@
 # PS-100-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-100-08. **Owner:** [12_Moderation/03_antifraud/mod_risk](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_risk. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_risk. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09), CTR-EVT-001 (R04).
 
-## Purpose and scope
-Define the observability performance process for risk within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-100-08.R01 | Metrics carry no `rsk_id`, `acc_`, `lst_` or feature labels. Tier and category codes are allowed. | MVP |
+| PS-100-08.R02 | Assessment completes p95 ≤ 500 ms after trigger. | MVP |
+| PS-100-08.R03 | Pending-assessment flag clears or auto-routes within 15 min for 100 % of items (p100). | MVP |
+| PS-100-08.R04 | Fairness metrics (tier distribution by locale and region cell) published monthly with K_MIN. | MVP |
 
-## Requirements to specify
-- [ ] PS-100-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-100-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-100-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Metric | Type | Labels |
+|---|---|---|
+| `risk_assessed_total` | counter | `subject_type`, `tier` |
+| `risk_transition_total` | counter | `from`, `to` |
+| `risk_queue_age_seconds` | gauge | `subject_type` |
+| `risk_hold_age_seconds` | histogram | `subject_type` |
+| `risk_fairness_tier_share` | gauge | `locale`, `tier` (cells suppressed below K_MIN) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Span `risk.assess` with tier bucket and category codes only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Dashboards: holds open per subject type; review backlog.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`risk_validation_error_total{code}`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards: `ope_` aggregate scope.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-100-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Alerts: queue age > 15 min (page); hold age > 24 h without review (ticket); fairness share shift > 5 points (ticket).
+
+## Privacy, retention, abuse
+No subject labels; fairness aggregates suppressed below K_MIN = 5 (CTR-PRV-001 R04).
+
+## Observability & budgets
+Capacity: 500 assessments per second per node (ASSUMPTION). Storage ≤ 1 KB per assessment.
+
+## Tests
+- `TEST-PS-100-08-01` load: 500 assessments/s for 10 min meet R02.
+- `TEST-PS-100-08-02` contract: label set check.
+- `TEST-PS-100-08-03` alert: forced queue stall pages within 15 min.
+- `TEST-PS-100-08-04` privacy: fairness aggregate below K_MIN not published.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics and alerts documented and tested.
+2. Latency and pending-flag budgets met.
+3. K_MIN suppression verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: capacity values are reference-node estimates.
+- D07 (retention), PROVISIONAL default applies to metrics (unapproved).

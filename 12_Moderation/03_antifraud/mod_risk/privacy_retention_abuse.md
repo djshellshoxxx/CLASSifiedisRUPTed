@@ -1,35 +1,62 @@
 # PS-100-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-100-07. **Owner:** [12_Moderation/03_antifraud/mod_risk](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_risk. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_risk. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R03, R04, R06, R07), CTR-COM-001 (claim privacy), CTR-CAP-001 (R08).
 
-## Purpose and scope
-Define the privacy retention abuse process for risk within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-100-07.R01 | Feature allow-list excludes precise location, contact lists, device fingerprints beyond keyed IDs, and proxies on the fairness review list (PS-100-02 R03). | MVP |
+| PS-100-07.R02 | Location input is LOCATION_COARSE region cell only (CTR-PRV-001 R04), with K_MIN applied to any aggregate. | MVP |
+| PS-100-07.R03 | Subjects can request an explanation of category codes (not weights) and a human review (GDPR-style right to contest, ASSUMPTION jurisdictional scope). | MVP |
+| PS-100-07.R04 | Assessments are not shared with peers or with counterparties. Counterparties see only generic "under review" on a shared listing. | MVP |
+| PS-100-07.R05 | Automated tiers are not used alone for permanent account action (PS-100-03 R02). | MVP |
 
-## Requirements to specify
-- [ ] PS-100-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-100-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-100-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention (D07, PROVISIONAL):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Record | Retention | After expiry |
+|---|---|---|
+| `rsk_assessment` | 30 days (`expires_at`), then 6 months as reason-code history for case audit | IDs and codes only after 30 days; hard delete at 6 months unless legal hold |
+| Queue and idempotency rows | 7 days | hard delete |
+| Review decisions | per case retention (F12) | per case |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Explanation request (subject) returns category codes and the review path; never weights or thresholds.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Expiry does not change case state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+No feature values in errors.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-100-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Case-scoped reviewers only (PS-100-05).
+
+## Failure, idempotency, concurrency, offline
+Retention jobs idempotent by `rsk_id` cursor.
+
+## Privacy, retention, abuse
+- Abuse 1 (gaming): tiers and features are not exposed; explanations give categories only.
+- Abuse 2 (discrimination): fairness review of tier distribution per locale and per region cell (K_MIN); proxies excluded by allow-list.
+- Abuse 3 (weaponization by rivals): flags alone do not raise tiers above `medium` without signal corroboration from `mod_signals`.
+- Abuse 4 (surveillance): no cross-service profile is built; features are limited to the subject's activity on the platform.
+- Metadata: counterparties learn only a generic state.
+
+## Observability & budgets
+Logs: `rsk_id`, tier bucket, category codes. No feature values, no subject IDs beyond `rsk_id`.
+
+## Tests
+- `TEST-PS-100-07-01` privacy: allow-list scan fails build on forbidden feature.
+- `TEST-PS-100-07-02` privacy: counterparty view contains no tier or reason.
+- `TEST-PS-100-07-03` fairness: tier distribution per locale within ±5 points of baseline on the labeled set (ASSUMPTION).
+- `TEST-PS-100-07-04` retention: assessment content reduced at 30 days; deleted at 6 months.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Feature allow-list enforced; no forbidden feature in production model.
+2. Counterparty and subject views contain no tier.
+3. Fairness report completed before each model release.
+
+## Assumptions & open decisions
+- ASSUMPTION: the 6-month reason history is a placeholder pending F10 and legal review.
+- D05 (geoprivacy), PROVISIONAL default: coarse public regions and user-initiated precision disclosure (unapproved).
+- D07 (retention), PROVISIONAL default: minimal retention with legal-hold exceptions (unapproved).

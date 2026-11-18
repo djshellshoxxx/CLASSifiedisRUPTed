@@ -1,35 +1,62 @@
 # PS-100-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-100-02. **Owner:** [12_Moderation/03_antifraud/mod_risk](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_risk. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_risk. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-ID-001, CTR-COM-001 (R-claims), CTR-PRV-001 (R04).
 
-## Purpose and scope
-Define the validation rules process for risk within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-100-02.R01 | `subject_type` ∈ {acc, lst, srv, rnt, auc, cyc}; `subject_ref` prefix must match. Else `RISK.SUBJECT_UNSUPPORTED`. | MVP |
+| PS-100-02.R02 | Every signal reference must resolve to a `sig_` owned by `mod_signals` and be ≤ 24 h old for tier-raising use; older signals may only lower confidence. Unresolved → `RISK.SIGNAL_UNRESOLVED`. | MVP |
+| PS-100-02.R03 | Feature set must not include precise location, contact lists, or proxies flagged by the fairness review list (F14/F10). Enforced by a feature allow-list. Attempt → `RISK.FEATURE_NOT_ALLOWED` at build time. | MVP |
+| PS-100-02.R04 | Payment claim inputs are read as claimed status only (CTR-COM-001). A claim status other than `claimed` for confirmed evidence is not accepted as input. | MVP |
+| PS-100-02.R05 | `reason_codes` ∈ {ACCOUNT_NEW, SIGNAL_BURST, LIMIT_HITS, FLAG_CLUSTER, PAYMENT_CLAIM_MISMATCH, COUNTERPARTY_DISPUTE, PATTERN_MATCH, MODEL_UNCERTAIN}. | MVP |
 
-## Requirements to specify
-- [ ] PS-100-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-100-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-100-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Module prefix `RISK`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Code | Category | HTTP | Retryable | `details.rule` |
+|---|---|---|---|---|
+| `RISK.SUBJECT_UNSUPPORTED` | validation | 400 | false | `subject_type` |
+| `RISK.SIGNAL_UNRESOLVED` | validation | 400 | false | `signal_refs` |
+| `RISK.FEATURE_NOT_ALLOWED` | internal | 500 | false | — (build-time, never returned to users) |
+| `RISK.MODEL_VERSION_UNKNOWN` | validation | 400 | false | `model_version` |
+| `RISK.SCORE_UNAVAILABLE` | unavailable | 503 | true | — |
+| `RISK.TRANSITION_NOT_ALLOWED` | unprocessable_state | 422 | false | `state` |
+| `RISK.EXPORT_TOO_LARGE` | validation | 400 | false | `cursor` (> 100 items, PS-100-10) |
+| `EVT.REVISION_CONFLICT` | conflict | 409 | false | `expected_revision` |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Order: subject type, signal resolution and age, feature allow-list (build time), model version, state guard.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Validation failures write no `rsk_event`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Responses never reveal which signal or feature drove a tier (prevents gaming). Subjects receive only generic state.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-100-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+`RISK.TRANSITION_NOT_ALLOWED` and not-found responses follow CTR-ERR-001 R08.
+
+## Failure, idempotency, concurrency, offline
+Concurrent assessments on one subject and trigger are deduplicated by (subject_ref, trigger correlation_id).
+
+## Privacy, retention, abuse
+Logs record rule names and counts only.
+
+## Observability & budgets
+`risk_validation_error_total{code}`.
+
+## Tests
+- `TEST-PS-100-02-01` unit: each code on exact condition only.
+- `TEST-PS-100-02-02` negative: signal older than 24 h cannot raise tier (lowers confidence only).
+- `TEST-PS-100-02-03` build-time: a feature named `postcode` fails the allow-list check.
+- `TEST-PS-100-02-04` negative: payment claim with confirmed evidence status is rejected as input (claimed-only rule).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Feature allow-list enforced at build and runtime.
+2. No error reveals driving signal or feature.
+3. Claimed-only rule for payment inputs verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: the feature allow-list and proxy review list are maintained by F10 and F14 with this module.
+- D06 (receipts), PROVISIONAL default: signed statements only, verification separate (unapproved).

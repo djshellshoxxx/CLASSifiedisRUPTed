@@ -1,35 +1,52 @@
-# PS-050-10 — import export backup rollback
+# PS-046-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-050-10. **Owner:** [06_Discovery/03_ranking/mod_fairness](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_fairness. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_fairness. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R11), CTR-FED-001 (no federation), CTR-SCH-001 (R07).
 
-## Purpose and scope
-Define the import export backup rollback process for fairness within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** D07 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-050-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-050-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-050-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-046-10.R01 | Policy export is public (caps and label). Audit export is aggregated, operator-only. | MVP |
+| PS-046-10.R02 | No import of policies from peers or files; policy changes only through PS-046-03 workflow. | MVP |
+| PS-046-10.R03 | Backups restore policy history; audit rows restore without seller buckets (keys destroyed). | MVP |
+| PS-046-10.R04 | Forward-only schema; upcast on read. | MVP |
+| PS-046-10.R05 | Flag `fairness.enabled` off returns unconstrained order with `constraint_status = DISABLED`; promotion labels still shown. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Policy export: `export_id`, `schema_version`, `policies[]`, `sha256`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+`rank_policy.export` (public), `exposure.export` (aggregated, operator).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Export changes no state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`FAIRNESS.IMPORT_NOT_ALLOWED` (403).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-050-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Public policy export; aggregated audit export for operators with purpose and dual control.
+
+## Failure, idempotency, concurrency, offline
+Exports idempotent per snapshot ID.
+
+## Privacy, retention, abuse
+No seller-level content in exports.
+
+## Observability & budgets
+`fairness_export_total`; p95 ≤ 5 s (ASSUMPTION).
+
+## Tests
+- TEST-PS-046-10-01 (contract): public export has no audit data.
+- TEST-PS-046-10-02 (negative): import attempt rejected.
+- TEST-PS-046-10-03 (backup): restored audit rows contain no seller buckets.
+- TEST-PS-046-10-04 (rollback): flag off serves DISABLED status and keeps labels.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No seller-level data in exports.
+2. No import path.
+3. Labels persist under rollback.
+
+## Assumptions & open decisions
+- ASSUMPTION: export windows.

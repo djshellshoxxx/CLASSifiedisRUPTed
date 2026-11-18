@@ -1,35 +1,58 @@
-# PS-050-05 — authorization capabilities
+# PS-046-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-050-05. **Owner:** [06_Discovery/03_ranking/mod_fairness](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_fairness. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_fairness. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (global scope limits, dual control), CTR-PRV-001.
 
-## Purpose and scope
-Define the authorization capabilities process for fairness within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** CTR-CAP-001 grant model PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-050-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-050-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-050-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-046-05.R01 | Policy draft and activation need `global` scope grant with purpose; activation needs two approvers. | MVP |
+| PS-046-05.R02 | Audit reads are aggregated; no principal reads per-page seller buckets except the system. | MVP |
+| PS-046-05.R03 | Forbidden ranking features list: any PRIVATE_PERSONAL or LOCATION_PRECISE field, identity documents, precise location, raw reputation scores (only F07 bands). | MVP |
+| PS-046-05.R04 | Sellers cannot read ranking inputs or audit rows about themselves. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Capabilities: `rank_policy.create`, `rank_policy.consent` (approve), `rank_policy.withdraw` (retire), `rank_policy.read`, `exposure.read` (aggregate).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Principal | Action | Scope | Outcome |
+|---|---|---|---|
+| F06 operator (`ope`) | rank_policy.create | global, purpose | ALLOW |
+| second approver (`ope`) | rank_policy.consent | global | ALLOW if distinct from drafter |
+| same person | rank_policy.consent on own draft | global | DENY → CAP.SELF_APPROVAL_FORBIDDEN |
+| operator | exposure.read | global | ALLOW aggregate only; per-bucket DENY → SYS.FORBIDDEN |
+| seller | rank_policy.read | none | DENY → SYS.NOT_FOUND for audits; policy summary public |
+| sys (relevance service) | fairness.apply | scope apply | ALLOW |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Grants expire ≤ 72 h (CTR-CAP-001 R06).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Per action.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-050-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Server-side. Policy summary (caps and label) public.
+
+## Failure, idempotency, concurrency, offline
+Revocation at next decision.
+
+## Privacy, retention, abuse
+Operator reads of aggregate audit write `aud_` records.
+
+## Observability & budgets
+`fairness_authz_decisions_total{action,outcome,reason_code}`.
+
+## Tests
+- TEST-PS-046-05-01 (unit): matrix rows.
+- TEST-PS-046-05-02 (security): drafter cannot consent own policy.
+- TEST-PS-046-05-03 (privacy): forbidden feature in ranking config rejected.
+- TEST-PS-046-05-04 (security): seller cannot read audit rows.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix uses CTR-CAP-001 vocabulary.
+2. Zero self-approved policies.
+3. Zero seller-readable audit rows.
+
+## Assumptions & open decisions
+- PROVISIONAL (CTR-CAP-001, unapproved).

@@ -1,35 +1,56 @@
-# PS-050-03 — workflow state machine
+# PS-046-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-050-03. **Owner:** [06_Discovery/03_ranking/mod_fairness](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_fairness. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_fairness. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (revision), CTR-CAP-001 (approvals).
 
-## Purpose and scope
-Define the workflow state machine process for fairness within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** Dual approval ASSUMPTION. Other labels per CTR-CAP-001 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-050-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-050-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-050-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-046-03.R01 | Policy status set exactly DRAFT, ACTIVE, RETIRED. RETIRED is terminal. | MVP |
+| PS-046-03.R02 | Activation requires two distinct approvers recorded before the transition. | MVP |
+| PS-046-03.R03 | Activating a new policy for a scope retires the previous ACTIVE policy in the same transaction. | MVP |
+| PS-046-03.R04 | A policy that fails validation cannot leave DRAFT. | MVP |
+| PS-046-03.R05 | Other transitions → `FAIRNESS.INVALID_TRANSITION` (409). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Each transition increments `state_version`; policy versions immutable once ACTIVE.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | rank_policy.drafted | PS-046-02 pass | DRAFT | None |
+| DRAFT | rank_policy.activated | two approvers; no conflict | ACTIVE | Previous ACTIVE → RETIRED |
+| ACTIVE | rank_policy.retired | replaced or emergency retire by dual approval | RETIRED | Revert to prior policy only by new draft |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Terminal: RETIRED.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`FAIRNESS.INVALID_TRANSITION` (409), `FAIRNESS.APPROVAL_MISSING` (422).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-050-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Approvers: `ope` or F06 lead roles with distinct identities; cannot approve own draft (CAP.SELF_APPROVAL_FORBIDDEN).
+
+## Failure, idempotency, concurrency, offline
+Activation is a single transaction; concurrent activations for one scope: one wins (`FAIRNESS.POLICY_CONFLICT`).
+
+## Privacy, retention, abuse
+Policy history retained indefinitely as configuration (no personal data).
+
+## Observability & budgets
+`rank_policy_transitions_total{from,to}`; alert if two ACTIVE policies exist for one scope (must be 0).
+
+## Tests
+- TEST-PS-046-03-01 (state): every table row passes.
+- TEST-PS-046-03-02 (approval): one approver → activation rejected.
+- TEST-PS-046-03-03 (race): two simultaneous activations → one ACTIVE.
+- TEST-PS-046-03-04 (retire): activation retires prior ACTIVE in same commit.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Never two ACTIVE policies per scope (TEST-PS-046-03-03).
+2. No activation without two approvers.
+3. Prior policy versions retrievable for audit.
+
+## Assumptions & open decisions
+- ASSUMPTION: two approvers for activation.

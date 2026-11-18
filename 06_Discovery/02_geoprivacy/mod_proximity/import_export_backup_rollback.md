@@ -1,35 +1,54 @@
-# PS-049-10 — import export backup rollback
+# PS-045-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-049-10. **Owner:** [06_Discovery/02_geoprivacy/mod_proximity](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_proximity. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_proximity. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R04, R11), CTR-FED-001 (R02), CTR-SCH-001 (R07).
 
-## Purpose and scope
-Define the import export backup rollback process for proximity within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** D05 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-049-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-049-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-049-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-10.R01 | Cell registry import only from the admin tool with F10 approval record; no peer import in MVP. | MVP |
+| PS-045-10.R02 | Registry export is public-safe (PUBLISHED cells and buckets only). | MVP |
+| PS-045-10.R03 | Owner export of budget counters: remaining count only. | MVP |
+| PS-045-10.R04 | Backups restore registry state as of backup; budget counters are not restored (RET-EPH). | MVP |
+| PS-045-10.R05 | Forward-only registry schema; upcast on read. | MVP |
+| PS-045-10.R06 | Flag `proximity.enabled` off stops region queries (503 with message key); anonymous registry reads of PUBLISHED cells continue. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Registry export: `export_id`, `schema_version`, `cells[]` (PUBLISHED and buckets), `sha256`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+`cell.export` query (public-safe); no import command in MVP.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Export changes no state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`PROXIM.IMPORT_NOT_ALLOWED` (403) for peer imports.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-049-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Export of registry: public-safe. Full registry export: `global` with dual control, excluding item counts below K_MIN.
+
+## Failure, idempotency, concurrency, offline
+Export idempotent per snapshot ID.
+
+## Privacy, retention, abuse
+No per-user data in export. Full registry export contains only cells and states, no per-user data.
+
+## Observability & budgets
+`proximity_export_total`; p95 ≤ 10 s (ASSUMPTION).
+
+## Tests
+- TEST-PS-045-10-01 (contract): public export has no sub-K_MIN bucket.
+- TEST-PS-045-10-02 (negative): peer import attempt rejected.
+- TEST-PS-045-10-03 (backup): restore does not restore budget counters.
+- TEST-PS-045-10-04 (rollback): flag off → 503 for region queries; anonymous registry read still works.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Public export has no sub-K_MIN values.
+2. No peer import path exists.
+3. Rollback fails region queries closed.
+
+## Assumptions & open decisions
+- ASSUMPTION: export rate and snapshot IDs.
+- OPEN (F10): full registry export scope.

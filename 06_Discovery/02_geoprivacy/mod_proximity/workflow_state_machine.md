@@ -1,35 +1,60 @@
-# PS-049-03 — workflow state machine
+# PS-045-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-049-03. **Owner:** [06_Discovery/02_geoprivacy/mod_proximity](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_proximity. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_proximity. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (K_MIN, R04; disclosure), CTR-EVT-001 (listing events drive counts).
 
-## Purpose and scope
-Define the workflow state machine process for proximity within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** D05 PROVISIONAL. K_MIN ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-049-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-049-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-049-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-03.R01 | Cell publication states exactly PUBLISHED, MERGED_UP, SUPPRESSED. | MVP |
+| PS-045-03.R02 | A cell with active count ≥ 5 is PUBLISHED. | MVP |
+| PS-045-03.R03 | A cell below 5 is MERGED_UP into its parent if the parent count ≥ 5 after merge; otherwise SUPPRESSED. | MVP |
+| PS-045-03.R04 | Recomputation runs every 15 min (ASSUMPTION) and on listing publish or expiry batch. | MVP |
+| PS-045-03.R05 | No transition exposes a count below K_MIN, including during recomputation. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Each recomputation writes a new `refreshed_at`; prior state retained for one cycle to avoid flapping.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | cell.registered | registry admin, F10 approval | SUPPRESSED (count 0) | Registry entry |
+| SUPPRESSED, MERGED_UP | cell.published | count ≥ 5 | PUBLISHED | Bucket visible |
+| PUBLISHED | cell.merged_up | count < 5 and parent ≥ 5 | MERGED_UP | Count rolls to parent |
+| PUBLISHED, MERGED_UP | cell.suppressed | count < 5 and parent < 5 | SUPPRESSED | Hidden |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Event names use `cell.*` (aggregate `cell`, registry scope).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+No terminal state; cells are retired only through registry change (CTR-ID-001 style retirement, ASSUMPTION).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-049-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+`PROXIM.CELL_UNKNOWN` for unregistered cells; `PROXIM.CELL_RETIRED` (410) for retired cells.
+
+## Authorization
+Registry changes by registry admin with F10 approval (dual control for changes to K_MIN or cell set, CTR-PRV-001 R04 rule).
+
+## Failure, idempotency, concurrency, offline
+Recomputation idempotent per cycle. Concurrent recompute: revision check; later write retries.
+
+## Privacy, retention, abuse
+State history retains only cell IDs and bucket values.
+
+## Observability & budgets
+`proximity_cell_transitions_total{from,to}`; alert on any response with count < 5 (must be 0).
+
+## Tests
+- TEST-PS-045-03-01 (state): every table row passes.
+- TEST-PS-045-03-02 (threshold): count 4 → SUPPRESSED; 5 → PUBLISHED.
+- TEST-PS-045-03-03 (merge): child 3 with parent 6 → MERGED_UP; parent count rises by 3.
+- TEST-PS-045-03-04 (flapping): oscillating count does not change state more than once per cycle.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No API response below K_MIN (TEST-PS-045-03-02, PS-045-02 R06).
+2. Merge preserves total counts.
+3. Refresh cadence ≤ 15 min.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute cycle; K_MIN 5.
+- OPEN (F10): K_MIN value and merge policy.

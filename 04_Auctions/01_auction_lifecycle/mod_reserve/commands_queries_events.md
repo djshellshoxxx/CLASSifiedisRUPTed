@@ -1,35 +1,60 @@
 # PS-035-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-035-04. **Owner:** [04_Auctions/01_auction_lifecycle/mod_reserve](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Parent:** [mod_reserve SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for reserve within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-035-04.R01 | Every reserve command carries `idempotency_key` and `expected_revision`. | MVP |
+| PS-035-04.R02 | Command body ≤ 2 KB. | MVP |
+| PS-035-04.R03 | Events are CTR-EVT-001 envelopes, `aggregate_type` = `auction`; events carry no reserve value. | MVP |
+| PS-035-04.R04 | Status query returns `reserve_status` only. | MVP |
 
-## Requirements to specify
-- [ ] PS-035-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-035-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-035-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Signature | Idempotency key |
+|---|---|---|
+| `reserve.set` | (`auc_`, `reserve_minor`, currency, expected_revision) | (seller, command, key) |
+| `reserve.lower` | (`auc_`, `reserve_minor`, expected_revision) | (seller, command, key) |
+| `reserve.status` | (`auc_`) → `reserve_status` (query) | n/a |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Event (`schema_id`) | Visibility |
+|---|---|
+| `auction.reserve.set` | Seller only: auc_, revision (no value) |
+| `auction.reserve.lowered` | Seller only: auc_, revision (no value) |
+| `auction.reserve.met` | PUBLIC: auc_ |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Errors: PS-035-02 codes; `SYS.CONFLICT` on stale revision.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Command outcomes map to PS-035-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Schema validation first; unknown fields rejected (`SYS.REQUEST_MALFORMED`).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-035-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Per PS-035-05. Status query is public.
+
+## Failure, idempotency, concurrency, offline
+Same key and digest → original result. Stale revision → `SYS.CONFLICT`. Events at-least-once; dedupe on `event_id`.
+
+## Privacy, retention, abuse
+No event or query response contains the reserve value for non-sellers. `reserve.status` never returns a value.
+
+## Observability & budgets
+`reserve.set` p95 ≤ 150 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-035-04-01 (contract): all commands and events validate against CTR-SCH-001.
+- TEST-PS-035-04-02 (contract): `reserve.status` response contains only the enum.
+- TEST-PS-035-04-03 (integration): duplicate `reserve.set` returns same result.
+- TEST-PS-035-04-04 (integration): stale revision returns `SYS.CONFLICT` without write.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All commands and events registered.
+2. Non-seller response scan finds no reserve value.
+3. Replay test passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24-hour idempotency retention.
+- See [DECISIONS.md](../../../DECISIONS.md) D10 (OPEN) for seller-side identity display rules.

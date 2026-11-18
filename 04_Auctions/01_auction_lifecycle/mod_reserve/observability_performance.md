@@ -1,35 +1,55 @@
 # PS-035-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-035-08. **Owner:** [04_Auctions/01_auction_lifecycle/mod_reserve](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Parent:** [mod_reserve SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-EVT-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the observability performance process for reserve within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-035-08.R01 | `reserve.set` p95 ≤ 150 ms server side. | MVP |
+| PS-035-08.R02 | MET lag = 0 (same transaction); any non-zero reconciliation is an alert. | MVP |
+| PS-035-08.R03 | Logs: `code`, `request_id`, module, timing, `auc_` ID. No reserve value, no `acc_` of the seller. | MVP |
+| PS-035-08.R04 | Dashboards show counts of changes and rejections by code only. | MVP |
 
-## Requirements to specify
-- [ ] PS-035-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-035-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-035-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels allowed: `code`, `action`, `from`, `to`. Forbidden: `acc_`, `auc_`, reserve values, amounts.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Spans with `request_id` and `correlation_id`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+State metrics from PS-035-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`reserve_validation_rejections_total{code}`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Operator dashboards: counts only; no reserve reads.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-035-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Telemetry best-effort; never blocks a reserve change or bid acceptance.
+
+## Privacy, retention, abuse
+Telemetry 30 days (ASSUMPTION). Allowlisted attributes. Probing-signal counts forwarded to F12 as aggregates.
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| `reserve_set_latency_seconds` p95 | ≤ 0.15 s |
+| `reserve_met_reconciliation_total` | 0 |
+| `reserve_duplicate_history_total` | 0 |
+| 5xx rate | ≤ 0.1% |
+
+## Tests
+- TEST-PS-035-08-01 (unit): log formatter drops reserve values.
+- TEST-PS-035-08-02 (load): 200 reserve changes per second for 10 min meet R01.
+- TEST-PS-035-08-03 (lint): metric labels contain no forbidden label.
+- TEST-PS-035-08-04 (alert): any reconciliation event fires an alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets measured in staging (future phase gate).
+2. Log sample of 10,000 lines has zero reserve values.
+3. Reconciliation alert configured.
+
+## Assumptions & open decisions
+- ASSUMPTION: starting budgets, revised after load test.
+- Related: D08 offline queue (PROVISIONAL, unapproved). See [DECISIONS.md](../../../DECISIONS.md).

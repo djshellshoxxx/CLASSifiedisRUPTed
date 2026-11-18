@@ -1,35 +1,52 @@
 # PS-035-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-035-06. **Owner:** [04_Auctions/01_auction_lifecycle/mod_reserve](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_reserve. **Parent:** [mod_reserve SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for reserve within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-035-06.R01 | Reserve changes and bid acceptance serialize under the auction lock; no interleaving can leave a qualifying bid without MET. | MVP |
+| PS-035-06.R02 | Duplicate `reserve.set` with same key returns the original result; no second history row. | MVP |
+| PS-035-06.R03 | MET write and bid acceptance commit in one transaction (PS-035-03 R03). | MVP |
+| PS-035-06.R04 | Offline reserve edits are queued (D08) and validated on acknowledgement; if the auction has a bid by then, a raise is rejected and a lower is validated against the current state. | MVP |
 
-## Requirements to specify
-- [ ] PS-035-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-035-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-035-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record per (seller, command, key, digest). History row written with the change.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events emitted via outbox; `auction.reserve.met` is emitted exactly once per auction.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+No recovery path returns MET to SET.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`, `SYS.RATE_LIMITED`. Non-retryable: `RESERVE.RAISE_AFTER_BID`, `RESERVE.LOCKED`, `SYS.CONFLICT` (re-read needed).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+System comparison runs as `sys`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-035-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Crash between bid commit and MET write: impossible by R03; if the store lacks atomicity, reconciliation sets MET for any ACCEPTED bid ≥ reserve within 1 min (fallback, ASSUMPTION).
+- Timeout on `reserve.set`: retry with same key.
+- Offline: queued edits never display as applied until ack.
+
+## Privacy, retention, abuse
+Recovery logs contain IDs and codes only.
+
+## Observability & budgets
+Metrics: `reserve_met_reconciliation_total` (must be 0 in steady state); `reserve_duplicate_history_total` (must be 0); `reserve_offline_rejected_on_ack_total`.
+
+## Tests
+- TEST-PS-035-06-01 (concurrency): 500 concurrent bids and one raise → invariant holds (MET iff qualifying bid exists; raise only before bids).
+- TEST-PS-035-06-02 (fault): kill between bid write and MET write → one reconciled MET, no duplicate event.
+- TEST-PS-035-06-03 (offline): queued raise after first bid rejected on ack.
+- TEST-PS-035-06-04 (idempotency): duplicate set produces one history row.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Invariant test passes across fault suite.
+2. Reconciliation metric zero in soak test.
+3. No offline edit is applied after a bid.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1-minute reconciliation fallback.
+- PROVISIONAL: offline writes pending until acknowledgement (D08 default, unapproved). See [DECISIONS.md](../../../DECISIONS.md).

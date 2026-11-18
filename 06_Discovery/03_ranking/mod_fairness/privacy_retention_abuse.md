@@ -1,35 +1,57 @@
-# PS-050-07 — privacy retention abuse
+# PS-046-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-050-07. **Owner:** [06_Discovery/03_ranking/mod_fairness](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_fairness. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_fairness. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (classes, retention, logs), CTR-FED-001 (no federation of audit rows), CTR-CAP-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for fairness within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** Key rotation daily ASSUMPTION. D07 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-050-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-050-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-050-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-046-07.R01 | Audit rows RET-OPS (30 days); bucket keys rotate daily and old keys destroyed at rotation. | MVP |
+| PS-046-07.R02 | Audit and policy data never federated (local operational data). | MVP |
+| PS-046-07.R03 | No ranking input or audit field carries PRIVATE_PERSONAL or LOCATION_PRECISE data (PS-046-05 R03). | MVP |
+| PS-046-07.R04 | Logs carry policy ID, page ID and counts; never seller bucket values. | MVP |
+| PS-046-07.R05 | Promotion status shown to viewers as label only; promotion purchase data stays in F09 claims (CTR-COM-001). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Retention metadata per row; key metadata with `key_destroyed_at`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+None personal.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Retention active → expired → purged.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Not applicable beyond PS-046-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-050-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+PS-046-05.
+
+## Failure, idempotency, concurrency, offline
+Key destruction is verified by test; rows cannot be re-keyed.
+
+## Privacy, retention, abuse
+Abuse controls:
+- Sellers gaming order by splitting into many accounts: same-seller caps apply per account and per bucket of linked accounts when F07 signals linkage (ASSUMPTION).
+- Paid placement hiding: label required and cap enforced (R05 and PS-046-02 R02).
+- Operator favoritism: policy changes need two approvers and are auditable.
+- Audit probing: aggregated reads only; query budget per operator (ASSUMPTION).
+
+## Observability & budgets
+`fairness_privacy_log_violations_total` must be 0.
+
+## Tests
+- TEST-PS-046-07-01 (lint): no sensitive class in ranking inputs or audit fields.
+- TEST-PS-046-07-02 (log scan): no seller bucket values in logs.
+- TEST-PS-046-07-03 (key destruction): after rotation, bucket values cannot be linked across days (test vector).
+- TEST-PS-046-07-04 (label): promoted items always rendered with label.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero sensitive fields in ranking config or audit rows.
+2. Keys destroyed at rotation.
+3. Label present on every promoted item.
+
+## Assumptions & open decisions
+- ASSUMPTION: daily key rotation; linkage signal from F07.
+- OPEN (F10, F12): linkage detection rules.

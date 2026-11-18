@@ -1,35 +1,71 @@
 # PS-065-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-065-05. **Owner:** [08_Communications/03_meetups/mod_handoff](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_handoff. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_handoff. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01, R02, R04 participant and case, R05, R07, R10, R13), CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for handoff within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-065-05.R01 | Attest actions evaluated on the owning `acc_` of an exchange party `prf_`; `prf_` is never a principal. | MVP |
+| PS-065-05.R02 | Only the two exchange parties may attest, withdraw or read the handoff; the F09 dispute service principal reads under a dispute scope. | MVP |
+| PS-065-05.R03 | Moderators read handoff metadata only under case grant; no signatures or quantities beyond the case need. | MVP |
+| PS-065-05.R04 | Operators cannot attest, edit or delete lines. | MVP |
+| PS-065-05.R05 | Participation in the exchange is derived from owning modules' events at decision time. | MVP |
+| PS-065-05.R06 | Default deny. | MVP |
 
-## Requirements to specify
-- [ ] PS-065-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-065-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-065-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field visibility (CTR-CAP-001 R10):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | public | party | F09 dispute service | case (mod_) | never |
+|---|---|---|---|---|---|
+| line direction, item, quantity, `attested_at` | | Y | Y (dispute scope) | presence and state only | |
+| `signature` | | own line Y, counterparty line Y | Y (dispute scope) | | |
+| `state`, `window_closes_at` | | Y | Y | Y | |
+| `meetup_ref` | | Y | | | |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Action | Actor | Scope | Result |
+|---|---|---|---|
+| `handoff.open` | party | exchange | allow |
+| `attest` (handoff line) | party | own direction | allow within window |
+| `handoff.withdraw_line` | attesting party | own line | allow before counter-attestation |
+| `handoff.read` | party | exchange | allow |
+| `handoff.dispute_read` | F09 `sys_` | dispute | allow |
+| `handoff.moderate_read` | `mod_` | case | presence and state |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Denied actions produce no state change; decisions recorded with outcome only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `SYS.NOT_FOUND` | false | `err.sys.not_found` |
+| `SYS.FORBIDDEN` | false | `err.sys.forbidden` |
+| `HANDOFF.PARTY_NOT_ALLOWED` | false | `err.handoff.party_not_allowed` |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-065-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Relation rules derived at decision time (CTR-CAP-001 R05). Closure of exchange does not remove party read rights until retention.
+
+## Failure, idempotency, concurrency, offline
+Re-authorized each attempt; queued attestations are re-checked against current party relation at relay time.
+
+## Privacy, retention, abuse
+Dispute reads and moderator reads emit `aud_` with `handoff_id`, scope and decision ID. No content of other attestations in audit.
+
+## Observability & budgets
+`handoff_authz_deny_total{action}`; alert on repeated attest denials from one account (possible probing).
+
+## Tests
+- TEST-PS-065-05-01 (unit): matrix per principal × action × field.
+- TEST-PS-065-05-02 (negative): operator attest denied.
+- TEST-PS-065-05-03 (integration): F09 dispute service sees lines only within dispute scope.
+- TEST-PS-065-05-04 (negative): non-party read returns `SYS.NOT_FOUND`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix implemented; default deny verified.
+2. Only parties attest.
+3. Dispute scope enforced for F09.
+4. Moderator reads limited to presence and state.
+
+## Assumptions & open decisions
+- ASSUMPTION: F09 dispute service principal exists with `dispute` scope.
+- PROVISIONAL (D10 default, unapproved): key registry model unchanged in MVP.

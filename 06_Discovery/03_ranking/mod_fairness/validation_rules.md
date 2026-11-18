@@ -1,35 +1,53 @@
-# PS-050-02 — validation rules
+# PS-046-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-050-02. **Owner:** [06_Discovery/03_ranking/mod_fairness](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_fairness. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_fairness. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the validation rules process for fairness within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** All cap values ASSUMPTION (OPEN, F06).
 
-## Requirements to specify
-- [ ] PS-050-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-050-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-050-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-046-02.R01 | Policy caps within ranges in PS-046-01 R02–R03; outside → `FAIRNESS.CONFIG_INVALID` (422). | MVP |
+| PS-046-02.R02 | Promoted slots cannot be disabled in a way that hides labels: a policy with `promoted_label` ≠ `Promoted` → `FAIRNESS.CONFIG_INVALID`. | MVP |
+| PS-046-02.R03 | One ACTIVE policy per scope; second activation → `FAIRNESS.POLICY_CONFLICT` (409). | MVP |
+| PS-046-02.R04 | Policy changes that loosen a cap require dual approval (CTR-CAP-001 R07 rule applied by analogy, ASSUMPTION) → else `CAP.SELF_APPROVAL_FORBIDDEN` or `FAIRNESS.APPROVAL_MISSING` (422). | MVP |
+| PS-046-02.R05 | Audit record shape checked before write; invalid audit → `FAIRNESS.AUDIT_INVALID` (internal, non-retryable, logged without values). | MVP |
+| PS-046-02.R06 | Ranking input features must pass the forbidden-feature check in PS-046-05 (`FAIRNESS.FEATURE_FORBIDDEN`, 422). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Checks: schema → ranges (R01) → label (R02) → uniqueness (R03) → approval (R04) → feature list (R06).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Applies to `rank_policy.draft`, `rank_policy.activate`, `rank_policy.retire`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Gates only; PS-046-03 holds transitions.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+All `FAIRNESS.*` non-retryable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-050-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Activation requires two approvers (dual control, ASSUMPTION).
+
+## Failure, idempotency, concurrency, offline
+Activation idempotent per policy ID and version.
+
+## Privacy, retention, abuse
+Policy diffs contain no listing or seller IDs.
+
+## Observability & budgets
+`fairness_validation_reject_total{code}`.
+
+## Tests
+- TEST-PS-046-02-01 (unit): one case per R01–R06 code.
+- TEST-PS-046-02-02 (boundary): cap 0.20 passes; 0.21 fails.
+- TEST-PS-046-02-03 (security): single approver cannot activate loosened caps.
+- TEST-PS-046-02-04 (negative): label other than `Promoted` rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every rule maps to a test and a code.
+2. No policy activation without required approvals.
+3. Label rule enforced.
+
+## Assumptions & open decisions
+- ASSUMPTION: approval rules and ranges.

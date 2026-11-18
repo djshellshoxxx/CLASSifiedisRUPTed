@@ -1,35 +1,51 @@
-# PS-049-08 — observability performance
+# PS-045-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-049-08. **Owner:** [06_Discovery/02_geoprivacy/mod_proximity](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_proximity. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_proximity. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (metrics rules, budget metrics), CTR-ERR-001.
 
-## Purpose and scope
-Define the observability performance process for proximity within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** Budgets ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-049-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-049-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-049-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-08.R01 | `proximity_query_latency_ms` p95 ≤ 100 ms (ASSUMPTION). | MVP |
+| PS-045-08.R02 | Metrics expose cell state counts, not per-cell counts below K_MIN. | MVP |
+| PS-045-08.R03 | Snapshot age gauge. | MVP |
+| PS-045-08.R04 | No labels with user IDs or cell IDs for query metrics. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Metrics: `proximity_query_latency_ms`, `proximity_query_total{outcome}`, `proximity_cell_transitions_total{from,to}`, `proximity_snapshot_age_seconds`, `prv_location_query_budget_hits_total`, `proximity_refresh_failures_total`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Counters per PS-045-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`proximity_validation_reject_total{code}`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-049-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Aggregated only.
+
+## Failure, idempotency, concurrency, offline
+Snapshot age alert.
+
+## Privacy, retention, abuse
+Metrics RET-OPS (30 days); no per-user dimension.
+
+## Observability & budgets
+Alerts: any response with count < K_MIN (must be 0); snapshot age > 30 min; budget hits > 5% of region queries in 1 h (ASSUMPTION).
+
+## Tests
+- TEST-PS-045-08-01 (lint): no user or cell label on query metrics.
+- TEST-PS-045-08-02 (load): ring-2 queries p95 ≤ 100 ms.
+- TEST-PS-045-08-03 (alert): seeded sub-K_MIN response fires alert.
+- TEST-PS-045-08-04 (alert): stale snapshot raises alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics present with specified labels.
+2. Latency budget met under fixture.
+3. Alerts fire within 5 minutes.
+
+## Assumptions & open decisions
+- ASSUMPTION: thresholds above.

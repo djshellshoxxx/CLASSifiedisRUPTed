@@ -1,35 +1,51 @@
 # PS-100-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-100-10. **Owner:** [12_Moderation/03_antifraud/mod_risk](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_risk. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_risk. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R07, R11), CTR-EVT-001 (R08), CTR-SCH-001 (model and schema migration).
 
-## Purpose and scope
-Define the import export backup rollback process for risk within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-100-10.R01 | Assessments are not importable from or exportable to other nodes or products. | MVP |
+| PS-100-10.R02 | Subject export (PS-100-07 R03) contains category codes and review outcomes only, not tiers or weights. | MVP |
+| PS-100-10.R03 | Backups are encrypted; restore reproduces assessments within retention and holds; expired assessments are not restored. | MVP |
+| PS-100-10.R04 | Model artifacts are versioned and signed; rollback = re-deploy a prior signed model version; existing assessments keep their `model_version`. | MVP |
+| PS-100-10.R05 | Restore reconciles holds with case state; any hold without an open case is released with an audit record. | MVP |
 
-## Requirements to specify
-- [ ] PS-100-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-100-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-100-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Subject export: JSON, category codes and review outcomes, ≤ 100 items per export. Backup scope: assessments within retention and open holds.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`risk.export_subject` (subject's own) → `risk.exported` with count and digest.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore does not replay transitions; restored holds are re-applied to discovery after reconciliation.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Export over 100 items → `RISK.EXPORT_TOO_LARGE` (400, non-retryable; cursor). Reconciliation mismatch → restore aborted, alert.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Subject export: subject only. Operator access: case scope with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-100-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Exports idempotent by `export_id`. Restore idempotent by backup ID.
+
+## Privacy, retention, abuse
+Exports exclude `signal_refs` and `feature_hash`. Backup restore honors the 30-day and 6-month retention windows (PS-100-07).
+
+## Observability & budgets
+Restore ≤ 30 min per 100 000 assessments (ASSUMPTION). Metric `risk_backup_last_success_timestamp`.
+
+## Tests
+- `TEST-PS-100-10-01` integration: backup → delete → restore → holds reconciled with cases.
+- `TEST-PS-100-10-02` negative: subject export contains no tier and no signal refs.
+- `TEST-PS-100-10-03` negative: import of assessments from peer refused.
+- `TEST-PS-100-10-04` rollback: prior model version re-deployed; old assessments keep their version label.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Restore reproduces holds and case links in test.
+2. Subject export contains no tier or signal references.
+3. Model rollback verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO ≤ 15 min and RTO ≤ 4 h are shared defaults with F15.
+- D07 (retention), PROVISIONAL default: retention windows apply to backups (unapproved).

@@ -1,35 +1,56 @@
-# PS-065-06 — failure recovery idempotency
+# PS-065-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-065-06. **Owner:** [08_Communications/03_meetups/mod_handoff](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_handoff. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_handoff. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03, offline), CTR-PRV-001 (RET-EVD), CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for handoff within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-065-06.R01 | Attestation commit and event are atomic (transaction or outbox). | MVP |
+| PS-065-06.R02 | Duplicate attestations (same key or same signed payload digest) return the original line. | MVP |
+| PS-065-06.R03 | Two-party race: both attestations commit; state transitions are recomputed from lines (not from event order). | MVP |
+| PS-065-06.R04 | Dispute referral to F09 is at-least-once; referral is idempotent by `handoff_id` and reason. | MVP |
+| PS-065-06.R05 | Offline attestations: signed on device, queued until relay ack; if the window closed → `not_applied`. | MVP |
+| PS-065-06.R06 | Client retries only retryable codes, max 5 attempts, backoff with jitter. | MVP |
 
-## Requirements to specify
-- [ ] PS-065-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-065-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-065-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Lines are append-only. Idempotency record 7 days. Dispute referral outbox: `handoff_id`, `reason`, `sent_at`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry rules apply to all commands in [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Device queue: `queued` → `acknowledged` | `not_applied`. Not-applied items shown to the attesting party.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Non-retryable codes not auto-retried. Window-closed attestation submitted offline is shown as not applied; the party is told the handoff window closed, not who is at fault.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Server re-authorizes each attempt.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-065-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Crash between commit and dispute referral: outbox resends; F09 de-duplicates.
+- Key registry outage: `KEY_UNKNOWN` retryable; attestation not accepted unsigned.
+- Clock skew: server time decides window (PS-065-02 R04).
+
+## Privacy, retention, abuse
+Device queue holds signed payloads only for pending items; purged on ack or logout. Rate limit 20 attestations per account per day (ASSUMPTION).
+
+## Observability & budgets
+`handoff_outbox_lag_seconds` p95 ≤ 5 s; `handoff_referral_retry_total`.
+
+## Tests
+- TEST-PS-065-06-01 (integration): crash after attestation commit before referral; referral sent once.
+- TEST-PS-065-06-02 (concurrency): simultaneous attestations from both parties; both commit; state `confirmed_mutual` or `disputed` per content.
+- TEST-PS-065-06-03 (offline): attestation queued past window → `not_applied` with user message.
+- TEST-PS-065-06-04 (fault): key registry down → retryable; no unsigned line accepted.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No duplicate lines under replay.
+2. State derived deterministically from lines.
+3. Offline attestations never silently dropped.
+4. Dispute referral delivered exactly once in effect.
+
+## Assumptions & open decisions
+- ASSUMPTION: 20 attestations per account per day.
+- PROVISIONAL (D08 default, unapproved): local pending queue until acknowledgment.
+- PROVISIONAL (D04 default, unapproved): compensating recovery via dispute flow.

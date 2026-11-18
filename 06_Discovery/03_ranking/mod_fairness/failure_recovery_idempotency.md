@@ -1,35 +1,54 @@
-# PS-050-06 — failure recovery idempotency
+# PS-046-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-050-06. **Owner:** [06_Discovery/03_ranking/mod_fairness](SPEC.md). **Implementing module:** 06_Discovery/03_ranking/mod_fairness. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/03_ranking/mod_fairness. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for fairness within 03_ranking. Do not assume implementation or successful external settlement.
+**Decision labels:** D02 cycle optimizer OPEN (not used here). No fairness guarantee is claimed.
 
-## Requirements to specify
-- [ ] PS-050-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-050-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-050-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-046-06.R01 | If the fairness step fails, the relevance service serves the unconstrained order with `constraint_status = UNCHECKED` and an alert; it does not block the page. | MVP |
+| PS-046-06.R02 | Audit write failure queues the row (RET-OPS) and retries; no page is blocked. | MVP |
+| PS-046-06.R03 | Policy activation is idempotent per `(policy_id, version)`. | MVP |
+| PS-046-06.R04 | Repair step is deterministic and bounded (≤ N passes = 3, ASSUMPTION); if constraints still fail, the page is marked `VIOLATED_AUTO_REPAIRED` and audited. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Queued audit rows carry the same schema as PS-046-01.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Retry-safe per PS-046-04.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+No new states.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`. Non-retryable: `FAIRNESS.*`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-050-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Internal call only.
+
+## Failure, idempotency, concurrency, offline
+- Fairness step timeout (> 20 ms): unconstrained order served and flagged.
+- Policy store unavailable: last ACTIVE policy cached for 15 min (ASSUMPTION), then fail-open to unconstrained order with alert (the caps are not a safety control).
+- Duplicate audit retry: deduplicated by `(page_id, policy_id)`.
+
+## Privacy, retention, abuse
+Queues hold aggregated rows only.
+
+## Observability & budgets
+`fairness_unchecked_pages_total`, `fairness_audit_queue_depth`, `fairness_repairs_total`.
+
+## Tests
+- TEST-PS-046-06-01 (failure): fairness timeout serves page flagged UNCHECKED.
+- TEST-PS-046-06-02 (queue): audit store down → rows queued and written once.
+- TEST-PS-046-06-03 (repair): adversarial input repaired within 3 passes or marked violated.
+- TEST-PS-046-06-04 (cache): policy store down for 10 min → cached policy used.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No page blocked by fairness failure.
+2. Every unchecked page is alerted and audited.
+3. Audit rows deduplicated.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute policy cache, 3 repair passes, 20 ms timeout.
+- OPEN (F06): whether fail-open is acceptable for caps (see Risk).

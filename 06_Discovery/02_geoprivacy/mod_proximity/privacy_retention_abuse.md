@@ -1,35 +1,57 @@
-# PS-049-07 — privacy retention abuse
+# PS-045-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-049-07. **Owner:** [06_Discovery/02_geoprivacy/mod_proximity](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_proximity. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_proximity. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R03–R05, R09, R10, retention), CTR-FED-001 (R02 cell federation), CTR-CAP-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for proximity within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** D05 PROVISIONAL. K_MIN ASSUMPTION (F10 validates). OPEN: legal review of narrowing-attack thresholds.
 
-## Requirements to specify
-- [ ] PS-049-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-049-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-049-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-07.R01 | No precise location of any user enters this module (CTR-PRV-001 R03; zero tolerance). | MVP |
+| PS-045-07.R02 | Cell counts published only at ≥ K_MIN = 5 (CTR-PRV-001 R04). | MVP |
+| PS-045-07.R03 | Budget counters RET-EPH (24 h); no query history retained beyond counters and alert records. | MVP |
+| PS-045-07.R04 | PUBLISHED cells may federate as registered cells only (CTR-FED-001 R02); MERGED_UP and SUPPRESSED never federate. | MVP |
+| PS-045-07.R05 | Logs carry cell IDs and codes; never raw query input or `acc_` linked to a cell. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Cell registry: LOCATION_COARSE, retention RET-ACC (registry life). Budget counters: RET-EPH.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Events are LOCATION_COARSE; `max_data_class` must not exceed it.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Suppressed cells are not retained beyond current cycle.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`PRV.QUERY_BUDGET_EXCEEDED` (429).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-049-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Per PS-045-05.
+
+## Failure, idempotency, concurrency, offline
+Deletion propagation of budget counters within 24 h (CTR-PRV-001 R06).
+
+## Privacy, retention, abuse
+Abuse controls:
+- Trilateration by shifting centers: budget (30/24 h) plus narrowing alert (PS-045-02 R05).
+- Differencing between buckets over time: buckets only, plus minimum 15-minute refresh; differencing test in CI.
+- Scraping of all cells: rate limit per client (ASSUMPTION).
+- Adversary claiming a cell to probe counts: registry admin dual approval.
+
+## Observability & budgets
+`prv_class_violations_total` must be 0. `prv_location_query_budget_hits_total` tracked.
+
+## Tests
+- TEST-PS-045-07-01 (lint): no precise field in any table or event.
+- TEST-PS-045-07-02 (K_MIN): simulated 4-item cell never appears in responses.
+- TEST-PS-045-07-03 (differencing): repeated refresh cycles do not reveal single-item change for a cell at 5.
+- TEST-PS-045-07-04 (federation): SUPPRESSED and MERGED_UP cells absent from federation batches.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero precise values in storage, logs, events or responses.
+2. No count below K_MIN disclosed.
+3. Federation limited to PUBLISHED cells.
+
+## Assumptions & open decisions
+- ASSUMPTION: K_MIN 5; scraping rate limit.
+- OPEN (F10): differencing mitigation sufficiency.

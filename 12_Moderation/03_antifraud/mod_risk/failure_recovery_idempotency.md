@@ -1,35 +1,54 @@
 # PS-100-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-100-06. **Owner:** [12_Moderation/03_antifraud/mod_risk](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_risk. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_risk. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03, R08), CTR-ERR-001, CTR-COM-001 (finality is not decided here).
 
-## Purpose and scope
-Define the failure recovery idempotency process for risk within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-100-06.R01 | `risk.assess` is idempotent per (subject_ref, correlation_id). Re-run after failure returns the existing assessment. | MVP |
+| PS-100-06.R02 | Assessment runs asynchronously from a durable queue with backoff 1 s → 10 min cap (ASSUMPTION). Missing signals do not stop assessment; they lower confidence. | MVP |
+| PS-100-06.R03 | If the scorer is unavailable, the subject is not held (no fail-closed on publication for scorer outage); the listing remains visible with a `pending_assessment` flag for ≤ 15 min, then review is routed automatically. | MVP |
+| PS-100-06.R04 | Holds and clearances are revision-checked; concurrent operations resolve to one winner (`EVT.REVISION_CONFLICT` for the other). | MVP |
+| PS-100-06.R05 | Step-up callbacks from F07 are idempotent per `rsk_id` and callback ID; duplicates return the same result. | MVP |
 
-## Requirements to specify
-- [ ] PS-100-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-100-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-100-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Queue rows: `correlation_id`, `subject_ref`, `attempts`, `next_attempt_at`, `status`. Idempotency rows per PS-091-06.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Assessment transaction writes `rsk_assessment`, routing events and the outbox in one commit.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery: an assessment that failed before commit is re-run; after commit it is never re-tiered except by a new trigger.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`RISK.SCORE_UNAVAILABLE` (503, retryable) only for synchronous status calls; the queue retries silently.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Re-evaluated per retry.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-100-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Offline: risk is server-side only; offline listing drafts (D08) are assessed after acknowledgement and shown as pending.
+- Partial failure: after `risk.assessed` but before `review_routed`, a reconciliation job re-emits routing from the committed tier (outbox-driven, no re-scoring).
+- Clock: step-up expiry uses server time only.
+
+## Privacy, retention, abuse
+Queue and idempotency rows hold IDs and attempt counts only.
+
+## Observability & budgets
+Alert: queue age > 15 min for listings (page); reconciliation finds routing gaps (ticket).
+
+## Tests
+- `TEST-PS-100-06-01` integration: scorer down 20 min → listing visible with `pending_assessment`, auto-routed after 15 min.
+- `TEST-PS-100-06-02` integration: crash after `assessed` commit → routing re-emitted once, no re-score.
+- `TEST-PS-100-06-03` integration: clear vs new hold race → one winner, one conflict.
+- `TEST-PS-100-06-04` integration: duplicate step-up callback → single transition.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No double routing or double hold in fault-injection suite.
+2. Scorer outage never hides listings beyond the 15 min flag rule.
+3. Re-scoring after commit never happens without a new trigger.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15 min pending-assessment window is a default for F01 and F12 review.
+- D08 (PWA offline writes), PROVISIONAL default: pending queue until relay acknowledgement (unapproved).
+- D04 (partial barter execution), PROVISIONAL default: no recovery step removes a consent; compensations are F02 concerns (unapproved).

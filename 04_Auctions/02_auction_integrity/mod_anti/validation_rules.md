@@ -1,35 +1,59 @@
 # PS-036-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-036-02. **Owner:** [04_Auctions/02_auction_integrity/mod_anti](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_anti. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_anti. **Parent:** [mod_anti SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-ERR-001, CTR-SCH-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the validation rules process for anti within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-036-02.R01 | A bid qualifies for extension only if server accepted time `t` satisfies `effective_end − window_seconds ≤ t < effective_end`. | MVP |
+| PS-036-02.R02 | Extension applies only when `extension_count` < `max_extensions`. At the cap, no extension occurs and state becomes `EXTENSION_CAP_REACHED`. | MVP |
+| PS-036-02.R03 | New `effective_end` = max(current `effective_end`, `t` + `extension_seconds`). It never decreases. | MVP |
+| PS-036-02.R04 | Client-supplied times are ignored. Only server-accepted timestamps are used. | MVP |
+| PS-036-02.R05 | Policy must exist and be published; unknown `policy_id` → `ANTISNIP.POLICY_UNKNOWN` and the auction is not opened. | MVP |
+| PS-036-02.R06 | A policy change never applies to an auction already open (policy pinned at creation). Attempt → `ANTISNIP.POLICY_PINNED`. | MVP |
+| PS-036-02.R07 | Bids with `sequence` ≤ `last_evaluated_sequence` are duplicates and are ignored (idempotent). | MVP |
 
-## Requirements to specify
-- [ ] PS-036-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-036-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-036-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Evaluation reads the bid event (sequence, accepted time) and the schedule row under the auction lock.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Enforced by `anti.evaluate_bid` (system) and `anti.publish_policy` (operator, dual control).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable. Rejections leave the schedule unchanged.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | Diagnostic |
+|---|---|---|---|
+| ANTISNIP.POLICY_UNKNOWN | false | validation / 400 | policy ID class |
+| ANTISNIP.POLICY_PINNED | false | conflict / 409 | auction state enum |
+| ANTISNIP.CLOCK_SKEW | true | precondition_failed / 412 | skew bucket |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Messages `err.antisnip.<code>`. Extension is an outcome, not an error.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-036-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Evaluation runs as `sys`. Policy publication requires `ope` dual control.
+
+## Failure, idempotency, concurrency, offline
+Deterministic for a given (bid sequence, policy version). Out-of-order events are evaluated by sequence (PS-036-06).
+
+## Privacy, retention, abuse
+Error bodies contain no bid amounts and no bidder identifiers.
+
+## Observability & budgets
+Validation ≤ 2 ms p95. Metric `antisnip_validation_rejections_total{code}`.
+
+## Tests
+- TEST-PS-036-02-01 (unit): one input per code.
+- TEST-PS-036-02-02 (boundary): bid at exactly `effective_end − 120 s` extends; one millisecond earlier does not.
+- TEST-PS-036-02-03 (property): `effective_end` is non-decreasing across 10,000 random bid sequences.
+- TEST-PS-036-02-04 (negative): client-supplied timestamp ignored (server time used).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All ANTISNIP codes registered in CTR-ERR-001 lint.
+2. Boundary and monotonicity tests pass.
+3. Policy pinning verified in integration test.
+
+## Assumptions & open decisions
+- ASSUMPTION: boundaries inclusive at window start; server clock skew tolerance 1 s.
+- See [DECISIONS.md](../../../DECISIONS.md) for D08 (offline writes not used by this module).

@@ -1,35 +1,59 @@
 # PS-100-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-100-05. **Owner:** [12_Moderation/03_antifraud/mod_risk](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_risk. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_risk. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R02–R04, R06–R10), CTR-PRV-001 (R01, R03).
 
-## Purpose and scope
-Define the authorization capabilities process for risk within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-100-05.R01 | Capabilities used: `rsk.read`, `rsk.create` (assess, sys_ only), `rsk.moderate` (clear, escalate), `rsk.update` (step-up result, sys_ callback). | MVP |
+| PS-100-05.R02 | Reviewers need a `mod_` grant with `case:<cas_>` scope and purpose `risk_review`. | MVP |
+| PS-100-05.R03 | Escalation requires a second `mod_` reviewer distinct from the first. | MVP |
+| PS-100-05.R04 | No `ope_` may read tiers or reasons without case scope and dual control. | MVP |
+| PS-100-05.R05 | Subjects read only their generic state (`under_review`, `verification_needed`, `resolved`). | MVP |
 
-## Requirements to specify
-- [ ] PS-100-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-100-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-100-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Actor | Action | Resource / scope | Outcome |
+|---|---|---|---|
+| `sys_` (assessor) | `rsk.create` | any subject | ALLOW |
+| `sys_` (F07 callback) | `rsk.update` | `rsk_` in `step_up_pending` | ALLOW only for that transition |
+| `mod_` (grant) | `rsk.read`, `rsk.moderate` (clear) | `case:cas_` | ALLOW if the reviewer is not the assessor-linked reviewer for the same case |
+| `mod_` (first reviewer) | `rsk.moderate` (escalate) | `case:cas_` | ALLOW; the escalated case needs a different `mod_` |
+| `mod_` (second reviewer) | `rsk.moderate` (clear escalated) | `case:cas_` | ALLOW if distinct from first |
+| `ope_` | `rsk.read` | any | DENY; ALLOW with dual control in case scope |
+| `acc_` (subject) | `rsk.read` | own subject | ALLOW: generic state only |
+| `acc_` (other) | any | any | DENY `SYS.NOT_FOUND` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Field visibility (CTR-CAP-001 R10): `tier`, `reason_codes`, `signal_refs`, `model_version` = `case`; `state` = `participant` (generic mapping for subject); `feature_hash` = `never`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Reviewer grants carry `constraints.purpose` = `risk_review`, `case_id`, `expires_at` ≤ 72 h.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization does not change state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.NOT_FOUND` for unreadable assessments; `SYS.FORBIDDEN` for `sys_` attempts to clear.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-100-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Zero-TTL decision cache for writes.
+
+## Privacy, retention, abuse
+Each reviewer read of tier or signal references writes an `aud_` record.
+
+## Observability & budgets
+`risk_authz_denied_total{capability,actor_kind}`; alert on repeated denials for one reviewer.
+
+## Tests
+- `TEST-PS-100-05-01` unit: matrix rows return outcomes.
+- `TEST-PS-100-05-02` negative: `sys_` clears an assessment → `SYS.FORBIDDEN`.
+- `TEST-PS-100-05-03` negative: same reviewer escalates and clears → `CAP.SELF_APPROVAL_FORBIDDEN` or equivalent.
+- `TEST-PS-100-05-04` negative: subject reads tier → field absent.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No automated actor clears or escalates.
+2. Subjects never see tiers or reasons.
+3. Every reviewer read writes an `aud_` record.
+
+## Assumptions & open decisions
+- ASSUMPTION: the escalation path requires two distinct reviewers; a single reviewer cannot clear their own escalation.
+- D10 (auth and portability), PROVISIONAL default: step-up uses F07 recovery rules, never bypassing proof (unapproved).

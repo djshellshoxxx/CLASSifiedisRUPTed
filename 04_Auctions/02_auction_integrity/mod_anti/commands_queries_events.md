@@ -1,35 +1,60 @@
 # PS-036-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-036-04. **Owner:** [04_Auctions/02_auction_integrity/mod_anti](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_anti. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_anti. **Parent:** [mod_anti SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for anti within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-036-04.R01 | `anti.evaluate_bid` consumes `bids.bid.accepted` by `event_id` and `bid_sequence`; idempotent. | MVP |
+| PS-036-04.R02 | `anti.publish_policy` carries `idempotency_key` and dual approval IDs. | MVP |
+| PS-036-04.R03 | Events are CTR-EVT-001 envelopes, `aggregate_type` = `auction`, `max_data_class` = PUBLIC. | MVP |
+| PS-036-04.R04 | Schedule query returns ≤ 1 KB per auction. | MVP |
 
-## Requirements to specify
-- [ ] PS-036-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-036-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-036-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Signature | Idempotency key |
+|---|---|---|
+| `anti.evaluate_bid` | (`auc_`, `bid_id`, `bid_sequence`, `server_accepted_at_utc`) | (`bid_id`) |
+| `anti.publish_policy` | (`policy_id`, `policy_version`, fields, approvals) | (operator, command, key) |
+| `anti.get_schedule` | (`auc_`) → schedule (query) | n/a |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Event (`schema_id`) | Visibility |
+|---|---|
+| `auction.extended` | PUBLIC: auc_, extension_index, new_end_utc |
+| `auction.extension_cap_reached` | PUBLIC: auc_ |
+| `auction.schedule_ended` | PUBLIC: auc_, final effective_end_utc |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Errors: PS-036-02 codes; `SYS.CONFLICT` for stale `schedule_revision`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Outcomes map to PS-036-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Schema validation first; unknown fields rejected.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-036-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Per PS-036-05.
+
+## Failure, idempotency, concurrency, offline
+Duplicate evaluation → no-op. Events at-least-once; dedupe by `event_id`. Out-of-order bid events are buffered per auction and applied in sequence order; buffer limit 50 events, beyond which the evaluator reads the bid log directly.
+
+## Privacy, retention, abuse
+Public events carry no bidder identifiers, only `bid_id` where the bid is already public.
+
+## Observability & budgets
+`anti.evaluate_bid` p95 ≤ 50 ms; `anti.get_schedule` p95 ≤ 100 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-036-04-01 (contract): all commands and events validate against CTR-SCH-001.
+- TEST-PS-036-04-02 (integration): duplicate `bids.bid.accepted` evaluated once.
+- TEST-PS-036-04-03 (integration): out-of-order events (sequence 5 before 4) produce the same schedule as in-order.
+- TEST-PS-036-04-04 (contract): public events contain no `acc_`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All commands and events registered.
+2. Out-of-order equivalence test passes on 10,000 random permutations.
+3. Public event privacy scan passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: 50-event reorder buffer.
+- See [DECISIONS.md](../../../DECISIONS.md) D10 for account-based rules (not used in schedule events).

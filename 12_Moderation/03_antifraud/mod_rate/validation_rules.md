@@ -1,35 +1,59 @@
 # PS-099-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-099-02. **Owner:** [12_Moderation/03_antifraud/mod_rate](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_rate. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_rate. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R03, R04, R05), CTR-FED-001 (R11), CTR-ID-001.
 
-## Purpose and scope
-Define the validation rules process for rate within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-099-02.R01 | `class_id` must exist in the loaded policy. Unknown → `RATE.CLASS_UNKNOWN` (internal caller error, not exposed to end users). | MVP |
+| PS-099-02.R02 | `subject_token` must be `acc_` or `fpr_` IDs (CTR-ID-001 format) or a keyed network token of 43 base64url characters. Other forms → `RATE.SUBJECT_INVALID`. | MVP |
+| PS-099-02.R03 | `cost` (tokens consumed) is an integer 1–100. Outside range → `RATE.COST_INVALID`. | MVP |
+| PS-099-02.R04 | Policy values: `emission_interval_ms` ≥ 10, `burst` 1–10 000, `window_ms` ≥ `emission_interval_ms`. Invalid policy is rejected at load, never partially applied. | MVP |
+| PS-099-02.R05 | A rate-limited response includes `retry_after_ms` = time until the next conforming request (GCRA), capped at 3 600 000 ms (CTR-ERR-001). | MVP |
 
-## Requirements to specify
-- [ ] PS-099-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-099-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-099-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Error registry (module prefix `RATE`):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Code | Category | HTTP | Retryable | `details.rule` |
+|---|---|---|---|---|
+| `RATE.LIMITED` | rate_limited | 429 | true | `class_id` (+ `retry_after_ms`) |
+| `RATE.CLASS_UNKNOWN` | internal | 500 | false | — (logged, not returned to users) |
+| `RATE.SUBJECT_INVALID` | validation | 400 | false | `subject_token` |
+| `RATE.COST_INVALID` | validation | 400 | false | `cost` |
+| `RATE.STORE_UNAVAILABLE` | unavailable | 503 | true | — |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Validation runs before bucket access. Invalid requests do not consume tokens.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+No state machine beyond bucket time; see PS-099-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`RATE.LIMITED` never reveals the limit value or the current count (prevents calibration by attackers).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-099-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Rate checks apply to unauthenticated and authenticated callers alike; they are not authorization decisions (CTR-CAP-001 unaffected).
+
+## Failure, idempotency, concurrency, offline
+Validation errors are non-retryable; `RATE.STORE_UNAVAILABLE` follows the class fail mode (PS-099-06).
+
+## Privacy, retention, abuse
+Error bodies contain no subject token or network information.
+
+## Observability & budgets
+Counter `rate_validation_error_total{code}`; no subject labels.
+
+## Tests
+- `TEST-PS-099-02-01` unit: each code on exact condition only.
+- `TEST-PS-099-02-02` negative: `cost` 101 → `RATE.COST_INVALID`, no token consumed (checked via subsequent allow).
+- `TEST-PS-099-02-03` contract: `retry_after_ms` never exceeds 3 600 000.
+- `TEST-PS-099-02-04` policy load: `burst` 0 rejects whole policy version.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Invalid input consumes no tokens.
+2. Error bodies contain no limit values or subject data.
+3. Partial policy never applied.
+
+## Assumptions & open decisions
+- ASSUMPTION: `cost` > 1 supports batched actions (for example, multi-item federation batches).
+- D08 (PWA offline writes), PROVISIONAL default: clients honor `retry_after_ms` before re-queuing (unapproved).

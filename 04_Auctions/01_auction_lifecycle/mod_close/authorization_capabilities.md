@@ -1,35 +1,63 @@
 # PS-034-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-034-05. **Owner:** [04_Auctions/01_auction_lifecycle/mod_close](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_close. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_close. **Parent:** [mod_close SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for close within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-034-05.R01 | Only `sys` may run `close.run`. No user or operator can trigger close early. | MVP |
+| PS-034-05.R02 | Only the seller may cancel, and only with zero accepted bids (`auc.cancel`, scope `self`). | MVP |
+| PS-034-05.R03 | Only the winning bidder may confirm (`auc.confirm`, scope `participant`). | MVP |
+| PS-034-05.R04 | Winner identity is visible to the seller after confirmation only (`owner` field visibility), and to the winner always. | MVP |
+| PS-034-05.R05 | Operator cancel requires `case:` scope and dual control (CTR-CAP-001 R06, R07). Purpose `auction_integrity`. | MVP |
+| PS-034-05.R06 | Reserve value is never readable by the close module's callers except `sys` for the comparison; `sys` writes only `reserve_met`. | MVP |
 
-## Requirements to specify
-- [ ] PS-034-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-034-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-034-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Action matrix:
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Principal | Action | Resource | Outcome |
+|---|---|---|---|
+| sys | `auc.execute` (close) | auction at revision | ALLOW |
+| user, seller | `auc.cancel` | own auction, zero bids | ALLOW |
+| user, seller | `auc.cancel` | own auction, bids exist | DENY → `CLOSE.CANCEL_WITH_BIDS` |
+| user, winner | `auc.confirm` | close record | ALLOW (participant) |
+| user, other bidder | `auc.confirm` | close record | DENY → `SYS.NOT_FOUND` |
+| user, seller | `auc.read` | winner before confirm | DENY (field `never` until confirm) |
+| mod, case scope | `auc.cancel` | auction in `cas_` | ALLOW (grant, dual control if ope) |
+| ope, single approval | `auc.cancel` | auction | DENY (dual control) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command maps to a row. Decision records hold outcome and reason only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Relation rules re-evaluated per command. Winner loses confirm right after UNCONFIRMED.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` for visible-but-disallowed; `SYS.NOT_FOUND` for hidden.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-034-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Capabilities: `auc.execute`, `auc.cancel`, `auc.confirm`, `auc.read`.
+
+## Failure, idempotency, concurrency, offline
+Decision TTL zero for writes and FINANCIAL_EVIDENCE reads. Revocation effective next decision.
+
+## Privacy, retention, abuse
+`aud_` records for every operator read of close records (purpose, decision ID, no content).
+
+## Observability & budgets
+Metric `close_authz_denials_total{action,code}`. Alert on any non-`sys` attempt to run close.
+
+## Tests
+- TEST-PS-034-05-01 (negative): each matrix row returns stated outcome.
+- TEST-PS-034-05-02 (negative): user attempt to call `close.run` returns `SYS.FORBIDDEN`.
+- TEST-PS-034-05-03 (integration): seller sees winner only after confirmation.
+- TEST-PS-034-05-04 (negative): operator cancel without second approver denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix tests pass with zero unlisted outcomes.
+2. No test path lets a non-sys principal close an auction.
+3. Winner identity absent from seller-facing responses before confirmation.
+
+## Assumptions & open decisions
+- ASSUMPTION: moderator grants max 72 h.
+- OPEN: whether seller may see winner pseudonym before confirmation. See [DECISIONS.md](../../../DECISIONS.md) D10.

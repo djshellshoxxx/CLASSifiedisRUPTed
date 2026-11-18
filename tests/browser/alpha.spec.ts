@@ -483,8 +483,14 @@ test(`layout at ${viewport.width}px stays within viewport and exposes visible ke
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }
   await page.screenshot({ path: testInfo.outputPath(`layout-${viewport.width}.png`), fullPage: true });
-  await page.locator('#backup-password').fill('wrong passphrase for backup');
-  await page.getByRole('button', { name: 'Download encrypted backup' }).focus();
+  const backupPassword = page.locator('#backup-password');
+  await backupPassword.fill('wrong passphrase for backup');
+  await expect(backupPassword).toBeFocused();
+  // Enter the button through keyboard navigation so the browser establishes keyboard focus modality.
+  await page.keyboard.press('Tab');
+  const backupButton = page.getByRole('button', { name: 'Download encrypted backup' });
+  await expect(backupButton).toBeFocused();
+  expect(await backupButton.evaluate(element => element.matches(':focus-visible'))).toBe(true);
   await page.keyboard.press('Enter');
   const error = page.locator('#error');
   await expect(error).toBeVisible();

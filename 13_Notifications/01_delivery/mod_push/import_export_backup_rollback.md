@@ -1,35 +1,54 @@
-# PS-104-10 — import export backup rollback
+# PS-104-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-104-10. **Owner:** [13_Notifications/01_delivery/mod_push](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_push. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_push. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the import export backup rollback process for push within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-104-10.R01 | Account export includes subscription metadata (device label, status, created_at) and excludes `endpoint`, `p256dh` and `auth`. | MVP |
+| PS-104-10.R02 | Push subscriptions are never imported from another node or from a backup into an active state; restored rows are set `expired` and must re-register. | MVP |
+| PS-104-10.R03 | Backups encrypt SECRET fields with a key managed by F16; backup restore cannot decrypt keys without the F16 key record. | MVP |
+| PS-104-10.R04 | Rollback = feature flag off: dispatch stops, queue is retained for 24 h then expired; no schema rollback required for 1.0.0. | MVP |
 
-## Requirements to specify
-- [ ] PS-104-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-104-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-104-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export file schema (JSON, `schema_version` 1.0.0): `{ "subscriptions": [ { "psb_id", "device_label", "status", "created_at" } ] }`. Export class PSEUDONYMOUS.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Federation export of push records: not in scope (no `psb_` in CTR-FED-001 envelope; Future).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+- `account.export` includes this module's export section under capability `push_subscription.export` (self).
+- Restore emits `push_subscription.expired` with `reason_code` `RESTORED_UNVERIFIED` for each restored row.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Restore: `active` in backup becomes `expired` on restore. Rollback: queued attempts become `expired` after 24 h.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Import of any push subscription file returns `PUSH.IMPORT_NOT_SUPPORTED` (non-retryable).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-104-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Export only by self (`push_subscription.export`); restore requires operator `global` scope and dual control (CTR-CAP-001 R07).
+
+## Failure, idempotency, concurrency, offline
+Export is repeatable and read-only. Restore is idempotent per `psb_id`. Rollback does not delete rows.
+
+## Privacy, retention, abuse
+Backup retention follows the backup policy in the platform backup spec (15_Platform/03_operations/mod_backups). Export deletes nothing.
+
+## Observability & budgets
+Export of 10 subscriptions completes in ≤ 2 s p95. Restore job reports count of rows set to `expired`.
+
+## Tests
+- TEST-PS-104-10-01 (contract): export file contains no key or endpoint fields.
+- TEST-PS-104-10-02 (integration): restore from backup yields zero `active` push subscriptions.
+- TEST-PS-104-10-03 (integration): feature flag off stops sends within 60 s and keeps queue rows until 24 h.
+- TEST-PS-104-10-04 (negative): push subscription import file is rejected with `PUSH.IMPORT_NOT_SUPPORTED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export and restore behavior verified in staging (not claimed as done).
+2. No key material in any export or backup manifest.
+3. Rollback runbook names the flag and the 24 h queue window.
+
+## Assumptions & open decisions
+- ASSUMPTION: federation push delivery is not in MVP.
+- Retention: D07 default, PROVISIONAL (D07 default, unapproved).
+- Backup key management depends on D10 (PROVISIONAL default, unapproved).

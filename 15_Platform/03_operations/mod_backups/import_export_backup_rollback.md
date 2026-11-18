@@ -1,35 +1,51 @@
-# PS-120-10 — import export backup rollback
+# PS-120-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-120-10. **Owner:** [15_Platform/03_operations/mod_backups](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_backups. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_backups (F15.S03.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-COM-001.
 
-## Purpose and scope
-Define the import export backup rollback process for backups within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-120-10.R01 | Backup sets are not exported outside the platform boundary. Export to a third party is refused (`BACKUP.DESTINATION_NOT_APPROVED`). | MVP |
+| PS-120-10.R02 | Import into the platform happens only through restore (PS-122) into an isolated environment. | MVP |
+| PS-120-10.R03 | Manifest format changes follow CTR-SCH-001; old manifests stay readable for the supported window (365 days for signed schemas, ASSUMPTION). | MVP |
+| PS-120-10.R04 | Rollback of a failed or cancelled job deletes its partial objects and keeps the failure record. Completed sets are never modified. | MVP |
+| PS-120-10.R05 | Lossy manifest migration is forbidden; original bytes are kept (CTR-SCH-001 R08). | MVP |
+| PS-120-10.R06 | A backup of a schema version is restorable only if the matching migration fixtures exist (CTR-SCH-001 R09). | MVP |
 
-## Requirements to specify
-- [ ] PS-120-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-120-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-120-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`backup.manifest` registry entry: owner F15, `signed: false`, `federated: false`, data classes per field.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No export command. Rollback is `backup.run` abort (internal) with `backup.failed`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback path: `running` → `failed` → `purged` (after 24 h) per PS-120-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SCH.UNKNOWN_VERSION` on manifests newer than the reader; `SCH.MIGRATION_FAILED` quarantines the set for review.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export refusal is the default (PS-120-05 R01).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-120-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Rollback is idempotent on `bkp_id`.
+
+## Privacy, retention, abuse
+Export refusal is logged as a security event (abuse signal).
+
+## Observability & budgets
+Metric: `backup_export_refused_total`. Alert on any attempt.
+
+## Tests
+- TEST-PS-120-10-01 (negative): export attempt to unapproved destination refused.
+- TEST-PS-120-10-02 (migration golden): manifest 1.0 readable under 1.1 reader.
+- TEST-PS-120-10-03 (rollback): cancelled job leaves no partial objects after 24 h cleanup.
+- TEST-PS-120-10-04 (integrity): completed set bytes unchanged after cleanup of a later failed job.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No export path exists (static route scan).
+2. TEST-PS-120-10-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 365-day manifest readability window.
+- PROVISIONAL (D07 default).

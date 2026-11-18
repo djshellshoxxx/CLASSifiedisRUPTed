@@ -1,44 +1,47 @@
-# F17.S03.M03 — compatibility
+# F17.S03.M03 — compatibility (support matrix and compatibility results)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F17.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** QA Lead (F17). **Parent:** [F17.S03 release](../SPEC.md).
 
 ## Purpose and business behavior
-Provide compatibility as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Maintain the support matrix of browsers, operating systems, PWA install targets, assistive technologies, stored-record schema versions and federated peer protocol versions, and record compatibility test results per matrix cell. The goal is to catch silent breakage of older clients, offline clients holding stale schemas and peers on unsupported protocol versions before a release is promoted.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a release manager, I see which matrix cells pass for the release candidate and which are unsupported.
+- As a participant on an older device, I keep read access to my records after an upgrade.
+- As a federation operator, I know which peer protocol versions this release still accepts.
 
 ## Scope
-- Required process spec: `compatibility_domain_model.md` (not yet authored)
-- Required process spec: `compatibility_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `compatibility_validation_and_authorization.md` (not yet authored)
-- Required process spec: `compatibility_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `compatibility_interfaces_and_events.md` (not yet authored)
-- Required process spec: `compatibility_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `compatibility_acceptance_and_property_tests.md` (not yet authored)
+- Process specs (SPEC-DRAFT-COMPLETE, pending approval): domain_schema, validation_rules, workflow_state_machine, commands_queries_events, authorization_capabilities, failure_recovery_idempotency, privacy_retention_abuse, observability_performance, contract_and_acceptance_tests, import_export_backup_rollback.
+- Process IDs: PS-142-01 to PS-142-10.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `PublishCompatMatrix`, `RecordCompatResult`. Queries `GetCompatMatrix`, `ListCompatResults`. Events `compat_matrix.published`, `compat_result.recorded`. Details: [commands_queries_events](commands_queries_events.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: CI results from [mod_ci](../mod_ci/SPEC.md), CTR-SCH-001 (schema versions), CTR-FED-001 (peer protocol versions), CTR-ERR-001. Downstream: [mod_gates](../mod_gates/SPEC.md). Schema registry ownership stays with F15 (CTR-SCH-001).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns the support matrix and compatibility results. Does not own schemas (CTR-SCH-001), federation rules (CTR-FED-001) or device records.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+A matrix that claims support not backed by results; old clients reading new schema fields incorrectly; offline clients with stale schemas writing invalid records; peers on deprecated protocol versions accepted by mistake; stale results from a previous build reused for a new release.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Matrix approved by QA Lead; deprecation policy for each cell defined; compatibility tests pass for the MVP matrix in a later phase.
 
 ## Required process specification inventory
-- [ ] `compatibility_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `compatibility_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `compatibility_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `compatibility_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `compatibility_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `compatibility_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `compatibility_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-142-01 drafted
+- [x] `validation_rules.md` — PS-142-02 drafted
+- [x] `workflow_state_machine.md` — PS-142-03 drafted
+- [x] `commands_queries_events.md` — PS-142-04 drafted
+- [x] `authorization_capabilities.md` — PS-142-05 drafted
+- [x] `failure_recovery_idempotency.md` — PS-142-06 drafted
+- [x] `privacy_retention_abuse.md` — PS-142-07 drafted
+- [x] `observability_performance.md` — PS-142-08 drafted
+- [x] `contract_and_acceptance_tests.md` — PS-142-09 drafted
+- [x] `import_export_backup_rollback.md` — PS-142-10 drafted
+
+## Assumptions and open decisions
+- ASSUMPTION: the MVP matrix lists current stable browsers and OS versions only; older versions are listed as `unsupported` with a date.
+- D01 (federated record protocol), default "versioned signed envelopes and explicit opt-in": PROVISIONAL (D01 default, unapproved).
+- D08 (PWA offline writes), default "local pending queue until authenticated relay acknowledgment": PROVISIONAL (D08 default, unapproved).

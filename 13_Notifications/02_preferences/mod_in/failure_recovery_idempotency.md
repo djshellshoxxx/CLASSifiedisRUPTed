@@ -1,35 +1,53 @@
-# PS-106-06 — failure recovery idempotency
+# PS-106-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-106-06. **Owner:** [13_Notifications/02_preferences/mod_in](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_in. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_in. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for in within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-106-06.R01 | Projection from `ntf_` event to inbox is idempotent by (`ntf_id`); replay creates no second item. | MVP |
+| PS-106-06.R02 | Preference change applies to new projections immediately and does not retroactively hide existing items except via prune. | MVP |
+| PS-106-06.R03 | Prune job is resumable by cursor and idempotent. | MVP |
+| PS-106-06.R04 | Projection lag p95 ≤ 5 s after `ntf_` creation. | MVP |
 
-## Requirements to specify
-- [ ] PS-106-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-106-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-106-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Projection key = `ntf_id`. Prune cursor stored per shard, retained 24 h.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+- Set-preferences retried with same key returns same revision.
+- Mark-read batch is all-or-nothing (PS-106-02.R04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Per workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.CONFLICT` on preference revision mismatch.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Projection uses sys grant at time of projection.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-106-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Event consumer crash: redeliver by `(aggregate_id, revision)` order (CTR-EVT-001).
+- Offline: read state changes queued per D08 PROVISIONAL pending queue; inbox list served from last sync.
+- Concurrency: two devices mark read; monotonic rule resolves.
+
+## Privacy, retention, abuse
+Pending queue on device cleared on logout after acknowledgement.
+
+## Observability & budgets
+Lag histogram; projection errors counter.
+
+## Tests
+- TEST-PS-106-06-01 (integration): duplicate `ntf_` event yields one item.
+- TEST-PS-106-06-02 (integration): prune resumes after kill.
+- TEST-PS-106-06-03 (offline): mark-read offline then reconnect yields single read event.
+- TEST-PS-106-06-04 (integration): projection lag under 5 s p95 at 500 events/s.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Replay safe in consumer test.
+2. Prune resumable verified.
+3. Lag budget verified in load test (to be run).
+
+## Assumptions & open decisions
+- ASSUMPTION: 500 events/s target per node.
+- D08 PROVISIONAL (D08 default, unapproved).

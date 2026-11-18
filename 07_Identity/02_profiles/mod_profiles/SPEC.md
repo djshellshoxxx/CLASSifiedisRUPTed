@@ -1,44 +1,51 @@
 # F07.S02.M02 — profiles
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F07.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Identity&Trust Lead (F07). **Parent:** F07.S02.
 
 ## Purpose and business behavior
-Provide profiles as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Holds the profile attached to each pseudonym (`prf_`): a short public bio, languages, an optional coarse region cell, and an optional private block of contact methods that is shared with a counterparty only on explicit, expiring disclosure. Owns field-level visibility, profile versioning, disclosure grants and the freeze/purge of profiles when a pseudonym is retired. Does not own handles or pseudonym lifecycle (mod_pseudonyms), reputation (mod_reputation), precise location (06_Discovery geoprivacy) or consent records (mod_consent).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a pseudonym holder, I write a bio and pick languages without entering my name or any contact detail in public fields.
+- As a pseudonym holder, I share my contact method with one counterparty for a defined window and can revoke it.
+- As a counterparty in an active exchange, I see only the fields the holder disclosed to me.
+- As a moderator, I see that a profile has contact methods without seeing their values.
 
 ## Scope
-- Required process spec: `profiles_domain_model.md` (not yet authored)
-- Required process spec: `profiles_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `profiles_validation_and_authorization.md` (not yet authored)
-- Required process spec: `profiles_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `profiles_interfaces_and_events.md` (not yet authored)
-- Required process spec: `profiles_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `profiles_acceptance_and_property_tests.md` (not yet authored)
+- [domain_schema.md](domain_schema.md) — PS-056-01
+- [validation_rules.md](validation_rules.md) — PS-056-02
+- [workflow_state_machine.md](workflow_state_machine.md) — PS-056-03
+- [commands_queries_events.md](commands_queries_events.md) — PS-056-04
+- [authorization_capabilities.md](authorization_capabilities.md) — PS-056-05
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-056-06
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-056-07
+- [observability_performance.md](observability_performance.md) — PS-056-08
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-056-09
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-056-10
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `UpdateProfile`, `SetFieldVisibility`, `DisclosePrivateField`, `RevokeDisclosure`; queries `GetPublicProfile`, `GetOwnProfile`, `GetCounterpartyView`; events `profile.updated`, `profile.visibility_changed`, `profile.frozen`, `profile.disclosure_granted`, `profile.disclosure_revoked`, `profile.private_purged` (CTR-EVT-001 envelopes). Details in PS-056-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: mod_pseudonyms (`pseudonym.created`, `pseudonym.retired`), mod_sessions, F14 supported-locale list, 06_Discovery region grid and K_MIN registry. Downstream: mod_reputation and listings read public fields by `prf_` ID; messaging reads counterparty view. Consent for disclosure: canonical owner ID PENDING (mod_consent). Canonical IDs: CTR-ID-001 `prf`.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns profile rows, visibility settings, disclosure grants and the private block. Does not own `prf_` rows (mod_pseudonyms), reputation scores, region grid, or consent records. Retention per PS-056-07.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Specific to profiles: (1) the bio and coarse region are the richest linkage surface in the identity area, since a distinctive bio plus a small region can re-identify a pseudonym across contexts; (2) disclosed contact values persist at a counterparty after revocation, so revocation cannot recall copies; (3) contact data written into public free text bypasses field rules; (4) cached private values on offline devices; (5) region cells with too few profiles reveal location, which K_MIN = 5 is meant to prevent. Profiles do not guarantee anonymity.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specs at SPEC-DRAFT-COMPLETE; every `PS-056-*.Rnn` mapped to `TEST-PS-056-*`; K_MIN, disclosure window and consent owner resolved or kept PROVISIONAL with sign-off; privacy and security review pass (future gate).
 
 ## Required process specification inventory
-- [ ] `profiles_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `profiles_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `profiles_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `profiles_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `profiles_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `profiles_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `profiles_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-056-01, SPEC-DRAFT-COMPLETE
+- [x] `validation_rules.md` — PS-056-02, SPEC-DRAFT-COMPLETE
+- [x] `workflow_state_machine.md` — PS-056-03, SPEC-DRAFT-COMPLETE
+- [x] `commands_queries_events.md` — PS-056-04, SPEC-DRAFT-COMPLETE
+- [x] `authorization_capabilities.md` — PS-056-05, SPEC-DRAFT-COMPLETE
+- [x] `failure_recovery_idempotency.md` — PS-056-06, SPEC-DRAFT-COMPLETE
+- [x] `privacy_retention_abuse.md` — PS-056-07, SPEC-DRAFT-COMPLETE
+- [x] `observability_performance.md` — PS-056-08, SPEC-DRAFT-COMPLETE
+- [x] `contract_and_acceptance_tests.md` — PS-056-09, SPEC-DRAFT-COMPLETE
+- [x] `import_export_backup_rollback.md` — PS-056-10, SPEC-DRAFT-COMPLETE

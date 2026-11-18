@@ -1,35 +1,62 @@
 # PS-116-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-02. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_offline (F15.S01.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-EVT-001, CTR-SCH-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the validation rules process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-116-02.R01 | `command_type` matches `^[a-z_]{2,24}\.[a-z_]{2,24}$` and is in the module's declared offline-capable list. | MVP |
+| PS-116-02.R02 | `aggregate_id`, when present, passes CTR-ID-001 R01–R04, R09 and its prefix matches the aggregate type (`ID.PREFIX_MISMATCH`). | MVP |
+| PS-116-02.R03 | `expected_revision` is null for creation and an integer >= 1 for updates; any other value is refused. | MVP |
+| PS-116-02.R04 | `schema_version` MAJOR must be supported by the local registry snapshot; unknown MAJOR is accepted into `upgrade_required`, not discarded (CTR-SCH-001 R06). | MVP |
+| PS-116-02.R05 | Payload is validated against the local copy of the payload schema before enqueue. Validation errors report field path and rule only, never the input value (CTR-ERR-001 R07). | MVP |
+| PS-116-02.R06 | Floats are refused in money fields (`OFFLINE.ENTRY_INVALID`, rule `float_money`). | MVP |
+| PS-116-02.R07 | Replay validation repeats R01–R03 and R05 before send to detect corrupted storage. | MVP |
 
-## Requirements to specify
-- [ ] PS-116-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Validation runs on the entry schema in PS-116-01. Rules map to codes:
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Rule | Code | Retryable |
+|---|---|---|
+| Schema, pattern, enum or range failure | OFFLINE.ENTRY_INVALID | false |
+| Command not offline-capable | OFFLINE.COMMAND_NOT_OFFLINE_CAPABLE | false |
+| Payload over 64 KiB or depth 8 | SYS.PAYLOAD_TOO_LARGE | false |
+| Digest mismatch on read | OFFLINE.ENTRY_TAMPERED | false |
+| Unknown MAJOR | OFFLINE.UPGRADE_REQUIRED | false |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Validation runs inside `offline.enqueue` (PS-116-04) before any write.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Validation failure at enqueue creates no entry. Validation failure at replay moves the entry to `not_applied` with the code above (PS-116-03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Error responses follow CTR-ERR-001 envelope. `message_key` = `err.offline.<code lowercased>`. No localized prose in the contract.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Validation does not authorize. The server re-authorizes on commit (CTR-CAP-001 R11).
+
+## Failure, idempotency, concurrency, offline
+Validation is pure and deterministic. Schema snapshot is updated only when online; a stale snapshot causes `upgrade_required`, not silent acceptance.
+
+## Privacy, retention, abuse
+Validation logs contain the rule name and code only. Input is never echoed or logged.
+
+## Observability & budgets
+Metric: `offline_validation_failures_total{code}`. Budget: validation ≤ 2 ms p95 for a 64 KiB payload on a mid-range phone (ASSUMPTION).
+
+## Tests
+- TEST-PS-116-02-01 (unit): each rule R01–R07 has a pass and a fail fixture.
+- TEST-PS-116-02-02 (property): random strings in `command_type` never pass unless they match the pattern and the allow-list.
+- TEST-PS-116-02-03 (unit): error body contains no input value (scan for fixture strings).
+- TEST-PS-116-02-04 (integration): unknown MAJOR entry stays pending across app restart.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every rule has a code in the table above; codes registered in the module catalog.
+2. No validation error body contains an input value.
+3. TEST-PS-116-02-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: payload schemas are shipped to the client as a signed snapshot (CTR-SCH-001).
+- PROVISIONAL (D08 default): validation before enqueue and again before replay.
+- OPEN: which commands are offline-capable per owner module; each owner module decides in its own spec.

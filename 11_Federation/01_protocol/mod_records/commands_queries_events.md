@@ -1,35 +1,50 @@
-# PS-084-04 — commands queries events
+# PS-084-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-084-04. **Owner:** [11_Federation/01_protocol/mod_records](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_records. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_records. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001, CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the commands queries events process for records within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-084-04.R01 | `records.set_federate` requires `idempotency_key` and `expected_revision`. | MVP |
+| PS-084-04.R02 | Events are `record.federate_enabled`, `record.federate_disabled`, `record_type.registered`, `record_type.deprecated`. | MVP |
+| PS-084-04.R03 | `records.query_registry` returns registry rows (public metadata) without item IDs. | MVP |
 
-## Requirements to specify
-- [ ] PS-084-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-084-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-084-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Schemas `record.*@1.0.0`, `record_type.*@1.0.0` per CTR-SCH-001.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Command | Actor | Event | Errors |
+|---|---|---|---|
+| records.set_federate | item owner | record.federate_enabled / _disabled | CLASS_NOT_FEDERABLE, OPT_IN_REQUIRED |
+| registry.register | Platform Lead | record_type.registered | TYPE_UNREGISTERED, SCH.BREAKING_UNVERSIONED |
+| registry.deprecate | Platform Lead | record_type.deprecated | INVALID_TRANSITION |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+[workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+[validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+[authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-084-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Same key and digest return original; different digest → `EVT.IDEMPOTENCY_KEY_REUSED`.
+
+## Privacy, retention, abuse
+Events carry aggregate IDs and enums only.
+
+## Observability & budgets
+Event counts per type.
+
+## Tests
+- TEST-PS-084-04-01 (contract): events validate.
+- TEST-PS-084-04-02 (idempotency): repeated set_federate yields one event.
+- TEST-PS-084-04-03 (query): registry response has no item IDs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command table complete.
+2. Duplicate writes produce one event.
+3. Registry query leaks no item IDs.
+
+## Assumptions & open decisions
+- PENDING: consumers (`mod_portable`, `mod_delivery`) confirmed in DEPENDENCY_MATRIX.md.

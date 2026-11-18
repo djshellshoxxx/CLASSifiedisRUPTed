@@ -1,35 +1,55 @@
 # PS-075-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-075-03. **Owner:** [09_Commerce/03_valuation/mod_rates](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_rates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_rates (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (R04, R16 window interplay), CTR-EVT-001 (R02). **Decisions:** D03 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the workflow state machine process for rates within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-075-03.R01 | Quote states: `issued`, `expired`. Expiry is time-based and irreversible. | MVP |
+| PS-075-03.R02 | Source states: `active`, `stale`, `disabled`. `stale` is derived from observation age; `disabled` is operator action only. | MVP |
+| PS-075-03.R03 | Expiry of a quote never alters a proposal or claim already pinned to it. | MVP |
+| PS-075-03.R04 | Consent pins `quote_id` and `quote_hash` atomically with the consent event. | MVP |
 
-## Requirements to specify
-- [ ] PS-075-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-075-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-075-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Transition row: `entity_id`, `from`, `to`, `at`, `revision`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`quote.issued`, `quote.expired`, `rate_source.registered`, `rate_source.disabled`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| — | `quote.issue` | PS-075-02 passes | `issued` | `quote.issued` |
+| `issued` | timer `valid_until` | — | `expired` | `quote.expired` |
+| source `active` | observation older than 5 min | — | `stale` | alert |
+| source `stale` | fresh observation | — | `active` | — |
+| source any | `rate_source.disable` | dual control | `disabled` | `rate_source.disabled` |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Other pairs return `SYS.CONFLICT` or `RATE.*` per PS-075-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Per PS-075-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-075-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Per PS-075-05.
+
+## Failure, idempotency, concurrency, offline
+Expiry timer is idempotent; expired quote refuses new use.
+
+## Privacy, retention, abuse
+Public events.
+
+## Observability & budgets
+Histogram: quote age at consent (aggregate).
+
+## Tests
+- TEST-PS-075-03-01 (unit): table rows; expired → issued refused.
+- TEST-PS-075-03-02 (integration): consent at valid time pins quote; expiry afterward does not affect proposal.
+- TEST-PS-075-03-03 (integration): source stale after 5 min excluded from next quote.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Pinned proposals unaffected by expiry (CTR-COM test 09).
+2. Source staleness handled.
+
+## Assumptions & open decisions
+- D03 (PROVISIONAL default, unapproved).

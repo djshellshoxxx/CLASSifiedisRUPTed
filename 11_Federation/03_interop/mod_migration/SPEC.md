@@ -1,44 +1,52 @@
 # F11.S03.M03 — migration
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F11.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (role). **Parent:** F11.S03.
 
 ## Purpose and business behavior
-Provide migration as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Plan, approve, execute and roll back controlled migrations of federated data: schema version steps (using CTR-SCH-001 migration hooks), node moves, and signing-key rotations. Migrations are dry-run first, dual-approved, checkpointed, verified and reversible within 14 days. Signed evidence keeps its original bytes; migration adds lossless views only.
+Naming: the slug `migration` is shortened to `MIGRATE` for error codes (CTR-ERR-001 R02 allows at most 8 letters). Mapping recorded in Assumptions.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As an operator, I can see the exact effect of a migration before approving it.
+- As a second approver, I can stop a migration that changes signed evidence.
+- As an operator, a crashed migration resumes without duplicates.
+- As a participant, my historic signed records still verify after a key rotation.
 
 ## Scope
-- Required process spec: `migration_domain_model.md` (not yet authored)
-- Required process spec: `migration_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `migration_validation_and_authorization.md` (not yet authored)
-- Required process spec: `migration_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `migration_interfaces_and_events.md` (not yet authored)
-- Required process spec: `migration_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `migration_acceptance_and_property_tests.md` (not yet authored)
+- [domain_schema.md](domain_schema.md) — PS-090-01
+- [validation_rules.md](validation_rules.md) — PS-090-02
+- [workflow_state_machine.md](workflow_state_machine.md) — PS-090-03
+- [commands_queries_events.md](commands_queries_events.md) — PS-090-04
+- [authorization_capabilities.md](authorization_capabilities.md) — PS-090-05
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-090-06
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-090-07
+- [observability_performance.md](observability_performance.md) — PS-090-08
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-090-09
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-090-10
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `migration.plan`, `migration.approve`, `migration.execute`, `migration.rollback`; query `migration.query_run`. Events `migration.planned`, `migration.approved`, `migration.completed`, `migration.failed`, `migration.rolled_back`. Details in PS-090-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: schema registry and hooks (CTR-SCH-001), envelope and key lifecycle (CTR-FED-001, F16), data classes (CTR-PRV-001). Downstream: peer nodes (key rotation notices), F10 review for class changes, observability (F15).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns migration run records and checkpoints. Migrated data remains owned by its aggregate module.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Lossy migration of signed evidence, which breaks verification. Migration raising a data class without privacy review. Irreversible moves after the rollback window. Key rotation invalidating historic signatures. Dual-running divergence between nodes. Plans going stale between dry run and execute.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs reviewed; lossy-evidence block tested; key-rotation verification test defined; B-06 not affected.
 
 ## Required process specification inventory
-- [ ] `migration_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `migration_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `migration_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `migration_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `migration_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `migration_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `migration_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-090-01, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `validation_rules.md` — PS-090-02, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `workflow_state_machine.md` — PS-090-03, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `commands_queries_events.md` — PS-090-04, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `authorization_capabilities.md` — PS-090-05, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `failure_recovery_idempotency.md` — PS-090-06, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `privacy_retention_abuse.md` — PS-090-07, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `observability_performance.md` — PS-090-08, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `contract_and_acceptance_tests.md` — PS-090-09, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `import_export_backup_rollback.md` — PS-090-10, SPEC-DRAFT-COMPLETE (pending approval)

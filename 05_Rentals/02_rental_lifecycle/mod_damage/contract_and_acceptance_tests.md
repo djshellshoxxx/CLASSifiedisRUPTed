@@ -1,35 +1,53 @@
 # PS-041-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-041-09. **Owner:** [05_Rentals/02_rental_lifecycle/mod_damage](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_damage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_damage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001 (golden fixtures), CTR-COM-001 (claim fixtures), CTR-CAP-001 (authz tests).
 
-## Purpose and scope
-Define the contract and acceptance tests process for damage within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** D06 PROVISIONAL. D04 OPEN.
 
-## Requirements to specify
-- [ ] PS-041-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-041-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-041-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-041-09.R01 | Contract tests run for each published `damage` schema version. | MVP |
+| PS-041-09.R02 | One test per `DAMAGE.*` code asserting code, category, HTTP status, `retryable`. | MVP |
+| PS-041-09.R03 | Golden fixtures for every migration path (CTR-SCH-001 R09). | MVP |
+| PS-041-09.R04 | End-to-end acceptance: report → contest → escalate → resolve → deposit partial release. | MVP |
+| PS-041-09.R05 | Suite runs in CI on every merge. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Fixtures: valid and invalid `damage` samples; photo samples with and without GPS EXIF (synthetic images only).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Envelope tests: required fields; `max_data_class = FINANCIAL_EVIDENCE`; no description in payload.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+One acceptance case per row in PS-041-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+One case per rule in PS-041-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-041-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+One case per matrix row in PS-041-05.
+
+## Failure, idempotency, concurrency, offline
+Cases -01 to -04 of PS-041-06 included.
+
+## Privacy, retention, abuse
+PS-041-07 tests included in CI.
+
+## Observability & budgets
+PS-041-08 metric presence test included.
+
+## Tests
+- TEST-PS-041-09-01 (contract): schema round-trip for every version.
+- TEST-PS-041-09-02 (error table): one case per `DAMAGE.*` code.
+- TEST-PS-041-09-03 (e2e): flow in R04 completes with deposit request event.
+- TEST-PS-041-09-04 (negative e2e): silence through the 72-h window never produces ACKNOWLEDGED.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-041-09-01 through -04 pass in CI.
+2. Every requirement in PS-041-01 through -08 maps to a test ID.
+3. Fixtures contain synthetic data only.
+
+## Assumptions & open decisions
+- ASSUMPTION: synthetic fixtures only.
+- PENDING CTR-SCH-001 registration of `damage` schema.

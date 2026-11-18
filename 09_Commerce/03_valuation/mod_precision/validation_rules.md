@@ -1,35 +1,56 @@
 # PS-074-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-074-02. **Owner:** [09_Commerce/03_valuation/mod_precision](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_precision. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_precision (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (R02, Validation table), CTR-ERR-001. **Decisions:** D03 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the validation rules process for precision within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-074-02.R01 | Parser accepts only the amount grammar in PS-074-01 R01: no sign, no separator, no exponent notation, no leading zeros except `0`. | MVP |
+| PS-074-02.R02 | Scaling input (major to minor) accepts only decimal strings with at most `exponent` fractional digits; more digits → error, never silent rounding. | MVP |
+| PS-074-02.R03 | Overflow: any intermediate or result > 39 digits → error. | MVP |
+| PS-074-02.R04 | Zero amounts are rejected for claims (`COM.AMOUNT_INVALID`) but valid as rule-set inputs. | MVP |
+| PS-074-02.R05 | Unsupported rounding mode name → error. | MVP |
 
-## Requirements to specify
-- [ ] PS-074-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-074-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-074-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Error reasons: `grammar`, `leading_zero`, `too_many_digits`, `fraction_digits`, `overflow`, `rounding_unsupported`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Library functions in PS-074-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+None.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Condition | Code | Category / HTTP | Retryable |
+|---|---|---|---|
+| Grammar violation | `PREC.GRAMMAR` | validation / 400 | false |
+| Overflow | `PREC.OVERFLOW` | validation / 400 | false |
+| Too many fraction digits | `PREC.SCALE_EXCEEDED` | validation / 400 | false |
+| Unsupported rounding | `PREC.ROUNDING_UNSUPPORTED` | validation / 400 | false |
+| Claim zero amount | `COM.AMOUNT_INVALID` | validation / 400 | false |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+None.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-074-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deterministic; no I/O.
+
+## Privacy, retention, abuse
+Error values are never echoed (CTR-ERR-001 R07).
+
+## Observability & budgets
+Counter by reason in calling services.
+
+## Tests
+- TEST-PS-074-02-01 (unit): grammar accept and reject list (`0`, `1`, `01`, `1.0`, `-1`, `1e3`, `+1`, ` 1`).
+- TEST-PS-074-02-02 (unit): fraction digits beyond exponent rejected.
+- TEST-PS-074-02-03 (property): overflow boundary at 10^39 - 1 and 10^39.
+- TEST-PS-074-02-04 (unit): error values not included in messages.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Grammar tests pass exhaustively for length ≤ 3 and sampled longer strings.
+2. No silent rounding on input.
+3. Overflow never wraps.
+
+## Assumptions & open decisions
+- D03 (PROVISIONAL default, unapproved).

@@ -1,35 +1,52 @@
 # PS-092-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-092-09. **Owner:** [12_Moderation/01_reporting/mod_appeals](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_appeals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_appeals. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for appeals within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-092-09.R01 | Every row in the PS-092-03 transition table has a passing test; every non-table pair expects `APPEALS.TRANSITION_NOT_ALLOWED`. | MVP |
+| PS-092-09.R02 | Contract tests validate all commands, events and errors against CTR-SCH-001 and CTR-ERR-001 in CI. | MVP |
+| PS-092-09.R03 | Cross-module test: a reversed appeal changes `mod_enforcement` state exactly once (contract with `mod_enforcement`). | MVP |
 
-## Requirements to specify
-- [ ] PS-092-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-092-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-092-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: one enforcement action per type; one spam verdict; one report closure; reviewer, reporter and appellant test accounts with pseudonyms (no real data).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Test IDs `TEST-PS-092-09-nn`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+All eight states and eleven transitions exercised; `implemented` path tested with enforcement stub and real service.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative corpus covers every code in PS-092-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Table-driven suite for PS-092-05 matrix, including reviewer conflict cases.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-092-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection: enforcement outage, duplicate events, parallel decisions, draft restore offline.
+
+## Privacy, retention, abuse
+Leakage tests from PS-092-07 run in this suite.
+
+## Observability & budgets
+Load and alert tests from PS-092-08.
+
+## Tests
+- `TEST-PS-092-09-01` unit: transition table exhaustive.
+- `TEST-PS-092-09-02` contract: schemas for all commands and events; body absent from events.
+- `TEST-PS-092-09-03` integration: appeal reversal → enforcement reversal exactly once.
+- `TEST-PS-092-09-04` integration: window boundary at 30 days ± 1 s.
+- `TEST-PS-092-09-05` e2e (keyboard only): appellant submits, withdraws, and reads outcome with screen-reader labels (WCAG 2.1 AA, ASSUMPTION scope).
+- `TEST-PS-092-09-06` property: no appeal reaches `closed` without passing `implemented` or `ineligible`/`withdrawn`.
+- `TEST-PS-092-09-07` offline: draft persists across restart; no transmission before submit.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100 % of transitions and error codes covered in CI.
+2. Cross-module reversal test passes three consecutive runs.
+3. Accessibility test passes for appellant screens.
+
+## Assumptions & open decisions
+- ASSUMPTION: `mod_enforcement` contract stub is provided by F12.S02.M01 before this suite runs.
+- D08 (PWA offline writes), PROVISIONAL default applies to drafts (unapproved).

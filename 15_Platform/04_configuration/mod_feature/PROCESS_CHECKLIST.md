@@ -1,61 +1,19 @@
-# Process inventory and integration checklist
+# Process inventory and integration checklist — F15.S04.M01 feature
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Owner: [module](SPEC.md) (Platform Lead, F15). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
+- [x] [domain_schema.md](domain_schema.md) — PS-123-01: slug, owner module, decision refs, default state.
+- [x] [validation_rules.md](validation_rules.md) — PS-123-02: default-off rule for open decisions, acyclic requires.
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-123-03: draft, active, deprecated, retired.
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-123-04: four internal commands, catalog list.
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-123-05: two approvers for activate and retire.
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-123-06: whole-catalog push, last-known-good.
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-123-07: no personal data, opaque slugs for sensitive features.
+- [x] [observability_performance.md](observability_performance.md) — PS-123-08: catalog age alert, lifecycle counters.
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-123-09: owner module declares slug.
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-123-10: snapshot digest, whole-catalog import.
 
-## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
-- [ ] Complete Prompt 3 specification-quality review before implementation.
+## Integration gates (not yet done)
+- [ ] Initial catalog populated and lint-clean.
+- [ ] Locale list from F14 confirmed.
+- [ ] Feature slug decision (entity prefix or slug registry) recorded.

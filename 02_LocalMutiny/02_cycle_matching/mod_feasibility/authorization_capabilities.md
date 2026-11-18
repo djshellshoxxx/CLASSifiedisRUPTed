@@ -1,35 +1,55 @@
-# PS-016-05 — authorization capabilities
+# PS-016-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-016-05. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_feasibility](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_feasibility. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_feasibility. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R04, R06, R09), CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for feasibility within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-016-05.R01 | The evaluator principal is `sys_` with `read` on `lst_` and `var_` at `global` scope, status fields only, purpose `feasibility`, expiry ≤ 72 h (CTR-CAP-001 R06). | MVP |
+| PS-016-05.R02 | No user, `ope_` or `mod_` principal may call evaluate. | MVP |
+| PS-016-05.R03 | `candidate_get` requires `participant` scope on the candidate. | MVP |
+| PS-016-05.R04 | The evaluator has no read access to message, profile or payment content. | MVP |
 
-## Requirements to specify
-- [ ] PS-016-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-016-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-016-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Grant record `grt_` for the evaluator; decision records `dec_` store outcome and reason only (CTR-CAP-001 R13).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Evaluate: sys_ with grant. Candidate read: participant. Snapshot seal: sys_ with grant.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Grant states follow CTR-CAP-001 (active, revoked, expired).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Missing grant returns CAP.GRANT_NOT_ACTIVE; wrong caller returns SYS.FORBIDDEN.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Result |
+|---|---|---|---|
+| sys_ evaluator (grant) | feasibility.evaluate | snapshot | ALLOW |
+| user | feasibility.evaluate | snapshot | DENY SYS.FORBIDDEN |
+| participant (acc_ in candidate) | cyc.read (candidate_get) | ccd_ | ALLOW own slot |
+| non-participant | read | ccd_ | DENY SYS.NOT_FOUND |
+| ope_ | read | ccd_ | DENY (no privileged path without case) |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-016-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Revocation effective at next decision (CTR-CAP-001 R09); the evaluator's grant revocation stops new evaluations, not sealed verdicts.
+
+## Privacy, retention, abuse
+Grants and decisions are RET-AUD (12 months); candidate verdicts RET-EPH.
+
+## Observability & budgets
+Grant use counted per purpose; no actor IDs in metrics.
+
+## Tests
+- TEST-PS-016-05-01 (unit): each table row.
+- TEST-PS-016-05-02 (negative): evaluator attempts to read message content are denied.
+- TEST-PS-016-05-03 (integration): revoked grant stops evaluation at next decision.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All rows covered by tests.
+2. Evaluator grant has an expiry and purpose in 100% of fixtures.
+3. Non-participant reads are indistinguishable from nonexistent candidates.
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h evaluator grant expiry (CTR-CAP-001 R06).
+- PENDING CTR-CAP-001: `ccd` resource type registration.

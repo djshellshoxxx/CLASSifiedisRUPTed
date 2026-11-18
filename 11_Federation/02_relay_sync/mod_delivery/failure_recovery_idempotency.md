@@ -1,35 +1,54 @@
-# PS-088-06 — failure recovery idempotency
+# PS-088-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-088-06. **Owner:** [11_Federation/02_relay_sync/mod_delivery](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_delivery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_delivery. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (Failure section, R13), CTR-EVT-001 (R02), CTR-ERR-001 (R03).
 
-## Purpose and scope
-Define the failure recovery idempotency process for delivery within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-088-06.R01 | Retry only when the error code's `retryable` is true (CTR-ERR-001 R03); never infer retry from status. | MVP |
+| PS-088-06.R02 | `FED.KEY_UNKNOWN` events are deferred up to 24 h before rejection. | MVP |
+| PS-088-06.R03 | Transport timeout per batch 30 s (ASSUMPTION); timeout counts as retryable. | MVP |
+| PS-088-06.R04 | `ACK_MISMATCH` (result count ≠ batch count) is non-retryable for that batch and alerts. | MVP |
+| PS-088-06.R05 | Queue storage unavailable: enqueue fails closed; no event is marked sent. | MVP |
 
-## Requirements to specify
-- [ ] PS-088-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-088-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-088-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Uses queue fields in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Per [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Per [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | When |
+|---|---|---|
+| FED.RATE_LIMITED | true | peer limit |
+| FED.KEY_UNKNOWN | true | deferred 24 h |
+| SYS.UNAVAILABLE | true | queue store down |
+| DELIVERY.ACK_MISMATCH | false | result count mismatch |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-authorize peer state.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-088-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Backoff per PS-088-03.R02. Revision gap holds that aggregate only. Offline nodes never send.
+
+## Privacy, retention, abuse
+Logs carry codes and counts.
+
+## Observability & budgets
+Retry histogram; time-to-deliver p95 ≤ 5 min when peer online (ASSUMPTION).
+
+## Tests
+- TEST-PS-088-06-01 (retry): non-retryable code not retried.
+- TEST-PS-088-06-02 (deferred key): key arrives at 2 h, event accepted.
+- TEST-PS-088-06-03 (fault): queue store down blocks enqueue, no false sent.
+- TEST-PS-088-06-04 (timeout): batch timeout retried with jitter.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retry rules match codes.
+2. No false "sent" under fault.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30 s timeout; delivery budget.

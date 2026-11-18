@@ -1,35 +1,64 @@
 # PS-026-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-026-04. **Owner:** [02_LocalMutiny/04_value_balancing/mod_mixed](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Parent:** [mod_mixed SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-COM-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for mixed within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-026-04.R01 | Every state-changing command carries `idempotency_key` (≥ 16 chars) and `expected_revision` (CTR-EVT-001 R02, R03). | MVP |
+| PS-026-04.R02 | Commands ≤ 16 KB body. Query responses for one revision ≤ 64 KB. | MVP |
+| PS-026-04.R03 | Every event is a CTR-EVT-001 envelope with `aggregate_type` = `cycle` and `max_data_class` = FINANCIAL_EVIDENCE. | MVP |
+| PS-026-04.R04 | Every payload is registered in CTR-SCH-001 under the `schema_id` below. | MVP |
 
-## Requirements to specify
-- [ ] PS-026-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-026-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-026-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Signature | Idempotency key | Version |
+|---|---|---|---|
+| `mixed.leg.declare` | (`cyc_`, expected_revision, legs[1..8]) → revision N+1 | (actor, command, key) | 1.0.0 |
+| `mixed.leg.withdraw` | (`cyc_`, expected_revision, leg_index) | (actor, command, key) | 1.0.0 |
+| `mixed.leg.submit_claim` | (`cyc_`, leg_index) → `clm_` | (actor, command, key) | 1.0.0 |
+| `mixed.leg.attest` | (`clm_`, claim_hash, signature) → forwarded to `clm.attest` | (actor, command, key) | 1.0.0 |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Query: `mixed.leg.list(cyc_, revision)` returns legs visible to the caller (PS-026-05). Pagination: none; a revision has ≤ 8 legs.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Event (`schema_id`) | Emitted by | Payload summary |
+|---|---|---|
+| `mixed.leg.declared` | declare | cyc_, revision, leg_count |
+| `mixed.leg.withdrawn` | withdraw | cyc_, revision, leg_index |
+| `mixed.leg.claim_submitted` | submit_claim | cyc_, leg_index, clm_ |
+| `mixed.leg.unattested` | timer | cyc_, leg_index |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Error codes per command: PS-026-02 table, plus `SYS.CONFLICT` (409) on `expected_revision` mismatch and `MIXED.LEG_STATE_INVALID` (PS-026-03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Command-to-state mapping is defined in PS-026-03. Commands are rejected, not queued, when the aggregate is in a terminal state.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-026-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Schema validation (JSON Schema 2020-12) runs before PS-026-02 business rules. Unknown fields are rejected in commands (`SYS.REQUEST_MALFORMED`).
+
+## Authorization
+Actions are listed in PS-026-05. Authorization runs before schema validation so that unauthorized actors learn nothing about rule failures.
+
+## Failure, idempotency, concurrency, offline
+Duplicate command with the same key and digest returns the original result. Same key with a different digest returns `SYS.CONFLICT`. Event delivery is at-least-once; consumers dedupe by `event_id`.
+
+## Privacy, retention, abuse
+Events carry no description text for in-kind legs; only `leg_index`. Subscribers receive the minimum payload their PS-026-05 scope allows.
+
+## Observability & budgets
+Command p95 ≤ 300 ms server side (ASSUMPTION). Event lag to subscribers p95 ≤ 2 s.
+
+## Tests
+- TEST-PS-026-04-01 (contract): every command and event validates against its CTR-SCH-001 schema.
+- TEST-PS-026-04-02 (integration): duplicate `mixed.leg.declare` returns identical revision.
+- TEST-PS-026-04-03 (integration): stale `expected_revision` returns `SYS.CONFLICT` with no write.
+- TEST-PS-026-04-04 (contract): `mixed.leg.declared` payload contains no amount field.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All four commands and four events registered; lint passes.
+2. Replay test: same key yields same result; different digest yields conflict.
+3. No event payload contains amount, currency or description (PRIVATE/FINANCIAL data stay in the aggregate).
+
+## Assumptions & open decisions
+- ASSUMPTION: idempotency retention 24 h, then key rejected as `SYS.GONE`.
+- Schema IDs follow CTR-SCH-001 `schema_id` rules. See [DECISIONS.md](../../../DECISIONS.md) D04 (PROVISIONAL default).

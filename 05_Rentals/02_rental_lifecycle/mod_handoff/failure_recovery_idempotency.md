@@ -1,35 +1,56 @@
-# PS-042-06 — failure recovery idempotency
+# PS-042-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-042-06. **Owner:** [05_Rentals/02_rental_lifecycle/mod_handoff](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_handoff. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_handoff. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (idempotency, saga, revision), CTR-ERR-001 (retry), CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for handoff within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** D08 PROVISIONAL (offline queue). D04 OPEN.
 
-## Requirements to specify
-- [ ] PS-042-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-042-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-042-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-042-06.R01 | All writes idempotent per CTR-EVT-001 R03. | MVP |
+| PS-042-06.R02 | Attestation queued offline is held as pending (D08) and revalidated at commit against window, state and checklist. | MVP |
+| PS-042-06.R03 | Rental activation after COMPLETE is a saga step with `correlation_id`; a failed activation is retried, and the handoff stays COMPLETE. | MVP |
+| PS-042-06.R04 | Expiry and reminder jobs are idempotent per `(handoff_id, state_version)`. | MVP |
+| PS-042-06.R05 | A queued attestation whose window expired at commit is moved to "not applied" with `message_key`; never silently dropped. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Saga record: `correlation_id`, handoff ID, rental ID, step, status. Pending queue entries are client-side, RET-EPH.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command retry-safe. `rental_handoff.attested` committed before any notification.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+No new states; failed steps leave status unchanged.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`, `SYS.PRECONDITION_FAILED`. Non-retryable: `RNTHAND.*`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-042-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+`sys` job holds write on `rental_handoff` only.
+
+## Failure, idempotency, concurrency, offline
+- Both parties attest at once: revision check; second attest sees COMPLETE and returns the stored result.
+- Phone offline at handoff: attestation queued; commit after reconnect; if window closed → "not applied".
+- Rental service down at activation: saga retries; handoff remains COMPLETE; rental shows "activation pending".
+
+## Privacy, retention, abuse
+Saga logs carry IDs and steps only.
+
+## Observability & budgets
+`rental_handoff_saga_open_total`, `rental_handoff_expired_total`, `rental_handoff_pending_queue_age_seconds` p95 ≤ 3600 (ASSUMPTION).
+
+## Tests
+- TEST-PS-042-06-01 (failure): rental service down at COMPLETE → activation retried, exactly one activation.
+- TEST-PS-042-06-02 (offline): queued attest after expiry → "not applied".
+- TEST-PS-042-06-03 (idempotency): replayed expiry job → one EXPIRED event.
+- TEST-PS-042-06-04 (race): simultaneous attest from both parties → one COMPLETE.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No COMPLETE without a successful activation or a logged retry (TEST-PS-042-06-01).
+2. No silent drops of offline attestations (TEST-PS-042-06-02).
+3. Zero duplicate events from job replay.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1-hour pending queue age target.
+- PROVISIONAL (D08 default, unapproved).
+- OPEN (D04): compensation if activation cannot complete.

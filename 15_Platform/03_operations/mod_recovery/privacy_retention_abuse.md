@@ -1,35 +1,51 @@
-# PS-122-07 — privacy retention abuse
+# PS-122-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-122-07. **Owner:** [15_Platform/03_operations/mod_recovery](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_recovery (F15.S03.M03). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for recovery within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-122-07.R01 | Deletions and legal holds are replayed before any restored read path opens (CTR-PRV-001 R06, R07). | MVP |
+| PS-122-07.R02 | Isolated restore targets have no access to production secrets, third-party processors or push services. | MVP |
+| PS-122-07.R03 | Isolated data is destroyed 72 h after run end unless a legal hold names the run (PS-122-03 R03). | MVP |
+| PS-122-07.R04 | Restoring LOCATION_PRECISE data requires dual control and is limited to the holder's case (CTR-PRV-001 R03, R07). | MVP |
+| PS-122-07.R05 | Drill data uses synthetic datasets only; production restore data is never used for drills. | MVP |
+| PS-122-07.R06 | Restore does not re-send notifications or emails to users. | MVP |
 
-## Requirements to specify
-- [ ] PS-122-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-122-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-122-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention of run records RET-AUD (12 months); restored content RET-LEGAL or destroyed per R03.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Destruction of isolated data is a sys job that emits `restore.purged` with counts.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See PS-122-03 `aborted`, `failed`, `promoted`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`PRV.HOLD_SCOPE_INVALID` for holds without scope.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-122-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-122-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Destruction is idempotent on run ID.
+
+## Privacy, retention, abuse
+Abuse: a restore used to read data without approval. Mitigated by dual control, isolation and audit. Insider misuse detection: alert on restore run without linked change (PS-122-05).
+
+## Observability & budgets
+Metric: `restore_isolated_bytes_outstanding`; alert when > 0 after 72 h.
+
+## Tests
+- TEST-PS-122-07-01 (integration): isolated target cannot reach push or processor endpoints.
+- TEST-PS-122-07-02 (integration): notifications suppressed during restore.
+- TEST-PS-122-07-03 (lifecycle): isolated data destroyed at 72 h.
+- TEST-PS-122-07-04 (privacy): restored LOCATION_PRECISE blocked without dual control.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No outbound path from isolated target to user-facing services (TEST-01).
+2. TEST-PS-122-07-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h destruction window.
+- OPEN (F10): legal hold interaction with drill records.

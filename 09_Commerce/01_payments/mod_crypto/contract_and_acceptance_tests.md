@@ -1,35 +1,51 @@
 # PS-068-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-068-09. **Owner:** [09_Commerce/01_payments/mod_crypto](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_crypto. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_crypto (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (Tests 01–13), CTR-EVT-001, CTR-ERR-001, CTR-SCH-001. **Decisions:** D03, D04 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the contract and acceptance tests process for crypto within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-068-09.R01 | CTR-COM-001 tests 02, 03, 05, 07, 08, 09, 12 run for every adapter in CI. | MVP |
+| PS-068-09.R02 | Each adapter has a replay suite from recorded provider responses (no live network in CI). | MVP |
+| PS-068-09.R03 | Reorg vectors: at least 20 synthetic reorg sequences per chain. | MVP |
+| PS-068-09.R04 | Accessibility: claim status labels and mismatch messages pass WCAG 2.1 AA. | MVP |
 
-## Requirements to specify
-- [ ] PS-068-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-068-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-068-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: recorded responses per provider per chain; known token contract addresses; look-alike addresses.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay of adapter sequences against event schemas.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Table tests shared with PS-068-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error table tests shared with PS-068-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests shared with PS-068-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-068-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Provider outage and disagreement scenarios shared with PS-068-06.
+
+## Privacy, retention, abuse
+Lint tests shared with PS-068-07.
+
+## Observability & budgets
+Alert tests shared with PS-068-08.
+
+## Tests
+- TEST-PS-068-09-01 (contract): recorded-response replay per adapter.
+- TEST-PS-068-09-02 (golden): 99/100/101% amount vectors.
+- TEST-PS-068-09-03 (e2e): submit, verify, finalize on testnet fixture chain.
+- TEST-PS-068-09-04 (e2e): reorg after FINAL yields REVERSED with both events.
+- TEST-PS-068-09-05 (a11y): mismatch message announced to screen readers.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All CTR-COM-001 listed tests pass for crypto.
+2. Reorg vector suite passes.
+3. Every PS-068 requirement maps to a test ID.
+
+## Assumptions & open decisions
+- ASSUMPTION: testnet fixtures stand in for mainnet in CI.
+- D03, D04 (PROVISIONAL, unapproved).

@@ -1,35 +1,49 @@
-# PS-067-08 — observability performance
+# PS-067-08 — observability and performance budgets
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-067-08. **Owner:** [09_Commerce/01_payments/mod_cash](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_cash. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_cash (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (Observability section), CTR-EVT-001, CTR-PRV-001 (R09). **Decisions:** D06 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the observability performance process for cash within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-067-08.R01 | Metrics: `cash_claims_total{state}`, `cash_rejections_total{code}`, `cash_disputes_total`. No amount or party label. | MVP |
+| PS-067-08.R02 | Claim submit p95 ≤ 300 ms server side (ASSUMPTION). | MVP |
+| PS-067-08.R03 | Alert: any cash claim reaching `EXTERNALLY_VERIFIED` (must be 0). | MVP |
+| PS-067-08.R04 | Logs: claim ID, event type, revision, code. | MVP |
 
-## Requirements to specify
-- [ ] PS-067-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-067-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-067-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric schema is closed; labels from enum sets only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Event counts by type.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Gauge of claims by state.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Counter by code.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards are aggregate and restricted to the Commerce Lead and on-call.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-067-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Offline pending claims are counted separately on the client only in aggregate.
+
+## Privacy, retention, abuse
+Metrics retained 90 days (ASSUMPTION); logs 14 days.
+
+## Observability & budgets
+Alert on rejection rate above 10% per hour for `CASH.METHOD_DISABLED` (config drift).
+
+## Tests
+- TEST-PS-067-08-01 (contract): metric label lint.
+- TEST-PS-067-08-02 (integration): synthetic verify attempt raises the "must be 0" alert.
+- TEST-PS-067-08-03 (unit): log redaction removes amounts.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets measured in load test.
+2. "Must be 0" alert configured and tested.
+3. No payment content in logs.
+
+## Assumptions & open decisions
+- ASSUMPTION: metric retention 90 days.
+- D06 (PROVISIONAL default, unapproved).

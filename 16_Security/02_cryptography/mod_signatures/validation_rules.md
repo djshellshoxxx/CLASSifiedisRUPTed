@@ -1,35 +1,57 @@
 # PS-130-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-130-02. **Owner:** [16_Security/02_cryptography/mod_signatures](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_signatures. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-FED-001
 
-## Purpose and scope
-Define the validation rules process for signatures within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-130-02.R01 | Reject `algorithm` values outside the closed enum. | MVP |
+| PS-130-02.R02 | Reject signing input larger than 64 KiB (CTR-EVT-001 R12) before canonicalization. | MVP |
+| PS-130-02.R03 | Reject nesting depth above 8 and any non-integer number in money or quantity fields. | MVP |
+| PS-130-02.R04 | Reject base64url with padding, whitespace or non-URL characters. | MVP |
+| PS-130-02.R05 | Reject a `domain_tag` that does not match `subject_type`. | MVP |
+| PS-130-02.R06 | Reject any signature whose `key_id` is not valid at `occurred_at` (valid_from ≤ occurred_at, not compromised before). | MVP |
 
-## Requirements to specify
-- [ ] PS-130-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-130-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-130-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Rules applied to [domain_schema.md](domain_schema.md) and to subject payloads before signing.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applied to `signature.sign` and `signature.verify` ([commands_queries_events.md](commands_queries_events.md)).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation failure creates no record and emits no signature.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Category | Retryable | message_key | Rule |
+|---|---|---|---|---|
+| SIG.ALGORITHM_NOT_ALLOWED | unprocessable_state (422) | false | err.sig.algorithm_not_allowed | R01 |
+| SIG.PAYLOAD_TOO_LARGE | payload_too_large (413) | false | err.sig.payload_too_large | R02 |
+| SIG.CANONICAL_INVALID | validation (400) | false | err.sig.canonical_invalid | R03, R04 |
+| SIG.DOMAIN_MISMATCH | validation (400) | false | err.sig.domain_mismatch | R05 |
+| SIG.KEY_NOT_VALID_AT_TIME | unprocessable_state (422) | false | err.sig.key_not_valid_at_time | R06 |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Verification of a bad signature is a result (`invalid`), not an error response.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-130-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Validation runs after authorization (CTR-CAP-001 R11).
+
+## Failure, idempotency, concurrency, offline
+Validation is pure and deterministic. Same bytes produce the same outcome on every node.
+
+## Privacy, retention, abuse
+Errors never echo payload bytes or digests of unvalidated input beyond the request ID.
+
+## Observability & budgets
+Counter `sig_validation_fail_total{code}`. Validation p95 ≤ 2 ms excluding canonicalization (ASSUMPTION).
+
+## Tests
+- TEST-PS-130-02-01: unit, one fixture per rule R01–R06.
+- TEST-PS-130-02-02: property, JCS canonical output is stable across key order permutations.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each rule has a failing fixture returning the listed code.
+2. Canonicalization matches RFC 8785 vectors.
+
+## Assumptions & open decisions
+- ASSUMPTION: 64 KiB and depth 8 limits from CTR-EVT-001.
+- D01 (envelope rules): PROVISIONAL (D01 default, unapproved).

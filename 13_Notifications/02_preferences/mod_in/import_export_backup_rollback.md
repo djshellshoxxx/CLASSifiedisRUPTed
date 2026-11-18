@@ -1,35 +1,50 @@
-# PS-106-10 — import export backup rollback
+# PS-106-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-106-10. **Owner:** [13_Notifications/02_preferences/mod_in](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_in. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_in. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-FED-001.
 
-## Purpose and scope
-Define the import export backup rollback process for in within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-106-10.R01 | Account export includes preferences and inbox items within retention (schema 1.0.0), class PSEUDONYMOUS. | MVP |
+| PS-106-10.R02 | Inbox items are not imported from other accounts or nodes. Import of preferences only, validated by PS-106-02. | MVP |
+| PS-106-10.R03 | Inbox is excluded from federation (CTR-FED-001 has no mapping). | MVP |
+| PS-106-10.R04 | Rollback: flag `inbox_projection` off stops new projections; clients fall back to live `notification` queries; existing items are kept until retention. | MVP |
 
-## Requirements to specify
-- [ ] PS-106-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-106-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-106-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{ "inbox_preference": {...}, "items": [ { "ntf_id", "category", "inbox_state", "created_at" } ], "schema_version": "1.0.0" }`. No `group_key` or `object_ref`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`account.export` includes section `inbox.export` (self).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback freezes state; no transitions to pruned except by retention.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Import errors use INPREF codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export self only; rollback operator global scope with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-106-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export read-only and repeatable. Import idempotent by digest.
+
+## Privacy, retention, abuse
+Backups follow platform backup policy; `group_key` HMAC key excluded from exports.
+
+## Observability & budgets
+Export ≤ 3 s p95 for 1000 items.
+
+## Tests
+- TEST-PS-106-10-01 (contract): export schema validation; no `group_key`.
+- TEST-PS-106-10-02 (integration): import attempting to set `security: false` rejected.
+- TEST-PS-106-10-03 (integration): rollback keeps existing items and stops new projections.
+- TEST-PS-106-10-04 (negative): federation import attempt rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export round-trip for preferences lossless.
+2. Rollback verified in staging (not run yet).
+3. No HMAC key material in any export.
+
+## Assumptions & open decisions
+- ASSUMPTION: inbox excluded from federation in MVP and Future.
+- D07 PROVISIONAL (D07 default, unapproved).

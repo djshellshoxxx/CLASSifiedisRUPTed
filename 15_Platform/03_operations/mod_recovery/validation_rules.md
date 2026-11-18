@@ -1,35 +1,55 @@
 # PS-122-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-122-02. **Owner:** [15_Platform/03_operations/mod_recovery](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_recovery (F15.S03.M03). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ERR-001, CTR-SCH-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the validation rules process for recovery within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-122-02.R01 | Restore to `production` is refused unless the target has been through an `isolated` run that reached `read_only` and passed all digest checks. | MVP |
+| PS-122-02.R02 | Source backup must be `complete`, not expired except under a hold active before expiry (PS-120-03 R02). | MVP |
+| PS-122-02.R03 | Manifest schema version must be supported by the reader (CTR-SCH-001 R06). | MVP |
+| PS-122-02.R04 | Runbook version must be `active` in the registry; a `draft` runbook cannot run. | MVP |
+| PS-122-02.R05 | Target environment must be on the approved list; production target requires `change_ref` of type `change`. | MVP |
 
-## Requirements to specify
-- [ ] PS-122-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-122-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-122-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Rules apply to `restore_run.create` input and to the manifest read at start.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applied at `restore_run.create` and `restore_run.approve`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation failure at creation creates no run.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| RECOVERY.ISOLATION_NOT_PROVEN | false | unprocessable_state / 422 | R01 |
+| RECOVERY.SOURCE_NOT_RESTORABLE | false | unprocessable_state / 422 | R02 |
+| SCH.UNKNOWN_VERSION | false | validation / 400 | R03 (shared code) |
+| RECOVERY.RUNBOOK_NOT_ACTIVE | false | precondition_failed / 412 | R04 |
+| RECOVERY.TARGET_NOT_APPROVED | false | forbidden / 403 | R05 |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation runs before authorization decisions are recorded; denial still audited.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-122-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Validation is deterministic.
+
+## Privacy, retention, abuse
+Errors name the rule, not the environment secrets or hostnames.
+
+## Observability & budgets
+Metric: `recovery_validation_refused_total{code}`.
+
+## Tests
+- TEST-PS-122-02-01 (unit): each rule pass and fail fixture.
+- TEST-PS-122-02-02 (negative): production restore without prior isolated run refused.
+- TEST-PS-122-02-03 (negative): expired backup without hold refused.
+- TEST-PS-122-02-04 (integration): draft runbook refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No production restore possible without isolated proof (TEST-02).
+2. TEST-PS-122-02-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: change ticket system reference format defined by F16 incident process (OPEN).

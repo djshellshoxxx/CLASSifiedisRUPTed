@@ -1,35 +1,62 @@
 # PS-082-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-082-01. **Owner:** [10_Privacy/02_security_boundaries/mod_threat](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_threat. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_threat. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-ID-001 (new prefix PENDING CTR-ID-001: `tht_`).
 
-## Purpose and scope
-Define the domain schema process for threat within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-082-01.R01 | A threat record has a stable `threat_id` (`THR-` + 4 digits, unique) and cites at least one boundary or flow ID from `10_Privacy/02_security_boundaries/mod_model`. | MVP |
+| PS-082-01.R02 | Each threat has one category from the set: `spoofing`, `tampering`, `repudiation`, `disclosure`, `denial`, `elevation`, `abuse`, `fraud`. | MVP |
+| PS-082-01.R03 | Each threat carries `likelihood` and `impact` on a 1–5 scale and a computed `risk` = likelihood × impact. | MVP |
+| PS-082-01.R04 | Mitigations reference requirement IDs (`PS-*.Rnn`, `CTR-*.Rnn`) and test IDs (`TEST-*`). Free text alone is not a mitigation. | MVP |
 
-## Requirements to specify
-- [ ] PS-082-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-082-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-082-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Type | Constraint |
+|---|---|---|
+| `threat_id` | string | `THR-\d{4}`, unique |
+| `title` | string | ≤ 120 chars, no user data |
+| `category` | enum | R02 set |
+| `flow_refs` | string[] | model IDs (PENDING `flw_`) |
+| `likelihood`, `impact` | integer | 1–5 |
+| `mitigations` | object[] | `{req_id, test_id, status}` |
+| `residual_risk` | integer | 1–25 |
+| `owner_role` | string | role name, not a person |
+| `next_review_on` | date | ≤ 180 days from last review (ASSUMPTION) |
+| `schema_version` | const | `1.0.0` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Canonical threats seeded from PROJECT_SPEC risks: metadata leakage, forged evidence, replay, fraud, abuse, relay failure, stale federated records, pseudonym linkage.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-082-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Read: Privacy, Security, QA leads. Write: Privacy and Security leads. Exploit detail fields visible to `global` reviewers only; field visibility `never` for public and end users.
+
+## Failure, idempotency, concurrency, offline
+Updates use `expected_revision`. No offline writes.
+
+## Privacy, retention, abuse
+Register contains no user data but reveals attack surface; treated as restricted. Retention in file 07.
+
+## Observability & budgets
+Counts per category and per state in file 08.
+
+## Tests
+- TEST-PS-082-01-01 (schema): threat without flow reference fails.
+- TEST-PS-082-01-02 (range): likelihood 6 rejected.
+- TEST-PS-082-01-03 (privacy): register export contains no `acc_` value.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema validates for all seeded threats.
+2. Risk computed deterministically.
+3. Every seeded threat has at least one flow reference.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1–5 scales; review interval 180 days.
+- PROVISIONAL (D07 default, unapproved): restricted-register retention.

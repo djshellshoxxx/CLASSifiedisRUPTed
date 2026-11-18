@@ -1,35 +1,51 @@
-# PS-120-08 — observability performance
+# PS-120-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-120-08. **Owner:** [15_Platform/03_operations/mod_backups](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_backups. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_backups (F15.S03.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for backups within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-120-08.R01 | Metrics: `backup_last_success_age_seconds{scope}`, `backup_job_duration_seconds{scope,kind}`, `backup_verify_failures_total`, `backup_bytes_total{scope}`. | MVP |
+| PS-120-08.R02 | Alert: last successful `events` backup older than 15 min (RPO target, ASSUMPTION). | MVP |
+| PS-120-08.R03 | Alert: any `failed` set in 24 h; any verify failure (page immediately). | MVP |
+| PS-120-08.R04 | Budgets: 100 GB full event-scope backup completes in <= 4 h at 200 MB/s effective write (ASSUMPTION); incremental window of 15 min completes in <= 5 min. | MVP |
+| PS-120-08.R05 | Logs carry `bkp_id`, scope, counts, status and codes; never object names containing record IDs, never keys. | MVP |
+| PS-120-08.R06 | Restore drill success is a published metric (`restore_drill_passed_total`), owned with PS-122. | MVP |
 
-## Requirements to specify
-- [ ] PS-120-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-120-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-120-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels: `scope` and `kind` enums only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Dashboard reads only aggregates.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Telemetry write failure does not fail the job; it increments `backup_telemetry_dropped_total`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards require `ope` with platform operations role (PS-120-05 R03).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-120-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Not applicable to clients.
+
+## Privacy, retention, abuse
+Telemetry retention RET-OPS (30 days) for logs; aggregated metrics without identifiers kept 400 days (ASSUMPTION).
+
+## Observability & budgets
+Budgets in R04. Metrics ingestion < 1% overhead on job duration.
+
+## Tests
+- TEST-PS-120-08-01 (unit): alert rules fire at thresholds in R02, R03.
+- TEST-PS-120-08-02 (performance): reference 100 GB full backup against R04 budget in staging.
+- TEST-PS-120-08-03 (log scan): backup logs contain no keys or record IDs beyond `bkp_id`.
+- TEST-PS-120-08-04 (chaos): stop backups for 20 min; alert fires within 2 min.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Alert for stale RPO fires in TEST-04 within 2 min.
+2. TEST-PS-120-08-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO 15 min; throughput budgets from staging hardware (OPEN).
+- PROVISIONAL (D07 default).

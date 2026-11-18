@@ -1,35 +1,56 @@
-# PS-121-05 — authorization capabilities
+# PS-121-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-121-05. **Owner:** [15_Platform/03_operations/mod_observability](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_observability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_observability (F15.S03.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for observability within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-121-05.R01 | Default deny. Ingest is limited to `sys` emitters registered per module. | MVP |
+| PS-121-05.R02 | Aggregate dashboards are readable by `ope` with the platform operations role. | MVP |
+| PS-121-05.R03 | Record-level telemetry is readable only with case scope and purpose (CTR-CAP-001 R06). | MVP |
+| PS-121-05.R04 | Changing an alert rule or silencing a critical alert requires two distinct `ope` approvers for rules tagged critical. | MVP |
+| PS-121-05.R05 | No user (`acc_`) principal can read telemetry about their own account except through owner export of audit records (CTR-PRV-001 R11). | MVP |
 
-## Requirements to specify
-- [ ] PS-121-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-121-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-121-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Capability | Actor | Resource | Verb |
+|---|---|---|---|
+| `telemetry_ingest` (write-only) | sys | telemetry, scope global | create |
+| `telemetry_aggregate.read` | ope | telemetry, scope global | read |
+| `telemetry_record.read` | mod or ope | telemetry, scope case | read (case + purpose) |
+| `alert.administer` | ope | alert | administer |
+| `alert_rule.administer` | ope (dual control for critical) | alert_rule | administer |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Decisions emit `dec_` records; no record content is stored in decisions (CTR-CAP-001 R13).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.FORBIDDEN` and `SYS.NOT_FOUND` per CTR-CAP-001.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Capability names follow CTR-CAP-001 R03 vocabulary. `telemetry_ingest` uses verb `create`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-121-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Decision cache zero for record-level reads.
+
+## Privacy, retention, abuse
+Repeated denied record-level reads raise an alert (CTR-CAP-001 abuse rule).
+
+## Observability & budgets
+Metric: `telemetry_authz_denied_total{capability}`.
+
+## Tests
+- TEST-PS-121-05-01 (matrix): each row yields the stated outcome.
+- TEST-PS-121-05-02 (negative): a user principal cannot read telemetry about own account.
+- TEST-PS-121-05-03 (privileged): critical rule change with one approver refused.
+- TEST-PS-121-05-04 (audit): record-level read emits `aud_` record without content.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Default deny holds for all capabilities (TEST-01).
+2. TEST-PS-121-05-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h maximum for case-scoped grants.
+- OPEN (F16): purpose registry values for telemetry.

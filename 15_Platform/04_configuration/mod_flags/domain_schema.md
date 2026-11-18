@@ -1,35 +1,65 @@
 # PS-124-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-124-01. **Owner:** [15_Platform/04_configuration/mod_flags](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/04_configuration/mod_flags (F15.S04.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-CAP-001, CTR-ID-001, CTR-PRV-001. **Canonical owner of record class "runtime flag definition and rollout state":** F15.S04.M02. Moderation reports (`rpt_`, F12.S01.M01 `mod_flags`) are a different record class and are not flags.
 
-## Purpose and scope
-Define the domain schema process for flags within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-124-01.R01 | Each flag has one `feature_slug` from PS-123 and one `key`; a flag without a catalog feature is refused. | MVP |
+| PS-124-01.R02 | `type` is a closed enum: `boolean`, `string`, `number`. Variants are declared per type. | MVP |
+| PS-124-01.R03 | Rollout percentage is an integer in 0–10000 (basis points). | MVP |
+| PS-124-01.R04 | Temporary flags carry `expires_at` no later than 180 days after creation (ASSUMPTION); on expiry the flag reverts to default. | MVP |
+| PS-124-01.R05 | Flags never grant capabilities; a flag is not an authorization decision (CTR-CAP-001 R01). | MVP |
 
-## Requirements to specify
-- [ ] PS-124-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-124-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-124-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "key": "snake_case, unique, never reused",
+  "feature_slug": "PS-123 slug",
+  "type": "boolean | string | number",
+  "default_value": "typed per type; must be safe-off for gated features",
+  "variants": [{"name": "snake_case", "value": "typed", "weight_bp": "0..10000"}],
+  "rollout_bp": "0..10000",
+  "targeting": [{"attribute": "allow-list name", "op": "in | eq", "values": ["..."]}],
+  "kill_switch": "boolean",
+  "expires_at": "RFC 3339 UTC ms or null",
+  "revision": "integer >= 1",
+  "updated_at": "RFC 3339 UTC ms"
+}
+```
+Constraints: `variants` weights sum to 10000; `kill_switch = true` forces default value at evaluation.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See PS-124-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See PS-124-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See PS-124-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-124-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-124-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Changes are revision-checked; evaluation is deterministic (PS-124-06).
+
+## Privacy, retention, abuse
+Targeting attributes are restricted to the allow-list in PS-124-07.
+
+## Observability & budgets
+Flag evaluation counts per key (no identifiers).
+
+## Tests
+- TEST-PS-124-01-01 (schema): variant weights must sum to 10000.
+- TEST-PS-124-01-02 (lint): flag without catalog feature refused.
+- TEST-PS-124-01-03 (unit): expiry date beyond 180 days refused.
+- TEST-PS-124-01-04 (unit): flag evaluation cannot authorize a capability (fixture with `true` value on a protected action still denied).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema and lint pass for all flags.
+2. TEST-PS-124-01-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 180-day maximum for temporary flags.
+- PROVISIONAL (D05 default): location-related flags use coarse regions only.

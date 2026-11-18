@@ -1,35 +1,52 @@
-# PS-018-07 — privacy retention abuse
+# PS-018-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-018-07. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_n](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_n. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_n. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R09), CTR-FED-001 (R03), CTR-EVT-001 (R11).
 
-## Purpose and scope
-Define the privacy retention abuse process for n within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-018-07.R01 | Run records and candidates follow the snapshot retention: deleted 24 h after snapshot expiry (RET-EPH). | MVP |
+| PS-018-07.R02 | Long cycles expose more pseudonymous links; candidate output is visible to matcher only and to each slot's own proposal. | MVP |
+| PS-018-07.R03 | Per-run candidate cap 1,000; per-account candidate share ≤ 50 per run (ASSUMPTION). | MVP |
+| PS-018-07.R04 | Graph-shape abuse (crafted graphs to exhaust budget) raises a signal to F12 when a single account accounts for > 20% of budget steps. | MVP |
+| PS-018-07.R05 | Search runs are never federated (CTR-FED-001 R02). | MVP |
 
-## Requirements to specify
-- [ ] PS-018-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-018-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-018-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Classes: candidate refs PSEUDONYMOUS; value gap FINANCIAL_EVIDENCE when non-zero.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events are counts only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Expiry triggers deletion.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+No content in errors.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matcher-only (PS-018-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-018-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deletion retried until confirmed (CTR-PRV-001 R12 completion record).
+
+## Privacy, retention, abuse
+- Threats: deanonymisation through long-cycle structure; budget exhaustion as denial of service; Sybil chains.
+- Controls: caps above; participant-only proposal views; F12 signal.
+- Residual risk: long cycles are more linkable than short ones; recorded for F10 review, not claimed mitigated.
+
+## Observability & budgets
+No account IDs in metrics; budget share reported per account hash.
+
+## Tests
+- TEST-PS-018-07-01 (privacy): payload lint shows no location or name fields.
+- TEST-PS-018-07-02 (abuse): crafted graph triggers F12 signal.
+- TEST-PS-018-07-03 (integration): snapshot expiry deletes run data within 24 h.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Lint passes for all run payloads.
+2. Abuse signal fires in 100% of crafted-graph fixtures.
+3. Residual linkage risk documented and sent to F10.
+
+## Assumptions & open decisions
+- ASSUMPTION: 50 candidates per account per run; 20% budget-share signal.
+- PROVISIONAL (D07 default, unapproved).

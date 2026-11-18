@@ -1,35 +1,54 @@
-# PS-058-04 — commands queries events
+# PS-058-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-058-04. **Owner:** [07_Identity/03_trust/mod_reputation](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_reputation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_reputation. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (envelope, R03), CTR-ERR-001, CTR-SCH-001, CTR-CAP-001 (`reputation.*`), CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for reputation within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-058-04.R01 | Input commands from owning modules carry source `event_id` and `idempotency_key`. | MVP |
+| PS-058-04.R02 | Public query `GetReputationBand(prf_id)` p95 ≤ 50 ms; returns `band` and `status` only. | MVP |
+| PS-058-04.R03 | Subject query `GetOwnReputation(prf_id)` returns counters; no counterparty identifiers. | MVP |
+| PS-058-04.R04 | Events carry `prf_id`, band or status, revision; no counters, counterparty IDs or dispute details. | MVP |
+| PS-058-04.R05 | Schema IDs `reputation.band_changed`, `reputation.review_opened`, `reputation.review_closed` at 1.0.0 (review events owned by F12, consumed here). | MVP |
+| PS-058-04.R06 | Public reputation API for third parties. | Future |
 
-## Requirements to specify
-- [ ] PS-058-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-058-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-058-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command / input | Payload | Source | Error codes |
+|---|---|---|---|
+| `ReputationInput` (`exchange_outcome`) | `event_id`, `prf_a`, `prf_b`, `finality`, `occurred_at`, `exchange_ref` (`trx_`, `par_`, or `rnt_`) | F02–F05, F08 handoff via F09 | `REPUTE.FINALITY_NOT_FINAL`, `SELF_DEALING`, `INPUT_STALE`, `INPUT_DUPLICATE` |
+| `ReputationInput` (`evidence_summary`) | `event_id`, `prf_id`, `evidence_ref`, `kind` | mod_evidence | `EVIDENCE_NOT_VALID` |
+| `ReputationInput` (`dispute_outcome`) | `event_id`, `prf_id`, `dsp_id`, `outcome` | F09 | `DISPUTE_REF_INVALID` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Input commands: `reputation.input` for `sys_` principal with the listed source scope. Reads per [authorization_capabilities.md](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Duplicate inputs return original outcome. Offline clients never submit reputation inputs directly; inputs originate from server-side modules only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-058-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Events carry no counterparty identity; `actor_ref` is the source `sys_`.
+
+## Observability & budgets
+`repute_input_total{source,result}`; no `prf_` labels.
+
+## Tests
+- TEST-PS-058-04-01 (contract): input and event schemas validate.
+- TEST-PS-058-04-02 (integration): duplicate input counted once.
+- TEST-PS-058-04-03 (contract): band event lacks counters and counterparty IDs.
+- TEST-PS-058-04-04 (negative): subject query contains no counterparty identifiers.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All inputs, queries and events implemented with listed payloads.
+2. Idempotency verified.
+3. Event lint passes.
+4. Counterparty identifiers absent from every response to non-subjects.
+
+## Assumptions & open decisions
+- ASSUMPTION: `aggregate_type = reputation_profile` registered in CTR-SCH-001.
+- Review event producer F12 (mod_appeals / mod_flags) by full ID once assigned.

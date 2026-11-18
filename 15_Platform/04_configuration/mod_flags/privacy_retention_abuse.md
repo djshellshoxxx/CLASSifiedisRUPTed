@@ -1,35 +1,51 @@
-# PS-124-07 — privacy retention abuse
+# PS-124-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-124-07. **Owner:** [15_Platform/04_configuration/mod_flags](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/04_configuration/mod_flags (F15.S04.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for flags within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-124-07.R01 | Subject bucketing uses a pseudonymous `acc_` or `prf_`-free subject key; raw identifiers are never used as bucket input. | MVP |
+| PS-124-07.R02 | Attribute allow-list: `tenant_id`, `app_version`, `platform`, `locale`, `region_cell` (LOCATION_COARSE, K_MIN applies). Any LOCATION_PRECISE attribute is refused. | MVP |
+| PS-124-07.R03 | Allow-list is versioned and changes require F10 review (CTR-PRV-001 R10 analog). | MVP |
+| PS-124-07.R04 | Flag evaluation logs record flag key, result and source only; attribute values are not logged. | MVP |
+| PS-124-07.R05 | Offline clients cache evaluated values only (not rules) for <= 24 h; cache is cleared on logout (CTR-PRV-001). | MVP |
+| PS-124-07.R06 | Targeting by protected characteristics is forbidden (OPEN, F10 to list categories). | MVP |
 
-## Requirements to specify
-- [ ] PS-124-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-124-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-124-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention: flag definitions RET-AUD; evaluation counters RET-OPS (30 days, no identifiers).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond PS-124-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`FLAG.FORBIDDEN_ATTRIBUTE` (PS-124-02).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-124-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-124-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Cached values are not authorization (CTR-CAP-001 failure section).
+
+## Privacy, retention, abuse
+Abuse: attempts to probe rollout membership by changing attributes. Mitigated by coarse attributes, and by rate limits on `flag.evaluate` (`SYS.RATE_LIMITED`).
+
+## Observability & budgets
+No identifiers in metrics.
+
+## Tests
+- TEST-PS-124-07-01 (negative): LOCATION_PRECISE attribute refused.
+- TEST-PS-124-07-02 (log scan): evaluation logs contain no attribute values.
+- TEST-PS-124-07-03 (abuse): 1,000 evaluations with varied attributes rate-limited.
+- TEST-PS-124-07-04 (offline): cache cleared on logout; rules never cached on device.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No raw identifiers used for bucketing (TEST-01).
+2. TEST-PS-124-07-01 through -04 pass.
+
+## Assumptions & open decisions
+- PROVISIONAL (D05 default): coarse regions only.
+- OPEN (F10): protected-characteristic list for R06.

@@ -1,35 +1,30 @@
-# PS-148-05 — authorization capabilities
+# PS-148-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-148-05. **Owner:** [18_Governance/02_community/mod_transparency](SPEC.md). **Implementing module:** 18_Governance/02_community/mod_transparency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 18_Governance/02_community/mod_transparency. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ERR-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the authorization capabilities process for transparency within 02_community. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-148-05.R01 | Default deny per CTR-CAP-001 R01. | MVP |
+| PS-148-05.R02 | Drafting needs `transp.report.draft`; approving and publishing need `transp.report.approve`, held by a different principal. | MVP |
+| PS-148-05.R03 | Reading draft figures needs `transp.report.read_draft` at global scope and is logged as a privileged read (CTR-CAP-001 R08). | MVP |
+| PS-148-05.R04 | No principal can read case-level data through this module. | MVP |
 
-## Requirements to specify
-- [ ] PS-148-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-148-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-148-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Authorization
+| Actor (principal) | Action | Scope | Decision |
+|---|---|---|---|
+| Analyst `acc_` with `transp.report.draft` | transparency_report.create | global | ALLOW |
+| Approver `acc_` with `transp.report.approve` | transparency_report.accept, publish | global | ALLOW if not drafter |
+| Reviewer `acc_` with `transp.report.read_draft` | transparency_report.read (draft) | global | ALLOW, audit record emitted |
+| Public | transparency_report.read (published) | global | ALLOW |
+| Any principal | case-level read | global | DENY |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Denied: `SYS.FORBIDDEN`. Hidden drafts: `SYS.NOT_FOUND`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Failure, idempotency, concurrency, offline
+Revocation at next decision. No offline path.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-148-05`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: privileged read rules follow CTR-CAP-001 R06 (expiry, purpose); exact values confirmed with F16.
+- D10 not affected: PROVISIONAL (D10 default, unapproved).

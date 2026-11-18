@@ -1,35 +1,48 @@
-# PS-087-04 — commands queries events
+# PS-087-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-087-04. **Owner:** [11_Federation/02_relay_sync/mod_dedup](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_dedup. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_dedup. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (Commands section), CTR-EVT-001 (R03), CTR-ERR-001.
 
-## Purpose and scope
-Define the commands queries events process for dedup within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-087-04.R01 | `dedup.check_and_record` takes `origin_node`, `event_id`, `aggregate_id`, `revision`, `payload_digest`. | MVP |
+| PS-087-04.R02 | Emits `dedup.duplicate_seen` (no payload) or `dedup.equivocation_detected` (IDs and digests only). | MVP |
+| PS-087-04.R03 | `dedup.lookup` returns result for a key without mutating state. | MVP |
 
-## Requirements to specify
-- [ ] PS-087-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-087-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-087-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Schemas `dedup.*@1.0.0` per CTR-SCH-001. Fields in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Operation | Actor | Event | Errors |
+|---|---|---|---|
+| dedup.check_and_record | sys_ (delivery/receive) | duplicate_seen / equivocation_detected | ENVELOPE_MALFORMED, EQUIVOCATION, WINDOW_EXCEEDED |
+| dedup.lookup | sys_ | none | SYS.UNAVAILABLE |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+[workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+[validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+[authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-087-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+The operation is itself idempotent: repeating the same call returns the same result.
+
+## Privacy, retention, abuse
+Events carry IDs and digests only.
+
+## Observability & budgets
+Event counts; equivocation event alerts.
+
+## Tests
+- TEST-PS-087-04-01 (contract): event schemas validate.
+- TEST-PS-087-04-02 (idempotency): repeated check returns duplicate, one row.
+- TEST-PS-087-04-03 (lookup): lookup does not change hit_count.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Operation table complete.
+2. Repeats are stable.
+
+## Assumptions & open decisions
+- PENDING: consumer list (mod_delivery, mod_conflicts) in DEPENDENCY_MATRIX.md.

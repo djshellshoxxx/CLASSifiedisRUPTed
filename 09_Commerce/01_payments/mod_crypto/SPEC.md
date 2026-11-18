@@ -1,44 +1,42 @@
 # F09.S01.M03 — crypto
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F09.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead (F09). **Parent:** [F09.S01 payments](../SPEC.md). **Canonical contracts:** CTR-COM-001 (on-chain verification R09–R12, adapter registry R11), CTR-EVT-001, CTR-CAP-001, CTR-PRV-001, CTR-ID-001, CTR-SCH-001, CTR-ERR-001. **Decisions:** D03, D04, D06, D09 (PROVISIONAL defaults, unapproved).
 
 ## Purpose and business behavior
-Provide crypto as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+On-chain transfer evidence. Parties record a transfer they made from their own wallet as a `clm_` claim with `method = onchain_transfer`. Registered chain adapters then verify the transfer against public chain data (chain, asset, recipient, amount, confirmations) and move the claim to `EXTERNALLY_VERIFIED` and, after the finality threshold, to `FINAL`. The module is non-custodial: the platform holds no keys, wallets, balances or swap rights, and it never signs transactions.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I record a transfer I sent from my own wallet so the counterparty can see its verification status.
+- As a participant, I see which chain, asset and recipient the verification matched, and I see when a transfer is reorganized out.
+- As an operator, I can add or disable a chain or asset in the registry without changing existing claims.
 
 ## Scope
-- Required process spec: `crypto_domain_model.md` (not yet authored)
-- Required process spec: `crypto_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `crypto_validation_and_authorization.md` (not yet authored)
-- Required process spec: `crypto_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `crypto_interfaces_and_events.md` (not yet authored)
-- Required process spec: `crypto_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `crypto_acceptance_and_property_tests.md` (not yet authored)
+- In scope: chain and asset registry entries, verifier adapter registration and signing, match rules, finality thresholds, reorg handling, adapter outage behavior.
+- Out of scope: wallet creation or custody, transaction signing, token swaps, fiat on-ramps, fee-on-transfer or rebasing assets (excluded for MVP, OPEN), claim records (CTR-COM-001), settlement reconciliation (mod_reconciliation).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Adapter commands `adapter.verify`, `adapter.finality`, `adapter.reorg` (system; CTR-COM-001). Registry commands `chain_adapter.register`, `chain_adapter.disable`. Events `chain_adapter.registered`, `chain_adapter.disabled`, plus claim events `clm.verified`, `clm.finalized`, `clm.reorged`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: `clm_` claims (CTR-COM-001), `cur_` asset registry (09 mod_currency, PENDING prefix), external chain RPC and indexer providers. Downstream: notifications (F13), reconciliation (mod_reconciliation), receipts (mod_receipts). Relation to mod_noncustodial (PS-069): wallet connection is owned there, not here.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns chain adapter registration, verification records (raw response digest, adapter ID), and finality policy records. Claims belong to CTR-COM-001. Addresses are external references, not entity IDs (CTR-ID-001).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Spoofed or lying RPC/indexer responses; untrusted adapters; token impersonation through look-alike contracts; address poisoning and phishing; reorgs moving claims backward; public on-chain graph clustering that can link a pseudonym to other activity; chain outages. On-chain public data does not prove the handover of goods or services.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Adapter registry and finality values confirmed per chain (OPEN values); library selection recorded in an ADR with versions and licenses; threat model reviewed by F16 Security (not audited); reorg test vectors in CI.
 
 ## Required process specification inventory
-- [ ] `crypto_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `crypto_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `crypto_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `crypto_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `crypto_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `crypto_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `crypto_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-068-01
+- [x] `validation_rules.md` — PS-068-02
+- [x] `workflow_state_machine.md` — PS-068-03
+- [x] `commands_queries_events.md` — PS-068-04
+- [x] `authorization_capabilities.md` — PS-068-05
+- [x] `failure_recovery_idempotency.md` — PS-068-06
+- [x] `privacy_retention_abuse.md` — PS-068-07
+- [x] `observability_performance.md` — PS-068-08
+- [x] `contract_and_acceptance_tests.md` — PS-068-09
+- [x] `import_export_backup_rollback.md` — PS-068-10

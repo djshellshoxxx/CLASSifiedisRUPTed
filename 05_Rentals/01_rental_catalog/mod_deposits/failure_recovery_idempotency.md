@@ -1,35 +1,58 @@
-# PS-040-06 — failure recovery idempotency
+# PS-040-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-040-06. **Owner:** [05_Rentals/01_rental_catalog/mod_deposits](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_deposits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/01_rental_catalog/mod_deposits. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (idempotency, revision, correlation), CTR-ERR-001 (retry rules), CTR-COM-001 (claim adapter and offline pending), CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for deposits within 01_rental_catalog. Do not assume implementation or successful external settlement.
+**Decision labels:** D08 PWA offline writes PROVISIONAL (unapproved). D09 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-040-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-040-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-040-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-040-06.R01 | Writes are idempotent per CTR-EVT-001 R03; duplicate key with same digest returns the original result with no new event. | MVP |
+| PS-040-06.R02 | Deposit state and linked claim write share one `correlation_id` saga (CTR-EVT-001 R09). | MVP |
+| PS-040-06.R03 | A partially failed saga is reconciled from the claim's state, never from client assertions. Reconciliation completes within 15 min (ASSUMPTION). | MVP |
+| PS-040-06.R04 | Offline queues hold `deposit.propose`, `deposit.agree` and `deposit.record_given` as pending (D08). Server revalidates at commit. | MVP |
+| PS-040-06.R05 | Queued commands with non-retryable codes move to "not applied"; they are never silently dropped. | MVP |
+| PS-040-06.R06 | Retries follow CTR-ERR-001: exponential backoff, base 500 ms, cap 60 s, same key. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Idempotency records: key, actor, command, digest, result pointer, 7-day retention (RET-OPS). Saga record: `correlation_id`, deposit ID, claim ID, step, status.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command in PS-040-04 is retry-safe. `deposit.held` is emitted only after the claim event is committed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Failure does not add states. A failed transition leaves the status unchanged. Offline-pending is client-side and not a server status.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`, `COM.VERIFIER_UNAVAILABLE`, `SYS.PRECONDITION_FAILED`. Non-retryable: all `DEPOSITS.*` codes and `COM.*` validation codes.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-040-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Recovery jobs run as `sys` principals with write scope on `deposit` only. They cannot create claims for either party.
+
+## Failure, idempotency, concurrency, offline
+- Timeout on claim submit: retry with same key; if unknown after 3 retries, reconcile by reading the claim.
+- Concurrent release and dispute: revision check; one wins, other gets `SYS.CONFLICT` and re-reads.
+- Offline record_given after a rental was cancelled: rejected non-retryable, moved to "not applied".
+- Pending consent older than 72 h: cancelled by PS-040-03 R05 on the server, client notified on sync.
+
+## Privacy, retention, abuse
+Saga logs hold IDs and step names only. Replay of a stale queued command is blocked by revision checks.
+
+## Observability & budgets
+`deposit_saga_open_total`, `deposit_saga_reconciled_total`, `deposit_saga_age_seconds` p95 ≤ 900 (ASSUMPTION).
+
+## Tests
+- TEST-PS-040-06-01 (failure injection): claim service times out after commit; saga reconciles to one claim and one deposit transition.
+- TEST-PS-040-06-02 (offline): queued `record_given` replayed after cancellation → "not applied" with `message_key`.
+- TEST-PS-040-06-03 (idempotency): 100 concurrent identical proposals → one deposit.
+- TEST-PS-040-06-04 (backoff): retry schedule matches base 500 ms and cap 60 s.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No orphan claim without a deposit link after recovery (TEST-PS-040-06-01).
+2. No queued command silently dropped (TEST-PS-040-06-02).
+3. Duplicate proposals never create two active deposits (TEST-PS-040-06-03).
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute reconciliation, 3 retries before reconcile-by-read.
+- PROVISIONAL (D08 default, unapproved).
+- PROVISIONAL (D09 default, unapproved).

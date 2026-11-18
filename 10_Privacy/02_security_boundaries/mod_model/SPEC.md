@@ -1,44 +1,51 @@
 # F10.S02.M02 — model
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F10.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Privacy Lead (role); Security Lead (role) approves versions. **Parent:** F10.S02.
 
 ## Purpose and business behavior
-Provide model as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Maintain the approved data-flow and trust-boundary model for ClassRup: which asset holds which data class, which flows cross a trust zone (client PWA, relay, peer node, external chain, external payment), and which controls apply at each crossing. Other modules and CI reference this model; a flow absent from it is treated as unreviewed.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a privacy reviewer, I can see every flow that carries precise location or financial evidence and its controls.
+- As a security reviewer, I can approve or reject a model version without editing it in place.
+- As a developer, a new cross-boundary flow fails CI until it is registered with a data class.
+- As an auditor, I can verify an exported model version by digest.
 
 ## Scope
-- Required process spec: `model_domain_model.md` (not yet authored)
-- Required process spec: `model_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `model_validation_and_authorization.md` (not yet authored)
-- Required process spec: `model_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `model_interfaces_and_events.md` (not yet authored)
-- Required process spec: `model_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `model_acceptance_and_property_tests.md` (not yet authored)
+- [domain_schema.md](domain_schema.md) — PS-081-01
+- [validation_rules.md](validation_rules.md) — PS-081-02
+- [workflow_state_machine.md](workflow_state_machine.md) — PS-081-03
+- [commands_queries_events.md](commands_queries_events.md) — PS-081-04
+- [authorization_capabilities.md](authorization_capabilities.md) — PS-081-05
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-081-06
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-081-07
+- [observability_performance.md](observability_performance.md) — PS-081-08
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-081-09
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-081-10
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `model.propose_version`, `model.approve`, `model.reject`, `flow.register`, `flow.retire`, `model.rollback`; query `model.query_current`. Events `model.version_approved`, `flow.registered`, `flow.retired`. Details in PS-081-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: data classes (CTR-PRV-001), federation class rules (CTR-FED-001 R03), capability model (CTR-CAP-001). Downstream: CI drift check, privacy review (F10), threat register (`10_Privacy/02_security_boundaries/mod_threat`, full ID). Integration uses contract tests.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns model versions, asset, boundary and flow records. Does not own the data itself or class definitions (CTR-PRV-001).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+The model drifts from code, leaving new flows unreviewed. A flow is misclassified, so a precise-location or financial path gets weaker controls. The static PWA host is treated as untrusted for secrets, but a model entry could imply otherwise. Tampered or unreviewed versions are approved. Sample data leaks personal values into the model.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs reviewed by Privacy and Security leads; zone × class matrix tested; drift check defined in CI plan.
 
 ## Required process specification inventory
-- [ ] `model_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `model_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `model_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `model_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `model_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `model_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `model_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-081-01, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `validation_rules.md` — PS-081-02, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `workflow_state_machine.md` — PS-081-03, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `commands_queries_events.md` — PS-081-04, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `authorization_capabilities.md` — PS-081-05, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `failure_recovery_idempotency.md` — PS-081-06, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `privacy_retention_abuse.md` — PS-081-07, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `observability_performance.md` — PS-081-08, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `contract_and_acceptance_tests.md` — PS-081-09, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `import_export_backup_rollback.md` — PS-081-10, SPEC-DRAFT-COMPLETE (pending approval)

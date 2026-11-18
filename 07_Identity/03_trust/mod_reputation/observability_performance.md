@@ -1,35 +1,62 @@
-# PS-058-08 — observability performance
+# PS-058-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-058-08. **Owner:** [07_Identity/03_trust/mod_reputation](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_reputation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_reputation. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001 (lag), CTR-PRV-001 (log classes), CTR-CAP-001 R08.
 
-## Purpose and scope
-Define the observability performance process for reputation within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-058-08.R01 | Each input, recompute and public read emits counter and latency. | MVP |
+| PS-058-08.R02 | `GetReputationBand` p95 ≤ 50 ms; recompute lag p95 ≤ 60 s. | MVP |
+| PS-058-08.R03 | Logs carry `prf_id`, source and code; never counters, counterparty IDs or dispute details. | MVP |
+| PS-058-08.R04 | No `prf_` or counterparty value as metric label. | MVP |
+| PS-058-08.R05 | Alerts: drift > 0 in nightly check; input backlog > 15 min; `SELF_DEALING` > 0.5% per day. | MVP |
+| PS-058-08.R06 | Band displayed with text equivalent and screen-reader label (WCAG 2.1 AA). | MVP |
 
-## Requirements to specify
-- [ ] PS-058-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-058-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-058-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Metric | Type | Labels |
+|---|---|---|
+| `repute_input_total` | counter | `source`, `result` |
+| `repute_input_reject_total` | counter | `code` |
+| `repute_recompute_lag_seconds` | histogram | none |
+| `repute_drift_total` | counter | none |
+| `repute_transition_total` | counter | `from`, `to` |
+| `repute_authz_deny_total` | counter | `action` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Covers PS-058-04 paths.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Transitions per PS-058-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Code counters only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards for F07 and F16; no per-subject views.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-058-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Input queue depth as aggregate only.
+
+## Privacy, retention, abuse
+Logs 30 days (RET-OPS); metrics 13 months aggregated; audit 12 months.
+
+## Observability & budgets
+- Availability 99.9% monthly (ASSUMPTION).
+- Load: 100 inputs/s peak; 1000 band reads/s (ASSUMPTION).
+- Nightly full recompute completes in < 2 h for 1 M profiles (ASSUMPTION).
+
+## Tests
+- TEST-PS-058-08-01 (unit): counters once per input.
+- TEST-PS-058-08-02 (privacy scan): no counters or identifiers in logs or metrics.
+- TEST-PS-058-08-03 (load): 100 inputs/s and 1000 reads/s within budget.
+- TEST-PS-058-08-04 (a11y): band text equivalent present.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Dashboards and alerts exist.
+2. Redaction verified.
+3. Budgets met.
+4. No per-subject label anywhere.
+
+## Assumptions & open decisions
+- ASSUMPTION: targets above.
+- PROVISIONAL (D07 default, unapproved): log retention 30 days.

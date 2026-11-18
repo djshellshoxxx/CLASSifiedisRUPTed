@@ -1,35 +1,52 @@
-# PS-081-06 — failure recovery idempotency
+# PS-081-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-081-06. **Owner:** [10_Privacy/02_security_boundaries/mod_model](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_model. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_model. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-CAP-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for model within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-081-06.R01 | A failed approval never leaves a version half-approved; state is all-or-nothing. | MVP |
+| PS-081-06.R02 | Publishing a version is idempotent by `(version, digest)`. | MVP |
+| PS-081-06.R03 | If the model store is unavailable, CI drift check fails closed (build fails, not passes). | MVP |
 
-## Requirements to specify
-- [ ] PS-081-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-081-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-081-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Uses `revision` and `digest_sha256` in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry rules apply to all commands in [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery is replay from the event log; no manual state edits.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | When |
+|---|---|---|
+| SYS.UNAVAILABLE | true | store down |
+| EVT.REVISION_CONFLICT | false | concurrent proposal |
+| MODEL.DRIFT_DETECTED | false | code declares a flow absent from the model |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-authorize.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-081-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrency via `expected_version`. Model changes are online-only (no offline queue).
+
+## Privacy, retention, abuse
+Recovery logs carry IDs and codes only.
+
+## Observability & budgets
+Metric `model_drift_detected_total`; CI check runtime ≤ 2 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-081-06-01 (idempotency): duplicate publish returns one version.
+- TEST-PS-081-06-02 (fault): store outage fails CI drift check.
+- TEST-PS-081-06-03 (concurrency): two approvals on one version, one wins.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No half-approved versions in fault tests.
+2. CI drift check fails closed.
+3. Idempotency verified for publish.
+
+## Assumptions & open decisions
+- ASSUMPTION: CI runtime bound.
+- PROVISIONAL (D10 default, unapproved): key assets follow same rules.

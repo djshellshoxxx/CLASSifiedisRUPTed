@@ -1,35 +1,62 @@
-# PS-056-06 — failure recovery idempotency
+# PS-056-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-056-06. **Owner:** [07_Identity/02_profiles/mod_profiles](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_profiles. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_profiles. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03, offline), CTR-PRV-001 (RET-EPH for queues; cache purge at logout).
 
-## Purpose and scope
-Define the failure recovery idempotency process for profiles within 02_profiles. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-056-06.R01 | Profile patch, visibility change and disclosure grant each commit atomically with their event (single transaction or outbox). | MVP |
+| PS-056-06.R02 | Duplicate delivery of any write returns original result; no second event. | MVP |
+| PS-056-06.R03 | Concurrent patches on the same revision: exactly one commits; others receive `EVT.REVISION_CONFLICT`. | MVP |
+| PS-056-06.R04 | Client retries only retryable codes, max 5 attempts, exponential backoff with jitter; client timeout 5 s. | MVP |
+| PS-056-06.R05 | Offline profile edits held in a local pending queue until relay acknowledgment; cleared on logout. | MVP |
+| PS-056-06.R06 | Freeze and purge jobs are idempotent and resumable. | MVP |
 
-## Requirements to specify
-- [ ] PS-056-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-056-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-056-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record as in mod_pseudonyms PS-052-06 (7-day retention). Pending-queue entry: `profile_patch_id`, `prf_id`, `patch_digest`, `expected_revision`, `status`. Purged on ack (RET-EPH). Queue entries containing private values are encrypted at rest on device (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry behavior applies to `UpdateProfile`, `SetFieldVisibility`, `DisclosePrivateField`, `RevokeDisclosure`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| `pending` (device) | relay ack | — | `acknowledged` | remove local queue entry |
+| `pending` | non-retryable error | — | `not_applied` | user sees message key; value kept until user dismisses |
+| `pending` | retryable error | attempts < 5 | `pending` | backoff |
+| `pending` | `PROF.PROFILE_FROZEN` received | — | `not_applied` | private values deleted from device |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Non-retryable codes never auto-retry. `not_applied` items are visible to user; never silently discarded (CTR-ERR-001).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Re-authorized on every server attempt; queue items carry no capabilities.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-056-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Revision conflict: client re-reads profile, shows diff, resubmits with new key.
+- Disclosure grant racing with revocation: last write by server timestamp wins; revocation is never overridden by an earlier grant replay (ASSUMPTION).
+- Relay outage: queue limit 100 patches or 7 days, then oldest become `not_applied` (ASSUMPTION).
+- Server crash after commit: retry returns stored result.
+
+## Privacy, retention, abuse
+Device queue purged on logout and account switch. Private values in queue removed when `PROFILE_FROZEN` returns. Replay storms rate-limited per `prf_` (30 writes per minute, ASSUMPTION).
+
+## Observability & budgets
+`prof_outbox_lag_seconds` p95 ≤ 5 s; `prof_queue_not_applied_total{code}`. No values in metrics.
+
+## Tests
+- TEST-PS-056-06-01 (integration): crash between commit and ack; one event published.
+- TEST-PS-056-06-02 (concurrency): 20 parallel patches; one commit per revision.
+- TEST-PS-056-06-03 (offline): patch queued while `prf_` retired becomes `not_applied` with private values deleted.
+- TEST-PS-056-06-04 (property): replay of any write sequence yields same final profile.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Atomicity verified by fault injection.
+2. No duplicate events under replay.
+3. Offline queue never drops items silently.
+4. Private values removed from device when profile frozen.
+
+## Assumptions & open decisions
+- ASSUMPTION: queue limit 100 items or 7 days.
+- ASSUMPTION: 30 writes per minute per `prf_`.
+- PROVISIONAL (D08 default, unapproved): local pending queue until authenticated relay acknowledgment.

@@ -1,35 +1,57 @@
 # PS-020-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-03. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_three. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R09), CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-020-03.R01 | Cycle is `proposed` on creation; `consented` only when all three slots consent to the same version. | MVP |
+| PS-020-03.R02 | Any single decline moves the cycle to `declined` and releases all three slots in the same commit. | MVP |
+| PS-020-03.R03 | No partial lock: lock starts only from `consented` and fails back to `proposed` with consents cleared. | MVP |
+| PS-020-03.R04 | Proposals expire 48 h after creation if not consented (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-020-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+State in `status`; consent in `slots[].consent`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+PS-020-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | cycle.propose_three | PS-020-02 passes | proposed (v1) | emit cycle.proposed |
+| proposed | consent (slot k) | version matches | proposed | emit cycle.slot_consented |
+| proposed | consent (third slot) | all three consented | consented | emit cycle.consented; hand to mod_lock |
+| proposed | content change | any slot | proposed (v+1) | clear consents; emit cycle.version_superseded |
+| proposed | decline (any slot) | — | declined | release all slots; emit cycle.declined |
+| proposed | 48 h elapsed | — | expired | emit cycle.expired |
+| consented | lock fails | — | proposed | clear consents; emit cycle.version_superseded |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions return SYS.UNPROCESSABLE_STATE.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Consent and decline: slot participant (PS-020-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Transitions serialised on version; no offline consent without pending-ack (D08).
+
+## Privacy, retention, abuse
+Declined and expired cycles: RET-OPS 30 days, pseudonyms only.
+
+## Observability & budgets
+Counts per state.
+
+## Tests
+- TEST-PS-020-03-01 (unit): every table row.
+- TEST-PS-020-03-02 (property): no path to lock with fewer than three consents.
+- TEST-PS-020-03-03 (integration): lock failure returns cycle to proposed.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. A three-party cycle reaches `consented` only with three consents on one version.
+2. One decline releases all slots in 100% of runs.
+3. Zero partial locks.
+
+## Assumptions & open decisions
+- ASSUMPTION: 48 h window.
+- PROVISIONAL (D04 default, unapproved): explicit per-party consent.

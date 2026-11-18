@@ -1,35 +1,49 @@
-# PS-083-07 — privacy retention abuse
+# PS-083-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-083-07. **Owner:** [11_Federation/01_protocol/mod_portable](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R02, R03, R08), CTR-PRV-001 (R03, R06, R11), CTR-EVT-001 (R13).
 
-## Purpose and scope
-Define the privacy retention abuse process for portable within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-083-07.R01 | Bundles never contain PRIVATE_PERSONAL, FINANCIAL_EVIDENCE, LOCATION_PRECISE or SECRET data (PS-083-02.R01). | MVP |
+| PS-083-07.R02 | Per-audience pseudonym replaces `actor_ref` (keyed HMAC, ASSUMPTION) so two audiences cannot correlate the owner. | MVP |
+| PS-083-07.R03 | Bundle file deleted 7 days after delivery acknowledgement (ASSUMPTION); manifest audit record kept per RET-AUD. | MVP |
+| PS-083-07.R04 | Abuse: peer exceeding 10 MiB/h or 600 events/min is rate-limited (CTR-FED-001 R11). | MVP |
 
-## Requirements to specify
-- [ ] PS-083-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-083-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-083-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Manifest class PSEUDONYMOUS. Item classes as per items.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Deletion of bundle file is a transition in [workflow_state_machine.md](workflow_state_machine.md) (`delivered` → `purged`, to add to table, ASSUMPTION).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`FED.RATE_LIMITED` (429, retryable).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-083-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge job idempotent per bundle.
+
+## Privacy, retention, abuse
+Retention: bundle file 7 days after ack; audit 12 months (RET-AUD, ASSUMPTION). Export obligations for portability: owner's own data at its classes (CTR-PRV-001 R11).
+
+## Observability & budgets
+Alert on bundles with re-identification signal (same pseudonym across two audiences). Logs carry no pseudonyms.
+
+## Tests
+- TEST-PS-083-07-01 (privacy): bundle built from mixed items excludes restricted items.
+- TEST-PS-083-07-02 (correlation): same owner yields different pseudonyms for two audiences.
+- TEST-PS-083-07-03 (retention): file purged at 7 days in fixture clock.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No restricted class in any bundle fixture.
+2. Pseudonym per audience verified.
+3. Purge test passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: keyed HMAC per audience; 7-day purge.
+- PROVISIONAL (D07 default, unapproved): minimal retention with legal-hold exceptions.

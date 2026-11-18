@@ -1,35 +1,52 @@
 # PS-136-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-136-05. **Owner:** [17_Quality/01_testing/mod_property](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_property. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_property. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-ERR-001
 
-## Purpose and scope
-Define the authorization capabilities process for property within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-136-05.R01 | Registering a property requires module owner role for `owning_module` or QA Lead. | MVP |
+| PS-136-05.R02 | Running properties requires CI `sys_` principal or QA Lead. | MVP |
+| PS-136-05.R03 | Replay of counterexamples is limited to engineers with read access to the owning module. | MVP |
+| PS-136-05.R04 | No property run may use production data as generator input. | MVP |
 
-## Requirements to specify
-- [ ] PS-136-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-136-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-136-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capability IDs: `property.register`, `property.run`, `property.replay`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Decision records on denial.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Actor | Action | Result |
+|---|---|---|
+| owner of module X | register property for X | allow |
+| owner of module Y | register property for X | DENY, SYS.FORBIDDEN |
+| CI sys | run | allow |
+| engineer | run (not CI, not QA Lead) | DENY, SYS.FORBIDDEN |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Grants reviewed quarterly (ASSUMPTION).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-136-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+N/A.
+
+## Privacy, retention, abuse
+Denials carry no property content.
+
+## Observability & budgets
+Counter `property_authz_denied_total{rule}`.
+
+## Tests
+- TEST-PS-136-05-01: unit, decision table.
+- TEST-PS-136-05-02: negative, cross-module registration denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Cross-module registration denied in fixtures.
+2. Production-data generator input rejected in lint.
+
+## Assumptions & open decisions
+- ASSUMPTION: quarterly grant review.
+- D10: PROVISIONAL (D10 default, unapproved) not applicable to test credentials.

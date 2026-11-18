@@ -1,35 +1,52 @@
-# PS-019-06 — failure recovery idempotency
+# PS-019-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-019-06. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03).
 
-## Purpose and scope
-Define the failure recovery idempotency process for party within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-019-06.R01 | Two concurrent binds of one participant into two cycles: exactly one succeeds; the other returns CYCPARTY.SLOT_TAKEN. | MVP |
+| PS-019-06.R02 | Withdrawal after consent but before lock is allowed, supersedes the cycle version, and clears other consents. | MVP |
+| PS-019-06.R03 | Replayed bind or withdraw with same key returns original result, no new event. | MVP |
+| PS-019-06.R04 | Command timeout 3 s; retry only with the same key. | MVP |
+| PS-019-06.R05 | Offline withdrawal is queued as pending until relay acknowledgement (D08); not applied locally as final. | MVP |
 
-## Requirements to specify
-- [ ] PS-019-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-019-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-019-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Live-slot unique constraint; version counter.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+All writes retry-safe by key.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Failure edges in PS-019-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Stale version returns CYCPARTY.VERSION_STALE (retryable).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-check participant status.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-019-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Race: bind and withdraw of the same slot serialise on version.
+- Crash after bind commit: binding exists; recovery reads committed state.
+- Backoff: 1 s base, 60 s cap, 5 attempts (ASSUMPTION).
+
+## Privacy, retention, abuse
+Pending local withdrawals are purged on logout.
+
+## Observability & budgets
+Count of SLOT_TAKEN per hour (possible double-booking attempts).
+
+## Tests
+- TEST-PS-019-06-01 (concurrency): 100 parallel binds yield one live slot per participant.
+- TEST-PS-019-06-02 (integration): withdrawal after consent supersedes version.
+- TEST-PS-019-06-03 (offline): queued withdrawal applies once after ack.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero participants with two live slots in 100% of runs.
+2. Superseded versions never reach lock.
+3. Replays create no duplicate events.
+
+## Assumptions & open decisions
+- PROVISIONAL (D08 default, unapproved).
+- PROVISIONAL (D04 default, unapproved).

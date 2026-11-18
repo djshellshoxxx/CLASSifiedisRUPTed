@@ -1,44 +1,41 @@
-# F02.S02.M04 — party
+# F02.S02.M04 — mod_party (cycle participant slots)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.S02.
+**Status:** SPEC-DRAFT-COMPLETE. **Owner:** Marketplace Lead (accountable role). **Parent:** F02.S02 (cycle_matching). **Canonical record owner:** `par_` (cycle participant slot) records are owned by F02.S01.M02 `02_LocalMutiny/01_trade_proposals/mod_party` (PROVISIONAL ownership default, see Data ownership). This module owns only the cycle-scoped slot binding.
 
 ## Purpose and business behavior
-Provide party as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Binds each participant's slot (`par_`) to one position in one cycle version: slot index, current consent projection and lock status. It enforces that a participant holds at most one live slot in a cycle at a time, so one listing or person cannot be committed twice in parallel. It does not decide cycles (mod_three, mod_four, mod_n) and does not record consents itself (F02.S03.M01 mod_consent).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I am in one cycle at a time, and if I withdraw my slot the other parties are told by pseudonym, not by name.
+- As an operator, I can see how many slots are blocked by a stuck participant without seeing who they are.
+- As a participant, I get a clear reason when my slot cannot be bound because I am already in a live cycle.
 
 ## Scope
-- Required process spec: `party_domain_model.md` (not yet authored)
-- Required process spec: `party_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `party_validation_and_authorization.md` (not yet authored)
-- Required process spec: `party_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `party_interfaces_and_events.md` (not yet authored)
-- Required process spec: `party_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `party_acceptance_and_property_tests.md` (not yet authored)
+Ten process specifications (inventory below). Two-party slot creation is out of scope (F02.S01.M02).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands: `cycle.bind_slot`, `cycle.withdraw_slot`. Query: `cycle.slots_get`. Events: `cycle.slot_bound`, `cycle.slot_withdrawn`, `cycle.slot_status_changed`. Error module code `CYCPARTY`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F02.S01.M02 (`par_` identity and owner; trade-proposal party records); F02.S02.M03 (mod_n) and F02.S02.M01/M02 (cycle creators call bind); F02.S03.M01 (mod_consent, reports consent status). Downstream: F02.S03.M03 (mod_dropouts, reads slot status); F02.S03.M04 (mod_recovery, reads slot status for compensation). Shared contracts: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns the binding (`cyc_`, `par_`, `slot_index`, `cycle_version`, status projection). Does not own `par_` identity, consent records, listings, or lock records.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Double-booking a participant across cycles, withdrawal used to pressure others after consent, slot-index collisions after version change, and pseudonym linkage through slot order. Pseudonyms do not guarantee anonymity; slot order reveals position only.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Ten process specs at SPEC-DRAFT-COMPLETE; PARTY canonical owner decision recorded (lead); binding tests defined for all three cycle lengths.
 
 ## Required process specification inventory
-- [ ] `party_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `party_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `party_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `party_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `party_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `party_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `party_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-019-01
+- [x] `validation_rules.md` — PS-019-02
+- [x] `workflow_state_machine.md` — PS-019-03
+- [x] `commands_queries_events.md` — PS-019-04
+- [x] `authorization_capabilities.md` — PS-019-05
+- [x] `failure_recovery_idempotency.md` — PS-019-06
+- [x] `privacy_retention_abuse.md` — PS-019-07
+- [x] `observability_performance.md` — PS-019-08
+- [x] `contract_and_acceptance_tests.md` — PS-019-09
+- [x] `import_export_backup_rollback.md` — PS-019-10

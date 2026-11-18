@@ -1,35 +1,49 @@
-# PS-124-10 — import export backup rollback
+# PS-124-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-124-10. **Owner:** [15_Platform/04_configuration/mod_flags](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/04_configuration/mod_flags (F15.S04.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the import export backup rollback process for flags within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-124-10.R01 | Rules export: versioned snapshot with digest; no subject data (none exists). | MVP |
+| PS-124-10.R02 | Rules import: whole-snapshot only, validated per PS-124-02; partial import refused. | MVP |
+| PS-124-10.R03 | Rollback re-publishes a previous rules revision as a new revision; history is kept. | MVP |
+| PS-124-10.R04 | Flag rules are included in platform backup scope (PS-120) so restore reproduces rollout state. | MVP |
+| PS-124-10.R05 | After restore, rollout-up changes made after the restore point are not re-applied automatically; operators confirm (PS-122). | MVP |
 
-## Requirements to specify
-- [ ] PS-124-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-124-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-124-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Snapshot: `{"rules_revision": int, "flags": [...], "digest": "sha256"}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Import and rollback require `flag.administer` with approval per PS-124-05.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback creates a revision; states follow PS-124-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`FLAG.DEFINITION_INVALID` on snapshot failure.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+As PS-124-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-124-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Import idempotent on digest.
+
+## Privacy, retention, abuse
+Snapshots have no personal data.
+
+## Observability & budgets
+Import completes within 30 s (ASSUMPTION).
+
+## Tests
+- TEST-PS-124-10-01 (round trip): export then import keeps digest.
+- TEST-PS-124-10-02 (negative): partial import refused.
+- TEST-PS-124-10-03 (rollback): rollback restores prior values as new revision.
+- TEST-PS-124-10-04 (restore): backup restore keeps rollout values and requires operator confirmation for rollout-up.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round trip stable (TEST-01).
+2. TEST-PS-124-10-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: rules snapshot under 5 MB.

@@ -1,35 +1,55 @@
-# PS-058-06 — failure recovery idempotency
+# PS-058-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-058-06. **Owner:** [07_Identity/03_trust/mod_reputation](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_reputation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_reputation. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001, CTR-COM-001 (finality may change after first report), CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for reputation within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-058-06.R01 | Each input is applied at most once per `(prf_id, event_id)`; enforced by unique index. | MVP |
+| PS-058-06.R02 | Recompute is a pure function of inputs and rules version; re-running yields identical counters. | MVP |
+| PS-058-06.R03 | Input arriving after finality change (`reported` → `final` or `final` → `reversed`) updates counters by delta, not by double count. | MVP |
+| PS-058-06.R04 | Input source outage: queue inputs upstream; reputation lag alert at 15 min. | MVP |
+| PS-058-06.R05 | Nightly full recompute compares against incremental state; any drift > 0 is logged and corrected from inputs. | MVP |
+| PS-058-06.R06 | Concurrent inputs for the same `prf_` serialize on the profile row (compare-and-set on revision). | MVP |
 
-## Requirements to specify
-- [ ] PS-058-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-058-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-058-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Applied-input table: `prf_id`, `event_id`, `applied_at`, `rule_version`. Retention 400 days to match PS-058-02 horizon, then pruned.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry rules apply to `ReputationInput` commands (PS-058-04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recompute states: `queued` → `applying` → `applied` or `failed` (retry, max 10 attempts, then alert).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`REPUTE.INPUT_DUPLICATE` is a success-equivalent for idempotent retries (returns no change).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Source `sys_` re-authorized per attempt.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-058-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Finality reversal: `exchange_outcome` with `finality = reversed` removes the earlier counted input by delta.
+- Partial failure between input write and counter update: transaction covers both.
+- Recompute failure does not block evidence or exchange commits (independent queues).
+
+## Privacy, retention, abuse
+Applied-input table holds event IDs only, no counterparty identity beyond the diversity window (PS-058-07).
+
+## Observability & budgets
+`repute_recompute_lag_seconds` p95 ≤ 60 s; `repute_drift_total`; alert at drift > 0 on nightly check.
+
+## Tests
+- TEST-PS-058-06-01 (integration): crash mid-update; counters match after retry.
+- TEST-PS-058-06-02 (property): recompute from inputs equals incremental state for random sequences.
+- TEST-PS-058-06-03 (integration): finality reversal removes exactly one count.
+- TEST-PS-058-06-04 (concurrency): 100 parallel inputs for one `prf_` yield exact sum.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Counters reconcile with inputs under property tests.
+2. No double count under replay or reversal.
+3. Lag within bound or alert fires.
+4. Nightly drift check implemented.
+
+## Assumptions & open decisions
+- ASSUMPTION: applied-input retention 400 days.
+- PROVISIONAL (D04 default, unapproved): per-party attestation and compensating recovery for partial exchanges.

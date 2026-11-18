@@ -1,35 +1,56 @@
-# PS-116-06 — failure recovery idempotency
+# PS-116-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-06. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_offline (F15.S01.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-116-06.R01 | Retry backoff: full jitter, base 500 ms, cap 60 s (CTR-ERR-001). Same `idempotency_key` on every retry. | MVP |
+| PS-116-06.R02 | Request timeout 15 s per send; a timeout is treated as unknown outcome and retried with the same key. | MVP |
+| PS-116-06.R03 | Retryable codes return to `queued`; non-retryable codes move to `not_applied`. Unknown codes are non-retryable (CTR-ERR-001). | MVP |
+| PS-116-06.R04 | Entries older than 30 days in `queued` or `upgrade_required` are moved to `not_applied` with `OFFLINE.ENTRY_EXPIRED` and shown to the user. | MVP |
+| PS-116-06.R05 | Crash recovery: on start, entries in `sending` return to `queued` before replay. | MVP |
+| PS-116-06.R06 | Storage corruption (digest mismatch) quarantines the entry as `not_applied` with `OFFLINE.ENTRY_TAMPERED`; the rest of the queue continues. | MVP |
+| PS-116-06.R07 | Server idempotency window 7 days (CTR-EVT-001 R03). Replays after that window are refused by the server and reported as `not_applied`. | MVP |
 
-## Requirements to specify
-- [ ] PS-116-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retry fields: `attempts`, `next_attempt_at` (PS-116-01). Maximum 50 attempts, then `not_applied` with `OFFLINE.RETRY_EXHAUSTED` (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries are issued by `offline.replay`; no separate retry command.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Transitions per PS-116-03. Crash recovery is `sending -> queued` (R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| OFFLINE.RETRY_EXHAUSTED | false | unprocessable_state / 422 | 50 attempts reached. |
+| OFFLINE.ENTRY_EXPIRED | false | gone / 410 | Older than 30 days. |
+| OFFLINE.ENTRY_TAMPERED | false | internal / 500 | Digest mismatch. |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries use the current session (PS-116-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Idempotency is the key pair in PS-116-01 R02. Concurrency: one sender per account per device (writer lock). If the device is offline, nothing is sent; no timer produces `applied`.
+
+## Privacy, retention, abuse
+Expired entries are purged as in PS-116-07. A device that replays thousands of entries is rate-limited by the server (`SYS.RATE_LIMITED`, retryable with `retry_after_ms`).
+
+## Observability & budgets
+Metrics: `offline_retries_total{code}`, `offline_exhausted_total`. Alert when exhausted entries exceed 1% of enqueues in 24 h (ASSUMPTION).
+
+## Tests
+- TEST-PS-116-06-01 (unit): backoff schedule with full jitter stays within [0, cap].
+- TEST-PS-116-06-02 (integration): kill process during `sending`; restart returns entry to `queued`; server commits once.
+- TEST-PS-116-06-03 (property): random error sequences never produce `applied` without `server_ref`.
+- TEST-PS-116-06-04 (unit): digest mismatch quarantines one entry, others replay.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retry, timeout and expiry values match this file.
+2. TEST-PS-116-06-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15 s timeout, 50 attempts, 30-day expiry.
+- PROVISIONAL (D08 default, unapproved).

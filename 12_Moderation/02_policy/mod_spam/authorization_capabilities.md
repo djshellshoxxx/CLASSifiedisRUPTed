@@ -1,35 +1,58 @@
 # PS-097-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-097-05. **Owner:** [12_Moderation/02_policy/mod_spam](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_spam. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_spam. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R03, R04, R06, R08), CTR-PRV-001 (R01).
 
-## Purpose and scope
-Define the authorization capabilities process for spam within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-097-05.R01 | Capabilities used: `spm.read`, `spm.create` (evaluate, sys_ only), `spm.moderate` (release, reject), `spm.read` for author status. | MVP |
+| PS-097-05.R02 | Reviewers need a `mod_` grant with `case:<cas_>` or review scope and `constraints.purpose` = `spam_review`. | MVP |
+| PS-097-05.R03 | Only `sys_` may create verdicts; no `acc_`, `ope_` or `mod_` may create one. | MVP |
+| PS-097-05.R04 | Message subject verdicts are readable only by `sys_` and by the sender (send-restriction status only). Reviewers never read message verdicts. | MVP |
+| PS-097-05.R05 | Operators have no direct write capability; reversals go through `mod_appeals`. | MVP |
 
-## Requirements to specify
-- [ ] PS-097-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-097-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-097-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Actor | Action | Resource / scope | Outcome |
+|---|---|---|---|
+| `sys_` (classifier) | `spm.create` | any subject | ALLOW |
+| `mod_` (grant) | `spm.read` | `case:cas_` or review scope, `lst_` or `srv_` | ALLOW |
+| `mod_` (grant) | `spm.moderate` (release, reject) | `case:cas_`/review scope | ALLOW with `expected_revision` |
+| `mod_` | any | `msg_` verdict | DENY `SYS.NOT_FOUND` (R04) |
+| `acc_` (author) | `spm.read` | own subject | ALLOW: `state` and generic category only |
+| `acc_` (other) | any | any | DENY `SYS.NOT_FOUND` |
+| `ope_` | `spm.moderate` | any | DENY; ALLOW with dual control only for release of a `rejected` verdict (ASSUMPTION) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Field visibility (CTR-CAP-001 R10): `feature_hash`, `model_version`, `confidence` = `never` for non-`sys_` actors; `reason_code` = `case` (mapped category to author).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Reviewer grants carry `expires_at` ≤ 72 h after `not_before`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization does not change state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.NOT_FOUND` for unreadable verdicts (CTR-ERR-001 R08).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-097-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Zero-TTL decision cache for writes.
+
+## Privacy, retention, abuse
+Reviewer reads of listing content are audited (`aud_` record per read).
+
+## Observability & budgets
+Metric `spam_authz_denied_total{capability,actor_kind}`.
+
+## Tests
+- `TEST-PS-097-05-01` unit: each matrix row returns its outcome.
+- `TEST-PS-097-05-02` negative: `mod_` attempts to read `msg_` verdict → `SYS.NOT_FOUND`.
+- `TEST-PS-097-05-03` negative: `acc_` attempts `spm.create` → denied.
+- `TEST-PS-097-05-04` negative: author reads `confidence` → field absent.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Only `sys_` creates verdicts.
+2. Reviewers cannot read message verdicts.
+3. Every reviewer read of content writes an `aud_` record.
+
+## Assumptions & open decisions
+- ASSUMPTION: reviewer access to message-subject metadata is not needed in MVP; abuse reports for messages go through `mod_flags`.
+- D10 (auth and portability), PROVISIONAL default: author status visibility uses the pseudonymous account (unapproved).

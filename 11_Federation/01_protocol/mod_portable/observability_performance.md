@@ -1,35 +1,51 @@
-# PS-083-08 — observability performance
+# PS-083-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-083-08. **Owner:** [11_Federation/01_protocol/mod_portable](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09), CTR-FED-001 (R10, R11).
 
-## Purpose and scope
-Define the observability performance process for portable within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-083-08.R01 | Bundle build p95 ≤ 2 s for 1000 items (ASSUMPTION). | MVP |
+| PS-083-08.R02 | Import verification p95 ≤ 500 ms for 100 events (ASSUMPTION). | MVP |
+| PS-083-08.R03 | Metrics contain no `acc_` or `nod_` values as labels; use hashed node class labels. | MVP |
 
-## Requirements to specify
-- [ ] PS-083-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-083-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-083-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Labels: `code`, `outcome`, `item_count_bucket`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Consumes `bundle.*` events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Telemetry failures do not block builds.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards visible to Platform Lead and on-call.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-083-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metrics loss tolerated.
+
+## Privacy, retention, abuse
+Logs retained 30 days (ASSUMPTION).
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| portable_build_latency_ms p95 | ≤ 2000 |
+| portable_import_verify_ms p95 | ≤ 500 |
+| portable_import_rejections_total | tracked by code |
+
+## Tests
+- TEST-PS-083-08-01 (performance): 1000-item fixture meets build p95.
+- TEST-PS-083-08-02 (redaction): labels contain no IDs.
+- TEST-PS-083-08-03 (metric): rejection increments by code.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics exported.
+2. Redaction passes.
+3. Budgets verified on fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above.

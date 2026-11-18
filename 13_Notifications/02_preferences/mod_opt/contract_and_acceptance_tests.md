@@ -1,35 +1,50 @@
 # PS-107-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-107-09. **Owner:** [13_Notifications/02_preferences/mod_opt](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_opt. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_opt. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for opt within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-107-09.R01 | Contract tests cover every OPT.* code and event in PS-107-04. | MVP |
+| PS-107-09.R02 | Matrix UI uses native checkboxes with programmatic labels naming channel and category; disabled cells explain why. | MVP |
+| PS-107-09.R03 | Consent wording for each enable is tested for presence and plain language by Accessibility and UX review (future gate). | MVP |
+| PS-107-09.R04 | Email unsubscribe pages pass WCAG 2.2 AA checks in three locales. | MVP |
 
-## Requirements to specify
-- [ ] PS-107-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-107-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-107-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: accounts with default matrix, fully opted-in, withdrawn-all; expired and reused tokens.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay with stale revisions and duplicate unsubscribes.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+All rows of workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+One failing fixture per PS-107-02 rule.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Token scope and operator denial fixtures (PS-107-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-107-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection from PS-107-06.
+
+## Privacy, retention, abuse
+Response-equality test for unsubscribe (PS-107-07).
+
+## Observability & budgets
+Contract suite ≤ 5 min.
+
+## Tests
+- TEST-PS-107-09-01 (contract): all OPT codes match CTR-ERR-001.
+- TEST-PS-107-09-02 (e2e): enable email, confirm by POST, receive, unsubscribe via link.
+- TEST-PS-107-09-03 (a11y): matrix keyboard and screen reader path.
+- TEST-PS-107-09-04 (offline): withdraw offline, reconnect, single event.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Contract suite green.
+2. e2e path passes.
+3. Accessibility checks pass for matrix and unsubscribe pages.
+
+## Assumptions & open decisions
+- ASSUMPTION: three locales for unsubscribe pages (en, de and one more; from mod_languages).
+- No Dxx blocks test scope.

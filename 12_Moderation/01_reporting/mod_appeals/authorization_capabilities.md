@@ -1,35 +1,60 @@
 # PS-092-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-092-05. **Owner:** [12_Moderation/01_reporting/mod_appeals](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_appeals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_appeals. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R04 scopes, R06 privileged grants, R07 dual control, R10 field visibility).
 
-## Purpose and scope
-Define the authorization capabilities process for appeals within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-092-05.R01 | Capabilities used: `apl.create`, `apl.read`, `apl.withdraw`, `apl.update`, `apl.decide`, `apl.export`. | MVP |
+| PS-092-05.R02 | Reviewers act only through an active `mod_` grant with `case:<cas_>` scope (CTR-CAP-001 R06). | MVP |
+| PS-092-05.R03 | Reviewer must not be the original decider or a reporter on the case (PS-092-02 R06). | MVP |
+| PS-092-05.R04 | Reporter identity is never returned to the appellant or to the reviewer. | MVP |
+| PS-092-05.R05 | Operator reads of appeal bodies require dual control (CTR-CAP-001 R07) because body is PRIVATE_PERSONAL. | MVP |
 
-## Requirements to specify
-- [ ] PS-092-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-092-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-092-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Actor | Action | Resource / scope | Outcome |
+|---|---|---|---|
+| `acc_` (affected subject) | `apl.create` | own `enf_`, `spm_` or `rpt_` | ALLOW within window |
+| `acc_` (appellant) | `apl.read` | own `apl_` | ALLOW: state, decision code, reason category |
+| `acc_` (appellant) | `apl.withdraw` | own `apl_` in `received`, `accepted`, `in_review` | ALLOW |
+| `mod_` with grant | `apl.read`, `apl.update` (assign) | `case:cas_` | ALLOW if not conflicted |
+| `mod_` assigned reviewer | `apl.decide` | `case:cas_`, `apl_` assigned to self | ALLOW |
+| `mod_` original decider or reporter | `apl.decide` | same case | DENY `APPEALS.REVIEWER_CONFLICT` |
+| `ope_` | `apl.read` | any `apl_` | DENY (single approval); ALLOW with dual control and `aud_` |
+| `ope_` | `apl.export` | case scope | ALLOW with dual control; bodies excluded |
+| `sys_` | any | any | DENY except enforcement acknowledgment writes |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Field visibility (CTR-CAP-001 R10): `body` = `participant` (appellant, assigned reviewer); `reviewer_ref` = `case`; `decision_code` and `state` = `participant`; `reason_code` = `case`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Grants carry `constraints.purpose` = `appeal_review` and `case_id` (CTR-CAP-001 R06). `expires_at` ≤ 72 h.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization does not change state. Denied calls write a `dec_` record only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Denied calls to other people's appeals return `SYS.NOT_FOUND` (CTR-ERR-001 R08).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-092-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Grant revocation takes effect at the next decision; decision cache is zero for `apl.read` on bodies (CTR-CAP-001 R09).
+
+## Privacy, retention, abuse
+Each reviewer read of `body` writes an `aud_` record with `apl_id`, purpose and decision ID, no content.
+
+## Observability & budgets
+Metric `appeals_authz_denied_total{action,reason}`; alert on repeated `REVIEWER_CONFLICT` by one reviewer.
+
+## Tests
+- `TEST-PS-092-05-01` unit: each matrix row returns its outcome.
+- `TEST-PS-092-05-02` negative: reporter of the case attempts `apl.decide` → `APPEALS.REVIEWER_CONFLICT`.
+- `TEST-PS-092-05-03` negative: `ope_` single approval reads body → denied.
+- `TEST-PS-092-05-04` negative: appellant reads reporter identity field → field absent (not null).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Dual control enforced for operator body access.
+2. Reviewer conflict check cannot be bypassed by request body fields (CTR-CAP-001 R11).
+3. Every body read by a reviewer or operator produces an `aud_` record.
+
+## Assumptions & open decisions
+- ASSUMPTION: reviewer selection is manual in MVP; automatic assignment is future scope.
+- D10 (auth and portability), PROVISIONAL default: appellant identity uses the pseudonym rules of F07 (unapproved).

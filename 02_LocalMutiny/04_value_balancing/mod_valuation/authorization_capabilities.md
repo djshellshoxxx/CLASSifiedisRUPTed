@@ -1,35 +1,60 @@
 # PS-027-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-027-05. **Owner:** [02_LocalMutiny/04_value_balancing/mod_valuation](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_valuation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_valuation. **Parent:** [mod_valuation SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for valuation within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-027-05.R01 | Only the slot owner may declare a value for that slot (`cyc.propose`, scope `participant`). | MVP |
+| PS-027-05.R02 | Snapshot values are readable by participants of the revision only. Non-participants receive `SYS.NOT_FOUND`. | MVP |
+| PS-027-05.R03 | Snapshot compute is a `sys` action (`cyc.execute`) with no content read by the `sys` principal beyond values needed for arithmetic. | MVP |
+| PS-027-05.R04 | Listing reference lines require `lst.read` by the owning party; a listing the party cannot read yields `VALUE.LISTING_NOT_OWNED`. | MVP |
+| PS-027-05.R05 | Moderators see snapshot content only under a `case:` scope with purpose. Operators need dual control (CTR-CAP-001 R07). | MVP |
 
-## Requirements to specify
-- [ ] PS-027-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-027-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-027-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Action matrix:
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Principal | Action | Resource | Outcome |
+|---|---|---|---|
+| user, slot owner | `cyc.propose` | own slot value | ALLOW |
+| user, other participant | `cyc.propose` | that slot | DENY → `SYS.FORBIDDEN` |
+| user, non-participant | `cyc.read` | snapshot | DENY → `SYS.NOT_FOUND` |
+| sys | `cyc.execute` | compute | ALLOW |
+| mod, case scope | `cyc.read` | snapshot in `cas_` | ALLOW (grant) |
+| ope, single approval | `cyc.read` | snapshot | DENY (dual control) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command maps to one row above. Decision records hold outcome and reason code only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization re-checked at each command. A participant removed by a later revision keeps no access to new snapshots.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` for visible-but-disallowed writes; `SYS.NOT_FOUND` for hidden objects.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-027-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Capability IDs: `cyc.propose`, `cyc.read`, `cyc.execute`. No module-specific verbs.
+
+## Failure, idempotency, concurrency, offline
+Decision TTL zero for writes and FINANCIAL_EVIDENCE reads (CTR-CAP-001 R09). Revocation effective at next decision.
+
+## Privacy, retention, abuse
+Pseudonyms resolve to `acc_` before authorization. Moderator reads create `aud_` records without snapshot content.
+
+## Observability & budgets
+Metric `valuation_authz_denials_total{action,code}`. Alert on sustained `SYS.NOT_FOUND` bursts from one principal.
+
+## Tests
+- TEST-PS-027-05-01 (negative): each matrix row returns stated outcome.
+- TEST-PS-027-05-02 (integration): non-owner cannot declare on another slot.
+- TEST-PS-027-05-03 (negative): `lst_` owned by another party returns `VALUE.LISTING_NOT_OWNED`.
+- TEST-PS-027-05-04 (integration): operator read without second approver denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix tests pass with zero unlisted outcomes.
+2. Snapshot never returned in public listing or search responses.
+3. Error bodies never reveal snapshot values to non-participants.
+
+## Assumptions & open decisions
+- ASSUMPTION: moderator case grants max 72 h (CTR-CAP-001 R06).
+- OPEN: whether a dispute counterparty outside the revision may see the valuation basis. See [DECISIONS.md](../../../DECISIONS.md) D03.

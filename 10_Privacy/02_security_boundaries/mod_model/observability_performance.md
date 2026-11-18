@@ -1,35 +1,52 @@
-# PS-081-08 — observability performance
+# PS-081-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-081-08. **Owner:** [10_Privacy/02_security_boundaries/mod_model](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_model. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_model. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09), CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for model within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-081-08.R01 | Coverage metric: percent of cross-boundary flows with a registered control; target 100%. | MVP |
+| PS-081-08.R02 | Drift metric: count of code-declared flows absent from the approved model; target 0. | MVP |
+| PS-081-08.R03 | Model query p95 ≤ 100 ms (ASSUMPTION). | MVP |
+| PS-081-08.R04 | Metrics labels exclude asset owner IDs. | MVP |
 
-## Requirements to specify
-- [ ] PS-081-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-081-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-081-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels: `zone_pair`, `class`, `outcome`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Consumes `flow.*` events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Metric export failure never blocks approval.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards for Privacy and Security leads.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-081-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+If metrics fail, CI still enforces R02 via the build check.
+
+## Privacy, retention, abuse
+Logs contain no content; retention 90 days (ASSUMPTION).
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| model_flow_coverage_ratio | 1.0 |
+| model_drift_total | 0 |
+| model_query_latency_ms p95 | ≤ 100 |
+
+## Tests
+- TEST-PS-081-08-01 (coverage): seeded uncovered boundary lowers coverage metric.
+- TEST-PS-081-08-02 (drift): new flow in code without model entry fails check.
+- TEST-PS-081-08-03 (redaction): metrics contain no owner IDs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Coverage metric equals 1.0 on approved fixtures.
+2. Drift check blocks merge on seeded drift.
+3. Redaction test passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: latency and log retention targets.

@@ -1,35 +1,54 @@
 # PS-032-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-032-06. **Owner:** [03_Services/02_service_booking/mod_quotes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_quotes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_quotes. **Parent:** [mod_quotes SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-COM-001, CTR-ID-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for quotes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-032-06.R01 | Accept is atomic: quote state change, `trx_` creation and booking link commit in one transaction (outbox for events). | MVP |
+| PS-032-06.R02 | Duplicate accept with same key returns the original `trx_id`; no second `trx_` is created. | MVP |
+| PS-032-06.R03 | If any hold is lost before accept, accept fails with `SVCQUOTE.HOLD_LOST`; no partial booking. | MVP |
+| PS-032-06.R04 | Expiry timer releases holds within 90 s of `valid_until` (PS-028-06 R02). | MVP |
+| PS-032-06.R05 | Offline accept is queued (D08) and returns server result on acknowledgement; if the quote expired, the queued accept fails and the UI says so. | MVP |
 
-## Requirements to specify
-- [ ] PS-032-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-032-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-032-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record per (actor, command, key, digest). Outbox row per event with `event_id`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Outbox relay publishes `svcquote.accepted` at-least-once; consumers dedupe.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+No recovery path moves ACCEPTED back to SENT. A failed `trx_` creation keeps SENT (PS-032-03 R03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE` (503), `SYS.RATE_LIMITED`. Non-retryable: `SVCQUOTE.HOLD_LOST`, `SVCQUOTE.EXPIRED`, `SYS.CONFLICT`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Timer and outbox relay run as `sys`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-032-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- F09 unavailable during accept: whole accept fails with `SYS.UNAVAILABLE`; client retries with same key (max 5, backoff 1–30 s).
+- Customer double-tap: same key; second call returns first result.
+- Provider sends supersede during customer accept: CAS on revision decides; loser receives `SYS.CONFLICT`.
+- Offline: queued accepts are never shown as accepted until ack.
+
+## Privacy, retention, abuse
+Recovery logs contain IDs and codes only. Outbox payloads are the event payload with no free text.
+
+## Observability & budgets
+Metrics: `svcquote_outbox_lag_seconds` p95 ≤ 5 s; `svcquote_accept_retries_total`; `svcquote_partial_accept_total` (must stay 0).
+
+## Tests
+- TEST-PS-032-06-01 (fault): kill after trx insert, before commit → no trx row, quote SENT.
+- TEST-PS-032-06-02 (concurrency): duplicate accept with same key → one `trx_`.
+- TEST-PS-032-06-03 (fault): F09 timeout → `SYS.UNAVAILABLE`, retry succeeds once.
+- TEST-PS-032-06-04 (offline): queued accept after expiry rejected on ack with `SVCQUOTE.EXPIRED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. `svcquote_partial_accept_total` is 0 across fault suite.
+2. No duplicate `trx_` in 1,000 replayed accepts.
+3. Offline accepts never display as confirmed before ack.
+
+## Assumptions & open decisions
+- ASSUMPTION: outbox relay at-least-once; 5 s lag budget.
+- PROVISIONAL: offline writes pending until acknowledgement (D08 default, unapproved). See [DECISIONS.md](../../../DECISIONS.md).

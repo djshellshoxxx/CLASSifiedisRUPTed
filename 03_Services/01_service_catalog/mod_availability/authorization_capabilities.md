@@ -1,35 +1,61 @@
 # PS-028-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-028-05. **Owner:** [03_Services/01_service_catalog/mod_availability](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_availability. **Parent:** [mod_availability SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for availability within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-028-05.R01 | Only the provider of a `srv_` may create, update, block, unblock or retire its windows (`srv.update`, scope `self`). | MVP |
+| PS-028-05.R02 | Window schedule fields are visible to the provider (`owner`) and, for a booked window only, to the booking customer (`participant`). | MVP |
+| PS-028-05.R03 | Public and other authenticated users see aggregate open-slot counts and 1-hour start times, never `provider` IDs, timezone or region. | MVP |
+| PS-028-05.R04 | Quote events may trigger hold and release only through a `sys` principal scoped to the window's `srv_`. | MVP |
+| PS-028-05.R05 | Operators have no read access to schedules without a `case:` scope and dual control. | MVP |
 
-## Requirements to specify
-- [ ] PS-028-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-028-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-028-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Action matrix:
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Principal | Action | Resource | Outcome |
+|---|---|---|---|
+| user, provider | `srv.update` | own window | ALLOW (self) |
+| user, other | `srv.update` | window | DENY → `SYS.NOT_FOUND` (cannot see) or `SYS.FORBIDDEN` (visible) |
+| user, booked customer | `srv.read` | booked window | ALLOW (participant, booked fields) |
+| user, other customer | `srv.read` | booked window | DENY → `SYS.NOT_FOUND` |
+| user, anonymous | `srv.read` | slot counts | ALLOW (aggregate) |
+| sys, `svq` scope | `svq.accept` (hold/book) | window of that `srv_` | ALLOW |
+| ope, single approval | `srv.read` | schedule | DENY (dual control) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command maps to a row above. Decision records hold outcome and reason code only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization rechecked per command; provider changes to `srv_` ownership re-evaluate on next decision.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` for visible resources; `SYS.NOT_FOUND` for hidden resources (CTR-ERR-001 R08).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-028-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Capability IDs: `srv.update`, `srv.read`, `svq.accept`. No additional verbs.
+
+## Failure, idempotency, concurrency, offline
+Decision TTL zero for writes. Revocation of a provider's listing takes effect at next decision; existing HELD windows release on `srv_` retirement.
+
+## Privacy, retention, abuse
+Pseudonyms resolve to `acc_` before checks (CTR-CAP-001 R02). Booked-customer visibility ends when the booking is released.
+
+## Observability & budgets
+Metric `svcavail_authz_denials_total{action,code}`. Alert on enumeration bursts of `SYS.NOT_FOUND` from one principal.
+
+## Tests
+- TEST-PS-028-05-01 (negative): each matrix row returns the stated outcome.
+- TEST-PS-028-05-02 (integration): non-booked customer cannot read the booked window.
+- TEST-PS-028-05-03 (integration): anonymous search returns counts only.
+- TEST-PS-028-05-04 (negative): operator read denied without second approver.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix tests pass with zero unlisted outcomes.
+2. No schedule field appears in public responses (automated scan).
+3. Booked-customer visibility removed within one decision cycle of release.
+
+## Assumptions & open decisions
+- ASSUMPTION: anonymous users receive counts only.
+- PENDING CTR-ID-001 (`avw` prefix). See [DECISIONS.md](../../../DECISIONS.md) D10 (OPEN; account portability affects provider identity).

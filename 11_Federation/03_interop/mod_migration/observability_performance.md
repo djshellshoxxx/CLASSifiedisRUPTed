@@ -1,35 +1,51 @@
-# PS-090-08 — observability performance
+# PS-090-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-090-08. **Owner:** [11_Federation/03_interop/mod_migration](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_migration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_migration. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09).
 
-## Purpose and scope
-Define the observability performance process for migration within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-090-08.R01 | Progress metric: aggregates migrated, quarantined and remaining per run. | MVP |
+| PS-090-08.R02 | Throughput ≥ 1000 aggregates/min on fixture (ASSUMPTION). | MVP |
+| PS-090-08.R03 | Verification pass rate after completion must be 100% for signed evidence. | MVP |
+| PS-090-08.R04 | Labels exclude run IDs and aggregate IDs. | MVP |
 
-## Requirements to specify
-- [ ] PS-090-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-090-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-090-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Labels: `kind`, `outcome`, `code`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Consumes `migration.*` events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Telemetry failure never stops a batch.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Platform Lead and on-call; run progress visible to approvers.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-090-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metric loss tolerated; checkpoints are the source of truth.
+
+## Privacy, retention, abuse
+Logs retained 30 days (ASSUMPTION).
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| migrate_throughput_per_min | ≥ 1000 |
+| migrate_verification_pass_ratio | 1.0 for signed |
+| migrate_quarantined_total | reviewed each run |
+
+## Tests
+- TEST-PS-090-08-01 (throughput): fixture meets target.
+- TEST-PS-090-08-02 (verification): post-run verify pass 100%.
+- TEST-PS-090-08-03 (redaction): labels contain no IDs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics exported.
+2. Verification gate enforced.
+
+## Assumptions & open decisions
+- ASSUMPTION: throughput target.

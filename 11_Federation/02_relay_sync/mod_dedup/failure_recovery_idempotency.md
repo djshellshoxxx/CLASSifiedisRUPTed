@@ -1,35 +1,49 @@
-# PS-087-06 — failure recovery idempotency
+# PS-087-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-087-06. **Owner:** [11_Federation/02_relay_sync/mod_dedup](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_dedup. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_dedup. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (Failure section), CTR-EVT-001 (R02, R03).
 
-## Purpose and scope
-Define the failure recovery idempotency process for dedup within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-087-06.R01 | Check-and-record is one atomic upsert; two concurrent identical events yield exactly one `recorded` row. | MVP |
+| PS-087-06.R02 | If the index is unavailable, `check_and_record` returns `SYS.UNAVAILABLE` (retryable) and never returns `duplicate` or `accepted` (fail closed). | MVP |
+| PS-087-06.R03 | Equivocation detection and quarantine are committed together. | MVP |
 
-## Requirements to specify
-- [ ] PS-087-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-087-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-087-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Unique index on `(origin_node, event_id)`; check on `(origin_node, aggregate_id, revision)`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry rules per [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Per [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | When |
+|---|---|---|
+| SYS.UNAVAILABLE | true | index down |
+| DEDUP.WINDOW_EXCEEDED | true | sync deferral |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-authorize.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-087-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrency via unique index; no offline path.
+
+## Privacy, retention, abuse
+Logs carry codes and IDs.
+
+## Observability & budgets
+`dedup_failclosed_total`; check p95 ≤ 10 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-087-06-01 (race): 100 concurrent identical checks → one recorded, 99 duplicate.
+- TEST-PS-087-06-02 (fault): index outage never returns accepted.
+- TEST-PS-087-06-03 (atomic): crash between quarantine and record leaves consistent state.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Race test passes.
+2. Fail-closed verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: check latency budget.

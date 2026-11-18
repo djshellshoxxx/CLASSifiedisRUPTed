@@ -1,35 +1,60 @@
 # PS-017-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-017-01. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_four](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_four. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_four. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-SCH-001, CTR-EVT-001, CTR-PRV-001. Slot IDs `par_` owned by F02.S01.M02 (PROVISIONAL, see PS-017-09 notes).
 
-## Purpose and scope
-Define the domain schema process for four within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-017-01.R01 | A four-party cycle has exactly 4 slots, `slot_index` 0..3, in canonical order. | MVP |
+| PS-017-01.R02 | Canonical rotation: the slot whose participant ref sorts first is index 0; the order is then fixed for the cycle's life. | MVP |
+| PS-017-01.R03 | Each slot has one `participant_ref` (`acc_`), one `offer_ref` (`var_` or `lst_`) and one `wants_ref` matched to the next slot's offer. | MVP |
+| PS-017-01.R04 | `version` is an integer starting at 1; every change to slots or terms increments it. | MVP |
+| PS-017-01.R05 | Four distinct `lst_` IDs are required across the cycle. | MVP |
 
-## Requirements to specify
-- [ ] PS-017-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-017-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-017-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "cycle_id": "cyc_<26>",
+  "length": 4,
+  "version": "integer >= 1",
+  "status": "enum(proposed, consented, locked, declined, expired, superseded)",
+  "slots": "[{slot_index: 0..3, par_id: par_<26>, participant_ref: acc_<26>, offer_ref: var_|lst_, wants_ref: string, consent: enum(pending, consented, declined)}]",
+  "feasibility_ref": "ccd_<26>",
+  "value_gap_minor": "string, decimal, >= 0",
+  "expires_at": "timestamp",
+  "schema_version": "1.0.0"
+}
+```
+Classes: all PUBLIC except `participant_ref` (PSEUDONYMOUS) and `value_gap_minor` (FINANCIAL_EVIDENCE when non-zero).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Shapes in PS-017-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Rules in PS-017-02.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Slot-scoped views in PS-017-05.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Version counter is the concurrency token (PS-017-06).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-017-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Slot pseudonyms only; retention per PS-017-07.
+
+## Observability & budgets
+Proposal row ≤ 4 KB (ASSUMPTION).
+
+## Tests
+- TEST-PS-017-01-01 (unit): rotation of any 4-cycle yields one canonical sequence.
+- TEST-PS-017-01-02 (property): version increments by exactly 1 per change.
+- TEST-PS-017-01-03 (contract): record validates against 1.0.0.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Any input rotation produces the same canonical slot order.
+2. Length other than 4 cannot be stored.
+3. Version never decreases.
+
+## Assumptions & open decisions
+- PROVISIONAL (D02 default, unapproved): deterministic canonical form.
+- PENDING CTR-ID-001: slot-level `par_` ownership confirmation with F02.S01.M02.

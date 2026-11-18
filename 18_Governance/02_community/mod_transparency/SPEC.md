@@ -1,44 +1,47 @@
-# F18.S02.M02 — transparency
+# F18.S02.M02 — transparency (aggregated transparency reports)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F18.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Governance Lead (F18). **Parent:** [F18.S02 community](../SPEC.md).
 
 ## Purpose and business behavior
-Provide transparency as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Produce and publish periodic transparency reports: aggregated counts of moderation actions, classification outcomes, appeals and their results, and governance decisions, with the methodology version used for each figure. Figures come from F12 moderation, [mod_prohibited](../../01_policy/mod_prohibited/SPEC.md) and [mod_governance](../mod_governance/SPEC.md). Reports are drafted, reviewed and then published as immutable versions. No case-level or person-level data is published.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I can read how many listings were restricted or removed in a period and why, in aggregate.
+- As a reviewer, I can check the methodology behind each figure before publication.
+- As an auditor, I can compare two periods using the same methodology version.
 
 ## Scope
-- Required process spec: `transparency_domain_model.md` (not yet authored)
-- Required process spec: `transparency_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `transparency_validation_and_authorization.md` (not yet authored)
-- Required process spec: `transparency_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `transparency_interfaces_and_events.md` (not yet authored)
-- Required process spec: `transparency_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `transparency_acceptance_and_property_tests.md` (not yet authored)
+- Process specs (SPEC-DRAFT-COMPLETE, pending approval): domain_schema, validation_rules, workflow_state_machine, commands_queries_events, authorization_capabilities, failure_recovery_idempotency, privacy_retention_abuse, observability_performance, contract_and_acceptance_tests, import_export_backup_rollback.
+- Process IDs: PS-148-01 to PS-148-10.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `DraftTransparencyReport`, `ApproveTransparencyReport`, `PublishTransparencyReport`. Queries `GetTransparencyReport`, `ListTransparencyReports`. Events `transparency_report.drafted`, `transparency_report.published`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F12 moderation aggregates (by reference to aggregate job ID), [mod_prohibited](../../01_policy/mod_prohibited/SPEC.md) decision counts, [mod_governance](../mod_governance/SPEC.md) decision counts, CTR-PRV-001 (aggregation and disclosure classes), CTR-CAP-001. Downstream: public web reading (F13 notification of publication, by ID only).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns report drafts, approved figures, methodology versions and published report versions. Does not own the underlying case records (F12) or user data.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Re-identification from small cells; selective reporting that hides a category; disclosure of case details protected by legal hold; figures that change after publication; methodology changes that make periods incomparable without notice.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Methodology v1 approved by Governance Lead and Privacy Lead; small-cell suppression rule tested; a published report reproducible from its inputs in a later phase.
 
 ## Required process specification inventory
-- [ ] `transparency_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `transparency_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `transparency_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `transparency_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `transparency_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `transparency_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `transparency_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-148-01 drafted
+- [x] `validation_rules.md` — PS-148-02 drafted
+- [x] `workflow_state_machine.md` — PS-148-03 drafted
+- [x] `commands_queries_events.md` — PS-148-04 drafted
+- [x] `authorization_capabilities.md` — PS-148-05 drafted
+- [x] `failure_recovery_idempotency.md` — PS-148-06 drafted
+- [x] `privacy_retention_abuse.md` — PS-148-07 drafted
+- [x] `observability_performance.md` — PS-148-08 drafted
+- [x] `contract_and_acceptance_tests.md` — PS-148-09 drafted
+- [x] `import_export_backup_rollback.md` — PS-148-10 drafted
+
+## Assumptions and open decisions
+- ASSUMPTION: report period is calendar quarter in MVP.
+- D05 (geoprivacy), default "coarse public regions and user-initiated precision disclosure": PROVISIONAL (D05 default, unapproved). Only coarse regions appear in reports.
+- D07 (retention), default "minimal per-category defaults with legal-hold exceptions": PROVISIONAL (D07 default, unapproved). See [DECISIONS](../../../DECISIONS.md).

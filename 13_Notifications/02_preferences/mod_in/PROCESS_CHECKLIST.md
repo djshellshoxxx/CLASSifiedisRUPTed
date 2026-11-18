@@ -1,61 +1,61 @@
-# Process inventory and integration checklist
+# Process inventory and integration checklist — F13.S02.M04 in
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
+- [x] [domain_schema.md](domain_schema.md) — PS-106-01 preference and projection rows
+  - [x] Expand preference fields and constant security flag
+  - [x] Map producer (F13 ntf_) and renderer (mod_inapp)
+  - [x] Review HMAC group key and no-content rule
+  - [x] Define prefix-mismatch and group collision fixtures
+- [x] [validation_rules.md](validation_rules.md) — PS-106-02 category and batch rules
+  - [x] Expand rules with INPREF codes
+  - [x] Map to CTR-ERR-001 and ID.PREFIX_MISMATCH
+  - [x] Review existence-leak rule for batches
+  - [x] Define 101-item and foreign-ID fixtures
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-106-03 item states
+  - [x] Expand transition table
+  - [x] Map events to consumers
+  - [x] Review monotonic read rule
+  - [x] Define cap and retention prune fixtures
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-106-04 interfaces
+  - [x] Expand command and query tables
+  - [x] Map event types
+  - [x] Review events for object_ref omission
+  - [x] Define pagination fixture
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-106-05 matrix
+  - [x] Expand actor matrix
+  - [x] Map maintenance grant
+  - [x] Review moderator denial of inbox content
+  - [x] Define cross-account fixtures
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-106-06 projection recovery
+  - [x] Expand replay and cursor rules
+  - [x] Map offline read-state queue
+  - [x] Review concurrent mark-read
+  - [x] Define consumer-crash fixture
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-106-07 inbox privacy
+  - [x] Expand data classes and retention ceiling
+  - [x] Map flooding, harassment and block filtering
+  - [x] Review activity-volume residual risk
+  - [x] Define block and deletion fixtures
+- [x] [observability_performance.md](observability_performance.md) — PS-106-08 metrics
+  - [x] Expand metrics and budgets
+  - [x] Map prune alert
+  - [x] Review log redaction
+  - [x] Define unread-count load fixture
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-106-09 tests
+  - [x] Expand test matrix
+  - [x] Map codes to contract tests
+  - [x] Review non-color unread state
+  - [x] Define item-count fixture set
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-106-10 export
+  - [x] Expand export schema
+  - [x] Map rollback flag
+  - [x] Review HMAC key exclusion
+  - [x] Define federation rejection fixture
 
 ## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
+- [x] Resolve cross-module ownership and dependencies (ntf_ owner F13; render owner mod_inapp).
+- [x] Validate typed errors (INPREF.*), capabilities and events against CTR files.
+- [x] Cover rollback, backup/restore, import/export and retention.
+- [ ] Record PENDING prefix `inp_` in CTR-ID-001.
 - [ ] Complete Prompt 3 specification-quality review before implementation.

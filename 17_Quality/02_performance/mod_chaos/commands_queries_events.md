@@ -1,35 +1,54 @@
-# PS-138-04 — commands queries events
+# PS-138-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-04. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_chaos. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001
 
-## Purpose and scope
-Define the commands queries events process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-138-04.R01 | `chaos.start`, `chaos.abort` and `chaos.revert` are idempotent by (`experiment_id`, command). | MVP |
+| PS-138-04.R02 | `chaos.abort` is accepted by any authorized operator at any time while `running`. | MVP |
+| PS-138-04.R03 | Status query p95 ≤ 200 ms (ASSUMPTION). | MVP |
+| PS-138-04.R04 | Events carry `max_data_class` PUBLIC. | MVP |
 
-## Requirements to specify
-- [ ] PS-138-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Command bodies reference [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Name | Kind | Errors |
+|---|---|---|
+| chaos.propose | command | FAULT_TYPE_INVALID, PRODUCTION_TARGET_FORBIDDEN, DURATION_EXCEEDED, ABORT_CONDITION_MISSING |
+| chaos.approve | command | TRANSITION_INVALID, CAP.SELF_APPROVAL_FORBIDDEN |
+| chaos.start | command | CONCURRENCY_LIMIT, TRANSITION_INVALID |
+| chaos.abort | command | TRANSITION_INVALID |
+| chaos.get / chaos.list_running | query | SYS.NOT_FOUND |
+| chaos_experiment.proposed / approved / started / aborted / completed / revert_failed | event | n/a |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Per [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Per [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Abort is never blocked by a concurrency limit.
+
+## Privacy, retention, abuse
+Events carry IDs and verdicts only.
+
+## Observability & budgets
+Command latency and error counters.
+
+## Tests
+- TEST-PS-138-04-01: contract, event schemas.
+- TEST-PS-138-04-02: integration, abort during running fault reverts.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Abort succeeds in 100% of drills regardless of concurrency count.
+2. Duplicate start returns existing run.
+
+## Assumptions & open decisions
+- ASSUMPTION: abort is always authorized to the experiment operator.
+- D01 (federation relay faults): PROVISIONAL (D01 default, unapproved).

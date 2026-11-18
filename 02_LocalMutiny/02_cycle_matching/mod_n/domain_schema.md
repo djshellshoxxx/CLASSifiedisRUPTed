@@ -1,35 +1,59 @@
 # PS-018-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-018-01. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_n](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_n. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_n. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-SCH-001, CTR-EVT-001, CTR-PRV-001. Search run prefix PENDING CTR-ID-001.
 
-## Purpose and scope
-Define the domain schema process for n within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-018-01.R01 | A search run is bound to one sealed feasibility snapshot (`snapshot_id`) and one parameter set (`max_length` 5..8, `budget_steps`, `candidate_cap`). | MVP |
+| PS-018-01.R02 | Output candidates have length 5..8 and distinct participants and listings. | MVP |
+| PS-018-01.R03 | Candidates are ordered by (length ascending, value gap ascending, canonical sequence ascending); the order is part of the record. | MVP |
+| PS-018-01.R04 | Routing record: `length` → owning module (2 → mod_two, 3 → mod_three, 4 → mod_four, 5–8 → mod_n). Exactly one owner per length. | MVP |
+| PS-018-01.R05 | `candidate_cap` default 1,000 per run (ASSUMPTION); cap reached sets `truncated: true`. | MVP |
 
-## Requirements to specify
-- [ ] PS-018-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-018-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-018-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "run_id": "srch_<26> (PENDING prefix)",
+  "snapshot_id": "sha256 hex (64)",
+  "algorithm_version": "1.0.0",
+  "parameters": {"max_length": "5..8", "budget_steps": "integer", "candidate_cap": "integer"},
+  "status": "enum(queued, running, completed, budget_exhausted, failed)",
+  "candidates": "[{cycle_length: 5..8, canonical_sequence: [var_|lst_ refs], value_gap_minor: string, feasibility_ref: ccd_}]",
+  "truncated": "boolean",
+  "schema_version": "1.0.0"
+}
+```
+Classes: candidate refs PUBLIC or PSEUDONYMOUS per source; `value_gap_minor` FINANCIAL_EVIDENCE when non-zero.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Shapes in PS-018-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Rules in PS-018-02.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Run records visible to the matcher only (PS-018-05).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Run is immutable once completed (PS-018-06).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-018-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Candidate refs deleted with the snapshot (PS-018-07).
+
+## Observability & budgets
+Run record ≤ 256 KB with cap 1,000 candidates (ASSUMPTION).
+
+## Tests
+- TEST-PS-018-01-01 (unit): ordering is total and stable.
+- TEST-PS-018-01-02 (unit): each length maps to exactly one owner.
+- TEST-PS-018-01-03 (contract): record validates against 1.0.0.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Ordering identical across 1,000 shuffled inputs.
+2. Length 2–4 never appears in mod_n output.
+3. Truncated runs flag `truncated: true` in 100% of cases.
+
+## Assumptions & open decisions
+- PROVISIONAL (D02 default, unapproved): bounded deterministic search with explicit ordering.
+- PENDING CTR-SCH-001 registry entry for search-run schema.

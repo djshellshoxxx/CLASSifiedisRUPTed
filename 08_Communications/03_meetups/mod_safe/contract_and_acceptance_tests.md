@@ -1,35 +1,53 @@
 # PS-066-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-066-09. **Owner:** [08_Communications/03_meetups/mod_safe](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_safe. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_safe (Platform Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-PRV-001, CTR-FED-001 (R03). **Decisions:** D05, D08 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the contract and acceptance tests process for safe within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-066-09.R01 | Contract suite runs in CI on every change to `meetup_plan` schema or related commands. | MVP |
+| PS-066-09.R02 | Every error code in PS-066-02 is covered by a contract test that asserts code, category, HTTP status, retryable and message key. | MVP |
+| PS-066-09.R03 | Every row of PS-066-03 has one test; every other pair has a negative test. | MVP |
+| PS-066-09.R04 | Accessibility test: check-in and safe-exit controls are operable by keyboard and expose labels to screen readers (WCAG 2.1 AA). | MVP |
+| PS-066-09.R05 | Offline test: queued safe exit delivered after reconnect in all scripted scenarios. | MVP |
 
-## Requirements to specify
-- [ ] PS-066-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-066-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-066-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: two parties, one trusted contact, one venue, one custom venue; window at fixed clock times; code vectors.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract tests replay recorded command sequences against the schema of each version.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+State table tests shared with PS-066-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error contract tests shared with PS-066-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests shared with PS-066-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-066-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Chaos scenarios: relay drop, duplicate delivery, clock skew of ±5 min, timer delay of 5 min.
+
+## Privacy, retention, abuse
+Privacy contract: lint and log scan tests shared with PS-066-07.
+
+## Observability & budgets
+Tests assert metric labels and log fields from PS-066-08.
+
+## Tests
+- TEST-PS-066-09-01 (contract): schema and event envelope validation for `meetup_plan` 1.0.0.
+- TEST-PS-066-09-02 (contract): error table conformance.
+- TEST-PS-066-09-03 (e2e): propose, confirm, check in from both parties, check out.
+- TEST-PS-066-09-04 (e2e): propose, confirm, safe exit from one party; counterparty sees "meetup ended" only.
+- TEST-PS-066-09-05 (a11y): keyboard and screen reader pass on check-in flow.
+- TEST-PS-066-09-06 (offline): safe exit queued offline, delivered on reconnect.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All contract suites green in CI before merge.
+2. Each requirement ID in PS-066-01 to -08 maps to at least one test ID.
+3. Accessibility and offline tests pass on the reference mobile PWA profile.
+
+## Assumptions & open decisions
+- ASSUMPTION: reference devices are defined by the F14 accessibility profile.
+- D08 (PROVISIONAL default, unapproved).

@@ -1,44 +1,42 @@
 # F09.S03.M01 — currency
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F09.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead (F09). **Parent:** [F09.S03 valuation](../SPEC.md). **Canonical owner for currency registry and valuation records:** this module (PROVISIONAL, per REVIEW_2026-11-16 B-06 fix; consumers reference by full ID). **Canonical contracts:** CTR-COM-001 (currency object R02–R03), CTR-ID-001, CTR-SCH-001, CTR-EVT-001, CTR-PRV-001. **Decisions:** D03 (PROVISIONAL, unapproved).
 
 ## Purpose and business behavior
-Provide currency as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Canonical registry of the currencies ClassRup can price and settle in: fiat (ISO 4217 alpha-3, minor-unit exponent) and assets (CAIP-19 identifiers, exponent from the chain adapter). Every amount in the commerce path refers to a registry entry. The module owns entry definitions, status and versions. It does not fetch rates (mod_rates) or do arithmetic (mod_precision).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I see the currency name, symbol and decimal places of every amount in a proposal.
+- As an operator, I can disable an asset without changing claims that already reference it.
+- As a consumer module, I rely on one exponent per currency, so amounts are not scaled differently in two places.
 
 ## Scope
-- Required process spec: `currency_domain_model.md` (not yet authored)
-- Required process spec: `currency_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `currency_validation_and_authorization.md` (not yet authored)
-- Required process spec: `currency_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `currency_interfaces_and_events.md` (not yet authored)
-- Required process spec: `currency_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `currency_acceptance_and_property_tests.md` (not yet authored)
+- In scope: fiat and asset registry entries, exponent, display metadata, status (`enabled`, `disabled`, `deprecated`), version history.
+- Out of scope: exchange rates (mod_rates), arithmetic and rounding (mod_precision), chain adapters (mod_crypto), LocalMutiny value balancing (consumer, F02 S04).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `currency.register`, `currency.set_status`. Queries `currency.get`, `currency.list`. Events `currency.registered`, `currency.status_changed`. Prefix `cur_` is PENDING CTR-ID-001 registration.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: ISO 4217 code list (maintained externally; updates via reviewed change), CAIP-19 identifiers from chain adapters (mod_crypto). Downstream: mod_rates, mod_precision, mod_cash, mod_crypto, mod_receipts, LocalMutiny `mod_currency` (02_LocalMutiny/04_value_balancing/mod_currency), `mod_offers` and proposal flows. The duplicate slug in LocalMutiny is a consumer only.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `cur_` registry entries and their version history. Does not own claims (CTR-COM-001), quotes (`qte_`, mod_rates) or evidence.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Wrong exponent scales amounts by a factor of 10^k; look-alike asset identifiers (same symbol, different contract); disabling a currency that open claims depend on; registry drift between modules; schema changes breaking signed evidence.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Exponent table reviewed against the ISO 4217 list; asset onboarding checklist approved; version history immutable; cross-module consumer list confirmed in planning/CONTRACTS.md (lead action).
 
 ## Required process specification inventory
-- [ ] `currency_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currency_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currency_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currency_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currency_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currency_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currency_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-073-01
+- [x] `validation_rules.md` — PS-073-02
+- [x] `workflow_state_machine.md` — PS-073-03
+- [x] `commands_queries_events.md` — PS-073-04
+- [x] `authorization_capabilities.md` — PS-073-05
+- [x] `failure_recovery_idempotency.md` — PS-073-06
+- [x] `privacy_retention_abuse.md` — PS-073-07
+- [x] `observability_performance.md` — PS-073-08
+- [x] `contract_and_acceptance_tests.md` — PS-073-09
+- [x] `import_export_backup_rollback.md` — PS-073-10

@@ -1,35 +1,48 @@
-# PS-138-07 — privacy retention abuse
+# PS-138-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-07. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_chaos. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-FED-001
 
-## Purpose and scope
-Define the privacy retention abuse process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-138-07.R01 | Chaos runs use synthetic data in staging; no production data copies are reachable from staging faults. | MVP |
+| PS-138-07.R02 | Faults never disable access controls, logging of authorization decisions, or incident alerting. | MVP |
+| PS-138-07.R03 | Fault types never corrupt, delete or mutate stored personal records. | MVP |
+| PS-138-07.R04 | Experiment records retained 365 days (ASSUMPTION), then summarized. | MVP |
 
-## Requirements to specify
-- [ ] PS-138-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+See [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+N/A.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Experiments violating R02 or R03 rejected at propose (`CHAOS.FAULT_TYPE_INVALID`).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per PS-138-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+N/A.
+
+## Privacy, retention, abuse
+- Abuse: chaos tooling used to degrade a real user's service is prevented by the production target block.
+- Federation faults (duplicate delivery) use test-only peers (CTR-FED-001).
+
+## Observability & budgets
+Logs record fault type and target ID only.
+
+## Tests
+- TEST-PS-138-07-01: privacy, fault that disables audit log is rejected at propose.
+- TEST-PS-138-07-02: production hostname rejected (cross-check with PS-138-02).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero experiments accepted with blocked fault types.
+2. Audit logging unaffected during all drills.
+
+## Assumptions & open decisions
+- ASSUMPTION: 365-day retention.
+- D07 (retention): PROVISIONAL (D07 default, unapproved).

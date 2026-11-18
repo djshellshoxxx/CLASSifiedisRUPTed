@@ -1,10 +1,9 @@
-# TODO
+# TODO — transparency (aggregated transparency reports)
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Process specs drafted; implementation not started.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Draft the 10 process specs (PS-148-01 to PS-148-10).
+- [ ] Governance Lead and Privacy Lead approve methodology v1 and small-cell threshold.
+- [ ] Confirm report period (quarter) and publication deadline.
+- [ ] F12 Trust and Safety Lead confirms aggregate job IDs and category list.
+- [ ] Implement drafting, approval and publication — future phase.

@@ -1,35 +1,51 @@
-# PS-081-10 — import export backup rollback
+# PS-081-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-081-10. **Owner:** [10_Privacy/02_security_boundaries/mod_model](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_model. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_model. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R07), CTR-EVT-001 (R08), CTR-PRV-001 (R06).
 
-## Purpose and scope
-Define the import export backup rollback process for model within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-081-10.R01 | Model export is a signed JSON document with digest, for auditors only. | MVP |
+| PS-081-10.R02 | Import of a model is allowed only as a new proposed version; it cannot overwrite an approved version. | MVP |
+| PS-081-10.R03 | Rollback re-points "current" to a previous approved version; it creates a new event and deletes nothing. | MVP |
 
-## Requirements to specify
-- [ ] PS-081-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-081-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-081-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export schema `model.export@1.0.0` (PENDING CTR-SCH-001 registration). Fields from [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`model.export` (reader), `model.import_proposal` (Privacy Lead), `model.rollback` (Security Lead). Events `model.exported`, `model.rolled_back`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback target must be `approved` or `superseded`; never `draft`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | When |
+|---|---|
+| MODEL.IMPORT_UNSIGNED | import without digest |
+| MODEL.ROLLBACK_TARGET_INVALID | target not approved |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: `model.read`. Import: Privacy Lead. Rollback: Security Lead, not self-proposed.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-081-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent per version digest. Rollback idempotent per target version.
+
+## Privacy, retention, abuse
+Export contains no personal data (PS-081-07). Backup of the model follows platform schedule.
+
+## Observability & budgets
+Metric `model_rollbacks_total`. Export p95 ≤ 2 s (ASSUMPTION).
+
+## Tests
+- TEST-PS-081-10-01 (import): unsigned import rejected.
+- TEST-PS-081-10-02 (rollback): rollback to superseded version keeps history.
+- TEST-PS-081-10-03 (export): exported digest verifies.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Import never overwrites approved versions.
+2. Rollback leaves history intact.
+3. Export digests verify.
+
+## Assumptions & open decisions
+- ASSUMPTION: export latency budget.
+- PROVISIONAL (D10 default, unapproved): signed export keys are user-independent platform keys (OPEN, F16).

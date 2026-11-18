@@ -1,35 +1,53 @@
-# PS-138-06 — failure recovery idempotency
+# PS-138-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-06. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_chaos. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001
 
-## Purpose and scope
-Define the failure recovery idempotency process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-138-06.R01 | Watchdog reverts any fault still active at `max_duration_s` + 60 s, independent of the runner. | MVP |
+| PS-138-06.R02 | Revert is idempotent and records the observed state before and after. | MVP |
+| PS-138-06.R03 | If revert fails, the experiment goes to `violated` and an operator page is raised within 60 s. | MVP |
+| PS-138-06.R04 | Steady-state checks run before start; no start while steady state is not met. | MVP |
+| PS-138-06.R05 | Experiment on a component already faulted by another experiment is refused. | MVP |
 
-## Requirements to specify
-- [ ] PS-138-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Watchdog state: `experiment_id`, `deadline_at`, `fault_handle`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Watchdog is a `sys_` job independent of the runner process.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Revert failure → `violated` (see PS-138-03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Category | Retryable | message_key |
+|---|---|---|---|
+| CHAOS.STEADY_STATE_NOT_MET | precondition_failed (412) | true | err.chaos.steady_state_not_met |
+| CHAOS.TARGET_BUSY | conflict (409) | true | err.chaos.target_busy |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+N/A beyond [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Clock drift between watchdog and runner: watchdog uses its own monotonic clock.
+- Staging network partition during an experiment: abort path uses a second channel (ASSUMPTION).
+
+## Privacy, retention, abuse
+Recovery logs contain IDs and metric names.
+
+## Observability & budgets
+Metric `chaos_watchdog_reverts_total`; alert on any watchdog revert (indicates runner failure).
+
+## Tests
+- TEST-PS-138-06-01: chaos-of-chaos, runner killed; watchdog reverts within window.
+- TEST-PS-138-06-02: revert failure produces `violated` and page.
+- TEST-PS-138-06-03: second experiment on busy target refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Watchdog reverts in 100% of runner-kill drills.
+2. No double-fault on a target in fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: second abort channel exists.
+- D08 (offline clients under fault): PROVISIONAL (D08 default, unapproved).

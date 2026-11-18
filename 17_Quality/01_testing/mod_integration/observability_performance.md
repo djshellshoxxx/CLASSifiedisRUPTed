@@ -1,35 +1,51 @@
-# PS-135-08 — observability performance
+# PS-135-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-135-08. **Owner:** [17_Quality/01_testing/mod_integration](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_integration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_integration. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001
 
-## Purpose and scope
-Define the observability performance process for integration within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-135-08.R01 | Record duration per scenario and per step. | MVP |
+| PS-135-08.R02 | Full integration suite ≤ 15 min on CI (ASSUMPTION). | MVP |
+| PS-135-08.R03 | Flaky rate per scenario reported weekly. | MVP |
+| PS-135-08.R04 | Alert when suite duration exceeds budget for 3 consecutive runs. | MVP |
 
-## Requirements to specify
-- [ ] PS-135-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-135-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-135-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Labels: `scenario`, `outcome`, `environment_id`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Spans per assertion group.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+N/A.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards readable by all engineers.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-135-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+If dashboards are down, results remain in CI.
+
+## Privacy, retention, abuse
+Telemetry contains no fixture content.
+
+## Observability & budgets
+| Signal | Target |
+|---|---|
+| full suite duration | ≤ 15 min |
+| single scenario | ≤ 2 min p95 (ASSUMPTION) |
+| flaky rate | < 2% per scenario (ASSUMPTION) |
+
+## Tests
+- TEST-PS-135-08-01: integration, budget alert fires on synthetic slow run.
+- TEST-PS-135-08-02: report, weekly flaky report generated.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets reported on every run.
+2. Alert verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above.
+- D08 offline scenario cost: PROVISIONAL (D08 default, unapproved).

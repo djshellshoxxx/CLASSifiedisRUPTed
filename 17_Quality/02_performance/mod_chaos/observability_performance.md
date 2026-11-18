@@ -1,35 +1,51 @@
-# PS-138-08 — observability performance
+# PS-138-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-08. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_chaos. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-PRV-001
 
-## Purpose and scope
-Define the observability performance process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-138-08.R01 | Record steady-state metrics before, during and after each experiment at 10 s resolution. | MVP |
+| PS-138-08.R02 | Abort on threshold breach within 10 s. | MVP |
+| PS-138-08.R03 | Report verdict within 15 min of revert completion. | MVP |
+| PS-138-08.R04 | Logs carry no request bodies or tokens. | MVP |
 
-## Requirements to specify
-- [ ] PS-138-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Labels: `fault_type`, `verdict`, `blast_radius`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each step spans with `experiment_id`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+N/A.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards readable by SRE and QA Lead.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Monitoring blind spot during fault is treated as abort condition ("no data" for 30 s).
+
+## Privacy, retention, abuse
+Telemetry 90 days (ASSUMPTION).
+
+## Observability & budgets
+| Signal | Target |
+|---|---|
+| abort latency | ≤ 10 s |
+| revert p95 | ≤ 30 s |
+| verdict report | ≤ 15 min after revert |
+
+## Tests
+- TEST-PS-138-08-01: integration, abort on synthetic threshold within 10 s.
+- TEST-PS-138-08-02: "no data" treated as abort.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets met in 100 drills.
+2. Blind-spot abort verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above.
+- D08: PROVISIONAL (D08 default, unapproved).

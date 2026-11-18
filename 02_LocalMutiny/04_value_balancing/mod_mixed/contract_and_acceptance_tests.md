@@ -1,35 +1,51 @@
 # PS-026-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-026-09. **Owner:** [02_LocalMutiny/04_value_balancing/mod_mixed](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Parent:** [mod_mixed SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001, CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for mixed within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-026-09.R01 | Contract tests run against CTR-COM-001 claim schema for every leg kind (six kinds). | MVP |
+| PS-026-09.R02 | End-to-end test covers a two-party mixed-value barter from declaration to `clm.attested`, using a pinned quote. | MVP |
+| PS-026-09.R03 | Negative tests cover every error code in PS-026-02 and every forbidden transition in PS-026-03. | MVP |
+| PS-026-09.R04 | Accessibility test: leg list and gap summary are operable by keyboard and announced with amount, currency and direction. | MVP |
 
-## Requirements to specify
-- [ ] PS-026-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-026-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-026-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `fixtures/mixed/two_party_cash.json`, `three_party_mixed_onchain.json`, `in_kind_limit.json` (names proposed; created in implementation phase). Each fixture pins its quote and snapshot hash.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract tests replay recorded events through CTR-EVT-001 validators.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Each state in PS-026-03 has at least one positive and one negative test.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error-code coverage report generated from the registry; fails below 100%.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests from PS-026-05 are included in the contract suite.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-026-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Chaos cases: duplicate delivery, out-of-order events, quote expiry mid-declare, offline replay (D08).
+
+## Privacy, retention, abuse
+Fixtures use synthetic `acc_` IDs and no real payment references. Test logs pass the PS-026-08 scrub check.
+
+## Observability & budgets
+Suite runtime ≤ 10 min for contract tests on CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-026-09-01 (contract): six leg kinds validate against CTR-COM-001 `method`.
+- TEST-PS-026-09-02 (e2e): two-party cash leg, declare → consent → submit → attest.
+- TEST-PS-026-09-03 (e2e): three-party cycle with one on-chain leg; verification stops at `EXTERNALLY_VERIFIED` only if adapter matches.
+- TEST-PS-026-09-04 (a11y): gap summary and leg controls pass keyboard and screen-reader checks.
+- TEST-PS-026-09-05 (property): random legs whose sums do not equal the gap always return `MIXED.GAP_NOT_BALANCED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All TEST-PS-026-09 tests pass in CI before release gate (future phase).
+2. Error-code coverage is 100% for MIXED codes.
+3. No test asserts a state named PAID.
+
+## Assumptions & open decisions
+- ASSUMPTION: adapter fixtures are recorded responses, not live chain calls.
+- OPEN: which accessibility standard the CI check maps to (WCAG 2.1 AA assumed). See [DECISIONS.md](../../../DECISIONS.md) D04.

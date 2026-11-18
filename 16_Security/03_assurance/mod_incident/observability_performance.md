@@ -1,35 +1,51 @@
-# PS-131-08 — observability performance
+# PS-131-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-131-08. **Owner:** [16_Security/03_assurance/mod_incident](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_incident. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_incident. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-PRV-001, CTR-ERR-001
 
-## Purpose and scope
-Define the observability performance process for incident within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-131-08.R01 | Gauge `incident_open_total{severity}` and histogram `incident_time_to_triage_seconds`. | MVP |
+| PS-131-08.R02 | Alert within 60 s when a SEV1/SEV2 incident is open with no triage after 30 min. | MVP |
+| PS-131-08.R03 | Dashboard shows counts only; no timeline text. | MVP |
+| PS-131-08.R04 | Read p95 ≤ 100 ms; command p95 ≤ 500 ms (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-131-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-131-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-131-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels: `severity`, `status`, `category`. No incident ID as label in metrics (cardinality and linkage risk).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Traces exclude request bodies.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+N/A.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards readable by F16 leads.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-131-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Monitoring outage triggers a backup pager path owned by F15.
+
+## Privacy, retention, abuse
+Telemetry retention 90 days for security operations (ASSUMPTION).
+
+## Observability & budgets
+| Signal | Target |
+|---|---|
+| SEV1 time to triage | ≤ 30 min |
+| read p95 | ≤ 100 ms |
+| SLA breach alert latency | ≤ 60 s |
+
+## Tests
+- TEST-PS-131-08-01: integration, SLA alert fires in test clock.
+- TEST-PS-131-08-02: log scan finds no timeline text.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. SLA alert verified in drill.
+2. Zero timeline text in logs or metrics.
+
+## Assumptions & open decisions
+- ASSUMPTION: targets above.
+- D07 (telemetry retention): PROVISIONAL (D07 default, unapproved).

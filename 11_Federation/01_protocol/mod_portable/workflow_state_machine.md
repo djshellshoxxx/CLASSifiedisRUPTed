@@ -1,35 +1,57 @@
 # PS-083-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-083-03. **Owner:** [11_Federation/01_protocol/mod_portable](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (verification order), CTR-EVT-001 (R02).
 
-## Purpose and scope
-Define the workflow state machine process for portable within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-083-03.R01 | Export: requested → building → signed → delivered, or → expired, or → revoked (key compromise). | MVP |
+| PS-083-03.R02 | Import: received → verified → imported, or → rejected. A rejected bundle is never partially applied. | MVP |
+| PS-083-03.R03 | A bundle whose `key_id` is revoked moves to `revoked` and is not delivered further. | MVP |
 
-## Requirements to specify
-- [ ] PS-083-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-083-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-083-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`status` on bundle record; per-item results in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`portable.create_bundle` → `bundle.created`; `portable.import_bundle` → `bundle.imported` or `bundle.rejected`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | create_bundle | PS-083-02 passes | requested | none |
+| requested | build complete | all items committed | building → signed | sign manifest |
+| signed | delivery ack | peer trusted | delivered | emit `bundle.delivered` |
+| signed, delivered | expiry job | now ≥ `expires_at` | expired | none |
+| signed, delivered | key revoked | `key_id` revoked | revoked | stop delivery |
+| received | verify | FED steps 1–9 pass | verified | none |
+| verified | import | items commit | imported | emit `bundle.imported` |
+| received, verified | any failure | FED error code | rejected | emit `bundle.rejected` (code only) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`PORTABLE.INVALID_TRANSITION` (409).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export by item owner; import by peer in `trusted` state.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-083-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Build is restartable from `requested`. Import is all-or-nothing per bundle (per-event dedupe in PS-087).
+
+## Privacy, retention, abuse
+Transitions carry IDs and codes only.
+
+## Observability & budgets
+Gauge of bundles per state; build p95 ≤ 2 s for 1000 items (ASSUMPTION).
+
+## Tests
+- TEST-PS-083-03-01 (state): table rows pass.
+- TEST-PS-083-03-02 (rejection): one bad event rejects whole bundle; no rows written.
+- TEST-PS-083-03-03 (revocation): key revoked mid-delivery stops delivery.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Table exhaustive.
+2. All-or-nothing import verified.
+3. Revocation stops delivery.
+
+## Assumptions & open decisions
+- ASSUMPTION: all-or-nothing import.
+- PROVISIONAL (D01 default, unapproved).

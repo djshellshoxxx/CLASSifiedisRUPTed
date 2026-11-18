@@ -1,35 +1,53 @@
-# PS-018-04 — commands queries events
+# PS-018-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-018-04. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_n](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_n. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_n. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-ID-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the commands queries events process for n within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-018-04.R01 | `cycle.search_n` is idempotent by (snapshot_id, parameters_digest). | MVP |
+| PS-018-04.R02 | `cycle.search_n` returns the run ID immediately; results are read with `cycle_search.get`. | MVP |
+| PS-018-04.R03 | `cycle_search.get` returns candidates to the matcher only; participants see only their own proposals. | MVP |
+| PS-018-04.R04 | Event `aggregate_type` `cycle_search`; revision per run. | MVP |
 
-## Requirements to specify
-- [ ] PS-018-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-018-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-018-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Request: `{snapshot_id, parameters: {max_length, budget_steps, candidate_cap}, idempotency_key}`. Event: `cycle_search.completed {run_id, status, truncated, candidate_count}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Caller | Idempotency | Expected revision | Errors |
+|---|---|---|---|---|
+| cycle.search_n | sys_ matcher | snapshot + digest | null | CYCLEN.LENGTH_OUT_OF_RANGE, CYCLEN.ROUTED_ELSEWHERE, CYCLEN.SNAPSHOT_NOT_SEALED |
+| cycle_search.get | sys_ matcher | n/a | n/a | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Versioning: schema 1.0.0; algorithm version in payload.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+PS-018-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+PS-018-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-018-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+PS-018-05.
+
+## Failure, idempotency, concurrency, offline
+Retry rules in PS-018-06.
+
+## Privacy, retention, abuse
+Event payload carries counts, not candidate content.
+
+## Observability & budgets
+Event lag ≤ 5 s p95.
+
+## Tests
+- TEST-PS-018-04-01 (contract): event validates.
+- TEST-PS-018-04-02 (unit): repeated search with same digest returns same run ID.
+- TEST-PS-018-04-03 (negative): user call to cycle.search_n denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each operation has schema, caller, idempotency rule and errors.
+2. Event carries counts only.
+3. Repeated identical requests create one run.
+
+## Assumptions & open decisions
+- PENDING CTR-EVT-001 subscriber map for mod_party and mod_consent.

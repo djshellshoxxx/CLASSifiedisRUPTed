@@ -1,35 +1,56 @@
 # PS-081-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-081-01. **Owner:** [10_Privacy/02_security_boundaries/mod_model](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_model. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_model. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-ID-001 (new prefixes PENDING CTR-ID-001: `ast_`, `bnd_`, `flw_`, `mdv_`).
 
-## Purpose and scope
-Define the domain schema process for model within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-081-01.R01 | Model holds three record types: asset (data store or artifact), trust boundary (zone pair), data flow (asset or boundary crossing with data class). | MVP |
+| PS-081-01.R02 | Every flow records `max_data_class` per CTR-PRV-001 ordering and the controls applied at each boundary crossing. | MVP |
+| PS-081-01.R03 | Model versions are immutable and carry a SHA-256 digest of canonical JSON. | MVP |
+| PS-081-01.R04 | The model contains class labels and IDs only, never sample data or real identifiers. | MVP |
 
-## Requirements to specify
-- [ ] PS-081-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-081-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-081-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Entity | Key fields | Constraint |
+|---|---|---|
+| asset `ast_` | `asset_id`, `name_key`, `owner_module`, `data_class`, `location_zone` | `data_class` from CTR-PRV-001 |
+| boundary `bnd_` | `boundary_id`, `from_zone`, `to_zone`, `controls[]` | zones: `client_pwa`, `relay`, `peer_node`, `external_chain`, `external_payment` |
+| flow `flw_` | `flow_id`, `source`, `sink`, `boundary_ids[]`, `data_class`, `retention_class` | `data_class` ≥ class of payload |
+| version `mdv_` | `version`, `digest_sha256`, `approved_by` (role), `schema_version` | immutable |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Trust zones: `client_pwa` and `peer_node` are untrusted for enforcement. `relay` enforces authorization (PROJECT_SPEC). Static PWA host holds no secrets.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-081-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Read: Privacy, Security and QA leads. Write: Privacy Lead (propose), Security Lead (accept). Fields visible to `global` scope only; model holds no personal data.
+
+## Failure, idempotency, concurrency, offline
+Version publish is idempotent by `(version, digest)`. Concurrent proposals are serialized by version number.
+
+## Privacy, retention, abuse
+No personal data. Retention: all versions kept (ASSUMPTION) for audit.
+
+## Observability & budgets
+Model coverage metrics in [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-081-01-01 (schema): flow without `data_class` fails validation.
+- TEST-PS-081-01-02 (digest): changing one byte of a published version fails verification.
+- TEST-PS-081-01-03 (privacy): model fixtures contain no sample values.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All four entity types validate against the schema.
+2. Published versions verify by digest.
+3. No field contains personal or sample data.
+
+## Assumptions & open decisions
+- ASSUMPTION: version history retained indefinitely.
+- PROVISIONAL (D10 default, unapproved): user-controlled keys are a trust-zone input; key records are modelled as assets, not stored values.

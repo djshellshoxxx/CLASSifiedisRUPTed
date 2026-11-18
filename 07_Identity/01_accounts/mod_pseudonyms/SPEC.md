@@ -1,44 +1,51 @@
 # F07.S01.M01 — pseudonyms
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F07.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Identity&Trust Lead (F07). **Parent:** F07.S01.
 
 ## Purpose and business behavior
-Provide pseudonyms as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Lets each account (`acc_`) act under one or more pseudonymous views (`prf_`), so listings, offers, messages and reputation attach to a handle rather than to a legal name or home address. Covers creating a `prf_`, assigning and reserving handles, editing the short label, and retiring a `prf_`. Does not own sign-in, sessions, recovery (mod_recovery), profile content (mod_profiles) or reputation scores (mod_reputation).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As an account holder, I create a second pseudonym for a separate trading context, and no public surface links it to my first one.
+- As an account holder, I retire a pseudonym; its handle stays reserved for 90 days so nobody else can take it.
+- As a counterparty, I see only handle and label of a pseudonym, never its account.
+- As Trust&Safety, I see retirement and handle-conflict counts without seeing account linkage.
 
 ## Scope
-- Required process spec: `pseudonyms_domain_model.md` (not yet authored)
-- Required process spec: `pseudonyms_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `pseudonyms_validation_and_authorization.md` (not yet authored)
-- Required process spec: `pseudonyms_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `pseudonyms_interfaces_and_events.md` (not yet authored)
-- Required process spec: `pseudonyms_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `pseudonyms_acceptance_and_property_tests.md` (not yet authored)
+- [domain_schema.md](domain_schema.md) — PS-052-01
+- [validation_rules.md](validation_rules.md) — PS-052-02
+- [workflow_state_machine.md](workflow_state_machine.md) — PS-052-03
+- [commands_queries_events.md](commands_queries_events.md) — PS-052-04
+- [authorization_capabilities.md](authorization_capabilities.md) — PS-052-05
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-052-06
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-052-07
+- [observability_performance.md](observability_performance.md) — PS-052-08
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-052-09
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-052-10
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `CreatePseudonym`, `ChangeHandle`, `UpdateLabel`, `RetirePseudonym`; queries `ListOwnPseudonyms`, `GetPublicPseudonym`; events `pseudonym.created`, `pseudonym.handle_changed`, `pseudonym.label_changed`, `pseudonym.retired` in CTR-EVT-001 envelopes. Details in PS-052-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: mod_sessions (authenticated `acc_`), F12 reserved-handle list, configuration of caps. Downstream: mod_profiles and mod_reputation (keyed by `prf_`), listings, offers and messaging (reference `prf_` by full ID only). Retirement guard depends on producer events from F02, F03, F04, F05 and F08 (PS-052-03 R04). Canonical IDs: CTR-ID-001 prefixes `acc`, `prf`.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `prf_` rows, `handle_reservations`, and the `acc_`→`prf_` link. Does not own `acc_` credentials (mod_sessions, F16), profile fields (mod_profiles), reputation (mod_reputation) or moderation records (F12). Retention per PS-052-07.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Specific to pseudonyms: (1) linkability through shared timing, label reuse, repeated counterparties and meetups; (2) Sybil creation to farm reputation or evade bans; (3) handle squatting and impersonation of operators and known users; (4) `acc_` leakage through API fields, logs, push payloads or federation; (5) retired handles resurfacing. A pseudonym is not an anonymity guarantee; this module reduces casual linkage only.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specs at SPEC-DRAFT-COMPLETE; every `PS-052-*.Rnn` mapped to `TEST-PS-052-*`; D10 and D07 approved or kept PROVISIONAL with explicit sign-off; privacy and security review pass (future gate).
 
 ## Required process specification inventory
-- [ ] `pseudonyms_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `pseudonyms_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `pseudonyms_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `pseudonyms_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `pseudonyms_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `pseudonyms_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `pseudonyms_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-052-01, SPEC-DRAFT-COMPLETE
+- [x] `validation_rules.md` — PS-052-02, SPEC-DRAFT-COMPLETE
+- [x] `workflow_state_machine.md` — PS-052-03, SPEC-DRAFT-COMPLETE
+- [x] `commands_queries_events.md` — PS-052-04, SPEC-DRAFT-COMPLETE
+- [x] `authorization_capabilities.md` — PS-052-05, SPEC-DRAFT-COMPLETE
+- [x] `failure_recovery_idempotency.md` — PS-052-06, SPEC-DRAFT-COMPLETE
+- [x] `privacy_retention_abuse.md` — PS-052-07, SPEC-DRAFT-COMPLETE
+- [x] `observability_performance.md` — PS-052-08, SPEC-DRAFT-COMPLETE
+- [x] `contract_and_acceptance_tests.md` — PS-052-09, SPEC-DRAFT-COMPLETE
+- [x] `import_export_backup_rollback.md` — PS-052-10, SPEC-DRAFT-COMPLETE

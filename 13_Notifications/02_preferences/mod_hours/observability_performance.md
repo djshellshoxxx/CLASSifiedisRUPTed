@@ -1,35 +1,51 @@
-# PS-105-08 — observability performance
+# PS-105-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-105-08. **Owner:** [13_Notifications/02_preferences/mod_hours](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_hours. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_hours. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for hours within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-105-08.R01 | `hours.evaluate` p95 ≤ 5 ms, p99 ≤ 15 ms, with 10 000 accounts per node cache. | MVP |
+| PS-105-08.R02 | `hours.set_windows` p95 ≤ 200 ms. | MVP |
+| PS-105-08.R03 | Deferred backlog older than 2 h raises alert. | MVP |
+| PS-105-08.R04 | Logs redact window content and `tz` (PS-105-07.R03). | MVP |
 
-## Requirements to specify
-- [ ] PS-105-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-105-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-105-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metrics (bounded labels): `hours_evaluations_total{outcome}`, `hours_deferred_backlog{channel}`, `hours_evaluate_seconds`, `hours_tzdata_version` (info gauge).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Trace spans carry `request_id`, `correlation_id`; attributes exclude window values.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Outcome labels match workflow_state_machine decisions.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Counts by `code` only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards show aggregates only; no per-account series.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-105-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Dashboard shows evaluator error rate; replay counter tracks duplicate evaluation attempts (should be 0 for delivered).
+
+## Privacy, retention, abuse
+Metrics retention 30 days (RET-OPS). No per-account labels.
+
+## Observability & budgets
+- Cache memory ≤ 64 MB per node (ASSUMPTION).
+- Evaluate CPU ≤ 2% at 1000 evaluations/s.
+
+## Tests
+- TEST-PS-105-08-01 (load): evaluate p95 ≤ 5 ms at 1000/s.
+- TEST-PS-105-08-02 (unit): label cardinality check rejects account-scoped labels.
+- TEST-PS-105-08-03 (integration): backlog alert fires when a deferred item is 2 h overdue.
+- TEST-PS-105-08-04 (contract): log fixtures contain no `tz` value.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics listed exist and are documented.
+2. Load test run (not yet executed; not claimed).
+3. Cardinality test passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above.
+- No Dxx directly applies.

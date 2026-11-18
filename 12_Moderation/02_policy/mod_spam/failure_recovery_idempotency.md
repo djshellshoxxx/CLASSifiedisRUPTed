@@ -1,35 +1,54 @@
 # PS-097-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-097-06. **Owner:** [12_Moderation/02_policy/mod_spam](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_spam. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_spam. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03, R08), CTR-ERR-001, CTR-FED-001 (R05).
 
-## Purpose and scope
-Define the failure recovery idempotency process for spam within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-097-06.R01 | Evaluation is idempotent on (subject_ref, model_version). Repeats return the stored verdict. | MVP |
+| PS-097-06.R02 | Listings and services are `pending_evaluation` (not discoverable) until a verdict exists. Evaluation retries run with backoff 1 s → 5 min cap (ASSUMPTION). | MVP |
+| PS-097-06.R03 | Message sends are not blocked by scorer outage. Messages are allowed under a stricter send-rate limit from `mod_rate` (fail-open with throttle). | MVP |
+| PS-097-06.R04 | Federated items are rejected for scoring until signature verification succeeds; evaluation failure defers the item (CTR-FED-001 deferred outcome). | MVP |
+| PS-097-06.R05 | Expiry job for 7-day quarantine is idempotent and runs every 5 min (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-097-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-097-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-097-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency rows as PS-091-06. Evaluation queue rows: `subject_ref`, `model_version`, `attempts`, `next_attempt_at`, `status`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Evaluate runs in a transaction that writes the verdict and the outbox event together.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+A subject that fails evaluation stays in `pending_evaluation`; no partial verdict is written.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SPAM.SCORE_UNAVAILABLE` (503, retryable true) is returned to synchronous callers only; internal queue retries silently.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+`sys_` credential rotation does not interrupt queued evaluations (credentials resolved per attempt).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-097-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Model rollback: a verdict records `model_version`; re-evaluation under the rolled-back version creates a new verdict and does not overwrite the old one.
+- Offline: listing drafts created offline are evaluated after relay acknowledgement (D08); they are not visible until evaluated.
+- Outage: after 30 min of scorer outage, operators are alerted and new listings stay pending. Message throttling tightens during outage.
+
+## Privacy, retention, abuse
+Queue rows hold IDs and attempt counts only.
+
+## Observability & budgets
+`spam_evaluation_backlog_seconds` gauge; alert at 15 min pending for listings.
+
+## Tests
+- `TEST-PS-097-06-01` integration: scorer down 20 min → listing pending, not discoverable; evaluated once after recovery.
+- `TEST-PS-097-06-02` integration: scorer down → message delivered under throttle; no verdict-based block.
+- `TEST-PS-097-06-03` integration: duplicate evaluation → one verdict.
+- `TEST-PS-097-06-04` integration: unverified federated item deferred, not scored.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No listing is publicly visible without a verdict.
+2. Scorer outage never blocks message delivery.
+3. No duplicate verdicts under retry tests.
+
+## Assumptions & open decisions
+- ASSUMPTION: listing fail-closed and message fail-open is a deliberate split; F12 Trust&Safety to confirm.
+- D08 (PWA offline writes), PROVISIONAL default: pending queue until relay acknowledgement (unapproved).
+- D01 (federated protocol), PROVISIONAL default: defer rather than accept unverified items (unapproved).

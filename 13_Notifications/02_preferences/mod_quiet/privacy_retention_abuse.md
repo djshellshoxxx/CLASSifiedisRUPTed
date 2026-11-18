@@ -1,35 +1,56 @@
-# PS-108-07 — privacy retention abuse
+# PS-108-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-108-07. **Owner:** [13_Notifications/02_preferences/mod_quiet](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_quiet. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_quiet. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for quiet within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-108-07.R01 | Pause state is PRIVATE_PERSONAL and never leaves the owner's view, the gating path and the audit path. | MVP |
+| PS-108-07.R02 | Senders are not informed when recipients are paused (no read receipts, no "unavailable" status). | MVP |
+| PS-108-07.R03 | Held notification records hold IDs and category only. | MVP |
+| PS-108-07.R04 | Purged 30 days after end (PS-108-01.R05). | MVP |
 
-## Requirements to specify
-- [ ] PS-108-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-108-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-108-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Class | Retention |
+|---|---|---|
+| qpd_ period rows | PRIVATE_PERSONAL | 30 days after end |
+| held records | PSEUDONYMOUS | until release or 24 h |
+| decision records | PSEUDONYMOUS | RET-AUD 12 months (outcome only) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events carry no zone or content.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Account deletion ends the period and drops held items.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+No period detail in error bodies.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner-only; see authorization_capabilities.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-108-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge job idempotent.
+
+## Privacy, retention, abuse
+- Abuse: starting and resuming periods repeatedly to churn gating (limit 20 starts per hour, ASSUMPTION).
+- Abuse: long pauses used to hide a stalled deadline from a counterparty; deadlines are visible in the workflow record, not by notifications, so this is accepted residual risk.
+- Privacy: pauses reveal sleep or focus times; mitigated by R01 and R02.
+
+## Observability & budgets
+Counts only.
+
+## Tests
+- TEST-PS-108-07-01 (integration): sender API calls reveal no pause state.
+- TEST-PS-108-07-02 (contract): log scan finds no zone or period bounds.
+- TEST-PS-108-07-03 (unit): 21st start in an hour rejected with QUIET.RATE_LIMITED.
+- TEST-PS-108-07-04 (integration): deletion ends period and purges held rows.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Sender-visible surface audited for leakage (no signal).
+2. Scans pass.
+3. Privacy Lead review pending.
+
+## Assumptions & open decisions
+- ASSUMPTION: 20 starts per hour.
+- D07 PROVISIONAL (D07 default, unapproved).

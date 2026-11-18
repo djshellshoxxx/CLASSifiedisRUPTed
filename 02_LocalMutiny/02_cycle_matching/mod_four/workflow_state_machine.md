@@ -1,35 +1,58 @@
 # PS-017-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-017-03. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_four](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_four. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_four. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R09), CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for four within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-017-03.R01 | A cycle is `proposed` on creation and moves to `consented` only when all four slots are consented to the same version. | MVP |
+| PS-017-03.R02 | A version change returns the cycle to `proposed` with all consents cleared (`superseded` applies to the old version). | MVP |
+| PS-017-03.R03 | Any decline moves the cycle to `declined`; declined is terminal. | MVP |
+| PS-017-03.R04 | Proposals expire 48 h after creation if not consented (ASSUMPTION). | MVP |
+| PS-017-03.R05 | Each transition emits one event in the same commit and carries the cycle `correlation_id` (CTR-EVT-001 R09). | MVP |
 
-## Requirements to specify
-- [ ] PS-017-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-017-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-017-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+State in `status`; slot consent in `slots[].consent`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions via PS-017-04 commands.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | cycle.propose_four | PS-017-02 passes | proposed (v1) | emit cycle.proposed |
+| proposed | cycle.consent (slot i) | version matches; slot pending | proposed | emit cycle.slot_consented |
+| proposed | cycle.consent (last slot) | all four consented | consented | emit cycle.consented; hand to mod_lock |
+| proposed | version change | any slot content change | proposed (v+1) | consents cleared; emit cycle.version_superseded |
+| proposed | cycle.decline | any slot | declined | emit cycle.declined; notify others by pseudonym |
+| proposed | 48 h elapsed | — | expired | emit cycle.expired |
+| consented | mod_lock fails | — | proposed | consents cleared; emit cycle.version_superseded |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions return SYS.UNPROCESSABLE_STATE or CYCFOUR.STALE_VERDICT.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Only the slot's participant may consent or decline (PS-017-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-017-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Transitions serialised on `version`. Consent cannot be queued offline as an unconditional action (D08 pending-ack only).
+
+## Privacy, retention, abuse
+Expired and declined cycles keep verdict links for 30 days (RET-OPS), slot pseudonyms only.
+
+## Observability & budgets
+Funnel counts per state (PS-017-08).
+
+## Tests
+- TEST-PS-017-03-01 (unit): every table row.
+- TEST-PS-017-03-02 (property): consent from old version never counts.
+- TEST-PS-017-03-03 (integration): lock failure returns cycle to proposed with cleared consents.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. A cycle reaches `consented` only with four consents on one version.
+2. Old-version consents never advance a newer version.
+3. Expiry occurs at 48 h ± 1 min in fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: 48 h consent window.
+- PROVISIONAL (D04 default, unapproved): explicit per-party consent; no atomic real-world guarantee.

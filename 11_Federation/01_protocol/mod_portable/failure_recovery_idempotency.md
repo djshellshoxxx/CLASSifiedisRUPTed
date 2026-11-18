@@ -1,35 +1,51 @@
-# PS-083-06 — failure recovery idempotency
+# PS-083-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-083-06. **Owner:** [11_Federation/01_protocol/mod_portable](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (Failure section, R05, R06), CTR-EVT-001 (R03).
 
-## Purpose and scope
-Define the failure recovery idempotency process for portable within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-083-06.R01 | A failed build leaves no signed bundle; retry rebuilds from `requested`. | MVP |
+| PS-083-06.R02 | A bundle that fails verification at import leaves no rows. | MVP |
+| PS-083-06.R03 | Re-delivery of a signed bundle is idempotent by `bundle_id`. | MVP |
+| PS-083-06.R04 | If the key store is unavailable, signing fails closed (`SYS.UNAVAILABLE`, retryable). | MVP |
 
-## Requirements to specify
-- [ ] PS-083-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-083-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-083-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Uses `bundle_id`, `key_id`, `revision` in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries apply to [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery per [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | When |
+|---|---|---|
+| SYS.UNAVAILABLE | true | key store down |
+| FED.KEY_UNKNOWN | true | import before key propagates (deferred up to 24 h) |
+| FED.KEY_REVOKED | false | signed under revoked key |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-authorize.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-083-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrent builds for one (owner, audience) serialized by build lock. Revision gaps hold the aggregate (CTR-EVT-001 R02).
+
+## Privacy, retention, abuse
+Logs carry bundle ID and code only.
+
+## Observability & budgets
+Metrics `portable_build_failures_total{code}`, `portable_import_rejections_total{code}`.
+
+## Tests
+- TEST-PS-083-06-01 (fault): key store outage during signing leaves no bundle.
+- TEST-PS-083-06-02 (idempotency): redelivered bundle no-ops.
+- TEST-PS-083-06-03 (deferred): unknown key deferred then accepted when key arrives within 24 h.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No partial bundles or imports under fault injection.
+2. Deferred key path tested.
+
+## Assumptions & open decisions
+- PROVISIONAL (D10 default, unapproved): key rotation with documented recovery.

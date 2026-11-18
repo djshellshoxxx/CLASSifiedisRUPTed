@@ -1,35 +1,57 @@
 # PS-020-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-09. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_three. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-020-09.R01 | Every requirement in PS-020-01 to -08 maps to a TEST-PS-020-* ID. | MVP |
+| PS-020-09.R02 | Rotation fixtures shared with mod_four run on every build. | MVP |
+| PS-020-09.R03 | Contract tests against mod_feasibility and mod_lock fixtures. | MVP |
 
-## Requirements to specify
-- [ ] PS-020-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: all three rotations; listings locked elsewhere; stale and fresh verdicts; relevance perturbations.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+PS-020-04 operations only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Every row of PS-020-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Every CYCTHREE code.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Every row of PS-020-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+PS-020-06 tests.
+
+## Privacy, retention, abuse
+PS-020-07 tests.
+
+## Observability & budgets
+PS-020-08 tests.
+
+## Tests
+| Test ID | Layer | Scope |
+|---|---|---|
+| TEST-PS-020-01-01..03 | unit, property, contract | shape and rotation |
+| TEST-PS-020-02-01..03 | unit, negative, property | validation and relevance |
+| TEST-PS-020-03-01..03 | unit, property, integration | states |
+| TEST-PS-020-04-01..03 | contract, unit, negative | commands |
+| TEST-PS-020-05-01..03 | unit, negative, integration | authorization |
+| TEST-PS-020-06-01..03 | concurrency, integration | races and lock re-check |
+| TEST-PS-020-07-01..03 | privacy, abuse, property | privacy |
+| TEST-PS-020-08-01..03 | unit, load, negative | observability |
+| TEST-PS-020-09-01 | e2e | three participants consent; lock receives cycle |
+| TEST-PS-020-09-02 | e2e | one participant declines; all slots released; no lock |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All TEST IDs pass in CI before merge (at implementation).
+2. Three-party e2e completes in 100% of fixtures.
+3. Decline e2e leaves zero locked listings.
+
+## Assumptions & open decisions
+- ASSUMPTION: synthetic fixtures.
+- Dxx: D02, D04, D08 (PROVISIONAL).

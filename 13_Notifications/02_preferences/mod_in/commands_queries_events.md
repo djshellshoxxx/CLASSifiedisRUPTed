@@ -1,35 +1,67 @@
-# PS-106-04 — commands queries events
+# PS-106-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-106-04. **Owner:** [13_Notifications/02_preferences/mod_in](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_in. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_in. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for in within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-106-04.R01 | Preference writes use `expected_revision` and `idempotency_key`. | MVP |
+| PS-106-04.R02 | Mark-read and archive are idempotent per `ntf_id`. | MVP |
+| PS-106-04.R03 | List query is cursor-paginated, 50 items per page, newest first; p95 ≤ 150 ms. | MVP |
+| PS-106-04.R04 | Events carry IDs, states and codes; no object content. | MVP |
 
-## Requirements to specify
-- [ ] PS-106-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-106-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-106-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+**Commands**
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Command | Actor | Idempotency key | expected_revision | Errors |
+|---|---|---|---|---|
+| `inbox.set_preferences` | user (self) | client key | required | INPREF.CATEGORY_UNKNOWN, INPREF.SECURITY_REQUIRED, INPREF.RETENTION_INVALID, SYS.CONFLICT |
+| `inbox.mark_read` | user (self) | client key | n/a | INPREF.BATCH_TOO_LARGE, SYS.NOT_FOUND |
+| `inbox.archive` | user (self) | client key | n/a | SYS.NOT_FOUND, INPREF.INVALID_STATE |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+**Queries**: `inbox.list` (self; filter by category and state), `inbox.unread_count` (self; returns integer).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Events**
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+| event_type | aggregate_type | max_data_class |
+|---|---|---|
+| inbox_preference.updated | inbox_preference | PSEUDONYMOUS |
+| notification.inbox_recorded | notification | PSEUDONYMOUS |
+| notification.marked_read | notification | PSEUDONYMOUS |
+| notification.archived | notification | PSEUDONYMOUS |
+| notification.inbox_pruned | notification | PSEUDONYMOUS |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-106-04`; scenarios and fixtures to be detailed in Prompt 3.
+Example payload `notification.marked_read`: `{"ntf_id":"ntf_…","category":"transactional"}`.
+
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
+
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
+
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Mark-read queued offline per D08 pending queue; replay safe.
+
+## Privacy, retention, abuse
+Events omit `object_ref` to avoid revealing activity on objects to event subscribers (ASSUMPTION: subscribers are internal).
+
+## Observability & budgets
+Command p95 ≤ 100 ms; unread count p95 ≤ 50 ms.
+
+## Tests
+- TEST-PS-106-04-01 (contract): events validate against CTR-EVT-001 and contain no `object_ref`.
+- TEST-PS-106-04-02 (integration): repeated mark-read returns same state, one event.
+- TEST-PS-106-04-03 (integration): list pagination stable across concurrent inserts.
+- TEST-PS-106-04-04 (unit): unread count equals count of `unread` items in fixtures.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Commands and queries match the tables.
+2. No content in events (scan).
+3. Pagination test passes with 10 000 items.
+
+## Assumptions & open decisions
+- ASSUMPTION: `object_ref` omitted from events.
+- Prefix `inp_` PENDING CTR-ID-001.

@@ -1,44 +1,51 @@
 # F11.S01.M02 — records
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F11.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (role). **Parent:** F11.S01.
 
 ## Purpose and business behavior
-Provide records as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Hold the federation record-type registry and the per-item `federate` flag. The registry states, for each local record type, the most sensitive class it may reach, whether it can federate at all, and whether each item needs explicit opt-in or may federate as a registered region cell. Other federation modules read these rules; this module does not build envelopes (CTR-EVT-001) or verify them (CTR-FED-001).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, my listing is never shared to another node unless I opt in for that listing.
+- As an operator, I can see which record types are federable and at what class.
+- As a privacy reviewer, I can block a record type from federation without a code change.
+- As a participant, opting out stops future sharing of that item.
 
 ## Scope
-- Required process spec: `records_domain_model.md` (not yet authored)
-- Required process spec: `records_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `records_validation_and_authorization.md` (not yet authored)
-- Required process spec: `records_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `records_interfaces_and_events.md` (not yet authored)
-- Required process spec: `records_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `records_acceptance_and_property_tests.md` (not yet authored)
+- [domain_schema.md](domain_schema.md) — PS-084-01
+- [validation_rules.md](validation_rules.md) — PS-084-02
+- [workflow_state_machine.md](workflow_state_machine.md) — PS-084-03
+- [commands_queries_events.md](commands_queries_events.md) — PS-084-04
+- [authorization_capabilities.md](authorization_capabilities.md) — PS-084-05
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-084-06
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-084-07
+- [observability_performance.md](observability_performance.md) — PS-084-08
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-084-09
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-084-10
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `records.set_federate`, `registry.register`, `registry.deprecate`; queries `records.query_registry`. Events `record.federate_enabled`, `record.federate_disabled`, `record_type.registered`, `record_type.deprecated`. Details in PS-084-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: data classes (CTR-PRV-001), schema registry (CTR-SCH-001), capability model (CTR-CAP-001). Downstream: `11_Federation/01_protocol/mod_portable`, `11_Federation/02_relay_sync/mod_delivery`, federation envelope (CTR-FED-001).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns the registry and item federate flags. Does not own items or their content.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+A record type registered as `public_auto` by mistake federates private content. Class raised without review. Flags applied while offline before acknowledgement. Cell mode with small cells reveals a location. Registry drift from code.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs reviewed; registry seeded from code inventory; class-raise review path tested.
 
 ## Required process specification inventory
-- [ ] `records_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `records_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-084-01, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `validation_rules.md` — PS-084-02, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `workflow_state_machine.md` — PS-084-03, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `commands_queries_events.md` — PS-084-04, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `authorization_capabilities.md` — PS-084-05, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `failure_recovery_idempotency.md` — PS-084-06, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `privacy_retention_abuse.md` — PS-084-07, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `observability_performance.md` — PS-084-08, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `contract_and_acceptance_tests.md` — PS-084-09, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `import_export_backup_rollback.md` — PS-084-10, SPEC-DRAFT-COMPLETE (pending approval)

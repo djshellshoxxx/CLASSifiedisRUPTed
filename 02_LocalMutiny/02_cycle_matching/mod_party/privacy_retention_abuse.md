@@ -1,35 +1,52 @@
-# PS-019-07 — privacy retention abuse
+# PS-019-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-019-07. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R12), CTR-EVT-001 (R06, R11), CTR-FED-001 (R03).
 
-## Purpose and scope
-Define the privacy retention abuse process for party within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-019-07.R01 | Slot data is PSEUDONYMOUS (`acc_` and `par_` refs); no names, contact data or precise location. | MVP |
+| PS-019-07.R02 | Binding rows follow RET-OPS (30 days) after cycle terminal state; live bindings retained while cycle is live. | MVP |
+| PS-019-07.R03 | Withdrawal-after-consent count per participant per 30 days is tracked; ≥ 3 raises a signal to F12 (ASSUMPTION). | MVP |
+| PS-019-07.R04 | Cycle order reveals slot position only; no ordering by time of join is exposed. | MVP |
+| PS-019-07.R05 | Bindings are not federated (CTR-FED-001 R02 default off). | MVP |
 
-## Requirements to specify
-- [ ] PS-019-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-019-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-019-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Classes per PS-019-01.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events PSEUDONYMOUS maximum.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Terminal state starts retention clock.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+No refs in errors beyond the caller's own.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Participant-only (PS-019-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-019-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Account deletion: binding keeps redacted slot marker; completion record counts only (CTR-PRV-001 R12).
+
+## Privacy, retention, abuse
+- Threats: withdrawal used to pressure partners; slot-order inference; Sybil participants filling many cycles.
+- Controls: withdrawal signal, no time-of-join ordering, live-slot rule.
+- Residual risk: slot position still linkable within one cycle; accepted, recorded for F10.
+
+## Observability & budgets
+No pseudonyms in metrics.
+
+## Tests
+- TEST-PS-019-07-01 (privacy): payload lint.
+- TEST-PS-019-07-02 (abuse): third post-consent withdrawal raises signal.
+- TEST-PS-019-07-03 (integration): deletion leaves redacted marker only.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Lint passes for binding and event payloads.
+2. Signal fires in 100% of fixtures at threshold.
+3. Deletion completion record has counts only.
+
+## Assumptions & open decisions
+- ASSUMPTION: threshold of 3 post-consent withdrawals per 30 days.
+- PROVISIONAL (D07 default, unapproved).

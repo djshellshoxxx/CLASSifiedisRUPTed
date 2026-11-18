@@ -1,44 +1,51 @@
 # F11.S02.M02 — dedup
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F11.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (role). **Parent:** F11.S02.
 
 ## Purpose and business behavior
-Provide dedup as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Decide, for each inbound federated event, whether it is new, a duplicate of an event already accepted, or equivocation (two different events claiming the same origin revision). Keys are `(origin_node, event_id)` for duplicates and `(origin_node, aggregate_id, revision)` for equivocation, per CTR-FED-001. Duplicate results let relays re-send safely; equivocation quarantines the peer and keeps evidence.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a relay, I can re-send a batch after a timeout without causing double application.
+- As a receiving node, a conflicting event under the same revision is detected and the sender quarantined.
+- As a trust and safety reviewer, I can read equivocation evidence under case control.
+- As an operator, a dedupe outage stops acceptance rather than risking double application.
 
 ## Scope
-- Required process spec: `dedup_domain_model.md` (not yet authored)
-- Required process spec: `dedup_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `dedup_validation_and_authorization.md` (not yet authored)
-- Required process spec: `dedup_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `dedup_interfaces_and_events.md` (not yet authored)
-- Required process spec: `dedup_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `dedup_acceptance_and_property_tests.md` (not yet authored)
+- [domain_schema.md](domain_schema.md) — PS-087-01
+- [validation_rules.md](validation_rules.md) — PS-087-02
+- [workflow_state_machine.md](workflow_state_machine.md) — PS-087-03
+- [commands_queries_events.md](commands_queries_events.md) — PS-087-04
+- [authorization_capabilities.md](authorization_capabilities.md) — PS-087-05
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-087-06
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-087-07
+- [observability_performance.md](observability_performance.md) — PS-087-08
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-087-09
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-087-10
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal command `dedup.check_and_record`; query `dedup.lookup`. Events `dedup.duplicate_seen`, `dedup.equivocation_detected`. Details in PS-087-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: inbound verification (CTR-FED-001 steps 1–11), event log (CTR-EVT-001). Downstream: `11_Federation/02_relay_sync/mod_delivery` (per-event result), `11_Federation/02_relay_sync/mod_conflicts` (revision gaps), trust and safety (F12) via peer quarantine.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns dedupe index and equivocation records. Event bodies are owned by the origin aggregate.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Index eviction causing double application. Clock-based expiry allowing replay of old events. Equivocation evidence retained too long or too briefly. Race between two relays inserting the same event. Flood of distinct IDs exhausting the index.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs reviewed; race test defined; equivocation path to quarantine tested.
 
 ## Required process specification inventory
-- [ ] `dedup_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dedup_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dedup_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dedup_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dedup_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dedup_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dedup_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-087-01, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `validation_rules.md` — PS-087-02, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `workflow_state_machine.md` — PS-087-03, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `commands_queries_events.md` — PS-087-04, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `authorization_capabilities.md` — PS-087-05, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `failure_recovery_idempotency.md` — PS-087-06, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `privacy_retention_abuse.md` — PS-087-07, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `observability_performance.md` — PS-087-08, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `contract_and_acceptance_tests.md` — PS-087-09, SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `import_export_backup_rollback.md` — PS-087-10, SPEC-DRAFT-COMPLETE (pending approval)

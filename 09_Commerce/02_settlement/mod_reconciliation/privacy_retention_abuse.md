@@ -1,35 +1,53 @@
-# PS-072-07 — privacy retention abuse
+# PS-072-07 — privacy, retention and abuse controls
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-072-07. **Owner:** [09_Commerce/02_settlement/mod_reconciliation](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_reconciliation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_reconciliation (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R06, R07, RET-EVD), CTR-COM-001 (Privacy), CTR-FED-001 (R03). **Decisions:** D06, D07 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the privacy retention abuse process for reconciliation within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-072-07.R01 | Findings carry claim IDs and codes; amounts and party IDs are not stored in findings. | MVP |
+| PS-072-07.R02 | Operator dashboards show counts by type; claim-level views need a case grant. | MVP |
+| PS-072-07.R03 | Findings retained with their claim under RET-EVD. | MVP |
+| PS-072-07.R04 | Reconciliation output is never federated or exported to third parties. | MVP |
+| PS-072-07.R05 | Repeated `FINAL_WITHOUT_ADAPTER` on one operator's resolutions raises a review alert (abuse of dismissal). | MVP |
 
-## Requirements to specify
-- [ ] PS-072-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-072-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-072-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data classes per PS-072-01.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No event payload contains amounts.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Finding retention: `open` → `resolved` → purged with claim.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+No separate codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per PS-072-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-072-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge idempotent.
+
+## Privacy, retention, abuse
+- Operator misuse: dismissal requires case reference and dual control; R05 alert.
+- Findings must not become a list of who transacts with whom: graph outputs are not produced.
+- Pseudonymous IDs are not anonymous.
+
+## Observability & budgets
+Counts by type only; no per-operator labels except in R05 alert.
+
+## Tests
+- TEST-PS-072-07-01 (lint): finding payload has no amount or party field.
+- TEST-PS-072-07-02 (contract): no federation of findings.
+- TEST-PS-072-07-03 (integration): R05 alert fires on fixture.
+- TEST-PS-072-07-04 (integration): purge with claim.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No amounts in findings.
+2. Dismissal misuse alert tested.
+3. Purge tied to claim retention.
+
+## Assumptions & open decisions
+- ASSUMPTION: R05 threshold of 5 dismissals per operator per 30 days.
+- D06, D07 (PROVISIONAL, unapproved).

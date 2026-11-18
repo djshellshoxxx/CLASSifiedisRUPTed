@@ -1,35 +1,51 @@
-# PS-132-07 — privacy retention abuse
+# PS-132-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-132-07. **Owner:** [16_Security/03_assurance/mod_response](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_response. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_response. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-FED-001
 
-## Purpose and scope
-Define the privacy retention abuse process for response within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-132-07.R01 | Containment records hold IDs, counts and outcomes; never the content of sessions, messages or listings. | MVP |
+| PS-132-07.R02 | Session revocation targets are scopes or IDs, never raw tokens. | MVP |
+| PS-132-07.R03 | A containment action that affects users must have a user-facing notice template reviewed by F10 before first use (ASSUMPTION). | MVP |
+| PS-132-07.R04 | Containment actions must not be used to read private content. | MVP |
+| PS-132-07.R05 | Records retained with their incident (PS-131-07.R04). | MVP |
 
-## Requirements to specify
-- [ ] PS-132-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-132-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-132-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+See [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events carry `actor_ref` only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Content-bearing fields rejected by PS-131-02 precise-data rule and PS-132-02 target rules.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Read of containment logs follows PS-131-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-132-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+N/A.
+
+## Privacy, retention, abuse
+- Abuse of containment: a responder could freeze a rival's account. Mitigated by two approvals, incident linkage and audit.
+- Notices to affected users state the action and the appeal route; no internal reasons (F12 appeals apply).
+- Over-containment is reversible where `reversible` is true.
+
+## Observability & budgets
+Logs record action type, targets as IDs, outcome.
+
+## Tests
+- TEST-PS-132-07-01: privacy, containment logs contain no session tokens (fixture scan).
+- TEST-PS-132-07-02: abuse, single-responder freeze attempt denied.
+- TEST-PS-132-07-03: notice template present before user-affecting action.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero token or content strings in logs in fixture set.
+2. User-affecting actions blocked when template absent.
+
+## Assumptions & open decisions
+- ASSUMPTION: notice template gate.
+- D07 (retention): PROVISIONAL (D07 default, unapproved).

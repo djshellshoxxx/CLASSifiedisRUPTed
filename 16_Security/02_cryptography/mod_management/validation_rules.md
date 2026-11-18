@@ -1,35 +1,59 @@
 # PS-129-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-129-02. **Owner:** [16_Security/02_cryptography/mod_management](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_management. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_management. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001, CTR-CAP-001
 
-## Purpose and scope
-Define the validation rules process for management within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-129-02.R01 | Reject any policy body with unknown fields (closed object). | MVP |
+| PS-129-02.R02 | Reject `allowed_suites` referencing a suite not `active`, or a deprecated/retired suite in a new `active` policy. | MVP |
+| PS-129-02.R03 | Reject `min_security_bits` below the registry floor (ASSUMPTION: 128). | MVP |
+| PS-129-02.R04 | Reject `effective_from` earlier than submission time + 24 h (ASSUMPTION). | MVP |
+| PS-129-02.R05 | Reject a policy whose key class already has an overlapping `active` or `scheduled` version. | MVP |
+| PS-129-02.R06 | Reject any approval where approver = proposer, or the same approver appears twice. | MVP |
 
-## Requirements to specify
-- [ ] PS-129-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-129-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-129-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Validation runs against the `crypto_policy` schema in [domain_schema.md](domain_schema.md). Diagnostics per CTR-ERR-001 R06: rule enum and field path only; submitted values are never echoed.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applied on `crypto_policy.propose`, `crypto_policy.approve`, `crypto_policy.schedule`. See [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation failure keeps the record in its prior state (no partial write).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Category | Retryable | message_key | Trigger (rule) |
+|---|---|---|---|---|
+| MGMT.POLICY_INVALID | validation (400) | false | err.mgmt.policy_invalid | R01, R03, R04; `details.rule` in {unknown_field, below_floor, too_soon, bad_range} |
+| MGMT.SUITE_UNKNOWN | validation (400) | false | err.mgmt.suite_unknown | R02, suite not in registry |
+| MGMT.ALGORITHM_DEPRECATED | unprocessable_state (422) | false | err.mgmt.algorithm_deprecated | R02, status deprecated or retired |
+| MGMT.OVERLAP_CONFLICT | conflict (409) | false | err.mgmt.overlap_conflict | R05 |
+| MGMT.DUAL_CONTROL_REQUIRED | precondition_failed (412) | false | err.mgmt.dual_control_required | R06, fewer than two distinct approvers at schedule |
+| MGMT.SELF_APPROVAL_FORBIDDEN | forbidden (403) | false | err.mgmt.self_approval_forbidden | R06 (CAP.SELF_APPROVAL_FORBIDDEN mirrored) |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Shared codes (`EVT.REVISION_CONFLICT`, `SYS.NOT_FOUND`) are unchanged.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-129-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Validation runs after authentication and before any state read that could reveal existence of a non-visible policy (CTR-ERR-001 R08).
+
+## Failure, idempotency, concurrency, offline
+Validation is deterministic. Same input returns the same error code. Offline clients validate locally for display only; the server result is authoritative.
+
+## Privacy, retention, abuse
+Error responses contain no submitted values. Rejected drafts are retained 30 days for abuse analysis (ASSUMPTION), then deleted.
+
+## Observability & budgets
+Counter `mgmt_validation_fail_total{rule}`. Validation p95 ≤ 20 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-129-02-01: unit, one fixture per rule R01–R06.
+- TEST-PS-129-02-02: contract, every code matches CTR-ERR-001 pattern and category-to-HTTP map.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each rule has at least one failing and one passing fixture.
+2. No error body contains submitted values or stack traces.
+3. Codes are never reused (CTR-ERR-001 R09).
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h activation lead time and 128-bit floor.
+- D10 default for rotation and approvals: PROVISIONAL (D10 default, unapproved).

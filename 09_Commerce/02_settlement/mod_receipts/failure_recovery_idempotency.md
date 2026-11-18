@@ -1,35 +1,51 @@
-# PS-071-06 — failure recovery idempotency
+# PS-071-06 — failure, recovery, idempotency and offline behavior
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-071-06. **Owner:** [09_Commerce/02_settlement/mod_receipts](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_receipts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_receipts (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-SCH-001 (R07, R08), CTR-COM-001 (Failure section). **Decisions:** D08 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the failure recovery idempotency process for receipts within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-071-06.R01 | Upload is resumable in 5 MiB chunks; a resumed upload reuses the same `evd_` ID. | MVP |
+| PS-071-06.R02 | Partial uploads expire after 24 h and their blobs are deleted. | MVP |
+| PS-071-06.R03 | Receipt signing is deterministic: same claim body and key produce the same signature input (JCS). | MVP |
+| PS-071-06.R04 | Offline evidence may be captured locally (D08) and finalized only after server acknowledgment; the local copy is encrypted at rest. | MVP |
+| PS-071-06.R05 | Upload retries use exponential backoff (base 2 s, max 5 attempts). | MVP |
 
-## Requirements to specify
-- [ ] PS-071-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-071-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-071-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Upload session: `evd_id`, `expected_sha256`, `bytes_received`, `expires_at`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Idempotency keys per upload chunk and finalize.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+`pending_upload` → `stored` (finalize) or → `expired` (24 h).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`RECEIPT.DIGEST_MISMATCH` (non-retryable), `SYS.UNAVAILABLE` (retryable).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Resume requires the same session token; expired session returns `SYS.GONE`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-071-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Duplicate finalize returns original `evd_`. Concurrent redact and attest: revision check.
+
+## Privacy, retention, abuse
+Local encrypted copies are removed on acknowledgment.
+
+## Observability & budgets
+Resume rate and expiry count per day.
+
+## Tests
+- TEST-PS-071-06-01 (integration): kill connection at 50%; resume completes with same `evd_`.
+- TEST-PS-071-06-02 (integration): session expires at 24 h; blob removed.
+- TEST-PS-071-06-03 (property): signing input identical across two runs.
+- TEST-PS-071-06-04 (integration): offline capture uploads once after reconnect.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No duplicate `evd_` on resume.
+2. Expired blobs gone from storage (scan).
+3. Signature determinism verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5 MiB chunks; 24 h session.
+- D08 (PROVISIONAL default, unapproved).

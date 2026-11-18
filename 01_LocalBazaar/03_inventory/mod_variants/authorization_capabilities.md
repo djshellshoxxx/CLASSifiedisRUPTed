@@ -1,35 +1,59 @@
-# PS-009-05 — authorization capabilities
+# PS-009-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-009-05. **Owner:** [01_LocalBazaar/03_inventory/mod_variants](SPEC.md). **Implementing module:** 01_LocalBazaar/03_inventory/mod_variants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/03_inventory/mod_variants. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for variants within 03_inventory. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-009-05.R01 | Writes to variants require `lst.update` with scope `self` on the owning listing. No other verb is used. | MVP |
+| PS-009-05.R02 | Reads of active variants require `lst.read` on the listing, under the listing's visibility rules. | MVP |
+| PS-009-05.R03 | Archived variants are visible to the listing owner only; to others they are omitted from responses (CTR-CAP-001 R10). | MVP |
+| PS-009-05.R04 | The availability process (`sys_`) reads active variant IDs under `lst.read` with a purpose constraint. It cannot write variants. | MVP |
+| PS-009-05.R05 | No `ope_` or `mod_` principal can edit variant attributes. Moderators act on the listing (`lst.moderate`, case scope). | MVP |
 
-## Requirements to specify
-- [ ] PS-009-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-009-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-009-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Authorization inputs: actor (`acc_`, `sys_`, `mod_`), action, resource (`lst_` with optional `var_` sub-resource), scope. No new resource type is registered: PENDING CTR-CAP-001.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Mapping per operation: add, update, archive → `lst.update`; get → `lst.read`; hide → `lst.moderate` (case scope).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable; authorization is evaluated per request (CTR-CAP-001 R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+A non-owner who can see the listing gets `SYS.FORBIDDEN` on write. A non-owner who cannot see the listing gets `SYS.NOT_FOUND` (CTR-CAP-001 example rows).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Result |
+|---|---|---|---|
+| owner (user) | lst.update | own lst_ | ALLOW |
+| other user, can see listing | lst.update | lst_ | DENY SYS.FORBIDDEN |
+| other user, cannot see listing | any | lst_ | DENY SYS.NOT_FOUND |
+| buyer | lst.read | lst_ (active variants) | ALLOW |
+| sys_ availability reader | lst.read | lst_ (purpose: availability) | ALLOW, IDs and status only |
+| mod_ with case grant | lst.moderate | cas_ scope | ALLOW (hide listing) |
+| ope_ | lst.update | any variant | DENY |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-009-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Decision cache TTL zero for writes (CTR-CAP-001 R09). Revocation of a grant takes effect at next decision.
+
+## Privacy, retention, abuse
+Every decision on a privileged read writes an `aud_` record; ordinary variant reads do not.
+
+## Observability & budgets
+Denied-write count per actor class is emitted without actor IDs (PS-009-08).
+
+## Tests
+- TEST-PS-009-05-01 (unit): each row of the authorization table.
+- TEST-PS-009-05-02 (integration): archived variant absent from a buyer's response, present for owner.
+- TEST-PS-009-05-03 (negative): `sys_` write attempt is denied and audited.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every table row is covered by a test ID.
+2. Field omission (not null) confirmed for archived variants.
+3. No write path is reachable by `ope_` or `mod_` principals without a listing-level grant.
+
+## Assumptions & open decisions
+- ASSUMPTION: availability reads are sys_ principal reads with purpose constraint (CTR-CAP-001 R06).
+- PENDING CTR-CAP-001: resource type `variant` sub-scope, if the owner wants one.
+- No Dxx decision changes this process; the values above are ASSUMPTION until F15/F16 review.

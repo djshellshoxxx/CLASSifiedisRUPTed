@@ -1,35 +1,69 @@
 # PS-059-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-059-05. **Owner:** [08_Communications/01_messaging/mod_attachments](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_attachments. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_attachments. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R04 participant scope, R10 field visibility, R11 attachment download), CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for attachments within 01_messaging. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-059-05.R01 | Actions are evaluated on the owning `acc_` of the uploader or viewer `prf_`; `prf_` is never a principal. | MVP |
+| PS-059-05.R02 | Only participants of the thread containing the message may download an attachment. Participation derived from mod_private at decision time. | MVP |
+| PS-059-05.R03 | Uploader alone may upload into a thread and only until commit. | MVP |
+| PS-059-05.R04 | Moderators read attachments only under a case grant, with dual control (PRIVATE_PERSONAL content, CTR-CAP-001 R07), and only for a time-limited purpose. | MVP |
+| PS-059-05.R05 | Public access never exists; no link is publicly enumerable. | MVP |
+| PS-059-05.R06 | Default deny. | MVP |
 
-## Requirements to specify
-- [ ] PS-059-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-059-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-059-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field visibility (CTR-CAP-001 R10):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | public | participant | uploader | case (mod_, dual control) | never |
+|---|---|---|---|---|---|
+| content bytes | | via access grant | | via access grant | |
+| `mime_type`, `byte_size`, `width`, `height` | | Y | Y | Y | |
+| `blob_ref` | | | | | Y |
+| `scan_status` | | | Y | Y | |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Action | Actor | Scope | Result |
+|---|---|---|---|
+| `attachment.create` | uploader `acc_` | participant of thread | allow until commit |
+| `attachment.read` | participant | thread | access grant |
+| `attachment.purge` | `sys_` retention or deleter | self / global | allow |
+| `attachment.moderate_read` | `mod_` | case | access grant with purpose and dual control |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Denied requests make no state change. Decision records `dec_` store outcome only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `SYS.NOT_FOUND` | false | `err.sys.not_found` |
+| `SYS.FORBIDDEN` | false | `err.sys.forbidden` |
+| `ATTACH.NOT_AVAILABLE` | depends on state | `err.attach.not_available` |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-059-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Relation rules derived from thread participation (CTR-CAP-001 R05). Access grants are bound to `att_id`, viewer `prf_` and expiry ≤ 5 min; revocation of participation invalidates grants at next decision.
+
+## Failure, idempotency, concurrency, offline
+Grants re-checked at each byte-range request. Offline access not allowed for attachments in MVP (cache disabled).
+
+## Privacy, retention, abuse
+Moderator reads emit `aud_` with `att_id`, purpose, dual-control approvers and decision ID.
+
+## Observability & budgets
+`attach_authz_deny_total{action}`; alert on access-grant denials spike for one thread.
+
+## Tests
+- TEST-PS-059-05-01 (unit): matrix per principal × action.
+- TEST-PS-059-05-02 (negative): non-participant with a valid URL-like ID gets `SYS.NOT_FOUND`.
+- TEST-PS-059-05-03 (integration): grant expires at 5 min; replay by another viewer rejected.
+- TEST-PS-059-05-04 (negative): moderator read without dual control rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix implemented; default deny verified.
+2. No public access path.
+3. Grants bound to viewer and expire.
+4. Moderator reads dual-controlled and audited.
+
+## Assumptions & open decisions
+- PROVISIONAL (D10 default, unapproved): key-based client-side encryption of attachments is not in MVP; server-side encryption at rest is.
+- ASSUMPTION: dual control applies to moderator reads of attachments.

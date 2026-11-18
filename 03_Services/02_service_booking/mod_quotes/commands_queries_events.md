@@ -1,35 +1,69 @@
 # PS-032-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-032-04. **Owner:** [03_Services/02_service_booking/mod_quotes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_quotes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_quotes. **Parent:** [mod_quotes SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-COM-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for quotes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-032-04.R01 | Every state-changing command carries `idempotency_key` and `expected_revision`. | MVP |
+| PS-032-04.R02 | Quote response ≤ 32 KB. Quote list per provider paginated, 50 per page. | MVP |
+| PS-032-04.R03 | Events use CTR-EVT-001 envelope with `aggregate_type` = `service_quote`, `max_data_class` = FINANCIAL_EVIDENCE after SENT. | MVP |
+| PS-032-04.R04 | Accept response returns `trx_id` and `price_hash`; no payment instructions. | MVP |
 
-## Requirements to specify
-- [ ] PS-032-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-032-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-032-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Signature | Idempotency key |
+|---|---|---|
+| `svcquote.create` | (`srv_`, fields) → `svq_` in DRAFT | (actor, command, key) |
+| `svcquote.send` | (`svq_`, expected_revision) → SENT; places holds | (actor, command, key) |
+| `svcquote.accept` | (`svq_`, expected_revision, price_hash) → ACCEPTED, `trx_` | (actor, command, key) |
+| `svcquote.decline` | (`svq_`, expected_revision) | (actor, command, key) |
+| `svcquote.withdraw` | (`svq_`, expected_revision) | (actor, command, key) |
+| `svcquote.supersede` | (`svq_`, expected_revision, new fields) → new `svq_` | (actor, command, key) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Queries: `svcquote.get(svq_)`, `svcquote.list(srv_ or customer scope, status, cursor)`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Event (`schema_id`) | Emitted by |
+|---|---|
+| `svcquote.created` | create |
+| `svcquote.sent` | send |
+| `svcquote.accepted` | accept (includes `trx_id`) |
+| `svcquote.declined` | decline |
+| `svcquote.withdrawn` | withdraw |
+| `svcquote.expired` | timer |
+| `svcquote.superseded` | supersede |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Errors: PS-032-02 codes, `SVCQUOTE.INVALID_TRANSITION`, `SVCQUOTE.EXPIRED`, `SVCQUOTE.HOLD_LOST`, `SYS.CONFLICT`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Command outcomes map to PS-032-03.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-032-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Schema validation first; unknown fields rejected (`SYS.REQUEST_MALFORMED`).
+
+## Authorization
+Provider and customer actions per PS-032-05; `sys` for expiry.
+
+## Failure, idempotency, concurrency, offline
+Duplicate command with same key and digest returns original; different digest → `SYS.CONFLICT`. Events at-least-once; dedupe on `event_id`. `svcquote.accepted` consumed by F09 and by F03.S01.M02 (booking link).
+
+## Privacy, retention, abuse
+`svcquote.created` and `svcquote.sent` payloads omit `scope_text` (fetched on read). Subscribers receive minimum fields.
+
+## Observability & budgets
+Command p95 ≤ 200 ms; accept p95 ≤ 300 ms (PS-032-03).
+
+## Tests
+- TEST-PS-032-04-01 (contract): all commands and events validate against CTR-SCH-001.
+- TEST-PS-032-04-02 (integration): duplicate accept returns identical `trx_id`.
+- TEST-PS-032-04-03 (contract): `svcquote.sent` payload has no `scope_text` or amount fields.
+- TEST-PS-032-04-04 (integration): accept with stale `price_hash` returns `SYS.CONFLICT`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All commands and events registered in CTR-SCH-001.
+2. Duplicate-accept replay returns identical result.
+3. Event payload audit shows no free-text fields.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24-hour idempotency retention.
+- Consumers reference `svq_` and `trx_` by full ID only. See [DECISIONS.md](../../../DECISIONS.md) D04.

@@ -1,35 +1,48 @@
-# PS-124-08 — observability performance
+# PS-124-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-124-08. **Owner:** [15_Platform/04_configuration/mod_flags](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/04_configuration/mod_flags (F15.S04.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for flags within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-124-08.R01 | Metrics: `flag_evaluations_total{source}`, `flag_evaluation_latency_ms`, `flag_kill_total`, `flag_rules_age_seconds`. | MVP |
+| PS-124-08.R02 | Evaluation p95 <= 5 ms server-side (ASSUMPTION). | MVP |
+| PS-124-08.R03 | Alert on any kill; alert on `default` source > 1% for 10 min. | MVP |
+| PS-124-08.R04 | Dashboard shows rollout percentages and counts; no subject-level view. | MVP |
 
-## Requirements to specify
-- [ ] PS-124-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-124-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-124-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Labels: `source`, `key` (catalog keys), `capability`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Not applicable.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboard per PS-124-05 R05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-124-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Not applicable.
+
+## Privacy, retention, abuse
+No subject identifiers in metrics.
+
+## Observability & budgets
+Budgets in R02.
+
+## Tests
+- TEST-PS-124-08-01 (unit): alert thresholds.
+- TEST-PS-124-08-02 (performance): 10,000 evaluations per second meets R02.
+- TEST-PS-124-08-03 (log scan): no subject identifiers in metrics or logs.
+- TEST-PS-124-08-04 (dashboard): no subject-level endpoint.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Latency budget met (TEST-02).
+2. TEST-PS-124-08-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 10,000 evaluations per second per node reference load.

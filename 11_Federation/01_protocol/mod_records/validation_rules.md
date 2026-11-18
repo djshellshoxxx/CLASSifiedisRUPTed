@@ -1,35 +1,52 @@
 # PS-084-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-084-02. **Owner:** [11_Federation/01_protocol/mod_records](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_records. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_records. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R02, R03), CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the validation rules process for records within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-084-02.R01 | Reject `federate = true` on an item whose type has `federate_mode = never` with `RECORDS.CLASS_NOT_FEDERABLE` (422). | MVP |
+| PS-084-02.R02 | Reject `federate = true` on `opt_in` type without an explicit `federate_opt_in_at` from the owner with `RECORDS.OPT_IN_REQUIRED` (422). | MVP |
+| PS-084-02.R03 | Reject a federate change for an unregistered `record_type` with `RECORDS.TYPE_UNREGISTERED` (422). | MVP |
+| PS-084-02.R04 | Reject a `cell` item whose region is not a registered cell with `RECORDS.CELL_UNREGISTERED` (422). | MVP |
 
-## Requirements to specify
-- [ ] PS-084-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-084-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-084-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Applies to [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applies to `records.set_federate`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation precedes transitions in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP |
+|---|---|---|
+| RECORDS.CLASS_NOT_FEDERABLE | false | unprocessable_state / 422 |
+| RECORDS.OPT_IN_REQUIRED | false | unprocessable_state / 422 |
+| RECORDS.TYPE_UNREGISTERED | false | unprocessable_state / 422 |
+| RECORDS.CELL_UNREGISTERED | false | unprocessable_state / 422 |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Shape validation first; unreadable items give `SYS.NOT_FOUND`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-084-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deterministic; no value echo.
+
+## Privacy, retention, abuse
+Errors name type and rule only.
+
+## Observability & budgets
+Counter `records_validation_failures_total{code}`.
+
+## Tests
+- TEST-PS-084-02-01 (unit): R01–R04 codes.
+- TEST-PS-084-02-02 (negative): `never` type cannot be flagged even by owner.
+- TEST-PS-084-02-03 (negative): cell item with unregistered cell rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All four codes tested.
+2. No value echo.
+
+## Assumptions & open decisions
+- PENDING CTR-PRV-001 registered cell set (K_MIN = 5 per R04, ASSUMPTION).

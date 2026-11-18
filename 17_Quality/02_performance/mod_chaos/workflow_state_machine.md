@@ -1,35 +1,55 @@
 # PS-138-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-03. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_chaos. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001
 
-## Purpose and scope
-Define the workflow state machine process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-138-03.R01 | Only transitions in the table are permitted. | MVP |
+| PS-138-03.R02 | An abort condition breach stops fault injection within 10 s (ASSUMPTION) and sets `aborted`. | MVP |
+| PS-138-03.R03 | Fault injection is always reverted at experiment end, including after abort or crash. | MVP |
+| PS-138-03.R04 | `held` and `violated` are terminal; a re-run creates a new experiment. | MVP |
 
-## Requirements to specify
-- [ ] PS-138-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`verdict` in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events `chaos_experiment.<past-tense>`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | propose | validated | proposed | emit `chaos_experiment.proposed` |
+| proposed | approve | second approver (not proposer) | approved | emit `chaos_experiment.approved` |
+| approved | start | concurrency limit not exceeded; steady state confirmed | running | inject fault; emit `chaos_experiment.started` |
+| running | duration elapsed | none | reverting | revert fault |
+| running | abort condition | threshold breached | aborted | revert fault; emit `chaos_experiment.aborted` |
+| reverting | reverted | fault removed and steady state restored | held or violated | record verdict; emit `chaos_experiment.completed` |
+| reverting | revert failed | any | violated | page operator; emit `chaos_experiment.revert_failed` |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`CHAOS.TRANSITION_INVALID` (conflict, 409) for other pairs.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Start requires operator with `execute` scope on the staging component.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Revert is idempotent. A watchdog reverts any fault still active after `max_duration_s` plus 60 s.
+
+## Privacy, retention, abuse
+Transitions carry no personal data.
+
+## Observability & budgets
+Metric `chaos_revert_seconds` (p95 ≤ 30 s, ASSUMPTION).
+
+## Tests
+- TEST-PS-138-03-01: unit, transition table.
+- TEST-PS-138-03-02: chaos-of-chaos, kill runner mid-fault; watchdog reverts within limit.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No fault remains active after watchdog window in 100 injected crashes.
+2. Abort within 10 s in 100% of threshold drills.
+
+## Assumptions & open decisions
+- ASSUMPTION: 10 s abort and 60 s watchdog grace.
+- D04 (partial barter during faults): PROVISIONAL (D04 default, unapproved).

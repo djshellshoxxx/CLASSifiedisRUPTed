@@ -1,35 +1,47 @@
-# PS-139-10 — import export backup rollback
+# PS-139-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-139-10. **Owner:** [17_Quality/02_performance/mod_load](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_load. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_load. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-FED-001, CTR-ERR-001
 
-## Purpose and scope
-Define the import export backup rollback process for load within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-139-10.R01 | Workload and profile definitions are versioned in the repository; rollback is a new commit. | MVP |
+| PS-139-10.R02 | Baseline results are exported as summaries (percentiles, counts), not raw traces. | MVP |
+| PS-139-10.R03 | Restoring a baseline does not start any run. | MVP |
+| PS-139-10.R04 | Baselines are tied to a build line and environment ID; cross-environment comparison is refused. | MVP |
 
-## Requirements to specify
-- [ ] PS-139-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-139-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-139-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `baseline_id`, `build_line`, `environment_id`, `percentiles`, `error_rate`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+N/A beyond registry operations.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Cross-environment comparison: `LOAD.BASELINE_MISMATCH` (validation 400).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export requires `load_run.read`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-139-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Import idempotent by `baseline_id`.
+
+## Privacy, retention, abuse
+Summaries contain no personal data.
+
+## Observability & budgets
+Counter `load_baseline_import_total{result}`.
+
+## Tests
+- TEST-PS-139-10-01: restore does not start a run.
+- TEST-PS-139-10-02: cross-environment comparison refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero runs started by restore in fixtures.
+2. Cross-environment comparisons refused in 100% of fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: baselines per build line.
+- D07 (summary retention): PROVISIONAL (D07 default, unapproved).

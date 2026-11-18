@@ -1,35 +1,65 @@
 # PS-105-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-105-01. **Owner:** [13_Notifications/02_preferences/mod_hours](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_hours. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_hours. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-PRV-001, CTR-SCH-001. Prefix `dwn_` is PENDING CTR-ID-001 registration.
 
-## Purpose and scope
-Define the domain schema process for hours within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-105-01.R01 | Delivery windows are recurring weekly rules in the account's local time zone (IANA name from profile). | MVP |
+| PS-105-01.R02 | Max 14 windows per account per channel (`push`, `email`, `inapp`). | MVP |
+| PS-105-01.R03 | A window stores weekday set (1–7), start and end as minutes from local midnight (0–1440, 15-minute steps), and `crosses_midnight` derived. Zero-length windows are invalid. | MVP |
+| PS-105-01.R04 | Zone is never derived from IP address or precise location (D05 PROVISIONAL). | MVP |
+| PS-105-01.R05 | Windows are PRIVATE_PERSONAL data; they never appear in events, metrics or provider payloads. | MVP |
+| PS-105-01.R06 | "No windows configured" means no restriction (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-105-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-105-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-105-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+delivery_window  (dwn_, class ulid, PENDING CTR-ID-001)
+{
+  "dwn_id": "dwn_<26>", "account_id": "acc_<26>", "channel": "push|email|inapp",
+  "weekdays": [1,2,3,4,5], "start_min": 480, "end_min": 1320,
+  "tz": "Europe/Berlin", "revision": 3, "updated_at": "<RFC 3339>", "schema_version": "1.0.0"
+}
+```
+Constraints: `start_min` < `end_min` after midnight normalization; `weekdays` unique and non-empty; `tz` must be in the pinned tzdata set (validation_rules); unique (`account_id`, `channel`, `weekdays`, `start_min`).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Derived, not stored: `window_decision` (`deliver`, `defer_until`, `drop`) per `ntf_` evaluation.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Provenance: rows are written only by the owning account; `sys_` reads them through the gating path.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-105-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
+
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Replace-all writes use `expected_revision`. See [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Windows reveal sleep and work patterns. Retention per [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+Count-only metrics. See [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-105-01-01 (unit): window with `start_min` = `end_min` is rejected.
+- TEST-PS-105-01-02 (unit): window 22:00–02:00 is stored with `crosses_midnight`=true and evaluates correctly on both sides.
+- TEST-PS-105-01-03 (property): 15 windows on one channel are rejected.
+- TEST-PS-105-01-04 (contract): no event schema contains `weekdays`, `start_min` or `end_min`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema validates for every row type in the example set.
+2. Window content absent from all events and logs (automated scan).
+3. Derived decisions reproducible from stored rows and pinned tzdata version.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute granularity and 14-window cap.
+- D05 PROVISIONAL (D05 default, unapproved): zone is user-chosen, not inferred.
+- Retention: D07 default, PROVISIONAL (D07 default, unapproved).

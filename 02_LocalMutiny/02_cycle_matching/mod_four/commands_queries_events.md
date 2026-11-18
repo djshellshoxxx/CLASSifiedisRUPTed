@@ -1,35 +1,56 @@
-# PS-017-04 — commands queries events
+# PS-017-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-017-04. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_four](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_four. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_four. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for four within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-017-04.R01 | All writes carry `idempotency_key` and `expected_version` (cycle version). | MVP |
+| PS-017-04.R02 | `cycle.consent` accepts `{cycle_id, slot_index, expected_version, idempotency_key}`. | MVP |
+| PS-017-04.R03 | `cycle.get` returns the full slot list to participants only; non-participants receive SYS.NOT_FOUND. | MVP |
+| PS-017-04.R04 | Event `aggregate_type` is `cycle`; revisions are contiguous per cycle. | MVP |
 
-## Requirements to specify
-- [ ] PS-017-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-017-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-017-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Requests: `cycle.propose_four {feasibility_ref, idempotency_key}`; `cycle.consent {cycle_id, slot_index, expected_version, idempotency_key}`; `cycle.decline {cycle_id, slot_index, expected_version, idempotency_key}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Caller | Idempotency | Expected version | Errors |
+|---|---|---|---|---|
+| cycle.propose_four | sys_ matcher | feasibility_ref + key | null | CYCFOUR.NOT_FEASIBLE, CYCFOUR.LENGTH_MISMATCH, CYCFOUR.VALUE_GAP |
+| cycle.consent | slot participant | key | required | SYS.CONFLICT (stale version), CYCFOUR.STALE_VERDICT |
+| cycle.decline | slot participant | key | required | SYS.CONFLICT |
+| cycle.get | participant | n/a | n/a | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Events: cycle.proposed, cycle.slot_consented, cycle.version_superseded, cycle.consented, cycle.declined, cycle.expired. Schema 1.0.0.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Mapping in PS-017-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+PS-017-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-017-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+PS-017-05.
+
+## Failure, idempotency, concurrency, offline
+Concurrency token is `expected_version`; replay rules in PS-017-06.
+
+## Privacy, retention, abuse
+Events show pseudonymous slot refs only.
+
+## Observability & budgets
+Consent latency p95 ≤ 300 ms server-side (ASSUMPTION).
+
+## Tests
+- TEST-PS-017-04-01 (contract): each event validates.
+- TEST-PS-017-04-02 (unit): stale expected_version rejected with SYS.CONFLICT.
+- TEST-PS-017-04-03 (negative): consent by a non-slot participant is denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command has schema, idempotency and expected-version rule.
+2. Events are emitted once per committed transition.
+3. `cycle.get` never returns another party's offer details beyond the four slot summaries.
+
+## Assumptions & open decisions
+- ASSUMPTION: 300 ms p95 consent budget.
+- PENDING CTR-EVT-001 subscriber map for mod_lock and mod_n.

@@ -1,35 +1,52 @@
-# PS-020-06 — failure recovery idempotency
+# PS-020-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-06. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_three. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03).
 
-## Purpose and scope
-Define the failure recovery idempotency process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-020-06.R01 | Two of three consent, third declines: the cycle is declined and both consents are released; no lock. | MVP |
+| PS-020-06.R02 | Consent for version v never advances version v+1. | MVP |
+| PS-020-06.R03 | Same-key replay returns original result with no new event. | MVP |
+| PS-020-06.R04 | Command timeout 3 s; backoff 1 s base, 60 s cap, 5 attempts (ASSUMPTION). | MVP |
+| PS-020-06.R05 | Lock-time listing re-check fails (CYCTHREE.LISTING_LOCKED): cycle returns to proposed and is not locked. | MVP |
 
-## Requirements to specify
-- [ ] PS-020-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Version counter; idempotency records 7 days.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+All writes retry-safe by key.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Failure edges in PS-020-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Stale version returns SYS.CONFLICT.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-check participant status.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Race: three consents in parallel serialise on version; exactly one final `consented`.
+- Crash mid-consent: committed state is authoritative on restart.
+- Offline: consent queued as pending-ack only (D08).
+
+## Privacy, retention, abuse
+Pending local consents purged on logout.
+
+## Observability & budgets
+Count of lock re-check failures.
+
+## Tests
+- TEST-PS-020-06-01 (concurrency): three parallel consents yield one consented event.
+- TEST-PS-020-06-02 (integration): two consents then decline releases both.
+- TEST-PS-020-06-03 (integration): listing locked between proposal and lock blocks lock.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No lock without three consents on one version in 100% of runs.
+2. Declines release all slots in 100% of runs.
+3. Zero duplicate events on replay.
+
+## Assumptions & open decisions
+- PROVISIONAL (D04 default, unapproved).
+- PROVISIONAL (D08 default, unapproved).

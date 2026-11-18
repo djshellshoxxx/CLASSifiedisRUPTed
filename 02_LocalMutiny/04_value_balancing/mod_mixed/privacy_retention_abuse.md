@@ -1,35 +1,51 @@
 # PS-026-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-026-07. **Owner:** [02_LocalMutiny/04_value_balancing/mod_mixed](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Parent:** [mod_mixed SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-EVT-001, CTR-COM-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for mixed within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-026-07.R01 | Leg amounts, currencies and due dates are class FINANCIAL_EVIDENCE. Descriptions are PRIVATE_PERSONAL. Party refs are PSEUDONYMOUS. | MVP |
+| PS-026-07.R02 | No payment handle, bank reference, wallet address or contact detail is stored in a leg. External references live only on the `clm_` claim (CTR-COM-001 `external_ref`). | MVP |
+| PS-026-07.R03 | Legs of a cycle that did not reach `CONSENTED` are deleted 30 days after the cycle's terminal state (ASSUMPTION). | MVP |
+| PS-026-07.R04 | Consented or submitted legs are retained as append-only evidence for the dispute window (14 days) plus 365 days (PROVISIONAL, D07 default), then party refs are pseudonymized. Legal hold overrides. | MVP |
+| PS-026-07.R05 | Per actor: ≤ 20 declare calls per cycle per hour; excess → `SYS.RATE_LIMITED`. | MVP |
 
-## Requirements to specify
-- [ ] PS-026-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-026-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-026-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention fields on the leg: `retain_until` (computed), `legal_hold` (boolean, set by F10 only). Pseudonymization replaces `from_par`/`to_par` linkage with a tombstone token; amounts remain.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Deletion and pseudonymization run as `sys_` jobs and emit `mixed.leg.purged` (no amounts in payload).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retention states: ACTIVE → ARCHIVED (after terminal state + 14 days) → PSEUDONYMIZED (+365 days) → PURGED (drafts only at +30 days).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Export or purge requests for legs under legal hold return `SYS.CONFLICT` with reason `legal_hold`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export of own legs is allowed to each participant (`cyc.export`). Purge is `sys` only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-026-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge jobs are idempotent per leg. A purge racing an active dispute is blocked by the DISPUTED guard (PS-026-03).
+
+## Privacy, retention, abuse
+Abuse controls: rate limit (R05); value-inflation signal from mod_valuation is forwarded to F12 as advisory only. Compensation legs cannot be used to transfer value outside a cycle: a leg without a cycle revision is rejected. Pseudonyms do not guarantee anonymity against counterparties who already know each other.
+
+## Observability & budgets
+Metrics: `mixed_legs_purged_total`, `mixed_rate_limited_total`. No amounts in logs. Purge job completes within 24 h of due date.
+
+## Tests
+- TEST-PS-026-07-01 (unit): every field has one data class (lint).
+- TEST-PS-026-07-02 (integration): legal hold blocks purge and pseudonymization.
+- TEST-PS-026-07-03 (abuse): 21st declare in one hour rejected with `SYS.RATE_LIMITED`.
+- TEST-PS-026-07-04 (negative): leg payload with a URL or phone number in description rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retention schedule matches R03 and R04 in the scheduler config.
+2. Purge leaves no linkage between a pseudonymized leg and a party `acc_`.
+3. Legal-hold tests pass before any purge job is enabled.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day draft retention; 14-day dispute window per CTR-COM-001 R16.
+- PROVISIONAL: retention defaults follow D07 default (unapproved). Legal retention periods require jurisdiction review (OPEN). See [DECISIONS.md](../../../DECISIONS.md).

@@ -1,35 +1,57 @@
-# PS-059-04 — commands queries events
+# PS-059-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-059-04. **Owner:** [08_Communications/01_messaging/mod_attachments](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_attachments. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_attachments. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R03, envelope), CTR-ERR-001, CTR-SCH-001, CTR-CAP-001 (`attachment.*`), CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for attachments within 01_messaging. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-059-04.R01 | Upload commands carry `idempotency_key`; `UploadChunk` also carries `chunk_index` and `chunk_sha256`. | MVP |
+| PS-059-04.R02 | `InitiateUpload` p95 ≤ 200 ms; `CompleteUpload` returns `scanning` within 300 ms. | MVP |
+| PS-059-04.R03 | Download is a server-authorized stream or a short-lived URL (≤ 5 min) bound to `att_id` and viewer; no permanent URLs. | MVP |
+| PS-059-04.R04 | Events carry `att_id`, `msg_id`, state, revision; no MIME type or size. | MVP |
+| PS-059-04.R05 | Schema IDs `attachment.uploaded`, `attachment.scan_passed`, `attachment.scan_failed`, `attachment.purged` at 1.0.0. | MVP |
+| PS-059-04.R06 | Resumable uploads across devices. | Future |
 
-## Requirements to specify
-- [ ] PS-059-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-059-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-059-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Payload | Error codes |
+|---|---|---|
+| `InitiateUpload` | `thread_id`, `declared_mime` (advisory), `declared_size`, `idempotency_key` | `QUOTA_EXCEEDED`, `TYPE_NOT_ALLOWED`, `SYS.FORBIDDEN` |
+| `UploadChunk` | `att_id`, `chunk_index`, `chunk_sha256`, bytes | `TOO_LARGE`, `SYS.NOT_FOUND` |
+| `CompleteUpload` | `att_id`, `expected_revision` | `IMAGE_INVALID`, `PDF_ACTIVE_CONTENT`, `TYPE_NOT_ALLOWED` |
+| `PurgeAttachment` | `att_id`, reason enum (`deleted_for_all`, `retention`, `abandoned`) | `NOT_AVAILABLE` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Query: `GetAttachmentAccess(att_id)` returns a short-lived access grant for thread participants only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+[validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-059-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Duplicate `InitiateUpload` with same key returns same `att_id`. Chunk replays with same hash are no-ops; different hash for same index → `ATTACH.CHUNK_CONFLICT` (non-retryable). Offline upload held in device queue (D08 PROVISIONAL) with size cap 25 MiB total.
+
+## Privacy, retention, abuse
+Event payloads carry no file metadata. Access grants logged to audit with `att_id` and purpose only.
+
+## Observability & budgets
+`attach_cmd_total{command,result}`; no `att_id` labels.
+
+## Tests
+- TEST-PS-059-04-01 (contract): payloads validate.
+- TEST-PS-059-04-02 (integration): duplicate initiate returns same `att_id`.
+- TEST-PS-059-04-03 (negative): conflicting chunk returns `CHUNK_CONFLICT`.
+- TEST-PS-059-04-04 (integration): access grant expires at 5 min and is not reusable by another viewer.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Commands, queries and events implemented as listed.
+2. Idempotency and chunk integrity verified.
+3. No permanent download URLs exist.
+4. Event lint passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: `aggregate_type = attachment` registered in CTR-SCH-001.
+- PROVISIONAL (D08 default, unapproved): offline queue until relay acknowledgment.

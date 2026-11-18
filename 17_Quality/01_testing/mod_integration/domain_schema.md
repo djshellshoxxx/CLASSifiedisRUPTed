@@ -1,35 +1,63 @@
 # PS-135-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-135-01. **Owner:** [17_Quality/01_testing/mod_integration](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_integration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_integration. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-CAP-001, CTR-ERR-001, CTR-SCH-001
 
-## Purpose and scope
-Define the domain schema process for integration within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-135-01.R01 | Each integration scenario has one `scenario` record: ID, contracts covered, modules involved, fixture set ID, owner. | MVP |
+| PS-135-01.R02 | Fixture sets are synthetic and versioned; each has a SHA-256 digest. | MVP |
+| PS-135-01.R03 | Each `run` record stores commit SHA, scenario ID, environment ID, outcome, duration and failing assertion ID. | MVP |
+| PS-135-01.R04 | No fixture contains real personal data, real coordinates, real payment references or production keys. | MVP |
 
-## Requirements to specify
-- [ ] PS-135-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-135-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-135-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "scenario_id": "INT-<CONTRACT>-<nn>, e.g. INT-EVT-07",
+  "contracts": ["CTR-EVT-001"],
+  "modules": ["<full module IDs>"],
+  "fixture_set_id": "fx_ (PENDING CTR-ID-001 prefix, proposed fxs, class opaque)",
+  "fixture_sha256": "64 hex",
+  "run_id": "run_ (PENDING, proposed tst, class ulid)",
+  "commit_sha": "40 hex",
+  "environment_id": "string (closed list: ci-ephemeral, staging-seeded)",
+  "outcome": "pass | fail | skipped | flaky_quarantined",
+  "failing_assertion": "TEST-PS-... | null",
+  "duration_ms": "integer",
+  "data_class": "PUBLIC"
+}
+```
+Synthetic data only, so class is PUBLIC; the rule in PS-135-01.R04 is enforced by lint, not by classification.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Test results are readable by all engineers; fixture write access is limited to QA Lead (F17) and module owners.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-135-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Runs are append-only. Re-running a scenario creates a new `run_id`.
+
+## Privacy, retention, abuse
+Fixture lint blocks any value matching personal-data patterns (email, phone, coordinates at street precision).
+
+## Observability & budgets
+Suite duration tracked per scenario (see [observability_performance.md](observability_performance.md)).
+
+## Tests
+- TEST-PS-135-01-01: unit, scenario record schema.
+- TEST-PS-135-01-02: lint, personal-data patterns blocked in fixtures.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every scenario record references at least one canonical contract ID.
+2. Fixture digest matches on every run.
+
+## Assumptions & open decisions
+- ASSUMPTION: fixture prefix `fxs` and run prefix `tst` are proposals, PENDING CTR-ID-001.
+- D08 (offline queue scenarios): PROVISIONAL (D08 default, unapproved).

@@ -1,35 +1,55 @@
-# PS-122-05 — authorization capabilities
+# PS-122-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-122-05. **Owner:** [15_Platform/03_operations/mod_recovery](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_recovery (F15.S03.M03). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for recovery within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-122-05.R01 | Default deny. Restore is never available to `acc_`, `mod_` or `fpr_` principals. | MVP |
+| PS-122-05.R02 | `restore_run.execute` is granted to `ope` in the platform recovery role, scoped to one run, with 72 h maximum (CTR-CAP-001 R06). | MVP |
+| PS-122-05.R03 | Initiator and approvers are distinct `ope` principals; self-approval is refused (CTR-CAP-001 R07). | MVP |
+| PS-122-05.R04 | Restored data is governed by the same classes as source; access to restored content requires the matching PRIVATE, FINANCIAL or LOCATION_PRECISE dual control. | MVP |
+| PS-122-05.R05 | Support staff cannot restore user credentials or bypass recovery proofs (CTR-CAP-001 R12). | MVP |
+| PS-122-05.R06 | Every run step and approval emits a CTR-EVT-001 event and an `aud_` record (CTR-CAP-001 R08). | MVP |
 
-## Requirements to specify
-- [ ] PS-122-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-122-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-122-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Capability | Actor | Resource | Verb |
+|---|---|---|---|
+| `restore_run.execute` | ope (recovery role) | restore_run, scope case | execute |
+| `restore_run.approve` | ope (distinct) | restore_run, scope case | accept |
+| `drill_record.create` | ope or sys (drill runner) | drill_record, scope global | create |
+| `drill_record.read` | ope | drill_record, scope global | read |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command in PS-122-04 checks the capability before execution.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Approval state is part of the run; no grant exists before approvals are complete (CTR-CAP-001 states).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.FORBIDDEN` for visible but denied; `SYS.NOT_FOUND` otherwise.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Decision cache zero for all restore capabilities (CTR-CAP-001 R09).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-122-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Revocation of recovery role during a run halts the run at the next step.
+
+## Privacy, retention, abuse
+Break-glass restore is not provided in MVP (Future decision, OPEN).
+
+## Observability & budgets
+Metric: `recovery_denied_total{capability}`; alert on any denied attempt outside a drill window.
+
+## Tests
+- TEST-PS-122-05-01 (matrix): each principal kind per capability.
+- TEST-PS-122-05-02 (privileged): single-approver promote refused with `CAP.DUAL_APPROVAL_REQUIRED`.
+- TEST-PS-122-05-03 (negative): support role attempt to restore a credential table refused.
+- TEST-PS-122-05-04 (audit): each step emits `aud_` record.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No user or federated principal can start a restore (TEST-01).
+2. TEST-PS-122-05-01 through -04 pass.
+
+## Assumptions & open decisions
+- OPEN: break-glass procedure (Future).

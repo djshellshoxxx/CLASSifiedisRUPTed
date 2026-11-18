@@ -1,44 +1,42 @@
 # F16.S03.M03 — response
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F16.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Security Lead (F16). **Parent:** F16.S03.
 
 ## Purpose and business behavior
-Provide response as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Executes and records containment actions taken during an incident: disabling a feature flag, revoking a scope of sessions, requesting key revocation through the key service, quarantining a federated peer, pausing federation, publishing an incident notice, or placing a data hold. Every action is proposed, approved by two people, executed as recorded steps, and rollbackable where reversible. It acts only on incidents declared in F16.S03.M02 (`mod_incident`).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a responder, I propose quarantining a peer that sends forged events, and a second responder approves it within minutes.
+- As a user affected by a session revocation, I receive a notice explaining the action and how to appeal, without internal details.
+- As a Security Lead, I can see every containment step and roll back a reversible flag change.
 
 ## Scope
-- Required process spec: `response_domain_model.md` (not yet authored)
-- Required process spec: `response_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `response_validation_and_authorization.md` (not yet authored)
-- Required process spec: `response_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `response_interfaces_and_events.md` (not yet authored)
-- Required process spec: `response_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `response_acceptance_and_property_tests.md` (not yet authored)
+- Containment action catalog, approval flow, executor, step log, rollback.
+- Excludes: incident records (`mod_incident`), key generation and revocation mechanics (`mod_key`), federation trust rules (F11), appeals (F12).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+`response.propose | approve | execute | rollback | get | list_by_incident`; events `response.*`. Errors `RESPONSE.*`. Detail in PS-132-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F15.S03.M02 (`mod_observability`, signals), F16.S03.M02 (`mod_incident`, parent incident). Downstream: F15.S03.M03 (`mod_recovery`, restore after containment). Calls into F16.S02.M01 (`mod_key`) for revocation requests and F11 for peer quarantine. Contracts: CTR-EVT-001, CTR-ERR-001, CTR-FED-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `containment_action` records and step logs. Does not own the revoked keys, sessions, flags, or peer records; it references them by ID.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Over-containment that disables service for many users; a single compromised responder freezing others; containment that tips off an attacker or leaks tokens; partial execution leaving inconsistent state; rollback that restores a compromised configuration. Mitigations: two approvals, platform-wide rule, rollback plan required, token-free logs, idempotent steps, human decision after partial failure. No platform custody of money. Pseudonyms do not guarantee anonymity of responders.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+10 process specs approved; every action type rehearsed in staging; `rsp` prefix registered; key-revocation and quarantine contracts with F16.S02.M01 and F11 confirmed; D10 resolved; security review passed.
 
 ## Required process specification inventory
-- [ ] `response_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `response_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `response_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `response_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `response_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `response_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `response_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-132-01 (SPEC-DRAFT-COMPLETE)
+- [x] [validation_rules.md](validation_rules.md) — PS-132-02 (SPEC-DRAFT-COMPLETE)
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-132-03 (SPEC-DRAFT-COMPLETE)
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-132-04 (SPEC-DRAFT-COMPLETE)
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-132-05 (SPEC-DRAFT-COMPLETE)
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-132-06 (SPEC-DRAFT-COMPLETE)
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-132-07 (SPEC-DRAFT-COMPLETE)
+- [x] [observability_performance.md](observability_performance.md) — PS-132-08 (SPEC-DRAFT-COMPLETE)
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-132-09 (SPEC-DRAFT-COMPLETE)
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-132-10 (SPEC-DRAFT-COMPLETE)

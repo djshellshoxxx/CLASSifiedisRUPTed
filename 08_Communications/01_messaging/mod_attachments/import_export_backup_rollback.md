@@ -1,35 +1,56 @@
-# PS-059-10 — import export backup rollback
+# PS-059-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-059-10. **Owner:** [08_Communications/01_messaging/mod_attachments](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_attachments. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_attachments. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R11 export; RET-LEGAL), CTR-SCH-001, CTR-CAP-001, CTR-FED-001 (never federated).
 
-## Purpose and scope
-Define the import export backup rollback process for attachments within 01_messaging. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-059-10.R01 | Owner export includes the owner's own uploaded attachments (re-encoded bytes, metadata rows) for threads where the owner is a participant, as a ZIP with `attachment.export` 1.0.0 manifest. | MVP |
+| PS-059-10.R02 | Export never includes counterparties' uploads from threads unless the owner uploaded them. | MVP |
+| PS-059-10.R03 | Backups encrypted and include blobs, metadata and scan results; purged attachments are not restored. | MVP |
+| PS-059-10.R04 | Restore re-verifies `content_sha256` for every blob before cutover. | MVP |
+| PS-059-10.R05 | Re-scan after restore before any attachment becomes `available`. | MVP |
+| PS-059-10.R06 | Attachment import from other platforms. | Future (not permitted in MVP) |
 
-## Requirements to specify
-- [ ] PS-059-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-059-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-059-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`attachment.export` manifest: `export_id`, `generated_at`, `items[]` (`att_id`, `msg_id`, `mime_type`, `byte_size`, `content_sha256`, `path`), `schema_version`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`RequestAttachmentExport` (owner, idempotent); event `attachment.export_ready` with `export_id` only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+`queued` → `ready` (24 h) → `expired`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `ATTACH.EXPORT_RATE_LIMIT` | true | `err.attach.export_rate_limit` |
+| `ATTACH.RESTORE_HASH_MISMATCH` | false | `err.attach.restore_hash` |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: owner (`attachment.read` on own uploads). Restore: operator with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-059-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent per `export_id`. Restore staged; hash sweep and re-scan before cutover.
+
+## Privacy, retention, abuse
+Export link valid 24 h then deleted (RET-EPH). Backups 35 days (ASSUMPTION). Legal hold per RET-LEGAL.
+
+## Observability & budgets
+`attach_export_total{result}`; export p95 ≤ 5 min for 500 MB (ASSUMPTION).
+
+## Tests
+- TEST-PS-059-10-01 (contract): manifest validates.
+- TEST-PS-059-10-02 (integration): export excludes counterparties' uploads.
+- TEST-PS-059-10-03 (integration): restore hash mismatch aborts.
+- TEST-PS-059-10-04 (integration): restored attachments re-scanned before availability.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export contains exactly the owner's uploads.
+2. Restore verifies hashes and re-scans.
+3. Purged items never reappear.
+4. Export link expires at 24 h.
+
+## Assumptions & open decisions
+- ASSUMPTION: backup retention 35 days; export 500 MB limit per request.
+- PROVISIONAL (D07 default, unapproved): per-category retention with legal-hold exceptions.

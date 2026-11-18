@@ -1,35 +1,57 @@
 # PS-016-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-016-09. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_feasibility](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_feasibility. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_feasibility. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-COM-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for feasibility within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-016-09.R01 | Every requirement in PS-016-01 to -08 maps to a TEST-PS-016-* ID. | MVP |
+| PS-016-09.R02 | Determinism is tested with shuffled inputs on every build. | MVP |
+| PS-016-09.R03 | Contract tests run against consumer fixtures for mod_three, mod_four and mod_n. | MVP |
 
-## Requirements to specify
-- [ ] PS-016-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-016-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-016-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: 2-, 3-, 4-, 8-, and 9-participant candidates; 5,000 and 5,001 edge snapshots; expired and in-range quotes; coarse cells below and above K_MIN.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Harness uses evaluate and candidate_get only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Each row of PS-016-03 has a test.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Each FEASIBLE code has a negative test.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Each row of PS-016-05 has a test.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-016-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Determinism, budget and outage tests per PS-016-06.
+
+## Privacy, retention, abuse
+Lint and Sybil tests per PS-016-07.
+
+## Observability & budgets
+Latency and metric-name tests per PS-016-08.
+
+## Tests
+| Test ID | Layer | Scope |
+|---|---|---|
+| TEST-PS-016-01-01..03 | unit, contract, lint | snapshot and schema |
+| TEST-PS-016-02-01..03 | unit, property, negative | rules and codes |
+| TEST-PS-016-03-01..03 | unit, property, integration | states |
+| TEST-PS-016-04-01..03 | contract, unit, negative | commands and events |
+| TEST-PS-016-05-01..03 | unit, negative, integration | authorization |
+| TEST-PS-016-06-01..03 | property, negative, integration | determinism and outage |
+| TEST-PS-016-07-01..03 | privacy, abuse, integration | privacy and Sybil |
+| TEST-PS-016-08-01..03 | load, unit, negative | budgets |
+| TEST-PS-016-09-01 | e2e | candidate built, evaluated FEASIBLE, passed to mod_three fixture |
+| TEST-PS-016-09-02 | e2e | candidate with stale availability evaluated INFEASIBLE, never consented |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All TEST IDs pass in CI before merge (at implementation).
+2. Consumers receive only FEASIBLE candidates in 100% of runs.
+3. Load test meets PS-016-08.R02 on the agreed profile.
+
+## Assumptions & open decisions
+- ASSUMPTION: fixtures are synthetic.
+- Dxx: D02 (search), D03 (value tolerance), D05 (regions); all PROVISIONAL.

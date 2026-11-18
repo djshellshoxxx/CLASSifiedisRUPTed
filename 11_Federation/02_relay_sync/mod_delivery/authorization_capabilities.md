@@ -1,35 +1,54 @@
-# PS-088-05 — authorization capabilities
+# PS-088-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-088-05. **Owner:** [11_Federation/02_relay_sync/mod_delivery](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_delivery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_delivery. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R01, peer scopes), CTR-CAP-001 (R09).
 
-## Purpose and scope
-Define the authorization capabilities process for delivery within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-088-05.R01 | Sending only to peers in `trusted` state; `restricted` peers receive nothing outbound (ASSUMPTION). | MVP |
+| PS-088-05.R02 | Receiving accepted from `trusted` and `restricted` (inbound only) peers; `quarantined` and `revoked` refused. | MVP |
+| PS-088-05.R03 | Revocation of a grant or peer takes effect for queued rows within 60 s (CTR-CAP-001 R09). | MVP |
+| PS-088-05.R04 | Default deny. | MVP |
 
-## Requirements to specify
-- [ ] PS-088-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-088-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-088-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capabilities: `fed.send_batch`, `fed.receive_batch`, `peer.admit`, `peer.quarantine`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+[commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Peer state from CTR-FED-001 lifecycle; authorization does not change it.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`FED.PEER_UNKNOWN`, `FED.PEER_NOT_TRUSTED`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Outcome |
+|---|---|---|---|
+| sys_ | fed.send_batch | trusted peer | ALLOW |
+| sys_ | fed.send_batch | quarantined peer | DENY, FED.PEER_NOT_TRUSTED |
+| trusted peer | fed.receive_batch | own origin events | ALLOW |
+| peer | fed.receive_batch | events with other origin | DENY, FED.PEER_NOT_TRUSTED |
+| F12 moderator | peer.quarantine | peer | ALLOW (case scope) |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-088-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fails closed. Offline nodes are not peers.
+
+## Privacy, retention, abuse
+Peer state changes audited (CTR-FED-001 R01, CTR-CAP-001 R08).
+
+## Observability & budgets
+`delivery_authz_denies_total{reason}`.
+
+## Tests
+- TEST-PS-088-05-01 (matrix): outcomes per row.
+- TEST-PS-088-05-02 (quarantine): queued rows dropped on quarantine.
+- TEST-PS-088-05-03 (origin): relayed foreign-origin event refused (ASSUMPTION).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix passes.
+2. Revocation within 60 s.
+
+## Assumptions & open decisions
+- ASSUMPTION: relays forward only their own origin events in MVP (CTR-FED-001 step 6).
+- PROVISIONAL (CTR-CAP-001 default, unapproved).

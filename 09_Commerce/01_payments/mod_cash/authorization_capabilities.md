@@ -1,35 +1,57 @@
-# PS-067-05 — authorization capabilities
+# PS-067-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-067-05. **Owner:** [09_Commerce/01_payments/mod_cash](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_cash. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_cash (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01–R08), CTR-COM-001 (Authorization), CTR-PRV-001 (R07). **Decisions:** D06 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the authorization capabilities process for cash within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-067-05.R01 | Only the two parties of a `trx_` may submit, attest or dispute a cash claim (`participant` scope). | MVP |
+| PS-067-05.R02 | Configuration reads are public; configuration writes require `cash_method.administer` with `ope_` principal and dual control. | MVP |
+| PS-067-05.R03 | Dispute resolution of cash claims requires `mod` with `case:` scope and decision record. | MVP |
+| PS-067-05.R04 | Operators cannot read claim amounts or counterparties without a privileged grant (CTR-PRV-001 R07). | MVP |
+| PS-067-05.R05 | `sys_` adapters have no rights over cash claims (no verification capability). | MVP |
 
-## Requirements to specify
-- [ ] PS-067-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-067-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-067-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capability IDs: `cash_method.read`, `cash_method.administer`, `clm.submit`, `clm.attest`, `clm.dispute`, `clm.resolve`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Action | Actor |
+|---|---|---|
+| `clm.submit` (cash) | `clm.propose` | party |
+| `clm.attest` | `clm.attest` | counterparty |
+| `clm.dispute` | `clm.reject` | party within window |
+| `case.resolve` | `clm.moderate` | `mod_` with `case:` |
+| `cash_method.configure` | `cash_method.administer` | `ope_` (dual control) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Grants follow CTR-CAP-001 lifecycle; a grant for `cash_method.administer` expires within 72 h (CTR-CAP-001 R06).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Non-party: `SYS.NOT_FOUND`. Party without rights: `SYS.FORBIDDEN`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Field visibility: counterparty sees claim state, amount and currency; moderators see claim under case grant only; no `sys_` visibility beyond verification scope.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-067-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Grant checks run per request; revoked grants fail on next decision.
+
+## Privacy, retention, abuse
+Privileged reads emit `aud_` records with IDs and purpose only (CTR-CAP-001 R08).
+
+## Observability & budgets
+Count of privileged reads per week; alert on any read without case reference.
+
+## Tests
+- TEST-PS-067-05-01 (unit): matrix rows allow listed actors only.
+- TEST-PS-067-05-02 (integration): single operator cannot approve own configuration change (`CAP.SELF_APPROVAL_FORBIDDEN`).
+- TEST-PS-067-05-03 (negative): `sys_` adapter cannot call claim attest or cash verify.
+- TEST-PS-067-05-04 (integration): non-party receives `SYS.NOT_FOUND`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix matches implementation (generated test).
+2. Dual control enforced for configuration changes.
+3. No system principal can verify a cash claim.
+
+## Assumptions & open decisions
+- ASSUMPTION: grant expiry 72 h maximum for privileged access.
+- D06 (PROVISIONAL, unapproved).

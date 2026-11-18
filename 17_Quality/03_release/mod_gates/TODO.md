@@ -1,10 +1,9 @@
-# TODO
+# TODO — gates (release gate definitions and decisions)
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Process specs drafted; implementation not started.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Draft the 10 process specs (PS-143-01 to PS-143-10).
+- [ ] QA Lead, Security Lead and Privacy Lead approve the MVP gate list.
+- [ ] Set maximum waiver lifetime (ASSUMPTION: 14 days) with Governance Lead.
+- [ ] Confirm evidence-ID format with mod_ci and mod_compatibility.
+- [ ] Implement gate evaluation and waiver flow — future phase.

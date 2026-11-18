@@ -1,35 +1,56 @@
-# PS-009-06 — failure recovery idempotency
+# PS-009-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-009-06. **Owner:** [01_LocalBazaar/03_inventory/mod_variants](SPEC.md). **Implementing module:** 01_LocalBazaar/03_inventory/mod_variants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/03_inventory/mod_variants. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-SCH-001 (R06), CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for variants within 03_inventory. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-009-06.R01 | Concurrent writes to one listing are serialised by the listing revision lock; the loser receives `EVT.REVISION_CONFLICT` and re-reads. | MVP |
+| PS-009-06.R02 | Two adds of the same attribute set from two devices: exactly one succeeds; the other returns `VARIANT.DUPLICATE_COMBINATION` or `EVT.REVISION_CONFLICT`. | MVP |
+| PS-009-06.R03 | Archive committed after a proposal referenced the variant: the proposal is flagged `needs_revalidation` (F02.S02.M05), never silently changed. | MVP |
+| PS-009-06.R04 | Command timeout 3 s (ASSUMPTION). Clients retry only with the same `idempotency_key`. | MVP |
+| PS-009-06.R05 | Offline edits are held in a local pending queue and shown as pending until relay acknowledgement (D08). | MVP |
 
-## Requirements to specify
-- [ ] PS-009-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-009-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-009-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+No extra tables. Idempotency records follow CTR-EVT-001 R03 (7-day retention). Read models are rebuilt from the event stream.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry-safe operations: all three commands, by key. `listing.variants_get` is idempotent by definition.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| pending (local) | relay ack | revision matches | committed | UI shows active or archived |
+| pending (local) | relay reject | any VARIANT or EVT code | rejected | user sees localised message key; no silent drop |
+| pending (local) | unknown schema MAJOR | CTR-SCH-001 R06 | pending | marked "client upgrade required"; never discarded |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Rejected queued edits return the original code and message key.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Replayed commands are re-authorised at replay time; a revoked owner's queued edit is rejected.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-009-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Partial failure: the event append and read-model update are one commit; a read-model gap is repaired by replay from revision.
+- Archive-versus-proposal race: archive wins if committed first; proposal re-check is asynchronous and bounded by PS-009-08.
+- Retries: exponential backoff from 1 s, cap 60 s, maximum 8 attempts (ASSUMPTION).
+
+## Privacy, retention, abuse
+Pending queue on a device follows RET-EPH; purged on logout (CTR-PRV-001 R06 cascade).
+
+## Observability & budgets
+Count of `EVT.REVISION_CONFLICT` per listing and queue depth per device are tracked (PS-009-08).
+
+## Tests
+- TEST-PS-009-06-01 (concurrency): two writers, one winner, one correct conflict.
+- TEST-PS-009-06-02 (integration): archive during open proposal flags it for re-check.
+- TEST-PS-009-06-03 (offline): queued add survives restart; after ack it is active exactly once.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No duplicate active variants after 100 randomised concurrent-add runs.
+2. Every archive that races a proposal yields a re-check flag in 100% of runs.
+3. Queued edits are never dropped; each ends in committed or rejected.
+
+## Assumptions & open decisions
+- PROVISIONAL (D08 default, unapproved): local pending queue until authenticated relay acknowledgement.
+- ASSUMPTION: 3 s command timeout and retry parameters above.

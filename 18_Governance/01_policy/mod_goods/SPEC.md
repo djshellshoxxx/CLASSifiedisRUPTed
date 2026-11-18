@@ -1,44 +1,46 @@
-# F18.S01.M03 — goods
+# F18.S01.M03 — goods (controlled goods taxonomy)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F18.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Governance Lead (F18). **Parent:** [F18.S01 policy](../SPEC.md).
 
 ## Purpose and business behavior
-Provide goods as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Maintain the controlled taxonomy of goods categories and per-category attributes (condition, quantity unit, safety flags, restriction flags) that listings must use. Restriction flags are inputs to [mod_prohibited](../mod_prohibited/SPEC.md) and [mod_jurisdictions](../mod_jurisdictions/SPEC.md); this module classifies goods but does not decide legality or prohibition.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a listing author, I pick a category whose name and attributes match what I am offering.
+- As a policy reviewer, I see which categories carry restriction flags and which rule versions they reference.
+- As a participant searching, I find items in the category they expect.
 
 ## Scope
-- Required process spec: `goods_domain_model.md` (not yet authored)
-- Required process spec: `goods_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `goods_validation_and_authorization.md` (not yet authored)
-- Required process spec: `goods_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `goods_interfaces_and_events.md` (not yet authored)
-- Required process spec: `goods_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `goods_acceptance_and_property_tests.md` (not yet authored)
+- Process specs (SPEC-DRAFT-COMPLETE, pending approval): domain_schema, validation_rules, workflow_state_machine, commands_queries_events, authorization_capabilities, failure_recovery_idempotency, privacy_retention_abuse, observability_performance, contract_and_acceptance_tests, import_export_backup_rollback.
+- Process IDs: PS-144-01 to PS-144-10.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `ProposeGoodsCategory`, `PublishGoodsCategory`, `DeprecateGoodsCategory`. Queries `GetGoodsTaxonomyVersion`, `ListGoodsCategories`. Events `goods_category.proposed`, `goods_category.published`, `goods_category.deprecated`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: governance approval via [mod_governance](../../02_community/mod_governance/SPEC.md); CTR-CAP-001, CTR-ERR-001. Downstream: listing creation and validation in F01, prohibited checks in mod_prohibited, jurisdiction rules in mod_jurisdictions. Consumers reference category keys and taxonomy versions only.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns the taxonomy tree, attribute definitions and their version history. Does not own listings (F01) or legal rules (mod_jurisdictions) or prohibition rules (mod_prohibited).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Taxonomy drift between versions that breaks saved listings; ambiguous categories that hide restricted goods; restriction flags set without a linked rule; unreviewed category additions; search bias from category placement.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Taxonomy v1 approved by Governance Lead; every restriction flag resolves to a rule ID; migration rules for deprecated categories tested in a later phase.
 
 ## Required process specification inventory
-- [ ] `goods_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `goods_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `goods_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `goods_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `goods_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `goods_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `goods_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-144-01 drafted
+- [x] `validation_rules.md` — PS-144-02 drafted
+- [x] `workflow_state_machine.md` — PS-144-03 drafted
+- [x] `commands_queries_events.md` — PS-144-04 drafted
+- [x] `authorization_capabilities.md` — PS-144-05 drafted
+- [x] `failure_recovery_idempotency.md` — PS-144-06 drafted
+- [x] `privacy_retention_abuse.md` — PS-144-07 drafted
+- [x] `observability_performance.md` — PS-144-08 drafted
+- [x] `contract_and_acceptance_tests.md` — PS-144-09 drafted
+- [x] `import_export_backup_rollback.md` — PS-144-10 drafted
+
+## Assumptions and open decisions
+- ASSUMPTION: taxonomy is maintained in-platform, not imported from an external standard, for MVP.
+- D07 (retention) default: PROVISIONAL (D07 default, unapproved). No other Dxx directly governs taxonomy. See [DECISIONS](../../../DECISIONS.md).

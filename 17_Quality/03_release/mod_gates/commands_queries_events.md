@@ -1,35 +1,36 @@
-# PS-143-04 — commands queries events
+# PS-143-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-143-04. **Owner:** [17_Quality/03_release/mod_gates](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_gates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/03_release/mod_gates. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for gates within 03_release. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-143-04.R01 | State-changing commands carry `idempotency_key` and `expected_revision`. | MVP |
+| PS-143-04.R02 | Commands are `v1`; breaking changes need a new name. | MVP |
+| PS-143-04.R03 | Queries paginate at max 100 and return evidence IDs and digests, not evidence bodies. | MVP |
 
-## Requirements to specify
-- [ ] PS-143-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-143-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-143-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands
+| Command (v1) | Signature | Idempotency key | Emits | Errors |
+|---|---|---|---|---|
+| DefineReleaseGate | `(gate: release_gate, governance_approval_id?)` | `gate_key` + `version` | `release_gate.defined` | GATES.EVIDENCE_MISSING, GATES.INVALID_TRANSITION, SYS.FORBIDDEN |
+| EvaluateGates | `(gate_key, commit_sha)` | `gate_key` + `commit_sha` + `gate_version` | `gate_decision.recorded` | GATES.EVIDENCE_STALE, SYS.NOT_FOUND |
+| GrantGateWaiver | `(decision_id, reason_key, expires_at, approved_by)` | `decision_id` + `reason_key` | `gate_waiver.granted` | GATES.SELF_APPROVAL_FORBIDDEN, GATES.WAIVER_TOO_LONG, SYS.CONFLICT |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Queries
+| Query (v1) | Input | Output | Errors |
+|---|---|---|---|
+| GetGateDecision | `decision_id` | outcome, evidence refs | SYS.NOT_FOUND |
+| ListOpenWaivers | cursor, limit ≤ 100 | waiver summaries | SYS.REQUEST_MALFORMED |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Events
+| event_type | aggregate_type | max_data_class | Payload (summary) |
+|---|---|---|---|
+| release_gate.defined | release_gate | PUBLIC | gate_key, version |
+| gate_decision.recorded | gate_decision | PUBLIC | decision_id, outcome, commit_sha |
+| gate_waiver.granted | gate_waiver | PUBLIC | waiver_id, gate_key, expires_at |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Envelope per CTR-EVT-001; `actor_ref` is an `acc_` or `sys_` ID.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-143-04`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: promotion tooling subscribes to `gate_decision.recorded`.
+- No Dxx decision governs these commands directly: D07 applies to decision retention: PROVISIONAL (D07 default, unapproved).

@@ -1,35 +1,34 @@
-# PS-145-04 — commands queries events
+# PS-145-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-145-04. **Owner:** [18_Governance/01_policy/mod_jurisdictions](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_jurisdictions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 18_Governance/01_policy/mod_jurisdictions. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for jurisdictions within 01_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-145-04.R01 | State-changing commands carry `idempotency_key` and `expected_revision`. | MVP |
+| PS-145-04.R02 | Commands are `v1`. | MVP |
+| PS-145-04.R03 | Queries are filtered by region and date; a query never returns a user's region. | MVP |
 
-## Requirements to specify
-- [ ] PS-145-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-145-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-145-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands
+| Command (v1) | Signature | Idempotency key | Emits | Errors |
+|---|---|---|---|---|
+| ProposeJurisdictionRule | `(rule: jurisdiction_rule)` | `rule_key` + `version` | `jurisdiction_rule.proposed` | JURIS.REGION_UNKNOWN, JURIS.SOURCE_MISSING, JURIS.DATE_RANGE_INVALID |
+| PublishJurisdictionRule | `(rule_key, version, approver_ref, expected_revision)` | `rule_key` + `version` | `jurisdiction_rule.published` | JURIS.PROHIBITION_LINK_MISSING, SYS.FORBIDDEN, SYS.CONFLICT |
+| WithdrawJurisdictionRule | `(rule_key, version, reason_key, expected_revision)` | `rule_key` + `version` + `reason_key` | `jurisdiction_rule.withdrawn` | JURIS.INVALID_TRANSITION, SYS.CONFLICT |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Queries
+| Query (v1) | Input | Output | Errors |
+|---|---|---|---|
+| GetJurisdictionRules | `region_code`, `as_of` date, `listing_type` | applicable rule versions | JURIS.REGION_UNKNOWN |
+| ListJurisdictionRuleVersions | `rule_key`, cursor | version history | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Events
+| event_type | aggregate_type | max_data_class | Payload (summary) |
+|---|---|---|---|
+| jurisdiction_rule.proposed | jurisdiction_rule | PUBLIC | rule_key, version |
+| jurisdiction_rule.published | jurisdiction_rule | PUBLIC | rule_key, version, region_code |
+| jurisdiction_rule.withdrawn | jurisdiction_rule | PUBLIC | rule_key, version |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-145-04`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: F01 and mod_prohibited subscribe to published and withdrawn events.
+- D05 default governs region arguments: PROVISIONAL (D05 default, unapproved).

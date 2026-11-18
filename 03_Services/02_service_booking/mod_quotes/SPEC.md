@@ -1,44 +1,48 @@
 # F03.S02.M01 — quotes
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F03.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead (F03). **Parent:** F03.S02.
 
 ## Purpose and business behavior
-Provide quotes as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Lets a service provider send a priced, time-limited quote for one or more availability windows (`avw_`) of a service listing (`srv_`), and lets the addressed customer accept or decline it. Sending holds the windows for up to 72 hours. Acceptance atomically creates a transaction (`trx_`, CTR-COM-001) and a booking link. The platform records the quote and the acceptance only; no payment is collected, held or released here.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a provider, I send a fixed-price quote for two time windows and can see which windows are held.
+- As a customer, I see the price, tax mode and line items before I accept, and I cannot be charged by the platform.
+- As a provider, a changed price is a new quote that the customer must accept again.
 
 ## Scope
-- Required process spec: `quotes_domain_model.md` (not yet authored)
-- Required process spec: `quotes_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `quotes_validation_and_authorization.md` (not yet authored)
-- Required process spec: `quotes_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `quotes_interfaces_and_events.md` (not yet authored)
-- Required process spec: `quotes_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `quotes_acceptance_and_property_tests.md` (not yet authored)
+- Owns: service quote records (`svq_`, pending prefix), quote states, send, accept, decline, withdraw and supersede commands.
+- Consumes: service availability holds (F03.S01.M02), service listings and skills (F03.S01), transaction creation (F09).
+- Out of scope: payment and settlement (F09.S02), milestones (F03.S02.M02), disputes (F03.S02.M03), negotiation messages (F08.S02.M01).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `svcquote.create`, `svcquote.send`, `svcquote.accept`, `svcquote.decline`, `svcquote.withdraw`, `svcquote.supersede`; queries `svcquote.get`, `svcquote.list`; events `svcquote.*`. Details in [commands_queries_events](commands_queries_events.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F03.S01.M01 `mod_skills`, F03.S01.M02 `mod_availability` (holds), F08.S02.M01 `mod_offers` (negotiation context), F09.S03.M03 `mod_precision` (currency handling). Downstream: F03.S02.M02 `mod_milestones`. Contracts: CTR-ERR-001, CTR-EVT-001, CTR-COM-001, CTR-SCH-001, CTR-CAP-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Canonical owner of service quote records: F03.S02.M01 (this module), keyed by `svq_` (prefix PENDING CTR-ID-001). Canonical owner of transactions (`trx_`) and claims: F09 (CTR-COM-001). Canonical owner of pinned currency quotes (`qte_`): F09.S03. Availability windows: F03.S01.M02. Consumers reference these by full ID.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Bait-and-switch price or scope changes after acceptance.
+- Hold abuse: quotes sent only to block windows.
+- Accept races with supersede or hold expiry.
+- Customer identity disclosure before acceptance.
+- Off-platform contact steering through scope text.
+- Disputes over delivered service (handled by F03.S02.M03).
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specs (PS-032-01 to PS-032-10) are SPEC-DRAFT-COMPLETE; `svq` prefix registration requested; accept atomicity specified; implementation, tests and security review are later-phase gates.
 
 ## Required process specification inventory
-- [ ] `quotes_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `quotes_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `quotes_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `quotes_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `quotes_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `quotes_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `quotes_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-032-01
+- [x] [validation_rules.md](validation_rules.md) — PS-032-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-032-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-032-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-032-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-032-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-032-07
+- [x] [observability_performance.md](observability_performance.md) — PS-032-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-032-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-032-10

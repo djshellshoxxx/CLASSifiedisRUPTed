@@ -1,35 +1,52 @@
-# PS-121-06 — failure recovery idempotency
+# PS-121-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-121-06. **Owner:** [15_Platform/03_operations/mod_observability](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_observability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_observability (F15.S03.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for observability within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-121-06.R01 | Emitters buffer up to 10,000 records or 10 MiB locally; oldest non-alert records are dropped first when full. | MVP |
+| PS-121-06.R02 | Alert-type records are never dropped by the emitter buffer; they persist until acknowledged by ingest. | MVP |
+| PS-121-06.R03 | Ingest outage: emitters retry with full-jitter backoff, base 1 s, cap 5 min (ASSUMPTION). | MVP |
+| PS-121-06.R04 | Dropped records increment `telemetry_dropped_total{reason}` and never block the caller. | MVP |
+| PS-121-06.R05 | Storage of the telemetry store is append-only per partition; partitions are sealed after 24 h. | MVP |
 
-## Requirements to specify
-- [ ] PS-121-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-121-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-121-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Buffer record carries batch digest for R02 of PS-121-04.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`telemetry.ingest` idempotent on digest (PS-121-04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Alert instances follow PS-121-03 and survive restarts.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| SYS.UNAVAILABLE | true | unavailable / 503 | Ingest down; emitter retries. |
+| OBSERV.REDACTION_FAILED | false | internal / 500 | Record dropped, not retried. |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Emitters use their `sys` principal.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-121-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Emitter crash: buffered records are flushed on restart when the file-backed buffer is intact; corrupt buffer is discarded with counter increment.
+
+## Privacy, retention, abuse
+Buffers hold the same redacted records as ingest; buffer files are excluded from crash-report uploads.
+
+## Observability & budgets
+Alert when telemetry dropped rate > 1% for 10 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-121-06-01 (fault): ingest down for 30 min; no caller blocked; alert records retained.
+- TEST-PS-121-06-02 (kill): emitter killed with 5,000 buffered records; restart delivers each once.
+- TEST-PS-121-06-03 (property): drop order never drops alert records before log records.
+- TEST-PS-121-06-04 (unit): corrupt buffer discarded and counted.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No caller blocked by telemetry outage (TEST-01).
+2. TEST-PS-121-06-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: buffer sizes above.

@@ -1,35 +1,49 @@
 # PS-073-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-073-09. **Owner:** [09_Commerce/03_valuation/mod_currency](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_currency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_currency (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (currency object, Tests 01, 09), CTR-SCH-001 (R09), CTR-EVT-001. **Decisions:** D03 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the contract and acceptance tests process for currency within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-073-09.R01 | Golden fixtures for every supported ISO 4217 code exponent and every registered asset. | MVP |
+| PS-073-09.R02 | Consumer contract tests for mod_rates, mod_precision, mod_cash, mod_crypto, mod_receipts and LocalMutiny `mod_currency`. | MVP |
+| PS-073-09.R03 | Schema migration golden fixtures for each supported `from` version (CTR-SCH-001 R09). | MVP |
+| PS-073-09.R04 | Accessibility: currency labels include name and code (not symbol alone). | MVP |
 
-## Requirements to specify
-- [ ] PS-073-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-073-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-073-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixture: registry snapshot; ISO list snapshot; asset list snapshot.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay of registry events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Shared with PS-073-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Shared with PS-073-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Shared with PS-073-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-073-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Shared with PS-073-06.
+
+## Privacy, retention, abuse
+Shared with PS-073-07.
+
+## Observability & budgets
+Shared with PS-073-08.
+
+## Tests
+- TEST-PS-073-09-01 (golden): exponent fixtures.
+- TEST-PS-073-09-02 (contract): consumer tests.
+- TEST-PS-073-09-03 (e2e): register asset, enable, propose, disable, claim remains valid.
+- TEST-PS-073-09-04 (a11y): currency label review.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Golden fixtures pass.
+2. Consumer contract tests pass.
+3. E2E lifecycle passes.
+
+## Assumptions & open decisions
+- D03 (PROVISIONAL, unapproved).

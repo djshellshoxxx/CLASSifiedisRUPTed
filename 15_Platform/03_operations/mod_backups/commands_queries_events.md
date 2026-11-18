@@ -1,35 +1,54 @@
-# PS-120-04 — commands queries events
+# PS-120-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-120-04. **Owner:** [15_Platform/03_operations/mod_backups](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_backups. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_backups (F15.S03.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the commands queries events process for backups within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-120-04.R01 | Every state-changing command carries `idempotency_key` (CTR-EVT-001 R03) and returns the original result on repeat. | MVP |
+| PS-120-04.R02 | Commands are internal (`sys`, `ope`); no client-facing endpoint. | MVP |
+| PS-120-04.R03 | Queries return metadata only; no query returns object content or keys. | MVP |
+| PS-120-04.R04 | Events are CTR-EVT-001 envelopes with `max_data_class` at most PSEUDONYMOUS (counts and IDs only). | MVP |
 
-## Requirements to specify
-- [ ] PS-120-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-120-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-120-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Signature | Idempotency scope | Emits | Errors |
+|---|---|---|---|---|
+| `backup.schedule` | (scope, kind, window, parent_set_id?) | (actor, key) | `backup.scheduled` (local) | BACKUP.SCOPE_INVALID, BACKUP.WINDOW_OVERLAP, BACKUP.PARENT_INVALID |
+| `backup.run` | (bkp_id) | (bkp_id) | `backup.started`, `backup.completed`, `backup.failed` | BACKUP.KEY_UNAVAILABLE, BACKUP.STORE_UNAVAILABLE |
+| `backup.verify` | (bkp_id) | (bkp_id, manifest_sha256) | `backup.completed` or `backup.failed` | BACKUP.MANIFEST_MISMATCH, BACKUP.VERIFY_FAILED |
+| `backup.expire` | (bkp_id, reason) | (bkp_id) | `backup.expired` | SYS.CONFLICT if hold active |
+| `backup.purge` | (bkp_id) | (bkp_id) | `backup.purged` | SYS.GONE on repeat |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Queries: `backup.list` (metadata, page size <= 100), `backup.get` (one set metadata).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Command effects follow PS-120-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Validation per PS-120-02. Error codes use CTR-ERR-001 envelope; `message_key` = `err.backup.<code>`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-120-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-120-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Duplicate `backup.run` for a running set returns current status (no second job). Event append uses CTR-EVT-001 revision check on the `backup` aggregate.
+
+## Privacy, retention, abuse
+Event payloads include `bkp_id`, scope, counts and class only. Never object names or record IDs.
+
+## Observability & budgets
+Commands p95 <= 200 ms excluding data transfer (ASSUMPTION).
+
+## Tests
+- TEST-PS-120-04-01 (contract): each command validated against signatures above.
+- TEST-PS-120-04-02 (unit): repeat `backup.run` returns same status.
+- TEST-PS-120-04-03 (lint): event payload fixtures contain no record IDs beyond `bkp_id`.
+- TEST-PS-120-04-04 (negative): no public route exposes the commands.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command table matches the registry of internal operations.
+2. TEST-PS-120-04-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: events use `backup.*` names (CTR-EVT-001 R10 past tense).
+- PENDING: `bkp` prefix (PS-120-01).

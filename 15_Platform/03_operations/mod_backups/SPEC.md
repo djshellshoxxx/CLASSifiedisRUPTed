@@ -1,44 +1,42 @@
 # F15.S03.M02 — backups
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F15.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (F15). **Parent:** [F15.S03 operations](../SPEC.md).
 
 ## Purpose and business behavior
-Provide backups as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Creates encrypted, verified, scheduled backup sets of the authoritative ClassRup stores: the event log, aggregate snapshots, schema registry, grant and decision records, and attachment objects. Backups are the source for disaster recovery in [mod_recovery](../mod_recovery/SPEC.md). A backup is usable only after verification passes. Backups hold personal and evidence data, so they are a high-value target and are never exported to users or third parties.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a platform operator, I can see the age of the last verified backup for each scope and know whether recovery point objectives are met.
+- As a platform operator, I am alerted when a backup fails or cannot be verified, before the gap grows.
+- As a participant, my deleted data stays deleted when a backup is restored (deletions are replayed).
+- As a participant, my signed receipts and listings in a backup are the same bytes that were originally signed.
 
 ## Scope
-- Required process spec: `backups_domain_model.md` (not yet authored)
-- Required process spec: `backups_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `backups_validation_and_authorization.md` (not yet authored)
-- Required process spec: `backups_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `backups_interfaces_and_events.md` (not yet authored)
-- Required process spec: `backups_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `backups_acceptance_and_property_tests.md` (not yet authored)
+Scheduled full and incremental backup jobs, manifests, encryption, verification, expiry and purge. Restore is owned by [mod_recovery](../mod_recovery/SPEC.md). Process specifications: [domain_schema](domain_schema.md), [validation_rules](validation_rules.md), [workflow_state_machine](workflow_state_machine.md), [commands_queries_events](commands_queries_events.md), [authorization_capabilities](authorization_capabilities.md), [failure_recovery_idempotency](failure_recovery_idempotency.md), [privacy_retention_abuse](privacy_retention_abuse.md), [observability_performance](observability_performance.md), [contract_and_acceptance_tests](contract_and_acceptance_tests.md), [import_export_backup_rollback](import_export_backup_rollback.md).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal commands `backup.schedule`, `backup.run`, `backup.verify`, `backup.expire`, `backup.purge`; queries `backup.list`, `backup.get`. No client-facing API. Error codes `BACKUP.*`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Depends on F15.S02.M03 (storage) and F16.S02.M02 (key management, KMS-wrapped keys). Consumed by F15.S03.M03 (recovery), F09.S02.M03 (reconciliation), F10.S01.M02 (retention), F10.S01.M04 (delete), F16.S03.M03 (incident response). Contracts: CTR-PRV-001 (disclosure and retention), CTR-SCH-001 (manifest schema).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Canonical owner of record class "backup set" and its manifest. It owns no content; content owners remain the data-owning modules.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Backup theft exposing all data classes; restore resurrecting deleted records; partial sets reported as complete; key loss making sets unreadable; silent RPO drift. Mitigations in PS-120-03, -05, -06 and -07. Retention and key recovery depend on open decisions D07 and D10.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specs SPEC-DRAFT-COMPLETE; manifest schema registered after `bkp` prefix is approved; restore drill defined with PS-122; D07 and D10 decided.
 
 ## Required process specification inventory
-- [ ] `backups_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `backups_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `backups_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `backups_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `backups_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `backups_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `backups_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — SPEC-DRAFT-COMPLETE (PS-120-01)
+- [x] `validation_rules.md` — SPEC-DRAFT-COMPLETE (PS-120-02)
+- [x] `workflow_state_machine.md` — SPEC-DRAFT-COMPLETE (PS-120-03)
+- [x] `commands_queries_events.md` — SPEC-DRAFT-COMPLETE (PS-120-04)
+- [x] `authorization_capabilities.md` — SPEC-DRAFT-COMPLETE (PS-120-05)
+- [x] `failure_recovery_idempotency.md` — SPEC-DRAFT-COMPLETE (PS-120-06)
+- [x] `privacy_retention_abuse.md` — SPEC-DRAFT-COMPLETE (PS-120-07)
+- [x] `observability_performance.md` — SPEC-DRAFT-COMPLETE (PS-120-08)
+- [x] `contract_and_acceptance_tests.md` — SPEC-DRAFT-COMPLETE (PS-120-09)
+- [x] `import_export_backup_rollback.md` — SPEC-DRAFT-COMPLETE (PS-120-10)

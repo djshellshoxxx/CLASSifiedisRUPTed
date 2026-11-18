@@ -1,35 +1,52 @@
-# PS-018-06 — failure recovery idempotency
+# PS-018-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-018-06. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_n](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_n. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_n. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03).
 
-## Purpose and scope
-Define the failure recovery idempotency process for n within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-018-06.R01 | Budget exhaustion discards all candidates from that run; no partial output is ever sent to proposal. | MVP |
+| PS-018-06.R02 | Same snapshot and parameters reproduce identical candidates. | MVP |
+| PS-018-06.R03 | Run timeout 60 s wall clock (ASSUMPTION), in addition to the step budget. | MVP |
+| PS-018-06.R04 | Worker crash restarts the run from the sealed snapshot; no duplicate runs for one key. | MVP |
+| PS-018-06.R05 | Lower-length cycles are never produced as fallback when a 5–8 run fails. | MVP |
 
-## Requirements to specify
-- [ ] PS-018-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-018-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-018-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Run record and idempotency records (7 days).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Start is retry-safe by key.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Failure edges per PS-018-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Timeouts return CYCLEN.BUDGET_EXHAUSTED (non-retryable with same parameters) or SYS.UNAVAILABLE for infrastructure.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-check grant.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-018-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Starvation: runs for lengths 5–8 are scheduled round-robin with 3-party and 4-party runs to bound wait time (ASSUMPTION: ≤ 60 s queue wait).
+- Backoff for infrastructure failure: 1 s base, 60 s cap, 5 attempts.
+- Offline: not applicable.
+
+## Privacy, retention, abuse
+Discarded candidates are not written to logs.
+
+## Observability & budgets
+Count of budget exhaustion per length.
+
+## Tests
+- TEST-PS-018-06-01 (negative): budget set below need yields zero candidates.
+- TEST-PS-018-06-02 (property): 100 reruns give identical candidate lists.
+- TEST-PS-018-06-03 (integration): crash at 50% progress restarts with identical output.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No partial candidate lists reach proposal in 100% of runs.
+2. Reruns identical in 100% of fixtures.
+3. Queue wait ≤ 60 s p95 in load test (not yet measured).
+
+## Assumptions & open decisions
+- PROVISIONAL (D02 default, unapproved): explicit budget and all-or-nothing output.
+- ASSUMPTION: timeout and wait values above.

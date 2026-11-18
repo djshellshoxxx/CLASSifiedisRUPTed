@@ -1,35 +1,58 @@
 # PS-092-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-092-08. **Owner:** [12_Moderation/01_reporting/mod_appeals](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_appeals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_appeals. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09), CTR-EVT-001 (R04).
 
-## Purpose and scope
-Define the observability performance process for appeals within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-092-08.R01 | Metrics carry no `apl_id`, `acc_` or `mod_` labels. | MVP |
+| PS-092-08.R02 | Submit and decide command p95 ≤ 300 ms; `appeal.get` p95 ≤ 150 ms. | MVP |
+| PS-092-08.R03 | Time to decision: p50 ≤ 5 days, p95 ≤ 14 days (matches SLA, ASSUMPTION). | MVP |
+| PS-092-08.R04 | Backlog alert when any `decided` appeal lacks `implemented` after 24 h. | MVP |
 
-## Requirements to specify
-- [ ] PS-092-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-092-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-092-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Metric | Type | Labels |
+|---|---|---|
+| `appeals_transition_total` | counter | `from`, `to` |
+| `appeals_time_to_decision_seconds` | histogram | `target_type` |
+| `appeals_decision_total` | counter | `decision_code`, `target_type` |
+| `appeals_validation_error_total` | counter | `code` |
+| `appeals_backlog_age_seconds` | gauge | none |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Reversal rate = `REVERSED` ÷ all decisions, per `target_type`, reviewed monthly by F12 (not an alert).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Spans `appeals.<command>` with `request_id`, outcome code and duration.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Dashboards show counts per state; no per-appeal drill-down outside the case view.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`appeals_validation_error_total{code}` only; no body length in metrics.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-092-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Dashboards require `ope_` with aggregate scope; no per-case data.
+
+## Failure, idempotency, concurrency, offline
+Alert on `appeals_backlog_age_seconds` > 86 400 for 1 h. Alert on submit error rate > 2 % for 10 min (ASSUMPTION).
+
+## Privacy, retention, abuse
+Logs and traces: IDs and codes only; body is never sampled into traces (CTR-PRV-001 R09). Histogram buckets prevent single-appeal re-identification (minimum bucket count 5, ASSUMPTION).
+
+## Observability & budgets
+Capacity target: 1 000 appeals per day per node at launch (ASSUMPTION); storage ≤ 2 KB per appeal excluding body.
+
+## Tests
+- `TEST-PS-092-08-01` load: 10 submits/s and 10 decides/s for 10 min meet R02.
+- `TEST-PS-092-08-02` contract: no metric label matches `apl_`, `acc_`, `mod_`.
+- `TEST-PS-092-08-03` log scan: no body text after an end-to-end run.
+- `TEST-PS-092-08-04` alert: synthetic 25 h backlog fires backlog alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All five metrics exposed with documented labels.
+2. Latency and alert requirements pass in staging.
+3. Log scan zero forbidden fields.
+
+## Assumptions & open decisions
+- ASSUMPTION: capacity and bucket thresholds are estimates pending F15 review.
+- D07 (retention), PROVISIONAL default applies to metric and log retention (unapproved).

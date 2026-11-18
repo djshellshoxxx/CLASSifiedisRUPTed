@@ -1,35 +1,48 @@
 # PS-131-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-131-09. **Owner:** [16_Security/03_assurance/mod_incident](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_incident. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_incident. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001
 
-## Purpose and scope
-Define the contract and acceptance tests process for incident within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-131-09.R01 | Contract tests validate every event schema and every `INCIDENT.*` code. | MVP |
+| PS-131-09.R02 | Tabletop drill scenario per category in PS-131-01 is runnable in staging. | MVP |
+| PS-131-09.R03 | Property test: random transition sequences never reach `closed` without a review record. | MVP |
+| PS-131-09.R04 | Hash-chain tamper test detects any single-entry edit. | MVP |
 
-## Requirements to specify
-- [ ] PS-131-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-131-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-131-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Synthetic incidents only; no production data.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Covers [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Covers [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Covers [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Covers PS-131-05 decision table.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-131-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Covers PS-131-06 scenarios.
+
+## Privacy, retention, abuse
+Test data contains no real coordinates or identifiers.
+
+## Observability & budgets
+Drill runtime ≤ 30 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-131-09-01: contract, event and code registry.
+- TEST-PS-131-09-02: e2e, tabletop SEV2 scenario from declare to close.
+- TEST-PS-131-09-03: property, closure invariant.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Drill completes with all events in expected order.
+2. Property suite runs ≥ 10,000 cases without violation.
+
+## Assumptions & open decisions
+- ASSUMPTION: drill cadence quarterly.
+- D07 default governs fixture retention: PROVISIONAL (D07 default, unapproved).

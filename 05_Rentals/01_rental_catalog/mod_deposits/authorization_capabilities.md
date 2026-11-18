@@ -1,35 +1,69 @@
-# PS-040-05 — authorization capabilities
+# PS-040-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-040-05. **Owner:** [05_Rentals/01_rental_catalog/mod_deposits](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_deposits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/01_rental_catalog/mod_deposits. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (model, scopes, dual control), CTR-PRV-001 (FINANCIAL_EVIDENCE rules), CTR-COM-001 (party and dispute rights).
 
-## Purpose and scope
-Define the authorization capabilities process for deposits within 01_rental_catalog. Do not assume implementation or successful external settlement.
+**Decision labels:** Grant model PROVISIONAL (CTR-CAP-001). D09 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-040-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-040-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-040-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-040-05.R01 | Default deny on every deposit action (CTR-CAP-001 R01). | MVP |
+| PS-040-05.R02 | Participant status is derived from the rental at decision time, not stored as a grant (CTR-CAP-001 R05). | MVP |
+| PS-040-05.R03 | Non-participants receive `SYS.NOT_FOUND` for any `dep_` (no existence leak). | MVP |
+| PS-040-05.R04 | `global` scope never grants access to FINANCIAL_EVIDENCE (CTR-CAP-001 R04). | MVP |
+| PS-040-05.R05 | `ope` access to deposit content requires case scope and dual control (CTR-CAP-001 R07). | MVP |
+| PS-040-05.R06 | Dispute raise uses verb `reject` (closest in CTR-CAP-001 R03 vocabulary; ASSUMPTION). Vocabulary addition is MINOR. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Capability IDs: `deposit.propose`, `deposit.consent`, `deposit.attest`, `deposit.withdraw`, `deposit.read`, `deposit.reject` (dispute), `deposit.moderate` (case resolution). Decision records `dec_` store outcome and reason code only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Principal | Action | Scope | Outcome |
+|---|---|---|---|
+| renter or owner | deposit.propose | participant | ALLOW (rule: participant) |
+| other party | deposit.consent | participant | ALLOW; stale hash → SYS.CONFLICT |
+| renter | deposit.attest (record_given) | participant | ALLOW |
+| owner | deposit.attest (received, release) | participant | ALLOW |
+| either party | deposit.withdraw | participant | ALLOW before HELD |
+| either party | deposit.reject (dispute) | participant | ALLOW inside window |
+| participant | deposit.read | participant | ALLOW; fields per matrix below |
+| non-participant | any | none | DENY → SYS.NOT_FOUND |
+| mod | deposit.moderate | case, with purpose | ALLOW if case grant active |
+| ope | deposit.read | global | DENY → SYS.FORBIDDEN (SCOPE_MISMATCH) |
+| sys (adapter) | any deposit action | none | DENY; claim adapters are scoped to claims only |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Field visibility (CTR-CAP-001 R10): amounts, method, status, terms hash, claim IDs: participant. Notes: participant. Counterparty fields after close: participant read-only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Grant lifecycle not used for participants. Case grants follow CTR-CAP-001 grant states.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-040-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+`SYS.FORBIDDEN` (403) only where the actor already knows the record (`global` or case). Otherwise `SYS.NOT_FOUND` (404).
+
+## Authorization
+Server-side on every read and write (CTR-CAP-001 R11). Request-body party IDs are ignored.
+
+## Failure, idempotency, concurrency, offline
+Revocation applies at next decision (CTR-CAP-001 R09). Writes and FINANCIAL_EVIDENCE reads use zero decision-cache TTL.
+
+## Privacy, retention, abuse
+Each privileged read by `mod` or `ope` emits an `aud_` record with resource ID, purpose and decision ID, no content (CTR-CAP-001 R08).
+
+## Observability & budgets
+`deposit_authz_decisions_total{action,outcome,reason_code}`. Alert on any `ope` ALLOW for FINANCIAL_EVIDENCE without a second approver (must be 0).
+
+## Tests
+- TEST-PS-040-05-01 (unit): each matrix row returns its outcome and reason code.
+- TEST-PS-040-05-02 (security): non-participant gets identical response for existing and missing `dep_`.
+- TEST-PS-040-05-03 (negative): `ope` single approval cannot read FINANCIAL_EVIDENCE (CTR-CAP-001 R07).
+- TEST-PS-040-05-04 (integration): participant removed by a rental change loses read access on the next call.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix rows match the CTR-CAP-001 vocabulary; no undeclared verb is used.
+2. Zero cross-party reads in TEST-PS-040-05-02.
+3. Dual control enforced for every `ope` access to deposit content.
+
+## Assumptions & open decisions
+- ASSUMPTION: `reject` as the dispute verb pending CTR-CAP-001 vocabulary MINOR change.
+- PROVISIONAL (CTR-CAP-001 grant model, unapproved).
+- OPEN (F16, F07): named owners for CTR-CAP-001 are unassigned (S3-11).

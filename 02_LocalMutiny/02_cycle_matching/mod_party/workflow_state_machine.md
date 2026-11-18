@@ -1,35 +1,56 @@
 # PS-019-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-019-03. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R09), CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for party within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-019-03.R01 | Slot status is one of pending, consented, declined, withdrawn, dropped, locked, compensated. | MVP |
+| PS-019-03.R02 | `locked` and `compensated` are reached only from cycle lock and PS-024 recovery events. | MVP |
+| PS-019-03.R03 | Withdrawal before lock frees the participant's live slot in the same commit. | MVP |
+| PS-019-03.R04 | Every change emits one event with the cycle `correlation_id`. | MVP |
 
-## Requirements to specify
-- [ ] PS-019-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-019-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-019-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Status in `binding.status`; history is the event stream.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions via PS-019-04 or upstream events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | cycle.bind_slot | PS-019-02 passes | pending | emit cycle.slot_bound |
+| pending | mod_consent: consented | version matches | consented | emit cycle.slot_status_changed |
+| pending or consented | cycle.withdraw_slot | not locked | withdrawn | frees live slot; cycle superseded |
+| pending | dropout detected (mod_dropouts) | — | dropped | cycle back to proposed |
+| consented | cycle locked | all slots consented | locked | emit status change |
+| locked | recovery compensates | PS-024 plan | compensated | releases live slot |
+| pending | cycle expired | 48 h window | declined | frees live slot |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions return SYS.UNPROCESSABLE_STATE or CYCPARTY codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Withdraw: slot participant. Bind: cycle creator (sys_). Lock and compensate: system events only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-019-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Serialised on binding version; see PS-019-06.
+
+## Privacy, retention, abuse
+Withdrawal reason is not stored (no free text).
+
+## Observability & budgets
+Count of withdrawals after consent (abuse signal).
+
+## Tests
+- TEST-PS-019-03-01 (unit): every table row.
+- TEST-PS-019-03-02 (property): live slot count never exceeds one per participant.
+- TEST-PS-019-03-03 (integration): withdraw before lock frees slot for next cycle.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Status changes match table rows in 100% of runs.
+2. Withdrawal releases the live slot in the same commit.
+3. No `locked` without a lock event.
+
+## Assumptions & open decisions
+- PROVISIONAL (D04 default, unapproved).

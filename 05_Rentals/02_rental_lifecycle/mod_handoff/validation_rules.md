@@ -1,35 +1,56 @@
 # PS-042-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-042-02. **Owner:** [05_Rentals/02_rental_lifecycle/mod_handoff](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_handoff. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_handoff. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (coarse cells, EXIF), CTR-ERR-001, CTR-EVT-001 (clock rule R04).
 
-## Purpose and scope
-Define the validation rules process for handoff within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** Window length and clock tolerance are ASSUMPTION (OPEN, F05).
 
-## Requirements to specify
-- [ ] PS-042-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-042-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-042-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-042-02.R01 | Window: `window_end − window_start` between 30 min and 48 h (ASSUMPTION). Else `RNTHAND.WINDOW_INVALID` (400). | MVP |
+| PS-042-02.R02 | Rental must be `RESERVED`; otherwise `SYS.UNPROCESSABLE_STATE` (422). | MVP |
+| PS-042-02.R03 | `place_region_cell` must be a registered cell. Coordinates or free-text location → `RNTHAND.LOCATION_TOO_PRECISE` (400). | MVP |
+| PS-042-02.R04 | Attest requires every checklist code present; any `issue` requires ≥ 1 photo digest. Missing → `RNTHAND.CHECKLIST_INCOMPLETE` (422). | MVP |
+| PS-042-02.R05 | Photo digests ≤ 20 and 64 lowercase hex. Else `SYS.REQUEST_MALFORMED` (400). | MVP |
+| PS-042-02.R06 | Attest only inside window ± 15 min client clock tolerance (ASSUMPTION); otherwise `RNTHAND.EXPIRED` (410) when past `window_end + 24 h`, or `RNTHAND.WINDOW_INVALID` before start. | MVP |
+| PS-042-02.R07 | Actor must be the owner or renter of the rental. Else `SYS.NOT_FOUND`. | MVP |
+| PS-042-02.R08 | Client-origin timestamps follow CTR-EVT-001 R04 bounds. Else `EVT.TIMESTAMP_OUT_OF_RANGE`. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Check order: participant (R07) → rental state (R02) → shape and cell (R03, R05) → window and clock (R01, R06, R08) → checklist (R04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Applies to `rental_handoff.schedule` and `rental_handoff.attest`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Gates only; see PS-042-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+All `RNTHAND.*` codes non-retryable except none. Diagnostics carry rule ID, never location or photo data.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-042-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+R07 only.
+
+## Failure, idempotency, concurrency, offline
+Offline attestation (D08) is revalidated against the window at commit; expired queued attestations are "not applied".
+
+## Privacy, retention, abuse
+Rejected location input is discarded; the error does not echo it.
+
+## Observability & budgets
+`rental_handoff_validation_reject_total{code}`.
+
+## Tests
+- TEST-PS-042-02-01 (unit): one case per R01–R08 code.
+- TEST-PS-042-02-02 (boundary): window of 30 min passes; 30 min minus 1 s fails; 48 h passes.
+- TEST-PS-042-02-03 (negative): street address in `place_region_cell` rejected, error body lacks the input.
+- TEST-PS-042-02-04 (negative): `issue` checklist item with no photo rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every rule maps to one test and one registry code.
+2. No rejected location text appears in responses or logs.
+3. Window boundaries tested at both edges.
+
+## Assumptions & open decisions
+- ASSUMPTION: window bounds, 15-minute clock tolerance, 24-hour grace.
+- OPEN (F05): whether handoff may occur without a reservation for walk-in rentals.

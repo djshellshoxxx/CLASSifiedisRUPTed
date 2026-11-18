@@ -1,35 +1,74 @@
 # PS-104-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-104-01. **Owner:** [13_Notifications/01_delivery/mod_push](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_push. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_push. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-PRV-001, CTR-EVT-001, CTR-SCH-001. Prefixes `psb_` and `pda_` are PENDING CTR-ID-001 registration.
 
-## Purpose and scope
-Define the domain schema process for push within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-104-01.R01 | One `push_subscription` per (account, device, endpoint). A repeated registration returns the existing row; no second row is created. | MVP |
+| PS-104-01.R02 | Stores `endpoint` (https URL, 1–2048 chars), `p256dh` (65 bytes, base64url), `auth` (16 bytes, base64url). Other lengths are rejected. | MVP |
+| PS-104-01.R03 | At most 10 subscriptions with `status=active` per account. | MVP |
+| PS-104-01.R04 | `push_attempt` stores status, attempt number, HTTP status and timestamps. It never stores payload bodies or endpoint URLs. | MVP |
+| PS-104-01.R05 | Each subscription references its device by `dev_` ID (owner F07). Device revocation revokes the subscription within 60 s. | MVP |
+| PS-104-01.R06 | `channel` enum reserves `apns` and `fcm`. Both are Future; MVP writes only `web_push`. | Future |
 
-## Requirements to specify
-- [ ] PS-104-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-104-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-104-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+push_subscription  (psb_, class ulid, PENDING CTR-ID-001)
+{
+  "psb_id": "psb_<26 Crockford>", "account_id": "acc_<26>", "device_id": "dev_<26>",
+  "channel": "web_push", "endpoint": "https://<push-host>/...",
+  "p256dh": "<base64url, 87 chars>", "auth": "<base64url, 22 chars>",
+  "status": "active|expired|revoked", "consecutive_failures": 0,
+  "created_at": "<RFC 3339 UTC>", "last_success_at": "<RFC 3339>|null", "revoked_at": "<RFC 3339>|null",
+  "revision": 1, "schema_version": "1.0.0"
+}
+```
+Constraints: `endpoint` unique where `status=active`; `p256dh` and `auth` encrypted at rest, class SECRET (CTR-PRV-001); `revision` follows CTR-EVT-001 R02.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+```json
+push_attempt  (pda_, PENDING CTR-ID-001)
+{ "pda_id": "pda_<26>", "psb_id": "psb_<26>", "ntf_id": "ntf_<26>",
+  "attempt_no": 1, "status": "queued|sent|retry_scheduled|expired|failed",
+  "http_status": 201, "scheduled_at": "<RFC 3339>", "finished_at": "<RFC 3339>|null", "schema_version": "1.0.0" }
+```
+Constraints: unique (`ntf_id`, `psb_id`, `attempt_no`); `attempt_no` 1–5; `ntf_id` owned by F13 notification records (not duplicated here).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Provenance: subscriptions are written by the owning account through its client. Attempts are written only by the `sys_` dispatcher.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md). Schema changes follow CTR-SCH-001.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-104-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
+
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Row writes use optimistic concurrency via `revision`. Full policy in [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Endpoint and key material are SECRET-adjacent. Retention per [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+Row counts and state gauges only; see [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-104-01-01 (unit): `p256dh` of 64 or 66 bytes is rejected with `PUSH.KEY_INVALID`.
+- TEST-PS-104-01-02 (unit): second registration of same device and endpoint returns existing `psb_id`.
+- TEST-PS-104-01-03 (property): `attempt_no` above 5 is never persisted.
+- TEST-PS-104-01-04 (integration): device revocation sets subscription `revoked` within 60 s.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema validates against `schema_version` 1.0.0 with no extra fields accepted.
+2. Eleventh active subscription per account is rejected.
+3. No row in `push_attempt` contains a URL or payload body (automated scan).
+
+## Assumptions & open decisions
+- ASSUMPTION: Web Push (VAPID) is the only MVP channel; native push is Future.
+- Retention of keys: D07 default, PROVISIONAL (D07 default, unapproved).
+- Prefix registration for `psb_`/`pda_`: PENDING CTR-ID-001.

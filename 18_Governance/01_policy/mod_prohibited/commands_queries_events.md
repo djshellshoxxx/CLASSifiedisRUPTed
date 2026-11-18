@@ -1,35 +1,35 @@
-# PS-146-04 — commands queries events
+# PS-146-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-146-04. **Owner:** [18_Governance/01_policy/mod_prohibited](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_prohibited. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 18_Governance/01_policy/mod_prohibited. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for prohibited within 01_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-146-04.R01 | State-changing commands carry `idempotency_key` and `expected_revision`. | MVP |
+| PS-146-04.R02 | Commands are `v1`. | MVP |
+| PS-146-04.R03 | Queries never return detection logic (none is stored) and never return other users' decisions. | MVP |
 
-## Requirements to specify
-- [ ] PS-146-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-146-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-146-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands
+| Command (v1) | Signature | Idempotency key | Emits | Errors |
+|---|---|---|---|---|
+| ProposeProhibitionRule | `(rule: prohibition_rule)` | `rule_key` + `version` | `prohibition_rule.proposed` | PROHIB.DETECTION_FIELD_FORBIDDEN, PROHIB.SOURCE_MISSING |
+| PublishProhibitionRule | `(rule_key, version, approver_ref, expected_revision)` | `rule_key` + `version` | `prohibition_rule.published` | PROHIB.RULE_NOT_PUBLISHED, SYS.FORBIDDEN, SYS.CONFLICT |
+| RetireProhibitionRule | `(rule_key, reason_key, expected_revision)` | `rule_key` + `reason_key` | `prohibition_rule.retired` | PROHIB.INVALID_TRANSITION, SYS.CONFLICT |
+| ClassifyListingDraft | `(draft_ref, draft_version, region_code)` | `draft_ref` + `draft_version` + `region_code` | `classification.recorded` | PROHIB.CONTENT_NOT_ALLOWED, SYS.UNAVAILABLE |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Queries
+| Query (v1) | Input | Output | Errors |
+|---|---|---|---|
+| GetProhibitionRules | `class_key?`, `status?`, cursor | rule summaries (no detection fields) | SYS.REQUEST_MALFORMED |
+| GetClassificationDecision | `decision_id` | outcome, reason keys | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Events
+| event_type | aggregate_type | max_data_class | Payload (summary) |
+|---|---|---|---|
+| prohibition_rule.published | prohibition_rule | PUBLIC | rule_key, version |
+| prohibition_rule.retired | prohibition_rule | PUBLIC | rule_key, version |
+| classification.recorded | classification_decision | PSEUDONYMOUS | decision_id, outcome, case_ref |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-146-04`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: F12 subscribes to `classification.recorded` where outcome is `restricted`.
+- No Dxx applies directly: PROVISIONAL, none applied.

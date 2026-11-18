@@ -1,44 +1,46 @@
-# F18.S01.M02 — prohibited
+# F18.S01.M02 — prohibited (prohibited-goods and content rule catalogue)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F18.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Governance Lead (F18). **Parent:** [F18.S01 policy](../SPEC.md).
 
 ## Purpose and business behavior
-Provide prohibited as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Maintain the catalogue of prohibited and restricted goods and content classes, and the classification decision that applies it to a listing draft: `permitted`, `restricted` (routed for review), or `prohibited` (blocked, with a reason key). The catalogue is written as categories, attributes and reason keys, not as detection signals, so it can be published without helping abusers evade detection. Moderation cases are handled by F12; this module supplies the rule basis.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a listing author, I see a clear reason key and next step when my draft is blocked or routed for review.
+- As a moderator, I see which catalogue rule a case relies on.
+- As a policy editor, I can add or retire a class with a source reference.
 
 ## Scope
-- Required process spec: `prohibited_domain_model.md` (not yet authored)
-- Required process spec: `prohibited_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `prohibited_validation_and_authorization.md` (not yet authored)
-- Required process spec: `prohibited_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `prohibited_interfaces_and_events.md` (not yet authored)
-- Required process spec: `prohibited_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `prohibited_acceptance_and_property_tests.md` (not yet authored)
+- Process specs (SPEC-DRAFT-COMPLETE, pending approval): domain_schema, validation_rules, workflow_state_machine, commands_queries_events, authorization_capabilities, failure_recovery_idempotency, privacy_retention_abuse, observability_performance, contract_and_acceptance_tests, import_export_backup_rollback.
+- Process IDs: PS-146-01 to PS-146-10.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `ProposeProhibitionRule`, `PublishProhibitionRule`, `RetireProhibitionRule`, `ClassifyListingDraft`. Queries `GetProhibitionRules`, `GetClassificationDecision`. Events `prohibition_rule.published`, `prohibition_rule.retired`, `classification.recorded`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: [mod_goods](../mod_goods/SPEC.md) category keys, [mod_jurisdictions](../mod_jurisdictions/SPEC.md) rule IDs, [mod_governance](../../02_community/mod_governance/SPEC.md) approvals, CTR-CAP-001, CTR-ERR-001. Downstream: F01 listing submission, F12 moderation cases (referenced by `cas_` ID).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns rule catalogue entries and classification decisions (outcome, reason key, rule IDs). Does not own listing content, moderation case records or user reports.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Over-blocking legitimate goods; under-blocking restricted goods; catalogue leaking detection logic to abusers; decisions that store listing text; inconsistent results for identical drafts across regions; reason keys that reveal protected attributes.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Catalogue v1 approved by Governance Lead, Trust and Safety Lead (F12) and Privacy Lead; classification decisions reproducible from pinned rule versions in a later phase.
 
 ## Required process specification inventory
-- [ ] `prohibited_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `prohibited_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `prohibited_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `prohibited_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `prohibited_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `prohibited_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `prohibited_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-146-01 drafted
+- [x] `validation_rules.md` — PS-146-02 drafted
+- [x] `workflow_state_machine.md` — PS-146-03 drafted
+- [x] `commands_queries_events.md` — PS-146-04 drafted
+- [x] `authorization_capabilities.md` — PS-146-05 drafted
+- [x] `failure_recovery_idempotency.md` — PS-146-06 drafted
+- [x] `privacy_retention_abuse.md` — PS-146-07 drafted
+- [x] `observability_performance.md` — PS-146-08 drafted
+- [x] `contract_and_acceptance_tests.md` — PS-146-09 drafted
+- [x] `import_export_backup_rollback.md` — PS-146-10 drafted
+
+## Assumptions and open decisions
+- ASSUMPTION: classification is rule-based in MVP; no automated machine-learning classifier is in scope.
+- D07 (retention), default "minimal per-category defaults with legal-hold exceptions": PROVISIONAL (D07 default, unapproved). See [DECISIONS](../../../DECISIONS.md).

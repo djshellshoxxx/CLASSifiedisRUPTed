@@ -1,44 +1,43 @@
 # F17.S02.M02 — chaos
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F17.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** QA Lead (F17). **Parent:** F17.S02.
 
 ## Purpose and business behavior
-Provide chaos as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Injects controlled faults into staging (relay outage, database failover, duplicate delivery, key-service unavailability, scheduler crash, clock skew) to test the claims made in the specifications: no unsigned events under key-service failure (PS-130), single policy activation under scheduler crash (PS-129), exactly-once effects under duplicate delivery (CTR-EVT-001). Every experiment has a written hypothesis, numeric abort conditions and a watchdog that reverts faults independently of the runner. Production chaos is out of scope at MVP.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As an SRE, I can abort any running experiment within 10 seconds, whoever started it.
+- As a module owner, I see the hypothesis and verdict for each fault my module must survive.
+- As a Security Lead, I can confirm that no experiment disables audit logging or access control.
 
 ## Scope
-- Required process spec: `chaos_domain_model.md` (not yet authored)
-- Required process spec: `chaos_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `chaos_validation_and_authorization.md` (not yet authored)
-- Required process spec: `chaos_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `chaos_interfaces_and_events.md` (not yet authored)
-- Required process spec: `chaos_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `chaos_acceptance_and_property_tests.md` (not yet authored)
+- Six MVP experiments CHX-01 to CHX-06.
+- Experiment lifecycle, abort, watchdog, verdict reporting.
+- Excludes: load testing (`mod_load`), offline-specific tests (`mod_offline`), production game days (out of scope at MVP).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+`chaos.propose | approve | start | abort | get | list_running`; events `chaos_experiment.*`. Errors `CHAOS.*`. Detail in PS-138-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F15.S03.M03 (`mod_recovery`, recovery paths under test), F17.S02.M01 (`mod_load`, baseline steady state). Downstream: F17.S02.M03 (`mod_offline`, offline behavior under faults). Contracts: CTR-EVT-001, CTR-ERR-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns experiment definitions, verdicts and watchdog state. Does not own the faulted components or their data.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Faults that cause real harm if they escape staging; faults that disable the very controls that would detect harm; runner crash leaving a fault active; experiments run in parallel on the same component; verdicts reported as held when the monitoring was blind. Mitigations: production target block, audit-protected fault list, independent watchdog, target lock, no-data equals abort. No platform custody of money. Pseudonyms do not guarantee anonymity of staging accounts.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Six experiments hold on release candidate for three consecutive releases (ASSUMPTION); watchdog drill passed; D01, D08 resolved; security review of fault list passed.
 
 ## Required process specification inventory
-- [ ] `chaos_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `chaos_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `chaos_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `chaos_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `chaos_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `chaos_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `chaos_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-138-01 (SPEC-DRAFT-COMPLETE)
+- [x] [validation_rules.md](validation_rules.md) — PS-138-02 (SPEC-DRAFT-COMPLETE)
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-138-03 (SPEC-DRAFT-COMPLETE)
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-138-04 (SPEC-DRAFT-COMPLETE)
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-138-05 (SPEC-DRAFT-COMPLETE)
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-138-06 (SPEC-DRAFT-COMPLETE)
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-138-07 (SPEC-DRAFT-COMPLETE)
+- [x] [observability_performance.md](observability_performance.md) — PS-138-08 (SPEC-DRAFT-COMPLETE)
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-138-09 (SPEC-DRAFT-COMPLETE)
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-138-10 (SPEC-DRAFT-COMPLETE)

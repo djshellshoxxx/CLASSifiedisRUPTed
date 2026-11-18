@@ -1,35 +1,47 @@
-# PS-074-04 — commands queries events
+# PS-074-04 — library interface
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-074-04. **Owner:** [09_Commerce/03_valuation/mod_precision](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_precision. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_precision (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (amount and quote encodings), CTR-SCH-001, CTR-ERR-001. **Decisions:** D03 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the commands queries events process for precision within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-074-04.R01 | Functions: `parse_amount(str) -> minor`, `format_amount(minor, exp) -> str`, `scale_to_minor(major_str, exp) -> minor`, `convert_minor(amount_minor, rate, rate_scale, base_exp, quote_exp) -> minor`. | MVP |
+| PS-074-04.R02 | No function accepts or returns a float type. | MVP |
+| PS-074-04.R03 | Each function returns `Result<T, PREC.*>`; no exceptions cross the boundary. | MVP |
+| PS-074-04.R04 | No event is emitted by this module. | MVP |
 
-## Requirements to specify
-- [ ] PS-074-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-074-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-074-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Inputs and outputs are decimal strings or arbitrary-precision integers.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No commands, queries or events. Calling services emit their own events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+None.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Per PS-074-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+None.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-074-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Pure functions; offline-safe.
+
+## Privacy, retention, abuse
+No logging of inputs.
+
+## Observability & budgets
+Callers record error counts only.
+
+## Tests
+- TEST-PS-074-04-01 (contract): public API surface matches R01 (generated).
+- TEST-PS-074-04-02 (lint): no float in signatures.
+- TEST-PS-074-04-03 (unit): every function returns `Result` on invalid input.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. API surface matches R01.
+2. Float lint clean.
+
+## Assumptions & open decisions
+- D03 (PROVISIONAL, unapproved).

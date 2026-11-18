@@ -1,35 +1,34 @@
 # PS-140-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-140-02. **Owner:** [17_Quality/02_performance/mod_offline](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_offline. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the validation rules process for offline within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-140-02.R01 | Every rejected write returns a CTR-ERR-001 envelope with a code from the table below. | MVP |
+| PS-140-02.R02 | Validation runs before any write; a rejected write leaves zero rows changed. | MVP |
+| PS-140-02.R03 | `details[].rule` uses the enum `REQUIRED`, `ENUM`, `PATTERN`, `REFERENCE`, `STATE`. Input values are never echoed. | MVP |
+| PS-140-02.R04 | Fixture scan rejects any scenario whose `fixture_class` is not `synthetic` or whose payload contains an email, phone number, IP address or coordinate pattern. | MVP |
 
-## Requirements to specify
-- [ ] PS-140-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-140-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-140-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field rules are defined in [domain_schema](domain_schema.md). Validation adds cross-field checks: `expected_outcome = rejected_with_code` requires a non-empty `expected_code`; `attempt` must equal the highest stored attempt + 1 for the same `build_ref` and `scenario_key`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation and errors
+| Code | Retryable | Category / HTTP | Message key | Privacy-safe diagnostic |
+|---|---|---|---|---|
+| OFFTEST.SCENARIO_DUPLICATE | false | conflict / 409 | err.offtest.scenario_duplicate | `scenario_key` collision |
+| OFFTEST.FIXTURE_NOT_SYNTHETIC | false | validation / 400 | err.offtest.fixture_not_synthetic | `fixture_class` value rejected |
+| OFFTEST.BUDGET_UNDEFINED | false | validation / 400 | err.offtest.budget_undefined | `budget_ref` not found |
+| OFFTEST.BUILD_REF_INVALID | false | validation / 400 | err.offtest.build_ref_invalid | pattern failed |
+| OFFTEST.ATTEMPT_OUT_OF_ORDER | false | conflict / 409 | err.offtest.attempt_out_of_order | expected attempt number |
+| OFFTEST.INVALID_TRANSITION | false | unprocessable_state / 422 | err.offtest.invalid_transition | from and event names |
+| SYS.CONFLICT | false | conflict / 409 | err.sys.conflict | revision mismatch |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Diagnostics exclude stack traces, file paths and fixture bodies (CTR-ERR-001 R06).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Validation runs after authorization. An unauthorized caller receives `SYS.FORBIDDEN` before any field is checked, so validation never reveals scenario existence.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-140-02`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions and open decisions
+- ASSUMPTION: the coordinate and email patterns used by the fixture scanner are maintained with the Privacy Lead.
+- D07 (retention) affects only the retention fields, not validation: PROVISIONAL (D07 default, unapproved).

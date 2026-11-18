@@ -1,35 +1,54 @@
 # PS-139-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-139-02. **Owner:** [17_Quality/02_performance/mod_load](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_load. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_load. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-FED-001, CTR-PRV-001
 
-## Purpose and scope
-Define the validation rules process for load within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-139-02.R01 | Reject weights not summing to 1.000000 ± 0.000001. | MVP |
+| PS-139-02.R02 | Reject an operation ID not registered in the command/query catalog. | MVP |
+| PS-139-02.R03 | Reject a profile with target RPS above the approved environment ceiling (ASSUMPTION: 2,000 rps staging). | MVP |
+| PS-139-02.R04 | Reject a run against a production host. | MVP |
+| PS-139-02.R05 | Reject a population size above 100,000 synthetic accounts (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-139-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-139-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-139-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Applies to [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applied on `load.define_workload`, `load.define_profile`, `load.run`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation failure creates no record.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Category | Retryable | message_key |
+|---|---|---|---|
+| LOAD.WEIGHTS_INVALID | validation (400) | false | err.load.weights_invalid |
+| LOAD.OPERATION_UNKNOWN | validation (400) | false | err.load.operation_unknown |
+| LOAD.RATE_ABOVE_CEILING | validation (400) | false | err.load.rate_above_ceiling |
+| LOAD.PRODUCTION_TARGET_FORBIDDEN | forbidden (403) | false | err.load.production_target_forbidden |
+| LOAD.POPULATION_TOO_LARGE | validation (400) | false | err.load.population_too_large |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation after authentication.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-139-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deterministic for the same input.
+
+## Privacy, retention, abuse
+Error output contains no hostnames.
+
+## Observability & budgets
+Counter `load_validation_fail_total{rule}`.
+
+## Tests
+- TEST-PS-139-02-01: unit, one fixture per rule.
+- TEST-PS-139-02-02: negative, production host rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each rule has failing and passing fixtures.
+2. No run starts above the rate ceiling.
+
+## Assumptions & open decisions
+- ASSUMPTION: 2,000 rps staging ceiling and 100,000 population cap.
+- D05 (geo query load): PROVISIONAL (D05 default, unapproved).

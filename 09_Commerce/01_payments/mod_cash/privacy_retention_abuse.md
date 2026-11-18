@@ -1,35 +1,54 @@
-# PS-067-07 — privacy retention abuse
+# PS-067-07 — privacy, retention and abuse controls
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-067-07. **Owner:** [09_Commerce/01_payments/mod_cash](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_cash. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_cash (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R06, R07, RET-EVD), CTR-COM-001 (Privacy section), CTR-FED-001 (R03). **Decisions:** D06, D07 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the privacy retention abuse process for cash within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-067-07.R01 | Claims carry FINANCIAL_EVIDENCE; retention RET-EVD 24 months after final state (ASSUMPTION; jurisdiction review OPEN). | MVP |
+| PS-067-07.R02 | Personal fields redacted at 12 months, hashes retained (CTR-COM-001). | MVP |
+| PS-067-07.R03 | Cash claims are never federated (CTR-FED-001 R03). | MVP |
+| PS-067-07.R04 | Logs carry claim ID, state and code only. | MVP |
+| PS-067-07.R05 | Collusion pattern: two parties with ≥ 5 mutual cash attestations in 30 days and no other trade generate a review alert (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-067-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-067-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-067-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Configuration records (`cashcfg`) are PUBLIC; claims are FINANCIAL_EVIDENCE.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Redaction is a `clm.redacted` event (payload digest replacement per CTR-EVT-001 R08).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retention: `active` → `redacted` (12 months) → `expired` (24 months).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+No separate errors; retention codes are per CTR-PRV-001.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Only parties and case moderators see claim content.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-067-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Redaction is idempotent per claim.
+
+## Privacy, retention, abuse
+- Fabricated cash claims cannot verify (PS-067-03); attestations require counterparty signature.
+- Collusion: R05 alert; case review by F12.
+- Cash claims disclose that they are unverified assertions; no implied payment proof.
+- Pseudonymous IDs are not anonymous.
+
+## Observability & budgets
+Alerts: collusion pattern count; dispute rate per party above threshold (ASSUMPTION).
+
+## Tests
+- TEST-PS-067-07-01 (contract): federation export of a cash claim is rejected with `FED.DATA_CLASS_NOT_ALLOWED`.
+- TEST-PS-067-07-02 (integration): redaction at 12 months removes personal fields and keeps hashes.
+- TEST-PS-067-07-03 (log lint): no amount or counterparty in logs.
+- TEST-PS-067-07-04 (abuse): collusion fixture triggers alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retention schedule enforced in test.
+2. No federation path for cash.
+3. Collusion alert fires on fixture.
+
+## Assumptions & open decisions
+- ASSUMPTION: R05 thresholds.
+- D07 (PROVISIONAL default, unapproved). D06 (PROVISIONAL default, unapproved).

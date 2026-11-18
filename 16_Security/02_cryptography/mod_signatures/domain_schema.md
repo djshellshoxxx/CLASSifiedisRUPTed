@@ -1,35 +1,67 @@
 # PS-130-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-130-01. **Owner:** [16_Security/02_cryptography/mod_signatures](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_signatures. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-SCH-001, CTR-FED-001, CTR-PRV-001
 
-## Purpose and scope
-Define the domain schema process for signatures within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-130-01.R01 | One `signature_record` per signed subject (event, statement or bundle). Records are immutable. | MVP |
+| PS-130-01.R02 | `algorithm` is a closed enum; MVP value `ed25519` only (ASSUMPTION, CTR-EVT-001 R05). | MVP |
+| PS-130-01.R03 | `signature` is exactly 64 bytes for `ed25519`, base64url without padding (68 characters). | MVP |
+| PS-130-01.R04 | `subject_digest` is SHA-256 (64 lowercase hex) of the signing input, recomputed on every verify. | MVP |
+| PS-130-01.R05 | `domain_tag` is fixed per `subject_type`; mismatch is rejected. | MVP |
+| PS-130-01.R06 | Record stores no private key material, no subject payload bytes, and no names or contact data. | MVP |
 
-## Requirements to specify
-- [ ] PS-130-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-130-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-130-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "sig_id": "sig_<26 Crockford base32> (PENDING CTR-ID-001 prefix, proposed sig, class opaque)",
+  "subject_type": "event | statement | bundle",
+  "subject_ref": "evt_... | stt_... | bnd_... (stt_ and bnd_ PENDING registration)",
+  "subject_digest": "sha256 hex, 64 chars",
+  "domain_tag": "CLASSRUPT-EVT-SIG-v1 | CLASSRUPT-STMT-SIG-v1 | CLASSRUPT-BNDL-SIG-v1",
+  "algorithm": "ed25519",
+  "key_id": "key_...",
+  "signer_ref": "sys_... | ope_... | fpr_... | acc_...",
+  "signed_at": "RFC 3339 UTC",
+  "signature": "base64url, 86 chars (64 bytes)",
+  "verification": {"result": "valid | invalid | key_unknown | key_expired | key_revoked", "checked_at": "RFC 3339 UTC", "reason_code": "closed enum"}
+}
+```
+- Classes: `subject_digest`, `key_id`, `algorithm`, `signature` = PUBLIC. `signer_ref` = PSEUDONYMOUS. `verification` = PUBLIC.
+- Owner of signature-record class: `16_Security/02_cryptography/mod_signatures` (F16.S02.M03). Consumers reference by full ID only (B-06). `11_Federation/01_protocol/mod_signatures` consumes verification and does not own records.
+- Signing input = UTF-8 of domain tag + `\n` + RFC 8785 JCS of the subject with `signature` removed (CTR-EVT-001 R05).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-130-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Ed25519 signing is deterministic, so a repeated sign of the same (`subject_digest`, `key_id`, `domain_tag`) yields the same bytes.
+
+## Privacy, retention, abuse
+Records persist with their subject. After subject deletion, record is reduced to digest, key_id, timestamps (CTR-PRV-001 R12).
+
+## Observability & budgets
+Counter `sig_verification_total{result}`.
+
+## Tests
+- TEST-PS-130-01-01: unit, length and base64url canonical form.
+- TEST-PS-130-01-02: unit, digest recomputation detects one-byte change.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema rejects 64-byte violations and padded base64url in 100% of fixtures.
+2. No record field stores private key bytes.
+
+## Assumptions & open decisions
+- ASSUMPTION: Ed25519 via a widely reviewed library; no custom primitives.
+- PENDING CTR-ID-001: prefixes `sig`, `stt`, `bnd`.
+- D01 (signed envelopes): PROVISIONAL (D01 default, unapproved). D06 (signed statements only): PROVISIONAL (D06 default, unapproved).

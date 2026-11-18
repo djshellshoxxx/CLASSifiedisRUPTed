@@ -1,35 +1,56 @@
-# PS-071-04 — commands queries events
+# PS-071-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-071-04. **Owner:** [09_Commerce/02_settlement/mod_receipts](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_receipts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_receipts (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (`clm.submit`, `clm.attest`), CTR-EVT-001 (R02, R03, R10), CTR-SCH-001, CTR-ERR-001. **Decisions:** D06 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the commands queries events process for receipts within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-071-04.R01 | `evd.upload` is a two-step command: create upload session (returns `evd_` ID and expected SHA-256), then finalize with digest match. | MVP |
+| PS-071-04.R02 | `evd.redact` replaces content with a tombstone, keeps `evd_` ID and digest, and emits `evd.redacted`. | MVP |
+| PS-071-04.R03 | `receipt.export` returns a signed bundle; it emits `receipt.exported` with count only. | MVP |
+| PS-071-04.R04 | Events carry `max_data_class` FINANCIAL_EVIDENCE; none is federated. | MVP |
 
-## Requirements to specify
-- [ ] PS-071-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-071-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-071-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Schema `evidence_item` 1.0.0 (fields per PS-071-01). Bundle format: JSON object with `receipts[]`, `manifest_sha256`, `schema_version`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Event | Expected revision | Idempotency |
+|---|---|---|---|
+| `evd.upload` (create, finalize) | `evd.uploaded` | null, then required | actor + key |
+| `evd.redact` | `evd.redacted` | required | actor + key |
+| `receipt.export` | `receipt.exported` | n/a | actor + key |
+| `receipt.get` (query) | none | n/a | n/a |
+| `clm.submit`, `clm.attest` | per CTR-COM-001 | per CTR-COM-001 | per CTR-COM-001 |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Evidence upload states: `pending_upload`, `stored`, `redacted`. See PS-071-03 for claim states.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Shared codes: `RECEIPT.EVIDENCE_TYPE`, `RECEIPT.EVIDENCE_LIMIT`, `SYS.PAYLOAD_TOO_LARGE`, `SYS.CONFLICT`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per PS-071-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-071-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Upload finalize with a digest mismatch returns `RECEIPT.DIGEST_MISMATCH` and deletes the blob.
+
+## Privacy, retention, abuse
+Events carry IDs, digests and enums only.
+
+## Observability & budgets
+Latency p95 ≤ 500 ms for finalize (ASSUMPTION, excluding network transfer).
+
+## Tests
+- TEST-PS-071-04-01 (contract): upload session and finalize schemas validate.
+- TEST-PS-071-04-02 (unit): digest mismatch deletes blob and returns `RECEIPT.DIGEST_MISMATCH`.
+- TEST-PS-071-04-03 (integration): redaction keeps digest and removes content.
+- TEST-PS-071-04-04 (contract): no event payload contains file names or EXIF data.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command table implemented.
+2. Redaction preserves digest, removes content.
+3. Export signatures verify.
+
+## Assumptions & open decisions
+- ASSUMPTION: `evidence_item` schema starts at 1.0.0.
+- D06 (PROVISIONAL, unapproved).

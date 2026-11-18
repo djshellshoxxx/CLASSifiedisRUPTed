@@ -1,44 +1,42 @@
 # F09.S01.M02 — cash
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F09.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead (F09). **Parent:** [F09.S01 payments](../SPEC.md). **Canonical contracts:** CTR-COM-001 (claim, states, errors), CTR-EVT-001, CTR-CAP-001, CTR-PRV-001, CTR-ID-001, CTR-SCH-001, CTR-ERR-001. **Decisions:** D03, D04, D06, D08, D09 (PROVISIONAL defaults, unapproved).
 
 ## Purpose and business behavior
-Provide cash as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Cash method profile for payment claims. Parties record a cash handover as a `clm_` claim with `method = cash`, and the counterparty may attest it. The platform never verifies cash, never holds cash or balances, and never moves a cash claim past `COUNTERPARTY_ATTESTED` (CTR-COM-001 R07). The module configures where and in which currencies cash claims are offered, sets ceilings, and defines the labels and copy shown for cash.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I record that I paid or received cash, so my counterparty can attest or dispute it.
+- As a participant, I see clearly that a cash claim is an assertion and not a verified payment.
+- As an operator, I can disable the cash method for a currency or region without touching existing claims.
 
 ## Scope
-- Required process spec: `cash_domain_model.md` (not yet authored)
-- Required process spec: `cash_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `cash_validation_and_authorization.md` (not yet authored)
-- Required process spec: `cash_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `cash_interfaces_and_events.md` (not yet authored)
-- Required process spec: `cash_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `cash_acceptance_and_property_tests.md` (not yet authored)
+- In scope: cash method enable/disable, per-currency ceiling, cash-specific copy and labels, attest-only rule, cash-specific validation profile.
+- Out of scope: claim schema and state machine (CTR-COM-001), disputes (F09 mod_disputes), on-chain transfers (mod_crypto), receipts (mod_receipts), reconciliation (mod_reconciliation).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Command `cash_method.configure` (operator, dual control for changes to ceilings). Events `cash_method.enabled`, `cash_method.disabled`, `cash_method.ceiling_changed`. Claim commands from CTR-COM-001 (`clm.submit`, `clm.attest`, `clm.dispute`).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: `trx_` transaction (F09), `cur_` currency registry (09 mod_currency), `qte_` quotes for cross-currency cash (mod_rates). Downstream: notifications (F13), evidence (mod_receipts), reconciliation (mod_reconciliation).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns cash method configuration only. Claim records belong to CTR-COM-001 (canonical owner F09 Commerce). Consumers reference `clm_` by full ID.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Fabricated cash claims; collusive attestation between two parties; unverifiable handover; claim-as-payment confusion in UI; cash in mixed-value barter mistaken for money; coercion. A cash claim proves an assertion, not payment or handover.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Process specs drafted; CTR-COM-001 ceiling rule confirmed; F10 review of handover-place data (none stored beyond venue class); F14 review of cash labels; no implementation before approval.
 
 ## Required process specification inventory
-- [ ] `cash_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `cash_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `cash_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `cash_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `cash_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `cash_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `cash_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-067-01
+- [x] `validation_rules.md` — PS-067-02
+- [x] `workflow_state_machine.md` — PS-067-03
+- [x] `commands_queries_events.md` — PS-067-04
+- [x] `authorization_capabilities.md` — PS-067-05
+- [x] `failure_recovery_idempotency.md` — PS-067-06
+- [x] `privacy_retention_abuse.md` — PS-067-07
+- [x] `observability_performance.md` — PS-067-08
+- [x] `contract_and_acceptance_tests.md` — PS-067-09
+- [x] `import_export_backup_rollback.md` — PS-067-10

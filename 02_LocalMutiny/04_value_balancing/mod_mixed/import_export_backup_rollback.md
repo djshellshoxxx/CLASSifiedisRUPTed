@@ -1,35 +1,51 @@
 # PS-026-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-026-10. **Owner:** [02_LocalMutiny/04_value_balancing/mod_mixed](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Parent:** [mod_mixed SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-EVT-001, CTR-COM-001.
 
-## Purpose and scope
-Define the import export backup rollback process for mixed within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-026-10.R01 | Each participant can export their own legs (both sides) as JSON, schema `mixed.leg.v1`, ≤ 1 MB per export. | MVP |
+| PS-026-10.R02 | Export never includes counterparties' descriptions, payment references or claim evidence digests beyond the participant's own claims. | MVP |
+| PS-026-10.R03 | Backup restore preserves `revision`, `leg_index` order and consent state. Restore never re-sends claims or events. | MVP |
+| PS-026-10.R04 | Import of legs is not supported in MVP. Any import attempt returns `SYS.GONE`-class rejection (`SYS.REQUEST_MALFORMED`, reason `not_supported`). | MVP |
+| PS-026-10.R05 | Rollback of a release never edits legs. Corrections use new revisions or `DISPUTED` (CTR-COM-001). | MVP |
 
-## Requirements to specify
-- [ ] PS-026-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-026-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-026-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export envelope: `{ "schema_id": "mixed.leg.export", "schema_version": "1.0.0", "cyc_id", "revision", "legs": [...], "exported_at" }`. Export signature not included in MVP (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export is a query with action `cyc.export` (PS-026-05). Emits `mixed.leg.exported` with count only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable. Restore is a whole-aggregate operation under a maintenance lock.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Exports of legs under legal hold return `SYS.CONFLICT` (PS-026-07). Corrupt backup (digest mismatch) → `SYS.INTERNAL` with restore halted.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: participants only. Restore: `ope` with dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-026-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Restore is idempotent by backup digest. Partial restore is rolled back to the pre-restore snapshot. Offline clients keep their own export only as a local file; no sync.
+
+## Privacy, retention, abuse
+Export files are FINANCIAL_EVIDENCE and carry a warning in the UI. Export links expire in 15 min. Abuse: export rate limit 5 per day per cycle.
+
+## Observability & budgets
+Restore duration ≤ 30 min for 1 million legs (ASSUMPTION). Metric: `mixed_export_total`, `mixed_restore_total{result}`.
+
+## Tests
+- TEST-PS-026-10-01 (integration): export → restore round trip yields identical leg digests.
+- TEST-PS-026-10-02 (negative): export by non-participant returns `SYS.NOT_FOUND`.
+- TEST-PS-026-10-03 (negative): import request returns rejection with reason `not_supported`.
+- TEST-PS-026-10-04 (fault): corrupted backup halts restore and leaves state unchanged.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round-trip digest test passes.
+2. Restore never produces a second `clm_` for an existing claim.
+3. Rollback runbook has no step that edits legs in place.
+
+## Assumptions & open decisions
+- ASSUMPTION: no signed export in MVP.
+- PROVISIONAL: retention and portability defaults follow D07 default (unapproved). Portability keys per D10 (OPEN). See [DECISIONS.md](../../../DECISIONS.md).

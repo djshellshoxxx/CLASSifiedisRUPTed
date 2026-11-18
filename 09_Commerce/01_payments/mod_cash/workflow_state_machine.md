@@ -1,35 +1,59 @@
 # PS-067-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-067-03. **Owner:** [09_Commerce/01_payments/mod_cash](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_cash. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_cash (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (R05–R07, R13, R15, R16; state table), CTR-EVT-001 (R02). **Decisions:** D04, D06 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the workflow state machine process for cash within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-067-03.R01 | Cash claims use only the CTR-COM-001 states; the reachable subset is `CLAIMED`, `COUNTERPARTY_ATTESTED`, `DISPUTED`, and `REVERSED` only via case resolution. | MVP |
+| PS-067-03.R02 | `EXTERNALLY_VERIFIED` and `FINAL` are unreachable for cash (R07). | MVP |
+| PS-067-03.R03 | Method configuration: `enabled` ↔ `disabled`. Disabling blocks new cash claims only. | MVP |
+| PS-067-03.R04 | Labels below `FINAL` never contain "paid", "payment received" or "settled" (CTR-COM-001 R15). | MVP |
 
-## Requirements to specify
-- [ ] PS-067-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-067-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-067-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Transition row per CTR-COM-001 (`clm.state_changed`). Configuration transition: `cashcfg_id`, `from`, `to`, `config_revision`, `changed_by`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`clm.submitted`, `clm.attested`, `clm.disputed`, `clm.dispute_resolved` (CTR-COM-001); `cash_method.enabled`, `cash_method.disabled`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| — | `clm.submit` (cash) | PS-067-02 passes | `CLAIMED` | Counterparty notified |
+| `CLAIMED` | `clm.attest` | counterparty signature valid | `COUNTERPARTY_ATTESTED` | Claimant notified |
+| `CLAIMED`, `COUNTERPARTY_ATTESTED` | `clm.dispute` | within 14-day window | `DISPUTED` | Transitions frozen |
+| `DISPUTED` | `clm.dispute_resolved` | case decision | prior state or `REVERSED` | Decision record |
+| `enabled` | `cash_method.disable` | operator approval | `disabled` | Existing claims unchanged |
+| `disabled` | `cash_method.enable` | operator approval | `enabled` | Notice to operators |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Any other pair returns `COM.INVALID_TRANSITION`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`COM.INVALID_TRANSITION` (409); `COM.CASH_NOT_VERIFIABLE` (422) on verify attempts.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-067-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Claim transitions by parties and case moderators per CTR-COM-001. Configuration by operators under dual control.
+
+## Failure, idempotency, concurrency, offline
+Attest versus dispute race: exactly one wins, the other gets `SYS.CONFLICT` (CTR-COM-001 test 13).
+
+## Privacy, retention, abuse
+Transition log holds hashes and enums only.
+
+## Observability & budgets
+Histogram: submit to attest latency (aggregate). Counter: cash claims disputed per party (collusion signal).
+
+## Tests
+- TEST-PS-067-03-01 (unit): table rows pass; undefined pairs refused.
+- TEST-PS-067-03-02 (property): 10,000 random sequences never reach `EXTERNALLY_VERIFIED` or `FINAL`.
+- TEST-PS-067-03-03 (integration): disable does not change existing claim states.
+- TEST-PS-067-03-04 (wording): UI copy scan for banned words below `FINAL`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Cash claims never reach `EXTERNALLY_VERIFIED` or `FINAL` (verified by test).
+2. Disabling the method leaves all claim states unchanged.
+3. Wording scan passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: 14-day dispute window (CTR-COM-001 R16).
+- D06 (PROVISIONAL default, unapproved): signed statements only; no verification step for cash.

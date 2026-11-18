@@ -1,35 +1,53 @@
-# PS-131-06 — failure recovery idempotency
+# PS-131-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-131-06. **Owner:** [16_Security/03_assurance/mod_incident](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_incident. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_incident. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-PRV-001
 
-## Purpose and scope
-Define the failure recovery idempotency process for incident within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-131-06.R01 | Declaration is idempotent on (`actor`, `command`, `idempotency_key`) for 7 days (CTR-EVT-001 R03). | MVP |
+| PS-131-06.R02 | Timeline append is idempotent on `entry_digest`. | MVP |
+| PS-131-06.R03 | Incident records remain writable during partial outage of notification services; notifications queue. | MVP |
+| PS-131-06.R04 | Restore from backup must reproduce the timeline hash chain head. | MVP |
+| PS-131-06.R05 | The module never auto-closes an incident. | MVP |
 
-## Requirements to specify
-- [ ] PS-131-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-131-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-131-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency and queue records only; no extra incident fields.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+SLA timers are durable (stored, not in-memory) and survive restart.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Crash mid-transition: state write and event are one transaction (outbox if separate store).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Category | Retryable | message_key |
+|---|---|---|---|
+| INCIDENT.NOTIFY_QUEUED | unavailable (503) | true | err.incident.notify_queued |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+N/A beyond [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-131-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Responder offline: local draft queued (D08), sent with original `occurred_at`; server records `recorded_at`.
+- Duplicate declarations from detectors are merged by the operator into one incident; the module does not auto-merge.
+- Timers recover after restart and emit breach events once (idempotent by timer ID).
+
+## Privacy, retention, abuse
+Queue entries hold no timeline text beyond encrypted payload (ASSUMPTION).
+
+## Observability & budgets
+Metric `incident_notify_queue_depth`; alert > 100 for 10 min.
+
+## Tests
+- TEST-PS-131-06-01: chaos, kill process after declare; one incident after restart.
+- TEST-PS-131-06-02: integration, notification outage queues and drains.
+- TEST-PS-131-06-03: restore, chain head matches.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero duplicate incidents from retried declarations.
+2. Restore reproduces chain head in 100% of fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: queue encryption at rest via F15 storage.
+- D08 (offline reporting): PROVISIONAL (D08 default, unapproved).

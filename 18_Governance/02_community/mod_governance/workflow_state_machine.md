@@ -1,35 +1,32 @@
 # PS-147-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-147-03. **Owner:** [18_Governance/02_community/mod_governance](SPEC.md). **Implementing module:** 18_Governance/02_community/mod_governance. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 18_Governance/02_community/mod_governance. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for governance within 02_community. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-147-03.R01 | Proposal states are `open`, `decided`, `withdrawn`. | MVP |
+| PS-147-03.R02 | Only `open` proposals can be decided or withdrawn. | MVP |
+| PS-147-03.R03 | A decided proposal yields exactly one approval ID, usable once. | MVP |
+| PS-147-03.R04 | A published rule version is immutable; changes need a new proposal. | MVP |
 
-## Requirements to specify
-- [ ] PS-147-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-147-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-147-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | OpenGovernanceProposal | base version current | open | emit `governance_proposal.opened` |
+| open | DecideGovernanceProposal | quorum met; no self-approval | decided (approved) | issue approval ID; emit `governance_proposal.decided` |
+| open | DecideGovernanceProposal | rejection by quorum | decided (rejected) | emit `governance_proposal.decided` |
+| open | WithdrawProposal | proposer only | withdrawn | emit `governance_proposal.decided` with outcome withdrawn |
+| decided (approved) | PublishCommunityRule | approval ID unused | published (rule version) | emit `community_rule.published`; approval ID consumed |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Invalid pairs return `GOVERN.INVALID_TRANSITION` (422).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Failure, idempotency, concurrency, offline
+- Double decision submission returns the first decision.
+- Two approvers decide at once: `expected_revision`; the second gets `SYS.CONFLICT` and re-reads.
+- Offline: votes need network; no offline state.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-147-03`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: proposals close after 14 days if undecided (ASSUMPTION), then become `withdrawn`.
+- D07 default applies to closed proposals: PROVISIONAL (D07 default, unapproved).

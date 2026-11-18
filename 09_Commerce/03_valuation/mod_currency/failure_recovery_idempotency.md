@@ -1,35 +1,48 @@
-# PS-073-06 — failure recovery idempotency
+# PS-073-06 — failure, recovery, idempotency and offline behavior
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-073-06. **Owner:** [09_Commerce/03_valuation/mod_currency](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_currency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_currency (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-SCH-001 (R07, R08). **Decisions:** D03, D08 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the failure recovery idempotency process for currency within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-073-06.R01 | Registry events replay deterministically to the same registry state. | MVP |
+| PS-073-06.R02 | Clients use last cached entry for each `currency_id` when offline; a new entry is never invented offline. | MVP |
+| PS-073-06.R03 | Unknown `currency_id` on a claim while offline is rejected at commit (D08). | MVP |
+| PS-073-06.R04 | Registry service outage: reads served from cache up to 24 h; writes fail with `SYS.UNAVAILABLE`. | MVP |
 
-## Requirements to specify
-- [ ] PS-073-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-073-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-073-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Cache key `(currency_id, version)`; cache entries immutable.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Idempotency keys per CTR-EVT-001.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+None beyond PS-073-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.UNAVAILABLE` (retryable) for writes during outage.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Unchanged on retry.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-073-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Replay of events in revision order.
+
+## Privacy, retention, abuse
+Public data; no retention limits beyond registry lifetime.
+
+## Observability & budgets
+Cache hit ratio alert below 95% (ASSUMPTION).
+
+## Tests
+- TEST-PS-073-06-01 (integration): replay of event log reproduces registry.
+- TEST-PS-073-06-02 (integration): outage: reads from cache; writes refused.
+- TEST-PS-073-06-03 (negative): offline claim with unknown currency refused at commit.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Replay determinism verified.
+2. No invented offline entries.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24-hour cache ceiling.
+- D03, D08 (PROVISIONAL, unapproved).

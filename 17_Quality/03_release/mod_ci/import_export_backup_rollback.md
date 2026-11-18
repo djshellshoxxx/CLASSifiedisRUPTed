@@ -1,35 +1,21 @@
-# PS-141-10 — import export backup rollback
+# PS-141-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-141-10. **Owner:** [17_Quality/03_release/mod_ci](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_ci. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/03_release/mod_ci. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the import export backup rollback process for ci within 03_release. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-141-10.R01 | Pipeline definitions are stored as reviewed repository files; the stored `ci_pipeline` version matches the file's commit SHA. | MVP |
+| PS-141-10.R02 | Run-record export contains status, digests and timings only; no logs. | MVP |
+| PS-141-10.R03 | Backups include run records; restore creates no new runs and dispatches no jobs. | MVP |
+| PS-141-10.R04 | Rollback of a pipeline is a new version that reverts the definition; history is kept. | MVP |
 
-## Requirements to specify
-- [ ] PS-141-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-141-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-141-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Import, export, backup and rollback
+- Import: pipeline definitions load from the repository on merge to main; invalid files fail the merge.
+- Export: JSON per run, for gate review and audit; excludes logs and secrets.
+- Backup: run records follow platform backup schedule and PS-141-07 retention.
+- Rollback: revert the definition commit and publish a new version; runs of the old version stay readable.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-141-10`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: runners are rebuilt from pinned images; no runner state is backed up.
+- D07 (retention) affects backup expiry: PROVISIONAL (D07 default, unapproved).

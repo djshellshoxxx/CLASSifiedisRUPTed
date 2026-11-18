@@ -1,35 +1,54 @@
 # PS-018-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-018-03. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_n](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_n. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_n. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02), CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for n within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-018-03.R01 | A run is `queued` → `running` → exactly one of `completed`, `budget_exhausted`, `failed`. | MVP |
+| PS-018-03.R02 | `budget_exhausted` and `failed` runs publish no candidates. | MVP |
+| PS-018-03.R03 | Completed runs are immutable; a rerun creates a new run ID. | MVP |
+| PS-018-03.R04 | Each transition emits one `cycle_search.completed` or lifecycle event in the same commit. | MVP |
 
-## Requirements to specify
-- [ ] PS-018-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-018-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-018-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+State in `status`; immutable after terminal state.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions via PS-018-04 only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | cycle.search_n | PS-018-02 passes | queued | emit run created |
+| queued | worker starts | snapshot sealed | running | none |
+| running | search finishes within budget | — | completed | emit cycle_search.completed with candidates |
+| running | steps ≥ budget | — | budget_exhausted | emit completed with no candidates |
+| running | internal error | retry limit reached | failed | emit failed; no candidates |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions return SYS.UNPROCESSABLE_STATE.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matcher only (PS-018-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-018-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Not offline. Worker crash before completion restarts the run from the sealed snapshot.
+
+## Privacy, retention, abuse
+Failed runs deleted at snapshot expiry.
+
+## Observability & budgets
+Run duration histogram by length (PS-018-08).
+
+## Tests
+- TEST-PS-018-03-01 (unit): each table row.
+- TEST-PS-018-03-02 (property): budget_exhausted runs never contain candidates.
+- TEST-PS-018-03-03 (integration): worker crash restart yields identical candidates.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every run ends in exactly one terminal state.
+2. Completed runs are byte-stable on read.
+3. No candidate from a non-completed run reaches proposal.
+
+## Assumptions & open decisions
+- PROVISIONAL (D02 default, unapproved).

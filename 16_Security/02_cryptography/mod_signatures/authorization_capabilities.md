@@ -1,35 +1,55 @@
 # PS-130-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-130-05. **Owner:** [16_Security/02_cryptography/mod_signatures](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_signatures. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-ERR-001
 
-## Purpose and scope
-Define the authorization capabilities process for signatures within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-130-05.R01 | Only registered producer `sys_` principals may call `signature.sign` for event subjects, scoped to their own aggregate types. | MVP |
+| PS-130-05.R02 | Users never obtain a signing oracle over arbitrary bytes; user-originated statements use device keys under a separate capability (PENDING D06, D10). | MVP |
+| PS-130-05.R03 | `signature.verify` is open to any authenticated principal and to federation import paths (`fpr_`) for their own batches. | MVP |
+| PS-130-05.R04 | `signature.get` visible to subject's owner and participants; `signer_ref` visible to `case:` scope only. | MVP |
+| PS-130-05.R05 | No principal may read private key material through this module. | MVP |
 
-## Requirements to specify
-- [ ] PS-130-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-130-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-130-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capability IDs: `signature.sign`, `signature.verify`, `signature.read`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Authorization is evaluated before canonicalization so that unauthorized callers cannot probe canonical errors.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Revoked signing grant for a producer blocks new signs immediately (zero cache, CTR-CAP-001 R09).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Actor | Action | Resource | Result |
+|---|---|---|---|
+| sys (producer of aggregate X) | signature.sign | event of X | allow |
+| sys (other producer) | signature.sign | event of X | DENY, SYS.FORBIDDEN |
+| user | signature.sign | arbitrary bytes | DENY, SYS.FORBIDDEN |
+| fpr | signature.verify | own batch | allow |
+| any authenticated | signature.verify | any subject | allow |
+| participant | signature.read | own subject | allow |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Actor identity from authenticated principal only (CTR-CAP-001 R11).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-130-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Denials recorded as `dec_` records without payload.
+
+## Privacy, retention, abuse
+Decision records hold IDs and rule names only.
+
+## Observability & budgets
+Counter `sig_authz_denied_total{actor_type}`; alert on sudden rise from one producer.
+
+## Tests
+- TEST-PS-130-05-01: unit, decision table.
+- TEST-PS-130-05-02: negative, user attempts to sign raw bytes and is denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No user path reaches the signing function.
+2. Revoked producer denied on next call.
+
+## Assumptions & open decisions
+- ASSUMPTION: producer registry maintained by F16 with F15 approval.
+- D10 (user-controlled keys): PROVISIONAL (D10 default, unapproved).

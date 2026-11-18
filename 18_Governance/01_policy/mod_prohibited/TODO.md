@@ -1,10 +1,9 @@
-# TODO
+# TODO — prohibited (prohibited-goods and content rule catalogue)
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Process specs drafted; implementation not started.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Draft the 10 process specs (PS-146-01 to PS-146-10).
+- [ ] Trust and Safety Lead (F12) review of catalogue classes and reason keys.
+- [ ] Confirm that no detection signal appears in published catalogue fields.
+- [ ] Map each catalogue class to a goods category key (mod_goods).
+- [ ] Implement classification and decision recording — future phase.

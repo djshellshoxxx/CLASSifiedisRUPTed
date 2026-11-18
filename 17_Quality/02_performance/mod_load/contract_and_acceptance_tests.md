@@ -1,35 +1,50 @@
 # PS-139-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-139-09. **Owner:** [17_Quality/02_performance/mod_load](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_load. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_load. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-FED-001, CTR-PRV-001
 
-## Purpose and scope
-Define the contract and acceptance tests process for load within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-139-09.R01 | Reference profiles LD-01 (steady, 200 rps, 30 min), LD-02 (ramp to 1,000 rps), LD-03 (spike ×3 for 2 min), LD-04 (soak 4 h at 300 rps). | MVP |
+| PS-139-09.R02 | Every error response observed under load matches CTR-ERR-001 envelope. | MVP |
+| PS-139-09.R03 | Relay batch ingest under LD-02 respects CTR-FED-001 batch limits. | MVP |
+| PS-139-09.R04 | Region query load respects CTR-PRV-001 K_MIN and budget. | MVP |
 
-## Requirements to specify
-- [ ] PS-139-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-139-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-139-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Profile definitions in repository.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Covered by [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Covered by [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Covered by [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Covered by [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-139-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Covered by [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Covered by [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+Covered by [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-139-09-01: LD-01 steady state within SLO.
+- TEST-PS-139-09-02: LD-02 ramp, no unhandled 5xx.
+- TEST-PS-139-09-03: LD-03 spike, rate limiting engages and recovers.
+- TEST-PS-139-09-04: LD-04 soak, no memory growth above 10% over 4 h (ASSUMPTION).
+- TEST-PS-139-09-05: error envelope conformance under load.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. LD-01 to LD-04 pass on the release candidate.
+2. Zero envelope violations across all runs.
+
+## Assumptions & open decisions
+- ASSUMPTION: profile numbers above.
+- D01 and D05 defaults govern LD-02 and region query portions: PROVISIONAL (default, unapproved).

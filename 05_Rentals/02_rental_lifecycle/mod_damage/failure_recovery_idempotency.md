@@ -1,35 +1,57 @@
-# PS-041-06 — failure recovery idempotency
+# PS-041-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-041-06. **Owner:** [05_Rentals/02_rental_lifecycle/mod_damage](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_damage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_damage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (idempotency, saga), CTR-ERR-001 (retry), CTR-COM-001 (claims), CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for damage within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** D08 PROVISIONAL (offline). D04 OPEN (partial execution); no atomic guarantee assumed.
 
-## Requirements to specify
-- [ ] PS-041-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-041-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-041-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-041-06.R01 | Writes idempotent per CTR-EVT-001 R03. | MVP |
+| PS-041-06.R02 | Photo upload completes before `damage.report` commits; uncommitted uploads are purged after 24 h (ASSUMPTION). | MVP |
+| PS-041-06.R03 | Deposit release request and damage resolution are one saga (`correlation_id`); a failed deposit step leaves damage RESOLVED and retries the request. | MVP |
+| PS-041-06.R04 | Timer expiry (72 h) runs as an idempotent `sys` job; duplicate runs are no-ops. | MVP |
+| PS-041-06.R05 | Offline acknowledgements queue as pending (D08); server revalidates line set and `state_version` at commit. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Upload record: digest, size, purge_after. Saga record: `correlation_id`, damage ID, deposit ID, step, status.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Retry-safe per PS-041-04. Event `damage.resolved` committed before deposit request is sent.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+No new states for failures. Failed transitions leave status unchanged.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`, `SYS.PRECONDITION_FAILED`. Non-retryable: all `DAMAGE.*` codes.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-041-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+`sys` jobs hold write scope on `damage` only; no claim creation.
+
+## Failure, idempotency, concurrency, offline
+- Upload interrupted: client resumes by digest; no duplicate photo.
+- Concurrent acknowledge and withdraw: revision check; one wins.
+- Offline acknowledge after report withdrawn: rejected, moved to "not applied".
+- Deposit service down during resolve: saga retries with backoff; damage stays RESOLVED.
+
+## Privacy, retention, abuse
+Saga logs hold IDs and step names only. Purged uploads leave no digest record.
+
+## Observability & budgets
+`damage_saga_open_total`, `damage_timer_run_total`, `damage_upload_purged_total`.
+
+## Tests
+- TEST-PS-041-06-01 (failure): deposit service down during resolve → saga retries to completion.
+- TEST-PS-041-06-02 (idempotency): timer job run twice → one escalation.
+- TEST-PS-041-06-03 (offline): queued acknowledge after withdraw → "not applied".
+- TEST-PS-041-06-04 (upload): killed upload resumes with no duplicate digest.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No resolved damage without a deposit step or a logged reason for deferral.
+2. No duplicate escalations from timer replay.
+3. No silently dropped offline command.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h upload purge, saga retry schedule per CTR-ERR-001.
+- PROVISIONAL (D08 default, unapproved).
+- OPEN (D04): partial execution and compensation for mixed-value settlement.

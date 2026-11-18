@@ -1,35 +1,50 @@
 # PS-108-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-108-09. **Owner:** [13_Notifications/02_preferences/mod_quiet](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_quiet. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_quiet. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for quiet within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-108-09.R01 | Contract tests cover every QUIET.* code and event in PS-108-04. | MVP |
+| PS-108-09.R02 | Pause control is a button group with preset labels and a live region that announces the end time in text. | MVP |
+| PS-108-09.R03 | Countdown is not the only information: end time in absolute text is also shown. | MVP |
+| PS-108-09.R04 | Tests run with a fixed clock and DST fixtures from mod_hours. | MVP |
 
-## Requirements to specify
-- [ ] PS-108-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-108-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-108-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: accounts with each preset, in two zones, with and without valid zone.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay with duplicates and stale revisions.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+All rows of workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+One failing fixture per PS-108-02 rule.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Sender and operator fixtures (PS-108-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-108-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection from PS-108-06.
+
+## Privacy, retention, abuse
+Leakage tests (PS-108-07).
+
+## Observability & budgets
+Suite runtime ≤ 5 min.
+
+## Tests
+- TEST-PS-108-09-01 (contract): all QUIET codes match CTR-ERR-001.
+- TEST-PS-108-09-02 (e2e): start 1 h pause, send deadline, see held push, end pause, see release.
+- TEST-PS-108-09-03 (a11y): button group and live region checked.
+- TEST-PS-108-09-04 (offline): start offline, reconnect, one period.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Contract suite green.
+2. e2e passes.
+3. Accessibility checks pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: fixture zones from mod_hours.
+- No Dxx blocks test scope.

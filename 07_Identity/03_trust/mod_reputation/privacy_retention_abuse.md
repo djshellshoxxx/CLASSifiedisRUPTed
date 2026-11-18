@@ -1,35 +1,63 @@
-# PS-058-07 — privacy retention abuse
+# PS-058-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-058-07. **Owner:** [07_Identity/03_trust/mod_reputation](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_reputation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_reputation. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (PSEUDONYMOUS; RET-ACC, RET-OPS, RET-AUD, RET-LEGAL), CTR-CAP-001, CTR-FED-001 (no federation of scores in MVP).
 
-## Purpose and scope
-Define the privacy retention abuse process for reputation within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-058-07.R01 | Reputation data is PSEUDONYMOUS; no legal identity, location or contact data is an input. | MVP |
+| PS-058-07.R02 | Counterparty `prf_` pairs stored only for the 365-day diversity window; then only the count remains. | MVP |
+| PS-058-07.R03 | Public band suppressed when fewer than 5 distinct counterparties exist (no "1 of 1" leakage). | MVP |
+| PS-058-07.R04 | Diversity rule: at most 1 counted exchange per counterparty pair per 30 days. | MVP |
+| PS-058-07.R05 | Counters of a retired `prf_` purged 30 days after retirement; band hidden at 30 days (PS-058-03 R04). | MVP |
+| PS-058-07.R06 | Reputation is never federated or exported to third parties in MVP. | MVP |
+| PS-058-07.R07 | Reputation shown as an input to ranking. | Future (requires mod_relevance decision) |
 
-## Requirements to specify
-- [ ] PS-058-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-058-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-058-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Record | Class | Retention |
+|---|---|---|
+| counters, band | PSEUDONYMOUS | RET-ACC, purged at retirement + 30 days |
+| counterparty pairs (diversity window) | PSEUDONYMOUS | 365 days, then count only |
+| applied-input table | internal | 400 days |
+| audit of case reads | internal | RET-AUD (12 months) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No counterparty identifiers in events (PS-058-04 R04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Purge clock starts at `pseudonym.retired` per [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Self-dealing and duplicate patterns recorded as codes only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Counters visible to subject only (PS-058-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-058-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge job idempotent; legal hold (RET-LEGAL) suspends purge.
+
+## Privacy, retention, abuse
+- **Reputation farming:** diversity rule (R04), weights favour confirmed final exchanges over self-attested ones, and distinct-counterparty threshold.
+- **Sybil rings:** clustering over counterparty pairs is run by F12 signals (mod_signals); this module applies the result only as a `under_review` trigger.
+- **Deanonymization:** no score exported; band suppression (R03); no cross-pseudonym aggregates.
+- **Doxxing via score history:** no history of band changes is exposed; only current band.
+- **Limit:** counters can still reveal activity level of a `prf_`; this is accepted for MVP and listed for PS-058-08 review.
+
+## Observability & budgets
+Aggregate band distribution only; no per-`prf_` metric labels.
+
+## Tests
+- TEST-PS-058-07-01 (privacy): band suppressed below five counterparties.
+- TEST-PS-058-07-02 (retention): pair records removed at 365 days; counters purged at retirement + 30 days.
+- TEST-PS-058-07-03 (abuse): repeated same-pair exchanges counted once per 30 days.
+- TEST-PS-058-07-04 (privacy scan): no counterparty identifiers in any response or event.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Band suppression rule enforced.
+2. Diversity rule enforced.
+3. Retention timers verified.
+4. No federation path exists.
+
+## Assumptions & open decisions
+- ASSUMPTION: 365-day pair window; 30-day diversity window per pair; 5 counterparties minimum.
+- PROVISIONAL (D07 default, unapproved): minimal retention.

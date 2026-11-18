@@ -1,35 +1,54 @@
 # PS-084-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-084-01. **Owner:** [11_Federation/01_protocol/mod_records](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_records. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_records. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R02), CTR-SCH-001 (R01, R10), CTR-EVT-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the domain schema process for records within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-084-01.R01 | Registry row per federable record type: `schema_id` (equals event_type prefix), `aggregate_type`, `max_class`, `federate_mode`. | MVP |
+| PS-084-01.R02 | `federate_mode` ∈ `never`, `public_auto`, `opt_in`, `cell`. `never` for PRIVATE_PERSONAL, LOCATION_PRECISE, SECRET, FINANCIAL_EVIDENCE (CTR-FED-001 R03). | MVP |
+| PS-084-01.R03 | Each item has `federate` (boolean, default false) and `federate_opt_in_at` (null unless true). | MVP |
+| PS-084-01.R04 | Changing a registry row's `max_class` to a more sensitive class is MAJOR and requires F10 review (CTR-SCH-001 R10). | MVP |
 
-## Requirements to specify
-- [ ] PS-084-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-084-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-084-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Entity | Fields | Constraint |
+|---|---|---|
+| registry row | `record_type`, `aggregate_type`, `max_class`, `federate_mode`, `schema_version`, `owner_module` | `owner_module` is a full module path |
+| item flag | `aggregate_id`, `federate`, `federate_opt_in_at`, `federate_revoked_at` | IDs only |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Registry row for `listing` (F01) is seeded as `federate_mode = opt_in`, max class PSEUDONYMOUS (PROVISIONAL, D01 default).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-084-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Flag change uses `expected_revision` on the item aggregate. Offline clients queue the flag change (D08) but federation applies it only at server acknowledgement.
+
+## Privacy, retention, abuse
+Registry is public metadata. Flags are PSEUDONYMOUS. Retention in file 07.
+
+## Observability & budgets
+Coverage of registry types in file 08.
+
+## Tests
+- TEST-PS-084-01-01 (schema): registry row with `federate_mode = opt_in` for LOCATION_PRECISE fails.
+- TEST-PS-084-01-02 (default): new item has `federate` false.
+- TEST-PS-084-01-03 (MAJOR): raising `max_class` without F10 review fails CI.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Registry validates against schema.
+2. Default `federate` false verified.
+3. Class-raising change blocked without review.
+
+## Assumptions & open decisions
+- ASSUMPTION: registry seeded only with types that exist in code.
+- PROVISIONAL (D01 default, unapproved): explicit opt-in.

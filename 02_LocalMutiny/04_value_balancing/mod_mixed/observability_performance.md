@@ -1,35 +1,54 @@
 # PS-026-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-026-08. **Owner:** [02_LocalMutiny/04_value_balancing/mod_mixed](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Parent:** [mod_mixed SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-EVT-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the observability performance process for mixed within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-026-08.R01 | Server p95 latency: `mixed.leg.declare` ≤ 300 ms; `mixed.leg.list` ≤ 150 ms (ASSUMPTION). | MVP |
+| PS-026-08.R02 | Gap-balance check (PS-026-02 R04) for 8 legs ≤ 5 ms p95. | MVP |
+| PS-026-08.R03 | Logs record `code`, `request_id`, module and timing only (CTR-ERR-001 R10). No amounts, currencies, descriptions or `acc_` IDs. | MVP |
+| PS-026-08.R04 | Dashboards show counts by leg `kind` only, never by party or amount range. | MVP |
 
-## Requirements to specify
-- [ ] PS-026-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-026-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-026-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels allowed: `kind`, `code`, `from_state`, `to_state`, `action`. Forbidden labels: `acc_`, `cyc_`, `amount`, `currency`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command emits a trace span with `request_id` and `correlation_id` (`cor_`, CTR-ID-001).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Metrics for transitions are in PS-026-03; stuck-leg alert defined there.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Metric `mixed_validation_rejections_total{code}` counts CTR-ERR codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards require `ope` read with purpose `operations`; no content access.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-026-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Telemetry is best-effort and never blocks a command. Client-side offline queue depth is reported as an aggregate count only.
+
+## Privacy, retention, abuse
+Telemetry retained 30 days (ASSUMPTION). Trace attributes are scrubbed by an allowlist. Anomaly alerts on declaration volume per cycle go to F12 as counts.
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| `mixed_declare_latency_seconds` p95 | ≤ 0.3 s |
+| `mixed_queue_pending_age_seconds` p95 | ≤ 1 h |
+| `mixed_leg_unattested_total` | alert on rise > 3× 7-day baseline |
+| Error rate (5xx) | ≤ 0.1% of commands |
+
+## Tests
+- TEST-PS-026-08-01 (unit): log formatter drops any field outside the allowlist.
+- TEST-PS-026-08-02 (load): 200 declares per second for 10 min meet R01 p95.
+- TEST-PS-026-08-03 (lint): metric label set contains no forbidden label.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets in the table are measured in staging before release gate (future phase).
+2. Log scan finds zero amounts or `acc_` IDs in a sample of 10,000 lines.
+3. Alert rules exist for stuck legs and queue age.
+
+## Assumptions & open decisions
+- ASSUMPTION: performance budgets are starting values, to be revised after load tests.
+- Related: D08 offline queue (PROVISIONAL default, unapproved). See [DECISIONS.md](../../../DECISIONS.md).

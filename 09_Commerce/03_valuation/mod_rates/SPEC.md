@@ -1,44 +1,42 @@
 # F09.S03.M02 — rates
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F09.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead (F09). **Parent:** [F09.S03 valuation](../SPEC.md). **Canonical contracts:** CTR-COM-001 (quote object, R04 pinning, quote errors), CTR-ID-001 (`qte`), CTR-EVT-001, CTR-SCH-001, CTR-ERR-001. **Decisions:** D03 (PROVISIONAL, unapproved).
 
 ## Purpose and business behavior
-Provide rates as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Issues pinned, expiring quotes (`qte_`) for cross-currency proposals and claims. Quotes come only from registered rate sources, are checked for staleness and divergence, and are fixed at the moment a party consents. Users cannot supply rates. A consented quote fixes the agreed value; a quote's expiry blocks new quotes only.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a proposer, I see one agreed value in the other currency that I can accept or decline before consenting.
+- As a counterparty, the quote I consent to cannot change after I agree.
+- As an operator, I can see which sources are stale or disagree, and quotes stop being issued when they do.
 
 ## Scope
-- Required process spec: `rates_domain_model.md` (not yet authored)
-- Required process spec: `rates_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `rates_validation_and_authorization.md` (not yet authored)
-- Required process spec: `rates_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `rates_interfaces_and_events.md` (not yet authored)
-- Required process spec: `rates_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `rates_acceptance_and_property_tests.md` (not yet authored)
+- In scope: source registration, quote issuance, divergence and staleness checks, quote hashing, quote expiry, consent-time pinning hook.
+- Out of scope: currency registry (mod_currency), arithmetic (mod_precision), chain price oracles for on-chain assets beyond registered sources, trading or conversion execution (the platform does not convert funds).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `quote.issue` (sys), `rate_source.register`, `rate_source.disable`. Queries `quote.get`. Events `quote.issued`, `quote.expired`, `rate_source.registered`, `rate_source.disabled`, `quote.refused` (internal audit). Prefix `qte_` exists in CTR-ID-001; `rsrc` source prefix is PENDING.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: `cur_` registry (mod_currency), external rate sources (registered adapters). Downstream: proposals (F02 mod_offers, mod_negotiation), claims (CTR-COM-001 `clm.submit` cross-currency), mod_precision for conversion, LocalMutiny value balancing (consumer).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns quote records and source registry. Consumers reference `qte_` by full ID.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Oracle manipulation by a single source; stale data at consent; quote-shopping across sources; quote expiry before settlement; source outage leaving proposals unpriced; user-supplied rates; collusion between a source operator and a party.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Source list and divergence thresholds approved; HALF_EVEN golden vectors pass (with mod_precision); consent-pinning contract agreed with F02; source licensing reviewed.
 
 ## Required process specification inventory
-- [ ] `rates_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `rates_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `rates_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `rates_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `rates_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `rates_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `rates_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-075-01
+- [x] `validation_rules.md` — PS-075-02
+- [x] `workflow_state_machine.md` — PS-075-03
+- [x] `commands_queries_events.md` — PS-075-04
+- [x] `authorization_capabilities.md` — PS-075-05
+- [x] `failure_recovery_idempotency.md` — PS-075-06
+- [x] `privacy_retention_abuse.md` — PS-075-07
+- [x] `observability_performance.md` — PS-075-08
+- [x] `contract_and_acceptance_tests.md` — PS-075-09
+- [x] `import_export_backup_rollback.md` — PS-075-10

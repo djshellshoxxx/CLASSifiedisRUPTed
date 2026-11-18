@@ -1,35 +1,55 @@
 # PS-135-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-135-03. **Owner:** [17_Quality/01_testing/mod_integration](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_integration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_integration. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001
 
-## Purpose and scope
-Define the workflow state machine process for integration within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-135-03.R01 | A run is in exactly one state: `queued`, `running`, `pass`, `fail`, `skipped`, `flaky_quarantined`. | MVP |
+| PS-135-03.R02 | A scenario that fails 2 of 3 retries is `fail`; a scenario that passes on retry 2 or 3 is `flaky_quarantined`. | MVP |
+| PS-135-03.R03 | A quarantined scenario blocks merge until QA Lead clears it within 5 working days (ASSUMPTION). | MVP |
+| PS-135-03.R04 | `pass`, `fail` and `skipped` are terminal for a `run_id`. | MVP |
 
-## Requirements to specify
-- [ ] PS-135-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-135-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-135-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`outcome` in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions emitted as `integration_run.<past-tense>` events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | schedule | scenario enabled | queued | emit `integration_run.queued` |
+| queued | start | environment ready | running | emit `integration_run.started` |
+| queued | skip | scenario marked skipped with reason | skipped | emit `integration_run.skipped` |
+| running | assertion pass | all assertions pass | pass | emit `integration_run.passed` |
+| running | assertion fail | retries exhausted | fail | emit `integration_run.failed` |
+| running | assertion fail then pass | retry index 2 or 3 passes | flaky_quarantined | emit `integration_run.flaky_quarantined` |
+| flaky_quarantined | clear | QA Lead decision recorded | pass | emit `integration_run.cleared` |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions are internal errors and fail the pipeline.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Clearing a quarantine needs QA Lead (F17) capability.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-135-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Runs are not resumed after environment loss; a new run is scheduled.
+
+## Privacy, retention, abuse
+No personal data in run records.
+
+## Observability & budgets
+Metric `integration_flaky_quarantined_total{scenario}`.
+
+## Tests
+- TEST-PS-135-03-01: unit, every transition.
+- TEST-PS-135-03-02: integration, retry policy produces the expected state.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No quarantined scenario merges without clearance.
+2. Retry counts recorded for every run.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5-working-day clearance window.
+- D04 (partial barter test scenarios depend on this): PROVISIONAL (D04 default, unapproved).

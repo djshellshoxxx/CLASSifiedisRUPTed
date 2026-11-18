@@ -1,35 +1,51 @@
-# PS-068-06 — failure recovery idempotency
+# PS-068-06 — failure, recovery, idempotency and offline behavior
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-068-06. **Owner:** [09_Commerce/01_payments/mod_crypto](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_crypto. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_crypto (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (Failure section; R11, R12), CTR-EVT-001 (R03), CTR-ERR-001 (R03). **Decisions:** D04, D08 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the failure recovery idempotency process for crypto within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-068-06.R01 | Each claim is verified by at least two independent RPC or indexer providers per chain (ASSUMPTION). Disagreement yields `COM.VERIFIER_UNAVAILABLE`, not a verdict. | MVP |
+| PS-068-06.R02 | Adapter timeout 10 s per provider; retries with exponential backoff (base 2 s, max 5 attempts), then state unchanged. | MVP |
+| PS-068-06.R03 | Poll interval: 30 s until `FINAL`, then 10 min until reorg window closes (ASSUMPTION). | MVP |
+| PS-068-06.R04 | Offline clients may queue a claim (D08); the server re-validates chain, asset, quote and party status at commit. | MVP |
+| PS-068-06.R05 | Chain outage: all claims on that chain keep their state; user label reads "verification delayed". | MVP |
 
-## Requirements to specify
-- [ ] PS-068-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-068-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-068-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Verification job row: `claim_id`, `chain_id`, `providers[]`, `last_result_digest`, `next_poll_at`, `attempts`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries keep the original idempotency key.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Job states: `scheduled`, `polling`, `agreed`, `disagreed`, `paused_outage`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`COM.VERIFIER_UNAVAILABLE` (503, retryable); `COM.FINALITY_PENDING` (412, retryable).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Jobs run as the adapter `sys_` principal.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-068-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Reorg during polling is detected by block hash mismatch and produces `adapter.reorg`. Concurrent dispute and finality: revision check (CTR-COM-001 test 13).
+
+## Privacy, retention, abuse
+Job rows are deleted with their claim's retention (RET-EVD).
+
+## Observability & budgets
+Metric: provider disagreement count per chain (alert on any sustained disagreement > 15 min).
+
+## Tests
+- TEST-PS-068-06-01 (integration): provider outage keeps state; recovery verifies once.
+- TEST-PS-068-06-02 (integration): two providers disagree; no verdict; alert raised.
+- TEST-PS-068-06-03 (integration): reorg at 2 confirmations reverts state.
+- TEST-PS-068-06-04 (property): replayed adapter result changes nothing.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No verdict issued on provider disagreement.
+2. Outage never changes claim state (test).
+3. Retries never create duplicate verification records.
+
+## Assumptions & open decisions
+- ASSUMPTION: two providers minimum per chain.
+- D04 (PROVISIONAL default, unapproved). D08 (PROVISIONAL default, unapproved).

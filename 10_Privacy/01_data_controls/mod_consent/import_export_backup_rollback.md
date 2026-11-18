@@ -1,35 +1,54 @@
-# PS-076-10 — import export backup rollback
+# PS-076-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-076-10. **Owner:** [10_Privacy/01_data_controls/mod_consent](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_consent. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R07, R11), CTR-SCH-001 (R07, R08), CTR-EVT-001 (R08).
 
-## Purpose and scope
-Define the import export backup rollback process for consent within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-076-10.R01 | Subject export includes all consent records and their status history at their classes (PSEUDONYMOUS). | MVP |
+| PS-076-10.R02 | Backup restore never resurrects a withdrawn or expired consent: restored state is reconciled against the event log before serving reads. | MVP |
+| PS-076-10.R03 | Import of consent records from another node or migration is accepted only with a signed source record and `source = migration`; otherwise rejected. | MVP |
+| PS-076-10.R04 | Rollback of a schema version never rewrites stored consent events (CTR-SCH-001 R07). | MVP |
 
-## Requirements to specify
-- [ ] PS-076-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-076-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-076-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export file: JSON, one record per line, schema `consent.export@1.0.0` (PENDING registry ID). Fields as in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export is requested through the data-export flow owned by 10_Privacy/01_data_controls/mod_export (full ID). This module supplies records only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore reconciliation: restored record `revision` < log `revision` → replay events; never downgrade status.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | When |
+|---|---|---|
+| CONSENT.IMPORT_UNSIGNED | false | import without source signature |
+| CONSENT.RESTORE_CONFLICT | false | restored state older than log (reconciled, logged) |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: subject (`consent.export`). Import: `sys_` migration principal only. Restore: `ope` with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-076-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export is idempotent per (subject, export_request_id). Import is idempotent per `consent_id` + revision.
+
+## Privacy, retention, abuse
+Export files expire 7 days after download (ASSUMPTION). Backups follow platform backup schedule; restore does not extend retention.
+
+## Observability & budgets
+Metric `consent_restore_reconciled_total`. Export generation p95 ≤ 5 s for 10,000 records (ASSUMPTION).
+
+## Tests
+- TEST-PS-076-10-01 (restore): backup taken before withdrawal, restored, withdrawn state holds.
+- TEST-PS-076-10-02 (import): unsigned import rejected.
+- TEST-PS-076-10-03 (export): export contains no other subject's records.
+- TEST-PS-076-10-04 (rollback): downgrade of schema leaves event bytes unchanged.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Restore test passes in 100% of runs.
+2. Export shows only the requesting subject's data.
+3. Rollback never rewrites stored events.
+
+## Assumptions & open decisions
+- ASSUMPTION: export expiry 7 days; export budget.
+- PROVISIONAL (D07 default, unapproved) for retention defaults.
+- PROVISIONAL (D10 default, unapproved): user-controlled keys govern signed import sources.

@@ -1,35 +1,57 @@
-# PS-058-10 — import export backup rollback
+# PS-058-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-058-10. **Owner:** [07_Identity/03_trust/mod_reputation](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_reputation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_reputation. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R11 export; RET-LEGAL), CTR-SCH-001 (migrations), CTR-CAP-001, CTR-FED-001 (no federation in MVP).
 
-## Purpose and scope
-Define the import export backup rollback process for reputation within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-058-10.R01 | Owner export returns own counters, band history not included, and input summaries as `reputation.export` 1.0.0. | MVP |
+| PS-058-10.R02 | Export excludes counterparty identifiers and other subjects' data. | MVP |
+| PS-058-10.R03 | Backups encrypted; include counters, applied-input table, pair windows. | MVP |
+| PS-058-10.R04 | Restore triggers full recompute and compares to backed-up counters; mismatch blocks cutover. | MVP |
+| PS-058-10.R05 | Rules-version change requires recompute of all profiles in a staged job, not in place. | MVP |
+| PS-058-10.R06 | Import of reputation from another platform. | Future (blocked on D01 and D10; not permitted in MVP) |
 
-## Requirements to specify
-- [ ] PS-058-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-058-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-058-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`reputation.export`: `export_id` (opaque), `generated_at`, `counters`, `input_summary[]` (`source`, `count`, `period`), `schema_version`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`RequestReputationExport` (owner, idempotent); event `reputation.export_ready` with `export_id` only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+`queued` → `ready` (24 h) → `expired`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `REPUTE.EXPORT_RATE_LIMIT` | true | `err.repute.export_rate_limit` |
+| `REPUTE.RESTORE_DRIFT` | false | `err.repute.restore_drift` |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: `reputation.read_own`. Restore: operator with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-058-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent per `export_id`. Restore staged; drift check before cutover. Rules changes staged and versioned; rollback by reverting rules version and recompute.
+
+## Privacy, retention, abuse
+Export file deleted at 24 h. Backups 35 days (ASSUMPTION); legal hold per RET-LEGAL.
+
+## Observability & budgets
+`repute_export_total{result}`; staged recompute progress as aggregate.
+
+## Tests
+- TEST-PS-058-10-01 (contract): export schema validates.
+- TEST-PS-058-10-02 (integration): export excludes counterparties.
+- TEST-PS-058-10-03 (integration): restore drift blocks cutover.
+- TEST-PS-058-10-04 (integration): rules-version rollback restores prior bands.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export matches fixtures.
+2. Restore drift check enforced.
+3. Rules changes never applied in place.
+4. Backup drill recorded.
+
+## Assumptions & open decisions
+- ASSUMPTION: backup retention 35 days.
+- PROVISIONAL (D10 default, unapproved): no portability in MVP.
+- PROVISIONAL (D07 default, unapproved): per-category retention.

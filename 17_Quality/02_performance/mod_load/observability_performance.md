@@ -1,35 +1,53 @@
-# PS-139-08 — observability performance
+# PS-139-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-139-08. **Owner:** [17_Quality/02_performance/mod_load](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_load. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_load. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001, CTR-PRV-001
 
-## Purpose and scope
-Define the observability performance process for load within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-139-08.R01 | Report p50, p95, p99 latency and error rate per operation ID. | MVP |
+| PS-139-08.R02 | Compare each run to the baseline run for the same build line; flag regressions > 10% on p95 (ASSUMPTION). | MVP |
+| PS-139-08.R03 | Gate release on SLO: p95 for each operation in its budget and error rate ≤ 0.5% (ASSUMPTION). | MVP |
+| PS-139-08.R04 | Harness metrics separate from system metrics. | MVP |
 
-## Requirements to specify
-- [ ] PS-139-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-139-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-139-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Labels: `operation_id`, `profile`, `environment_id`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+N/A.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+N/A.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards readable by engineers and SRE.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-139-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Harness metric loss marks the run `failed` (PS-139-03).
+
+## Privacy, retention, abuse
+No personal data in metrics.
+
+## Observability & budgets
+| Operation class | p95 target (ASSUMPTION) |
+|---|---|
+| Listing read | ≤ 300 ms |
+| Message send | ≤ 500 ms |
+| Region query | ≤ 400 ms |
+| Relay batch ingest (100 events) | ≤ 1 s |
+| Error rate | ≤ 0.5% |
+
+## Tests
+- TEST-PS-139-08-01: load, reference profile meets all targets on staging.
+- TEST-PS-139-08-02: regression detection, injected 15% slowdown is flagged.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Reference profile passes SLO gate in 3 consecutive runs.
+2. Injected regression flagged in fixture.
+
+## Assumptions & open decisions
+- ASSUMPTION: targets above.
+- D02 (cycle optimizer latency): PROVISIONAL (D02 default, unapproved).

@@ -1,35 +1,51 @@
-# PS-124-04 — commands queries events
+# PS-124-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-124-04. **Owner:** [15_Platform/04_configuration/mod_flags](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/04_configuration/mod_flags (F15.S04.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for flags within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-124-04.R01 | `flag.evaluate` is the only client-reachable operation; it returns evaluated values for the caller's context, never rules. | MVP |
+| PS-124-04.R02 | Admin commands require `expected_revision` and `idempotency_key`. | MVP |
+| PS-124-04.R03 | `flag.kill` bypasses approval but records actor, reason code and timestamp. | MVP |
 
-## Requirements to specify
-- [ ] PS-124-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-124-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-124-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command or query | Signature | Idempotency scope | Emits | Errors |
+|---|---|---|---|---|
+| `flag.evaluate` | (keys[], context allow-list) → values | none (read) | none | FLAG.UNKNOWN_KEY returns default, not error to clients |
+| `flag.create` | (definition) | (actor, key) | `flag.created` | FLAG.DEFINITION_INVALID, FLAG.FEATURE_NOT_ACTIVE |
+| `flag.update` | (key, patch, expected_revision, change_ref?) | (key, key) | `flag.updated` | FLAG.APPROVAL_MISSING, FLAG.ROLLOUT_INVALID, SYS.CONFLICT |
+| `flag.kill` | (key, reason_code) | (key, key) | `flag.killed` | SYS.CONFLICT |
+| `flag.clear_kill` | (key, expected_revision) | (key, key) | `flag.updated` | CAP.SELF_APPROVAL_FORBIDDEN |
+| `flag.retire` | (key, expected_revision) | (key) | `flag.retired` | FLAG.FEATURE_NOT_ACTIVE |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Effects per PS-124-03.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Per PS-124-02.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Per PS-124-05.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+`flag.evaluate` falls back to default on any internal error. Admin commands are retry-safe with the same key.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-124-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+`flag.evaluate` accepts only the attribute allow-list; unknown attributes are dropped, not logged with values.
+
+## Observability & budgets
+`flag.evaluate` p95 <= 5 ms server-side (ASSUMPTION).
+
+## Tests
+- TEST-PS-124-04-01 (contract): command table matches implementation.
+- TEST-PS-124-04-02 (negative): evaluate response contains no rule definitions.
+- TEST-PS-124-04-03 (concurrency): two rollout updates on the same revision; one succeeds.
+- TEST-PS-124-04-04 (fallback): evaluation error returns default values.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command table matches implementation.
+2. TEST-PS-124-04-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: `flag.evaluate` is idempotent and read-only.

@@ -1,44 +1,41 @@
-# F02.S02.M03 — n
+# F02.S02.M03 — mod_n
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.S02.
+**Status:** SPEC-DRAFT-COMPLETE. **Owner:** Marketplace Lead (accountable role). **Parent:** F02.S02 (cycle_matching). **Canonical record owner:** this module, for the length-routing decision and generalised search runs (`cyc_` proposals with five or more slots).
 
 ## Purpose and business behavior
-Provide n as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Finds and proposes barter cycles of five to eight participants by bounded, deterministic search over a FEASIBLE snapshot. Three- and four-party cycles are routed to mod_three and mod_four, so each cycle has exactly one owning module. The search is explicitly budgeted: when the budget is spent, the run yields no proposals rather than partial ones.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant in a long cycle, I am told the cycle's length and that every other party consented to the same version.
+- As an operator, I can lower the maximum length or the search budget to protect latency, without touching shorter-cycle modules.
+- As a participant, if no cycle is found within budget, I see "no cycle found in this run", not an error about other people.
 
 ## Scope
-- Required process spec: `n_domain_model.md` (not yet authored)
-- Required process spec: `n_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `n_validation_and_authorization.md` (not yet authored)
-- Required process spec: `n_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `n_interfaces_and_events.md` (not yet authored)
-- Required process spec: `n_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `n_acceptance_and_property_tests.md` (not yet authored)
+Ten process specifications (inventory below). Lengths 2–4 are routed away; length above 8 is out of scope.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal command `cycle.search_n` (sys_ matcher). Event `cycle_search.completed`. Proposals use `cycle.propose_n` (shape shared with PS-017-04). Error module code `CYCLEN`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F02.S02.M05 (mod_feasibility, FEASIBLE snapshots); F02.S02.M02 (mod_four, canonical rotation and regression fixtures, shadow comparison only); F15.S02.M03 (mod_storage, snapshot storage). Downstream: F02.S02.M04 (mod_party, slot binding) and F02.S03.M01 (mod_consent). Shared contracts: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns search-run records and length routing. Does not own feasibility verdicts, slots (`par_`), consents or locks.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Combinatorial blow-up, starvation of short cycles by long-search runs, budget gaming by crafted graphs, silent truncation of results, and accidental duplicate ownership with mod_three or mod_four. Pseudonyms do not guarantee anonymity; long cycles increase graph-linkage risk (see PS-018-07).
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Ten process specs at SPEC-DRAFT-COMPLETE; routing table agreed with mod_three and mod_four; search budget benchmark plan defined; golden fixtures for lengths 5–8.
 
 ## Required process specification inventory
-- [ ] `n_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `n_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `n_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `n_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `n_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `n_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `n_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-018-01
+- [x] `validation_rules.md` — PS-018-02
+- [x] `workflow_state_machine.md` — PS-018-03
+- [x] `commands_queries_events.md` — PS-018-04
+- [x] `authorization_capabilities.md` — PS-018-05
+- [x] `failure_recovery_idempotency.md` — PS-018-06
+- [x] `privacy_retention_abuse.md` — PS-018-07
+- [x] `observability_performance.md` — PS-018-08
+- [x] `contract_and_acceptance_tests.md` — PS-018-09
+- [x] `import_export_backup_rollback.md` — PS-018-10

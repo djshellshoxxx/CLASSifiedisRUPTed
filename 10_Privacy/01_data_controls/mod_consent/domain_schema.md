@@ -1,35 +1,64 @@
 # PS-076-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-076-01. **Owner:** [10_Privacy/01_data_controls/mod_consent](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_consent. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-ID-001 (new prefix PENDING CTR-ID-001 for `cns_`).
 
-## Purpose and scope
-Define the domain schema process for consent within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-076-01.R01 | One consent record per (`subject`, `purpose`, `scope`, `notice_version`) lineage. Records are append-only; each state change creates `revision` + 1. | MVP |
+| PS-076-01.R02 | `purpose` is drawn from a closed registry: `analytics`, `notifications_push`, `federation_item_optin`, `location_precision_disclosure`, `counterparty_contact`. Values PROVISIONAL (owner F10). | MVP |
+| PS-076-01.R03 | Record holds no free text, no IP address, no device identifier (CTR-EVT-001 R06, CTR-PRV-001 R09). | MVP |
+| PS-076-01.R04 | Each record stores the `notice_version` the subject saw. A record cannot exist without it. | MVP |
 
-## Requirements to specify
-- [ ] PS-076-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-076-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-076-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Type | Constraint | Class |
+|---|---|---|---|
+| `consent_id` | string | `cns_` + 26 Crockford chars (CTR-ID-001) | PSEUDONYMOUS |
+| `subject` | string | `acc_` ID, reference only | PSEUDONYMOUS |
+| `purpose` | enum (closed) | R02 registry | PUBLIC |
+| `scope` | object | `{type: global\|item, ref: <ID>\|null}`; `ref` is an ID, never content | PSEUDONYMOUS |
+| `status` | enum | `granted`, `withdrawn`, `expired`, `superseded` | PUBLIC |
+| `revision` | integer | ≥ 1, per record | PUBLIC |
+| `notice_version` | string | SemVer | PUBLIC |
+| `granted_at`, `withdrawn_at` | date-time | `withdrawn_at` null unless status = withdrawn | PSEUDONYMOUS |
+| `expires_at` | date-time or null | ≤ `granted_at` + 365 d (ASSUMPTION) | PSEUDONYMOUS |
+| `source` | enum | `ui`, `api`, `migration` | PUBLIC |
+| `schema_version` | const | `1.0.0` | — |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Canonical owner (B-06, PROVISIONAL): this module owns privacy-consent records only. Cycle-participation consent (`02_LocalMutiny/03_cycle_execution/mod_consent`) and negotiation consent (`08_Communications/02_negotiation/mod_consent`) are separate record classes; consumers reference them by full ID.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Defined in [commands_queries_events.md](commands_queries_events.md). This file defines fields only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Field `status` lifecycle is specified in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Field rules are in [validation_rules.md](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-076-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Field visibility per CTR-CAP-001 R10: `subject` and `status` visible to owner; `scope.ref` visible to owner and to the item owner only when status = granted (ASSUMPTION). No `global` read of consent content.
+
+## Failure, idempotency, concurrency, offline
+Revision check on every write (`expected_revision`, CTR-EVT-001 R02). Schema change rules: CTR-SCH-001 R10 (any class change requires F10 review).
+
+## Privacy, retention, abuse
+Record class PSEUDONYMOUS. Retention: see [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+Schema lint in CI (PRV.UNCLASSIFIED_FIELD on any field lacking a class).
+
+## Tests
+- TEST-PS-076-01-01 (unit): registry rejects purpose outside R02 closed set.
+- TEST-PS-076-01-02 (contract): every field carries exactly one class; CI fails on missing class.
+- TEST-PS-076-01-03 (schema): record without `notice_version` fails validation.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema validates against `1.0.0` JSON Schema with `additionalProperties: false`.
+2. Each field has one class from CTR-PRV-001.
+3. Purpose registry matches R02 exactly.
+
+## Assumptions & open decisions
+- ASSUMPTION: consent expiry maximum 365 days.
+- PROVISIONAL (D07 default, unapproved): minimal per-category retention; see file 07.
+- B-06: canonical owner of privacy-consent class is this module (PROVISIONAL). Final ownership OPEN for Governance Lead (F18).

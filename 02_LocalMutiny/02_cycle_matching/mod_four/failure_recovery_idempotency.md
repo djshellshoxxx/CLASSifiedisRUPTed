@@ -1,35 +1,52 @@
-# PS-017-06 — failure recovery idempotency
+# PS-017-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-017-06. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_four](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_four. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_four. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03), CTR-SCH-001 (R06).
 
-## Purpose and scope
-Define the failure recovery idempotency process for four within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-017-06.R01 | A consent for version v cannot advance version v+1 (checked against expected_version). | MVP |
+| PS-017-06.R02 | Duplicate consent with same key returns the original response with no new event. | MVP |
+| PS-017-06.R03 | If mod_lock fails after `consented`, the cycle returns to `proposed` with consents cleared; no partial lock remains. | MVP |
+| PS-017-06.R04 | Timeouts: command 3 s; retry only with same key; backoff 1 s base, 60 s cap, 5 attempts (ASSUMPTION). | MVP |
+| PS-017-06.R05 | Expiry job runs every 1 min; consent on an expired cycle returns SYS.UNPROCESSABLE_STATE. | MVP |
 
-## Requirements to specify
-- [ ] PS-017-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-017-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-017-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Version counter and consent flags; idempotency records 7 days.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+All writes retry-safe by key.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Failure edges are in PS-017-03 (lock failure, expiry).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Expired consent returns SYS.UNPROCESSABLE_STATE; stale version returns SYS.CONFLICT.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-check participant status.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-017-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Race: two slots consent in parallel; both commits serialise on version; the last one completes `consented`.
+- Crash mid-commit: event append is atomic with state change; recovery reads last revision.
+- Offline: consent is never queued as a blind action; a pending-ack state is shown until relay acknowledgement (D08).
+
+## Privacy, retention, abuse
+Pending local consents are purged on logout (CTR-PRV-001 R06).
+
+## Observability & budgets
+Count of lock failures and supersessions per day.
+
+## Tests
+- TEST-PS-017-06-01 (concurrency): four parallel consents yield one consented event.
+- TEST-PS-017-06-02 (integration): mod_lock failure clears consents.
+- TEST-PS-017-06-03 (offline): queued consent sent after version change is rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No consented state from mixed versions in 100% of runs.
+2. Zero duplicate events for replayed keys.
+3. Expiry within 1 min of the 48 h window.
+
+## Assumptions & open decisions
+- PROVISIONAL (D08 default, unapproved): local pending queue until authenticated acknowledgement.
+- ASSUMPTION: timeout and retry values above.

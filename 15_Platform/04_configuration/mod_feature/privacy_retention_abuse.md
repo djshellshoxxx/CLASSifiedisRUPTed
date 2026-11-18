@@ -1,35 +1,48 @@
-# PS-123-07 — privacy retention abuse
+# PS-123-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-123-07. **Owner:** [15_Platform/04_configuration/mod_feature](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_feature. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/04_configuration/mod_feature (F15.S04.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for feature within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-123-07.R01 | Feature definitions hold no personal data (CTR-PRV-001 class PUBLIC). | MVP |
+| PS-123-07.R02 | Feature names and descriptions must not reveal unreleased security controls; security-sensitive features use opaque slugs and restricted titles. | MVP |
+| PS-123-07.R03 | Definition versions are kept indefinitely (RET-AUD for change records). | MVP |
+| PS-123-07.R04 | Feature catalog is not exposed to unauthenticated clients. | MVP |
 
-## Requirements to specify
-- [ ] PS-123-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-123-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-123-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention class RET-AUD for change records; definitions are public-internal metadata.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond PS-123-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`FEATURE.DEFINITION_INVALID` if a security-sensitive feature carries a public title (lint).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-123-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-123-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Not applicable.
+
+## Privacy, retention, abuse
+Abuse: enumeration of unreleased features via public endpoints is prevented by R04 and by generic 404 responses.
+
+## Observability & budgets
+Metric: none beyond lint results.
+
+## Tests
+- TEST-PS-123-07-01 (lint): definitions contain no personal data fields.
+- TEST-PS-123-07-02 (lint): security-sensitive titles restricted.
+- TEST-PS-123-07-03 (negative): unauthenticated catalog request returns `SYS.UNAUTHENTICATED`.
+- TEST-PS-123-07-04 (retention): change record kept 12 months.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No personal data in catalog (TEST-01).
+2. TEST-PS-123-07-01 through -04 pass.
+
+## Assumptions & open decisions
+- PROVISIONAL (D07 default).

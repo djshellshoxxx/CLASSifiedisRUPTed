@@ -1,35 +1,65 @@
-# PS-052-08 — observability performance
+# PS-052-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-052-08. **Owner:** [07_Identity/01_accounts/mod_pseudonyms](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_pseudonyms. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_pseudonyms. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001 (diagnostics), CTR-EVT-001 (lag metrics), CTR-PRV-001 (log classes), CTR-CAP-001 R08 (audit).
 
-## Purpose and scope
-Define the observability performance process for pseudonyms within 01_accounts. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-052-08.R01 | Every command emits counter, latency histogram and error-code counter. | MVP |
+| PS-052-08.R02 | Command p95 ≤ 300 ms; query p95 ≤ 100 ms; handle availability check p95 ≤ 50 ms (server-side). | MVP |
+| PS-052-08.R03 | Logs contain `prf_id`, `event_id`, command and code only. No handle, label, `account_id` in application logs. | MVP |
+| PS-052-08.R04 | Metric labels never include `prf_id`, handle, label or `acc_` (cardinality and linkage). | MVP |
+| PS-052-08.R05 | Abuse alerts on rate of `HAS_OPEN_PARTICIPATION`, `HANDLE_TAKEN` and rate-limit hits, aggregated per minute. | MVP |
+| PS-052-08.R06 | Accessibility budget: error messages announced by screen readers in the web and mobile clients (tested in mod_keyboard / mod_screenreader). | MVP |
 
-## Requirements to specify
-- [ ] PS-052-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-052-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-052-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric names and label sets:
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Metric | Type | Labels |
+|---|---|---|
+| `pseud_cmd_total` | counter | `command`, `result` |
+| `pseud_cmd_latency_ms` | histogram | `command` |
+| `pseud_validation_fail_total` | counter | `code` |
+| `pseud_outbox_lag_seconds` | gauge | none |
+| `pseud_queue_not_applied_total` | counter | `code` |
+| `pseud_authz_deny_total` | counter | `action` |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Latency and error reporting apply to all commands in [commands_queries_events.md](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Transition counters per [workflow_state_machine.md](workflow_state_machine.md): `pseud_transition_total{from,to,event}`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Error counters by `code` only (CTR-ERR-001). Unknown codes count as `SYS.INTERNAL`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-052-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Dashboards viewable by F16 and F07 operators only; no per-handle views.
+
+## Failure, idempotency, concurrency, offline
+Client-side offline queue depth reported as aggregate only (no per-user identifiers).
+
+## Privacy, retention, abuse
+Operational logs (pseudonymous) retained 30 days (RET-OPS). Metric retention 13 months, aggregated. Audit (`aud_`) retention 12 months (RET-AUD).
+
+## Observability & budgets
+- Budgets: command p95 300 ms; outbox lag p95 ≤ 5 s; availability target 99.9% monthly (ASSUMPTION).
+- Load target: 50 creates/s peak with 1 M `prf_` rows (ASSUMPTION, to validate in PS-052-09).
+- Alert thresholds: `HANDLE_TAKEN` > 20% of claims over 15 min (possible squatting campaign).
+
+## Tests
+- TEST-PS-052-08-01 (unit): each command increments counter exactly once.
+- TEST-PS-052-08-02 (privacy scan): log and metric output contains no handle, label, `prf_` or `acc_` strings in fixture run.
+- TEST-PS-052-08-03 (load): 50 creates/s for 10 min meets p95 budget.
+- TEST-PS-052-08-04 (a11y): error announcements present for each code in web client.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Dashboards and alerts exist for each listed metric.
+2. Log and metric redaction verified by fixture scan.
+3. Latency budgets met under the load test.
+4. No per-user dimension in any metric.
+
+## Assumptions & open decisions
+- ASSUMPTION: 99.9% monthly availability target.
+- ASSUMPTION: 50 creates/s peak load, 1 M rows.
+- PROVISIONAL (D07 default, unapproved): operational log retention 30 days.

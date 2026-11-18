@@ -1,35 +1,51 @@
 # PS-104-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-104-09. **Owner:** [13_Notifications/01_delivery/mod_push](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_push. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_push. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-ID-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for push within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-104-09.R01 | Contract tests run on every change to push schemas, error codes or event types, before merge. | MVP |
+| PS-104-09.R02 | Every error code in PS-104-02 and PS-104-03 has a contract test asserting envelope, `retryable` and `message_key`. | MVP |
+| PS-104-09.R03 | Browser test covers subscribe, receive, revoke on Web Push simulator in Chromium, Firefox and Safari (desktop and iOS). | MVP |
+| PS-104-09.R04 | Accessibility: permission prompt and settings controls pass keyboard-only and screen reader checks (WCAG 2.2 AA target). | MVP |
 
-## Requirements to specify
-- [ ] PS-104-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-104-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-104-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: test push host (`push.test.invalid` ASSUMPTION), VAPID test key pair (non-production), simulated `dev_` and `acc_` records.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract test replays each command with valid, invalid, duplicate and stale-revision inputs and compares response to schema.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+State coverage: all rows of workflow_state_machine.md must be exercised (see TEST-PS-104-03-01).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative tests: each validation row in PS-104-02 has one failing fixture.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Negative tests: cross-account and operator access fixtures (PS-104-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-104-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Chaos fixtures from PS-104-06 are included in the integration suite.
+
+## Privacy, retention, abuse
+Privacy fixtures check that no event, response or log contains fixture endpoint or key strings.
+
+## Observability & budgets
+Test suite runtime budget 10 min for unit and contract layers.
+
+## Tests
+- TEST-PS-104-09-01 (contract): all push events validate against CTR-EVT-001.
+- TEST-PS-104-09-02 (contract): all push error codes match CTR-ERR-001 regex and envelope.
+- TEST-PS-104-09-03 (e2e): subscribe, receive generic notification, revoke, no further sends.
+- TEST-PS-104-09-04 (a11y): permission prompt keyboard path and announcement tested.
+- TEST-PS-104-09-05 (offline): reconnect after 2 h offline yields queued attempts delivered or expired per TTL.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Contract suite green on CI for all rows above.
+2. Browser matrix in R03 passes before MVP gate.
+3. Accessibility checklist signed off by Accessibility Lead (future gate).
+
+## Assumptions & open decisions
+- ASSUMPTION: Safari web push requires home-screen install (see mod_install); test fixture accounts for this.
+- No Dxx directly applies; test scope aligns with D07 retention tests.

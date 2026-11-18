@@ -1,35 +1,54 @@
 # PS-131-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-131-05. **Owner:** [16_Security/03_assurance/mod_incident](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_incident. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_incident. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-ERR-001
 
-## Purpose and scope
-Define the authorization capabilities process for incident within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-131-05.R01 | Declaring an incident requires `ope` or `sys_` with `create` on `security_incident`, scope `global`. | MVP |
+| PS-131-05.R02 | Viewing an incident requires `case:<inc_>` scope membership; F16 leads have `global` read of metadata only, not timeline text. | MVP |
+| PS-131-05.R03 | Timeline text (PRIVATE_PERSONAL) is readable only by named responders on that incident. | MVP |
+| PS-131-05.R04 | Closing or reopening requires two distinct responders, one of whom is the commander. | MVP |
+| PS-131-05.R05 | Every read of timeline text emits an `aud_` record without content (CTR-CAP-001 R08). | MVP |
 
-## Requirements to specify
-- [ ] PS-131-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-131-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-131-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capability IDs: `security_incident.create`, `security_incident.triage`, `security_incident.administer`, `security_incident.read`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Grants to responders are time-bound (`expires_at` ≤ 72 h, CTR-CAP-001 R06) and purpose-coded.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Revoking a responder grant takes effect at next decision.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Actor | Action | Resource | Result |
+|---|---|---|---|
+| sys | create | incident | allow |
+| responder (case member) | triage | incident | allow |
+| F16 lead | read metadata | incident | allow |
+| F16 lead | read timeline text | incident | DENY, SYS.FORBIDDEN unless named responder |
+| user | any | incident | DENY, SYS.NOT_FOUND |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dual control on close/reopen per R04.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-131-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Decision records (`dec_`) for every denial.
+
+## Privacy, retention, abuse
+Denials record IDs and rule names only.
+
+## Observability & budgets
+Counter `incident_authz_denied_total{rule}`.
+
+## Tests
+- TEST-PS-131-05-01: unit, decision table.
+- TEST-PS-131-05-02: negative, non-responder lead denied timeline text.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Timeline text never returned to a non-named principal in fixtures.
+2. Close without second responder denied.
+
+## Assumptions & open decisions
+- ASSUMPTION: responder roster maintained by F16 Security Lead.
+- D07 (access retention): PROVISIONAL (D07 default, unapproved).

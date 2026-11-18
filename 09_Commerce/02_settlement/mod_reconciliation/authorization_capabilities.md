@@ -1,35 +1,54 @@
-# PS-072-05 — authorization capabilities
+# PS-072-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-072-05. **Owner:** [09_Commerce/02_settlement/mod_reconciliation](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_reconciliation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_reconciliation (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R04–R08), CTR-PRV-001 (R07). **Decisions:** D04 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the authorization capabilities process for reconciliation within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-072-05.R01 | `recon.run` by `sys_` (schedule) or `ope_` with `reconciliation.execute` scoped to listed chains and windows. | MVP |
+| PS-072-05.R02 | Findings are visible to operators only under a `case:` or dual-controlled `global` grant (CTR-PRV-001 R07). | MVP |
+| PS-072-05.R03 | Resolution of `FINAL_WITHOUT_ADAPTER` requires two distinct `ope_` approvers. | MVP |
+| PS-072-05.R04 | Participants see only their own claim status changes, never findings. | MVP |
 
-## Requirements to specify
-- [ ] PS-072-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-072-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-072-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capabilities: `reconciliation.execute`, `reconciliation.read`, `reconciliation.resolve`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Action | Actor |
+|---|---|---|
+| `recon.run` | `reconciliation.execute` | sys_, ope_ |
+| `recon.finding.list` | `reconciliation.read` | ope_ with case grant |
+| `recon.finding.resolve` | `reconciliation.resolve` | ope_ (dual for FINAL types) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Grants per CTR-CAP-001 lifecycle.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unauthorized: `SYS.FORBIDDEN`; hidden resource: `SYS.NOT_FOUND`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Field visibility: amounts hidden unless case grant includes FINANCIAL_EVIDENCE purpose.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-072-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Grant checked at each list page.
+
+## Privacy, retention, abuse
+Every finding read emits `aud_` with finding ID and purpose.
+
+## Observability & budgets
+Alert on reads without case reference.
+
+## Tests
+- TEST-PS-072-05-01 (unit): matrix rows.
+- TEST-PS-072-05-02 (integration): single operator cannot resolve FINAL finding (`CAP.SELF_APPROVAL_FORBIDDEN`).
+- TEST-PS-072-05-03 (negative): participant cannot list findings.
+- TEST-PS-072-05-04 (integration): finding read creates `aud_`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix implemented.
+2. Dual control enforced.
+3. Audit records complete.
+
+## Assumptions & open decisions
+- ASSUMPTION: grant maximum 72 h.
+- D04 (PROVISIONAL default, unapproved).

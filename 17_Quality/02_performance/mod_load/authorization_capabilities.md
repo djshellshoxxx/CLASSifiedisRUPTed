@@ -1,35 +1,53 @@
 # PS-139-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-139-05. **Owner:** [17_Quality/02_performance/mod_load](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_load. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_load. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-ERR-001
 
-## Purpose and scope
-Define the authorization capabilities process for load within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-139-05.R01 | Defining workloads and profiles requires engineer role for the owning module or QA Lead. | MVP |
+| PS-139-05.R02 | Starting a run requires QA Lead or CI `sys_` principal scoped to staging. | MVP |
+| PS-139-05.R03 | Any load run against production hosts is denied, regardless of role. | MVP |
+| PS-139-05.R04 | Abort permitted to QA Lead, run owner and SRE on call. | MVP |
 
-## Requirements to specify
-- [ ] PS-139-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-139-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-139-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capability IDs: `load_workload.define`, `load_run.start`, `load_run.abort`, `load_run.read`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Decision records on denial.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+N/A.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Actor | Action | Result |
+|---|---|---|
+| engineer (module owner) | define workload for own module | allow |
+| engineer (other module) | define workload | DENY, SYS.FORBIDDEN |
+| CI sys | start run on staging | allow |
+| any | start run on production | DENY, LOAD.PRODUCTION_TARGET_FORBIDDEN |
+| SRE on call | abort | allow |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Grants for CI principals scoped to staging environment IDs only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-139-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+N/A.
+
+## Privacy, retention, abuse
+Denials carry no hostnames.
+
+## Observability & budgets
+Counter `load_authz_denied_total{rule}`.
+
+## Tests
+- TEST-PS-139-05-01: unit, decision table.
+- TEST-PS-139-05-02: negative, production start denied for QA Lead too.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No production load start in any role in fixtures.
+2. SRE abort honoured in 100% of runs.
+
+## Assumptions & open decisions
+- ASSUMPTION: production load is out of scope at MVP.
+- D10: PROVISIONAL (D10 default, unapproved) for credentials used by load clients.

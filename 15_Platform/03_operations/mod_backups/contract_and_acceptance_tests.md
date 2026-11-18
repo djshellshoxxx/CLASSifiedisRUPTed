@@ -1,35 +1,49 @@
 # PS-120-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-120-09. **Owner:** [15_Platform/03_operations/mod_backups](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_backups. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_backups (F15.S03.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for backups within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-120-09.R01 | Consumer contract tests for `backup.manifest` run against every supported manifest version (CTR-SCH-001 R09). | MVP |
+| PS-120-09.R02 | Consumers mod_recovery (PS-122), mod_reconciliation (F09.S02.M03) and mod_retention (F10.S01.M02) run contract tests against the manifest and tombstone formats. | MVP |
+| PS-120-09.R03 | Fixtures are synthetic; no production backup data in test environments. | MVP |
+| PS-120-09.R04 | Acceptance includes one full scheduled backup and one restore to isolated environment in staging each release. | MVP |
 
-## Requirements to specify
-- [ ] PS-120-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-120-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-120-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixture path `fixtures/backups/<kind>/<manifest_version>/`. Each fixture includes expected digest.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Tests call PS-120-04 commands only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+State coverage: every row of PS-120-03 has at least one test.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Each code in PS-120-02 and PS-120-06 has a fixture.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Negative tests for PS-120-05 matrix included.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-120-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Chaos suite in PS-120-06 runs in staging nightly.
+
+## Privacy, retention, abuse
+Test scans check that fixtures have no real identifiers.
+
+## Observability & budgets
+Suite runtime <= 45 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-120-09-01 (contract): manifest v1.x consumers pass.
+- TEST-PS-120-09-02 (e2e staging): backup then restore to isolated environment; row counts and digests match.
+- TEST-PS-120-09-03 (lint): fixture scan finds no real data.
+- TEST-PS-120-09-04 (coverage): every PS-120-03 transition has a test ID.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Restore drill in staging matches source digests (TEST-02).
+2. TEST-PS-120-09-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: staging has isolated keys and storage.
+- OPEN: F17 test environment owner for restore drills.

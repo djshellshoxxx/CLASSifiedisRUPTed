@@ -1,35 +1,57 @@
-# PS-072-02 — validation rules
+# PS-072-02 — validation rules and finding types
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-072-02. **Owner:** [09_Commerce/02_settlement/mod_reconciliation](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_reconciliation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_reconciliation (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (state table, R10, R12), CTR-ERR-001. **Decisions:** D04 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the validation rules process for reconciliation within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-072-02.R01 | Finding type `FINAL_WITHOUT_ADAPTER` is raised for every `FINAL` claim with no `clm.verified` and `clm.finalized` record. Target count: 0. | MVP |
+| PS-072-02.R02 | `STATE_VERSION_GAP` when a claim's `state_version` is not contiguous. | MVP |
+| PS-072-02.R03 | `DUPLICATE_TX` when two claims share (chain, tx_hash) (CTR-COM-001 R10). | MVP |
+| PS-072-02.R04 | `STALE_PENDING` for offline-queued claims not acknowledged within 7 days. | MVP |
+| PS-072-02.R05 | `ORPHAN_CLAIM` when `trx_` does not exist or is closed. | MVP |
+| PS-072-02.R06 | `ADAPTER_GAP` when no adapter result exists for a claim in `EXTERNALLY_VERIFIED` for longer than the polling budget. | MVP |
 
-## Requirements to specify
-- [ ] PS-072-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-072-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-072-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Finding-type enum: `FINAL_WITHOUT_ADAPTER`, `STATE_VERSION_GAP`, `DUPLICATE_TX`, `STALE_PENDING`, `ORPHAN_CLAIM`, `ADAPTER_GAP`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applies to `recon.run`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+A run with `FINAL_WITHOUT_ADAPTER` findings is not `complete` until findings are resolved or dismissed with a case reference.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Condition | Code | Category / HTTP | Retryable |
+|---|---|---|---|
+| Invalid scope | `SYS.REQUEST_MALFORMED` | validation / 400 | false |
+| Run key already running | `SYS.CONFLICT` | conflict / 409 | true |
+| Adapter unreachable during run | `RECON.COVERAGE_PARTIAL` (run status, not an HTTP error) | n/a | n/a |
+| Dismiss without case reference | `RECON.CASE_REQUIRED` | validation / 400 | false |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Scope limited to the operator's permitted chains and windows.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-072-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Rules are pure functions of claim and adapter records at run time; results include the snapshot revision.
+
+## Privacy, retention, abuse
+Diagnostics show the rule name and claim ID only.
+
+## Observability & budgets
+Counter by finding type. Alert on any `FINAL_WITHOUT_ADAPTER` above 0.
+
+## Tests
+- TEST-PS-072-02-01 (unit): one fixture per finding type, each raising exactly that finding.
+- TEST-PS-072-02-02 (unit): clean fixture yields zero findings.
+- TEST-PS-072-02-03 (unit): dismiss without case reference rejected.
+- TEST-PS-072-02-04 (property): rules are deterministic for the same snapshot.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each finding type has a fixture and a test.
+2. No finding is raised on fully verified data.
+3. Dismiss path requires a case.
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day stale-pending window.
+- D04 (PROVISIONAL default, unapproved).

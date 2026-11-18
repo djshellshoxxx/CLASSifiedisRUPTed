@@ -1,44 +1,42 @@
 # F09.S02.M03 — reconciliation
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F09.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead (F09). **Parent:** [F09.S02 settlement](../SPEC.md). **Canonical contracts:** CTR-COM-001 (states, adapter results, R12 reorg), CTR-EVT-001, CTR-CAP-001, CTR-PRV-001 (R07, RET-EVD), CTR-ID-001, CTR-ERR-001. **Decisions:** D04, D06 (PROVISIONAL defaults, unapproved).
 
 ## Purpose and business behavior
-Provide reconciliation as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Detects drift between claim states, adapter observations, attestations and receipts, and produces findings for operators and dispute workflows. The module does not move claim state itself and never touches money. Corrections happen only through the owning transitions (adapter `sys_` commands or case decisions in CTR-COM-001). Each run reports what it checked and what it could not check.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As an operator, I see every FINAL claim that lacks an adapter record, with its ID and code only.
+- As an operator, I see which chains were unreachable during a run, so a clean result is never mistaken for a complete one.
+- As a dispute reviewer, I get a finding with the evidence references needed to open a case.
 
 ## Scope
-- Required process spec: `reconciliation_domain_model.md` (not yet authored)
-- Required process spec: `reconciliation_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `reconciliation_validation_and_authorization.md` (not yet authored)
-- Required process spec: `reconciliation_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `reconciliation_interfaces_and_events.md` (not yet authored)
-- Required process spec: `reconciliation_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `reconciliation_acceptance_and_property_tests.md` (not yet authored)
+- In scope: scheduled and on-demand reconciliation runs, finding types, run status, finding lifecycle.
+- Out of scope: verification itself (mod_crypto), state transitions (CTR-COM-001), dispute decisions (mod_disputes), bank statement import (not in MVP; PENDING decision).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `recon.run` (sys scheduled; ope on demand), `recon.finding.resolve` (ope with dual control for FINAL-related findings). Events `recon_run.completed`, `recon_finding.opened`, `recon_finding.resolved`. Prefixes `rcn` and `rfd` are PENDING CTR-ID-001.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: claims (CTR-COM-001), adapter results (mod_crypto), receipts (mod_receipts), cash configuration (mod_cash). Downstream: disputes (mod_disputes), case management (F12), operator dashboards.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns reconciliation runs and findings. Claims and evidence stay with their owners.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Silent drift (for example FINAL without adapter record); false positives that trigger unjustified disputes; partial adapter outages producing misleading clean runs; findings leaking financial evidence to operators; run cost on large claim sets.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Finding type table agreed; run status rules tested with partial outages; operator access under dual control confirmed by F10; no state-changing path in the module.
 
 ## Required process specification inventory
-- [ ] `reconciliation_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `reconciliation_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `reconciliation_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `reconciliation_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `reconciliation_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `reconciliation_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `reconciliation_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-072-01
+- [x] `validation_rules.md` — PS-072-02
+- [x] `workflow_state_machine.md` — PS-072-03
+- [x] `commands_queries_events.md` — PS-072-04
+- [x] `authorization_capabilities.md` — PS-072-05
+- [x] `failure_recovery_idempotency.md` — PS-072-06
+- [x] `privacy_retention_abuse.md` — PS-072-07
+- [x] `observability_performance.md` — PS-072-08
+- [x] `contract_and_acceptance_tests.md` — PS-072-09
+- [x] `import_export_backup_rollback.md` — PS-072-10

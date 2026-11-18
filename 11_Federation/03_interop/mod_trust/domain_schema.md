@@ -1,35 +1,76 @@
 # PS-091-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-091-01. **Owner:** [11_Federation/03_interop/mod_trust](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_trust. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_trust. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-FED-001, CTR-PRV-001, CTR-SCH-001 (referenced, not redefined).
 
-## Purpose and scope
-Define the domain schema process for trust within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-091-01.R01 | Each federation peer `fpr_` has one trust row holding one `trust_state` in {pending, trusted, restricted, quarantined, revoked}. | MVP |
+| PS-091-01.R02 | Every state change is one append-only `trs_` row; `revision` per peer starts at 1 and increments by 1 (CTR-EVT-001 R02). | MVP |
+| PS-091-01.R03 | Trust rows hold reason codes and evidence references only. No item content, payload digests, names, IP addresses or free text. | MVP |
+| PS-091-01.R04 | Signing keys are referenced by `key_id` (CTR-FED-001 R09). Key material is never stored here. | MVP |
+| PS-091-01.R05 | The peer node record `nod_` belongs to F11 root. This module owns only trust state and assessments. | MVP |
 
-## Requirements to specify
-- [ ] PS-091-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-091-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-091-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```sql
+CREATE TABLE fed_peer_trust (
+  peer_id      CHAR(30) PRIMARY KEY CHECK (peer_id ~ '^fpr_[0-9A-HJKMNP-TV-Z]{26}$'),
+  trust_state  TEXT NOT NULL CHECK (trust_state IN ('pending','trusted','restricted','quarantined','revoked')),
+  revision     INTEGER NOT NULL CHECK (revision >= 1),
+  updated_at   TIMESTAMPTZ NOT NULL
+);
+CREATE TABLE trs_assessment (
+  trs_id         CHAR(30) PRIMARY KEY,              -- ulid; prefix PENDING CTR-ID-001 registry entry
+  peer_id        CHAR(30) NOT NULL REFERENCES fed_peer_trust(peer_id),
+  revision       INTEGER NOT NULL,
+  from_state     TEXT NOT NULL,
+  to_state       TEXT NOT NULL,
+  trigger        TEXT NOT NULL CHECK (trigger IN ('admitted','restricted','quarantined','restored','revoked')),
+  reason_code    TEXT NOT NULL,                     -- registry, see PS-091-02
+  evidence_ref   TEXT NULL,                         -- evd_, rpt_ or cas_ ID; never content
+  source_kind    TEXT NOT NULL CHECK (source_kind IN ('admin','automated','moderation','key_event')),
+  actor_ref      TEXT NOT NULL,                     -- acc_ | sys_ | ope_ | mod_
+  correlation_id CHAR(30) NOT NULL,                 -- cor_ (CTR-ID-001)
+  recorded_at    TIMESTAMPTZ NOT NULL,
+  UNIQUE (peer_id, revision)
+);
+```
+Field classes (CTR-PRV-001): `peer_id`, `trust_state`, `to_state`, `trigger`, `revision` = PUBLIC. `reason_code`, `evidence_ref`, `actor_ref` = PSEUDONYMOUS, operator scope only. No column may hold PRIVATE_PERSONAL or higher.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Provenance: every row carries `source_kind`, `actor_ref` and `correlation_id`. Rows are never updated or deleted except by redaction (CTR-EVT-001 R08).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+See [PS-091-04](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See [PS-091-03](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See [PS-091-02](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-091-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+See [PS-091-05](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+See [PS-091-06](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+See [PS-091-07](privacy_retention_abuse.md).
+
+## Observability & budgets
+See [PS-091-08](observability_performance.md).
+
+## Tests
+- `TEST-PS-091-01-01` unit: schema constraints reject a state outside the enum and a revision of 0.
+- `TEST-PS-091-01-02` property: `UNIQUE (peer_id, revision)` holds under 10 000 random transition sequences.
+- `TEST-PS-091-01-03` contract: no column in either table has class above LOCATION_COARSE; CI fails on an unclassified column (`PRV.UNCLASSIFIED_FIELD`).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every table column has a CTR-PRV-001 class and a constraint.
+2. `trs_` count per peer equals `fed_peer_trust.revision` (verified by PS-091-06 reconciliation).
+3. No column stores content, names, IPs or key material (verified by TEST-PS-091-01-03).
+
+## Assumptions & open decisions
+- ASSUMPTION: `trs_` prefix is new and needs a CTR-ID-001 registry entry (owner F11 proposed). Until then the ID is `PENDING CTR-ID-001`.
+- D01 (federated record protocol), PROVISIONAL default: versioned signed envelopes with explicit opt-in (unapproved).
+- D10 (auth and portability), PROVISIONAL default: user-controlled keys; this module references key IDs only (unapproved).

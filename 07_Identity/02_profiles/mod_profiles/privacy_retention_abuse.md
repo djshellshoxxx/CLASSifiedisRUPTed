@@ -1,35 +1,65 @@
-# PS-056-07 — privacy retention abuse
+# PS-056-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-056-07. **Owner:** [07_Identity/02_profiles/mod_profiles](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_profiles. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_profiles. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (PSEUDONYMOUS, PRIVATE_PERSONAL, LOCATION_COARSE; RET-ACC, RET-PRIV, RET-LEGAL, RET-EPH; R11 export), CTR-CAP-001, CTR-FED-001 (profiles not federated in MVP).
 
-## Purpose and scope
-Define the privacy retention abuse process for profiles within 02_profiles. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-056-07.R01 | Private block (`contact_methods`) is PRIVATE_PERSONAL and never appears in public responses, events, logs, federation, analytics or push payloads (zero tolerance). | MVP |
+| PS-056-07.R02 | `region_cell` is LOCATION_COARSE, K_MIN = 5, and never more precise than the registry grid. | MVP |
+| PS-056-07.R03 | Private block purged 30 days after `prf_` retirement; public block retained as tombstone under RET-ACC. | MVP |
+| PS-056-07.R04 | Disclosure grants expire at the earlier of 30 days or relation end; expired grants purged within 24 h. | MVP |
+| PS-056-07.R05 | Counterparties receive private fields only with an explicit per-counterparty grant; no default share on match or trade. | MVP |
+| PS-056-07.R06 | Profile text is scanned for contact patterns on write (PS-056-02 R02); residual leakage is documented, not claimed as prevented. | MVP |
+| PS-056-07.R07 | Verification badges or identity documents on profile. | Future (out of scope; owned by mod_evidence) |
 
-## Requirements to specify
-- [ ] PS-056-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-056-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-056-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Record | Class | Retention |
+|---|---|---|
+| public block (`bio`, `languages`, `region_cell`) | PSEUDONYMOUS / LOCATION_COARSE | RET-ACC |
+| `contact_methods` | PRIVATE_PERSONAL | RET-PRIV (365 days after last access or deletion, whichever first) and purged at `prf_` retirement + 30 days |
+| disclosure grants | PRIVATE_PERSONAL metadata | 30 days or relation end; then deleted |
+| device queue | PRIVATE_PERSONAL (local) | RET-EPH |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Event payloads carry field names and grant IDs only (PS-056-04 R04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Purge timers start at transitions in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Contact-pattern rejections logged as code and pattern type only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner export and deletion only; counterparties see granted values only in window.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-056-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge and expiry jobs idempotent; re-run safe. Device caches cleared at logout (CTR-PRV-001). Legal hold (RET-LEGAL) suspends purge for held records only.
+
+## Privacy, retention, abuse
+- **Context leakage:** distinctive bio plus region can link a pseudonym across contexts. Mitigation: region K_MIN and user guidance. Residual risk accepted for MVP (ASSUMPTION).
+- **Post-disclosure copies:** revocation stops future reads, cannot recall copies (CTR-PRV-001). UI states this.
+- **Contact leakage through free text:** heuristic checks; not a guarantee.
+- **Scraping:** public profile reads rate-limited per client (ASSUMPTION 120/min).
+- **Abuse:** profiles with spam links are handled by mod_spam (F12); this module only enforces field rules.
+
+## Observability & budgets
+Aggregate counts of purges, grants and expiries; no per-profile values.
+
+## Tests
+- TEST-PS-056-07-01 (privacy scan): fixtures with contact data produce zero occurrences outside owner/granted responses.
+- TEST-PS-056-07-02 (retention): purge at 30 days after retirement; grant expiry at 30 days.
+- TEST-PS-056-07-03 (export): owner export includes own private block; counterparties' data redacted (CTR-PRV-001 R11).
+- TEST-PS-056-07-04 (legal hold): held profile not purged.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero private values in any non-authorized output (fixture scan).
+2. Retention timers verified.
+3. Grants expire without manual action.
+4. Residual leakage documented in user-facing copy (F14 review).
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day purge and 30-day grant maximum.
+- ASSUMPTION: 120 public reads per minute per client.
+- PROVISIONAL (D07 default, unapproved): minimal per-category retention with legal-hold exceptions.
+- PROVISIONAL (D05 default, unapproved): coarse public regions; user-initiated precision disclosure only.

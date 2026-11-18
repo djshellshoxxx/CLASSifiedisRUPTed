@@ -1,35 +1,55 @@
-# PS-040-10 — import export backup rollback
+# PS-040-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-040-10. **Owner:** [05_Rentals/01_rental_catalog/mod_deposits](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_deposits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/01_rental_catalog/mod_deposits. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R11 export, R06 deletion, R07 holds), CTR-FED-001 (R03 no financial federation), CTR-SCH-001 (migrations), CTR-COM-001 (evidence retention).
 
-## Purpose and scope
-Define the import export backup rollback process for deposits within 01_rental_catalog. Do not assume implementation or successful external settlement.
+**Decision labels:** D07 PROVISIONAL. D09 PROVISIONAL. Federation of financial evidence deferred (CTR-FED-001 R03).
 
-## Requirements to specify
-- [ ] PS-040-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-040-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-040-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-040-10.R01 | No import of deposit records from any peer or external file in MVP. Inbound `deposit` events → `FED.DATA_CLASS_NOT_ALLOWED`. | MVP |
+| PS-040-10.R02 | Owner-initiated export: own deposit records, counterparty PRIVATE_PERSONAL fields redacted (CTR-PRV-001 R11). Format JSON, schema versioned. | MVP |
+| PS-040-10.R03 | Export excludes `notes` written by the counterparty and any `aud_` content. | MVP |
+| PS-040-10.R04 | Backups follow the platform schedule; restore replays deletions and redactions (CTR-PRV-001 R06). | MVP |
+| PS-040-10.R05 | Rollback: the schema is forward-only; new code reads old versions via upcast (CTR-SCH-001 R07). Stored bytes are never rewritten. | MVP |
+| PS-040-10.R06 | Feature flag `deposits.enabled` off stops new proposals; existing deposits remain readable and continue to release. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Export envelope: `export_id`, `schema_version`, `generated_at`, `records[]` (deposit fields per PS-040-01 with counterparty PRIVATE_PERSONAL removed), `sha256`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Export is a query on `deposit.export` (owner only) producing `deposit.exported` audit event. Import has no command.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Export does not change status. Legal-hold records cannot be deleted by export or rollback (CTR-PRV-001 R07).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` for non-owner export. `FED.DATA_CLASS_NOT_ALLOWED` for inbound deposit data.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-040-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Export: owner (participant, role owner) only. Operator export requires case scope and dual control.
+
+## Failure, idempotency, concurrency, offline
+Export is idempotent per request key. Interrupted export resumes from cursor, never double-counts.
+
+## Privacy, retention, abuse
+Export files are FINANCIAL_EVIDENCE: download link expires in 24 h; file deleted after first complete download or 7 days. Export contents are never logged.
+
+## Observability & budgets
+`deposit_export_total`, `deposit_export_duration_seconds` p95 ≤ 60 s for ≤ 1000 records (ASSUMPTION).
+
+## Tests
+- TEST-PS-040-10-01 (contract): export validates against schema; counterparty notes absent.
+- TEST-PS-040-10-02 (negative): inbound deposit event from a peer is rejected with `FED.DATA_CLASS_NOT_ALLOWED`.
+- TEST-PS-040-10-03 (backup): restore after deletion does not resurrect a purged record.
+- TEST-PS-040-10-04 (rollback): flag off → proposals blocked; release of held deposit still succeeds.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export contains no counterparty-private fields (TEST-PS-040-10-01).
+2. No inbound financial evidence accepted (TEST-PS-040-10-02).
+3. Rollback leaves all stored deposits readable (TEST-PS-040-10-04).
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h download expiry, 7-day file deletion.
+- PROVISIONAL (D07, D09 defaults, unapproved).
+- OPEN (F10): legal hold scope for deposit records.

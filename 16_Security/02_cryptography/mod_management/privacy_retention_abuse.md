@@ -1,35 +1,52 @@
-# PS-129-07 — privacy retention abuse
+# PS-129-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-129-07. **Owner:** [16_Security/02_cryptography/mod_management](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_management. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_management. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-FED-001
 
-## Purpose and scope
-Define the privacy retention abuse process for management within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-129-07.R01 | All stored fields are class PUBLIC; any field above PUBLIC fails lint `PRV.UNCLASSIFIED_FIELD` or `MGMT.POLICY_INVALID` with `rule = class_not_public`. | MVP |
+| PS-129-07.R02 | Policy records never contain key material, passphrases or device identifiers. | MVP |
+| PS-129-07.R03 | Proposal rate ≤ 5 per `ope` per 24 h (ASSUMPTION). | MVP |
+| PS-129-07.R04 | Policy documents exported to peers are signed (CTR-EVT-001 R05). | MVP |
+| PS-129-07.R05 | Downgrade guard: a new active policy may not remove a suite that is still in use for verification of retained signatures before its `retired` date. | MVP |
 
-## Requirements to specify
-- [ ] PS-129-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-129-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-129-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Only `crypto_policy` and suite registry fields in [domain_schema.md](domain_schema.md). No personal data.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events carry `actor_ref` = `ope_` only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retention class changes only at `retired`, after which records remain as governance history (ASSUMPTION).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Downgrade attempt: `MGMT.ALGORITHM_DEPRECATED`. Rate limit: `SYS.RATE_LIMITED` with `retry_after_ms`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Insider collusion is limited by dual control (PS-129-05.R02). Disclosure of policy is not restricted.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-129-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+N/A beyond [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+- Retention: policy and approval records retained indefinitely as public governance records (ASSUMPTION; D07 default).
+- Abuse: compromised `ope` account can propose but cannot activate alone; alerts on unusual proposal volume.
+- Pseudonymity: approver identities are pseudonymous and linkable only by F07 under CTR-CAP-001 rules.
+
+## Observability & budgets
+Logs record `policy_id`, event type, approver IDs. Never log policy bodies beyond IDs.
+
+## Tests
+- TEST-PS-129-07-01: unit, lint rejects any non-PUBLIC field.
+- TEST-PS-129-07-02: negative, downgrade proposal denied.
+- TEST-PS-129-07-03: abuse, 6th proposal in 24 h rate-limited.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero non-PUBLIC fields in registry.
+2. Downgrade fixtures all rejected.
+3. Rate-limit fixture returns 429 with `retry_after_ms`.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5 proposals per 24 h.
+- D07 (retention): PROVISIONAL (D07 default, unapproved).

@@ -1,35 +1,49 @@
-# PS-084-10 — import export backup rollback
+# PS-084-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-084-10. **Owner:** [11_Federation/01_protocol/mod_records](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_records. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_records. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R07, R10), CTR-PRV-001 (R11).
 
-## Purpose and scope
-Define the import export backup rollback process for records within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-084-10.R01 | Registry export is public JSON with digest; no item data. | MVP |
+| PS-084-10.R02 | Registry import creates `proposed` rows only; activation requires PS-084-03 guard. | MVP |
+| PS-084-10.R03 | Rollback of a registry change re-activates the prior row version; no row deleted. | MVP |
 
-## Requirements to specify
-- [ ] PS-084-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-084-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-084-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export `record_type.export@1.0.0` (PENDING registration). Fields in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`registry.export`, `registry.import`, `registry.rollback`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback target must be `active` or `deprecated`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | When |
+|---|---|
+| RECORDS.IMPORT_UNSIGNED | import without digest |
+| RECORDS.ROLLBACK_TARGET_INVALID | target not active or deprecated |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: any authenticated reader. Import and rollback: Platform Lead with Privacy Lead for class changes.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-084-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Import idempotent per digest. Rollback idempotent per target.
+
+## Privacy, retention, abuse
+Item flags are not exported with the registry.
+
+## Observability & budgets
+`records_rollbacks_total`.
+
+## Tests
+- TEST-PS-084-10-01 (import): import cannot activate directly.
+- TEST-PS-084-10-02 (rollback): prior row restored, history intact.
+- TEST-PS-084-10-03 (export): exported registry verifies by digest.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Import never activates.
+2. Rollback keeps history.
+
+## Assumptions & open decisions
+- ASSUMPTION: registry export is public.

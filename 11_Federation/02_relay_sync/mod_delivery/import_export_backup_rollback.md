@@ -1,35 +1,46 @@
-# PS-088-10 — import export backup rollback
+# PS-088-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-088-10. **Owner:** [11_Federation/02_relay_sync/mod_delivery](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_delivery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_delivery. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R07, R13), CTR-SCH-001 (R08).
 
-## Purpose and scope
-Define the import export backup rollback process for delivery within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-088-10.R01 | Queue is not exported. Batch records are exported for audit with IDs and codes only. | MVP |
+| PS-088-10.R02 | Queue restore after data loss rebuilds rows from the event log for events not yet acknowledged by a peer; acknowledged rows are not resent. | MVP |
+| PS-088-10.R03 | Rollback of a batch is not possible; compensation is a new event by origin (tombstone, CTR-FED-001 R07). | MVP |
 
-## Requirements to specify
-- [ ] PS-088-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-088-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-088-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Batch export `dlv.export@1.0.0` (PENDING registration).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`delivery.rebuild_queue` (sys_), `dlv.exported`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rebuild creates rows in `queued` only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | When |
+|---|---|
+| DELIVERY.REBUILD_UNCERTAIN | ack state unknown for a row; row set to queued and receiver dedupe applies |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Rebuild: Platform Lead approval.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-088-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Rebuild idempotent; receiver dedupe prevents double apply.
+
+## Privacy, retention, abuse
+Exports contain no payloads.
+
+## Observability & budgets
+`delivery_rebuilds_total`.
+
+## Tests
+- TEST-PS-088-10-01 (restore): acknowledged rows not resent.
+- TEST-PS-088-10-02 (rebuild): unknown-ack rows resent and deduped.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No duplicate application after restore.
+
+## Assumptions & open decisions
+- ASSUMPTION: rebuild relies on receiver dedupe.

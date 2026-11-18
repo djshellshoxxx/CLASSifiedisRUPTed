@@ -1,35 +1,59 @@
-# PS-057-06 — failure recovery idempotency
+# PS-057-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-057-06. **Owner:** [07_Identity/03_trust/mod_evidence](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_evidence. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_evidence. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03, offline rules), CTR-SCH-001 (R08 lossless), CTR-COM-001 (R14 attestation reference pattern).
 
-## Purpose and scope
-Define the failure recovery idempotency process for evidence within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-057-06.R01 | Record, supersede and withdraw commit atomically with their event (transaction or outbox). | MVP |
+| PS-057-06.R02 | Duplicate delivery returns original result; no duplicate evidence row. | MVP |
+| PS-057-06.R03 | Key registry outage: signature checks fail with retryable `KEY_UNKNOWN`; no evidence is accepted unsigned when a signature is required. | MVP |
+| PS-057-06.R04 | Client retries only retryable codes, max 5 attempts, backoff with jitter. | MVP |
+| PS-057-06.R05 | Offline recordings held in pending queue until relay ack, then cleared. | MVP |
+| PS-057-06.R06 | Reputation recompute failure does not roll back evidence commit; recompute retried until success (max 15 min lag, alert beyond). | MVP |
 
-## Requirements to specify
-- [ ] PS-057-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-057-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-057-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record (7 days). Pending entry: `evidence_draft_id`, `body_digest`, `signature_ref`, `status`. Purged on ack (RET-EPH).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry rules apply to `RecordEvidence`, `SupersedeEvidence`, `WithdrawEvidence`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To |
+|---|---|---|---|
+| `pending` (device) | relay ack | — | `acknowledged` |
+| `pending` | `KEY_UNKNOWN` | key sync pending | `pending` (retry with backoff) |
+| `pending` | non-retryable error | — | `not_applied` (visible, not discarded) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Non-retryable codes never retried automatically (CTR-ERR-001).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Server re-authorizes each attempt.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-057-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Crash after commit before ack: retry returns stored result.
+- Revocation of issuer key during pending queue: queued items signed with revoked key become `not_applied` with `SIGNATURE_INVALID`.
+- Queue limit 50 items or 7 days (ASSUMPTION).
+
+## Privacy, retention, abuse
+Pending drafts hold content locally only while pending; purged at logout. Rate limit 10 recordings per subject per 24 h from a single issuer (ASSUMPTION) to stop evidence flooding.
+
+## Observability & budgets
+`evidence_outbox_lag_seconds` p95 ≤ 5 s; `evidence_recompute_lag_seconds` p95 ≤ 60 s.
+
+## Tests
+- TEST-PS-057-06-01 (integration): crash after commit; single event.
+- TEST-PS-057-06-02 (fault): key registry down; retryable error; recovery after sync.
+- TEST-PS-057-06-03 (offline): key revoked while queued → `not_applied`.
+- TEST-PS-057-06-04 (property): replay of write sequences yields same final state.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No evidence accepted without required signature.
+2. Atomicity under fault injection.
+3. Recompute lag within bound or alert fires.
+4. Offline items never discarded silently.
+
+## Assumptions & open decisions
+- ASSUMPTION: queue limit 50 items / 7 days; 10 recordings per subject per issuer per 24 h.
+- PROVISIONAL (D08 default, unapproved): offline queue until acknowledgment.

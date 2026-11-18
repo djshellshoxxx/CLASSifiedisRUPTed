@@ -1,10 +1,9 @@
-# TODO
+# TODO — compatibility (support matrix and results)
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Process specs drafted; implementation not started.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Draft the 10 process specs (PS-142-01 to PS-142-10).
+- [ ] QA Lead approval of MVP matrix cells (browsers, OS, PWA targets, assistive tech).
+- [ ] Confirm the deprecation window for old schema versions with F15 (CTR-SCH-001).
+- [ ] Confirm which federated peer protocol versions are accepted with F11 (CTR-FED-001).
+- [ ] Implement matrix publishing and result recording — future phase.

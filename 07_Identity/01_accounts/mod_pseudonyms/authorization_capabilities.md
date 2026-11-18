@@ -1,35 +1,76 @@
 # PS-052-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-052-05. **Owner:** [07_Identity/01_accounts/mod_pseudonyms](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_pseudonyms. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_pseudonyms. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01 default deny, R02 principals, R04 scopes, R10 field visibility, R12 support limits), CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for pseudonyms within 01_accounts. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-052-05.R01 | Authorization is evaluated on `acc_` only; `prf_` is never a principal (CTR-CAP-001 R02). | MVP |
+| PS-052-05.R02 | Default deny. Only the actions in the matrix are granted; unlisted action → `SYS.FORBIDDEN`. | MVP |
+| PS-052-05.R03 | The `account_id` field is visible only to `self`. No other principal, including `ope_`, `mod_` and `sys_` without a case grant, can read it. | MVP |
+| PS-052-05.R04 | Support and operators cannot read or change `acc_` credentials through this module (CTR-CAP-001 R12). | MVP |
+| PS-052-05.R05 | Reads of `prf_` by a counterparty return handle and label only, never `state_changed_at` or `revision`. | MVP |
+| PS-052-05.R06 | Decision cache TTL is zero for all writes and for owner reads of `account_id`. | MVP |
 
-## Requirements to specify
-- [ ] PS-052-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-052-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-052-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field visibility (CTR-CAP-001 R10):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | public | participant | owner | case | never |
+|---|---|---|---|---|---|
+| `prf_id`, `handle`, `label`, `state` | Y | Y | Y | Y | |
+| `revision`, `state_changed_at`, `created_at` | | | Y | | |
+| `account_id` | | | Y | | Y (no case grant) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Action matrix (action = `<resource>.<verb>`, resource scope):
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| Action | Actor | Scope | Result |
+|---|---|---|---|
+| `pseudonym.create` | `acc_` owner | self | allow |
+| `pseudonym.read` | any | public | handle, label, state |
+| `pseudonym.read` | `acc_` owner | self | all owner fields |
+| `pseudonym.update` | `acc_` owner | self | allow (handle, label) |
+| `pseudonym.retire` | `acc_` owner | self | allow, subject to participation guard |
+| `pseudonym.read` | `ope_` / `mod_` | case | handle, label, state; never `account_id` |
+| `account.delete` (saga) | `sys_` | global | retire all owned `prf_` |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Authorization is checked before each transition in [workflow_state_machine.md](workflow_state_machine.md). Denied requests produce no state change and no event; a decision record `dec_` stores outcome and reason code only (CTR-CAP-001 R13).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-052-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+| Code | Trigger | `retryable` | `message_key` |
+|---|---|---|---|
+| `SYS.NOT_FOUND` | caller cannot read the `prf_` | false | `err.sys.not_found` |
+| `SYS.FORBIDDEN` | action not granted | false | `err.sys.forbidden` |
+
+Unreadable and non-existent `prf_` return identical responses (CTR-ERR-001 R08).
+
+## Authorization
+Relation rules: owner (`account_id` equals caller `acc_`) derived at decision time (CTR-CAP-001 R05). No stored grants are needed for MVP. Future grants are out of scope.
+
+## Failure, idempotency, concurrency, offline
+- Authorization is re-evaluated on each retry; a revoked account session fails closed.
+- Decision outage: writes fail closed with retryable `SYS.UNAVAILABLE`; cached public reads may serve up to 60 s old decisions (CTR-CAP-001 R09, ASSUMPTION).
+
+## Privacy, retention, abuse
+Privileged reads by `ope_`/`mod_` emit an `aud_` record with `prf_id`, purpose and decision ID, with no handle content (CTR-CAP-001 R08). Dual control is not needed because no PRIVATE or LOCATION_PRECISE data is in this module.
+
+## Observability & budgets
+Counter `pseud_authz_deny_total{action}`. Alert on sudden rise of `pseudonym.read` denials by one principal (scraping signal).
+
+## Tests
+- TEST-PS-052-05-01 (unit): matrix cell for each principal × action.
+- TEST-PS-052-05-02 (negative): `prf_` ID passed as principal is rejected.
+- TEST-PS-052-05-03 (integration): counterparty response omits `account_id` and revision fields (absent, not null).
+- TEST-PS-052-05-04 (abuse): enumerating `prf_` IDs returns identical not-found responses for private and non-existent IDs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix implemented; default deny verified by test.
+2. `account_id` never returned to a non-owner in any response, log or event.
+3. Support credential access denied (R04) in test.
+4. Unreadable and missing objects are indistinguishable.
+
+## Assumptions & open decisions
+- ASSUMPTION: `pseudonym.read` for case scope is needed for moderation; it is limited to handle, label and state.
+- F16 Security Lead owns CTR-CAP-001; F07 named owner UNASSIGNED (S3-11).
+- PROVISIONAL (D10 default, unapproved): user-controlled keys do not change this matrix in MVP.

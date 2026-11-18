@@ -1,35 +1,49 @@
-# PS-088-04 — commands queries events
+# PS-088-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-088-04. **Owner:** [11_Federation/02_relay_sync/mod_delivery](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_delivery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_delivery. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (Commands section), CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the commands queries events process for delivery within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-088-04.R01 | `fed.send_batch` takes `peer`, `event_ids[]`, `idempotency_key` (= batch digest). | MVP |
+| PS-088-04.R02 | `fed.receive_batch` returns one result per event in the same order as input. | MVP |
+| PS-088-04.R03 | Events: `dlv.sent`, `dlv.acknowledged`, `dlv.failed`, `delivery.dropped` (IDs and codes only). | MVP |
 
-## Requirements to specify
-- [ ] PS-088-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-088-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-088-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Batch and result schemas per CTR-FED-001 (batch: `urn:classrupt:contract:CTR-FED-001:batch:1.0.0`).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Command | Actor | Event | Errors |
+|---|---|---|---|
+| fed.send_batch | sys_ | dlv.sent | PEER_NOT_TRUSTED, RATE_LIMITED |
+| fed.receive_batch | trusted/restricted peer | per-event accepted | SIZE_EXCEEDED, PEER_UNKNOWN, PEER_NOT_TRUSTED |
+| ack processing | sys_ | dlv.acknowledged / dlv.failed | ACK_MISMATCH (see file 06) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+[workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+[validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+[authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-088-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+`fed.send_batch` idempotent by batch digest; `fed.receive_batch` idempotent per event (CTR-FED-001).
+
+## Privacy, retention, abuse
+Events carry IDs and codes only.
+
+## Observability & budgets
+Event counts; consumer lag ≤ 60 s (ASSUMPTION).
+
+## Tests
+- TEST-PS-088-04-01 (contract): batch and result schemas validate.
+- TEST-PS-088-04-02 (idempotency): resend of same batch digest yields same results.
+- TEST-PS-088-04-03 (order): result array order matches input.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command table complete.
+2. Result ordering verified.
+
+## Assumptions & open decisions
+- PENDING: consumers in DEPENDENCY_MATRIX.md.

@@ -1,35 +1,64 @@
 # PS-066-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-066-02. **Owner:** [08_Communications/03_meetups/mod_safe](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_safe. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_safe (Platform Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-ID-001, CTR-PRV-001 (R03). **Decisions:** D05 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the validation rules process for safe within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-066-02.R01 | Reject any request containing a key named `address`, `lat`, `lng`, `coordinates`, `landmark` or `location` (any depth) with `SYS.REQUEST_MALFORMED`. | MVP |
+| PS-066-02.R02 | Reject windows longer than PT12H or starting more than P30D after now. | MVP |
+| PS-066-02.R03 | `venue_ref` must exist in the curated list or equal `custom_public`. | MVP |
+| PS-066-02.R04 | Check-in accepted only when `now` is within `[window_start - 30 min, window_end + 30 min]`. | MVP |
+| PS-066-02.R05 | Five failed check-in codes per party per plan within 15 min lock that party's check-in for 15 min. | MVP |
+| PS-066-02.R06 | At most one trusted contact per party; contact handle normalized (trimmed, lowercased) before hashing. | MVP |
 
-## Requirements to specify
-- [ ] PS-066-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-066-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-066-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Rule enum: `participant`, `forbidden_field`, `window_length`, `window_lead`, `venue_known`, `checkin_code`, `checkin_window`, `checkin_lock`, `trusted_contact_limit`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applies to `meetup.propose`, `meetup.confirm`, `meetup.check_in`, `meetup.set_trusted_contact`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+A validation failure writes no plan row and no event.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Rule | Code | Category / HTTP | Retryable | Message key |
+|---|---|---|---|---|
+| Non-participant | `SYS.NOT_FOUND` | not_found / 404 | false | `err.sys.not_found` |
+| Forbidden field | `SYS.REQUEST_MALFORMED` | validation / 400 | false | `err.sys.request_malformed` |
+| Window too long | `SAFE.WINDOW_TOO_LONG` | validation / 400 | false | `err.safe.window_too_long` |
+| Window too far ahead | `SAFE.WINDOW_TOO_FAR` | validation / 400 | false | `err.safe.window_too_far` |
+| Venue unknown | `SAFE.VENUE_UNKNOWN` | validation / 400 | false | `err.safe.venue_unknown` |
+| Code wrong | `SAFE.CHECKIN_CODE_INVALID` | unprocessable_state / 422 | false | `err.safe.checkin_code_invalid` |
+| Check-in outside window | `SAFE.OUTSIDE_WINDOW` | unprocessable_state / 422 | true | `err.safe.outside_window` |
+| Lock active | `SYS.RATE_LIMITED` | rate_limited / 429 | true | `err.sys.rate_limited` |
+| Contact limit | `SAFE.TRUSTED_CONTACT_LIMIT` | validation / 400 | false | `err.safe.trusted_contact_limit` |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+`retryable: true` applies only when the same unchanged request can succeed later (`SAFE.OUTSIDE_WINDOW` before window start; the lock).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-066-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Participant check (PS-066-05) runs before field validation; non-participants never learn which rule failed.
+
+## Failure, idempotency, concurrency, offline
+Validation is deterministic and uses server time at commit. Diagnostics name the rule enum only; they never echo window times or codes.
+
+## Privacy, retention, abuse
+Diagnostics contain no venue, time, handle or code value (CTR-ERR-001 R06).
+
+## Observability & budgets
+Counter by (code, rule). Alert when `SAFE.CHECKIN_CODE_INVALID` exceeds 20% of check-ins in an hour (ASSUMPTION; abuse signal).
+
+## Tests
+- TEST-PS-066-02-01 (unit): each row of the error table returns its code and retryable value.
+- TEST-PS-066-02-02 (unit): nested `location` key in a venue object is rejected.
+- TEST-PS-066-02-03 (integration): sixth wrong code locks the party for 15 min; lock expiry allows retry.
+- TEST-PS-066-02-04 (unit): check-in at window_end + 31 min is rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Error table implemented exactly and registered in CTR-ERR-001.
+2. No error body contains window times, codes or handles (test scan).
+3. Non-participant and nonexistent plan responses are byte-identical.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-minute check-in tolerance; 5 attempts per 15 min.
+- D05 (PROVISIONAL default, unapproved).

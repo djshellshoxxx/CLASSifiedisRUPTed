@@ -1,35 +1,50 @@
-# PS-009-10 — import export backup rollback
+# PS-009-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-009-10. **Owner:** [01_LocalBazaar/03_inventory/mod_variants](SPEC.md). **Implementing module:** 01_LocalBazaar/03_inventory/mod_variants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/03_inventory/mod_variants. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R05–R09), CTR-FED-001 (R05, R08), CTR-PRV-001 (R11).
 
-## Purpose and scope
-Define the import export backup rollback process for variants within 03_inventory. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-009-10.R01 | Owner export includes all variants of the listing, including archived ones, in schema 1.0.0 JSON. | MVP |
+| PS-009-10.R02 | Public export and federation include active variants only. | MVP |
+| PS-009-10.R03 | Import of variant records validates against the declared schema version; unknown MAJOR is rejected with SCH.UNKNOWN_VERSION. | MVP |
+| PS-009-10.R04 | Backup restores variants with their `created_revision` and `archived_revision` unchanged. | MVP |
+| PS-009-10.R05 | Rollback of this feature hides the UI and stops writes; it never deletes variant rows. Archive is the only data action. | MVP |
 
-## Requirements to specify
-- [ ] PS-009-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-009-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-009-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export object: `{variants: [variant record], schema_version: "1.0.0"}` nested under listing export. No new fields.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Import is replay of `listing.variant_added` and `listing.variant_archived` events in revision order (CTR-EVT-001 R02).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Import does not create new states; imported `archived` variants stay archived.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Imported rows failing PS-009-02 are rejected per row; the batch reports row index and code, no values.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export by owner (`lst.update` scope self) or by export request under CTR-CAP-001 `export` verb; federation export is by the node, not the listing owner.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-009-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Import is idempotent by (origin_node, event_id) (CTR-FED-001 R05). Restore is blocked while a listing revision gap exists (EVT.REVISION_GAP).
+
+## Privacy, retention, abuse
+Export of archived variants is owner-only (PS-009-05). Exports follow CTR-PRV-001 R11.
+
+## Observability & budgets
+Export size ≤ 8 KB per listing variant set (PS-009-01 budget).
+
+## Tests
+- TEST-PS-009-10-01 (contract): owner export validates against 1.0.0.
+- TEST-PS-009-10-02 (integration): import then re-export is byte-stable for the variant section (canonical JSON).
+- TEST-PS-009-10-03 (rollback): feature off leaves all rows readable in the database.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export and import round trip preserves all variant fields.
+2. Rollback test shows zero deleted variant rows.
+3. Federation export excludes archived variants in 100% of fixtures.
+
+## Assumptions & open decisions
+- PENDING: feature flag ID for variants, from F15 mod_flags.
+- PROVISIONAL (D01 default, unapproved): versioned signed envelopes for any federated export.

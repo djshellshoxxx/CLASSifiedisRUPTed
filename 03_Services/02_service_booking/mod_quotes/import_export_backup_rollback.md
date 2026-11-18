@@ -1,35 +1,51 @@
 # PS-032-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-032-10. **Owner:** [03_Services/02_service_booking/mod_quotes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_quotes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_quotes. **Parent:** [mod_quotes SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-EVT-001, CTR-COM-001.
 
-## Purpose and scope
-Define the import export backup rollback process for quotes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-032-10.R01 | Provider exports own quotes; customer exports quotes addressed to them. JSON, schema `svcquote.quote` 1.0.0, ≤ 1 MB per export. | MVP |
+| PS-032-10.R02 | Export includes `price_hash` so recipients can verify the price they accepted. | MVP |
+| PS-032-10.R03 | Backup restore preserves states, `trx_id` links and `price_hash`; restore never re-sends events or creates `trx_` rows. | MVP |
+| PS-032-10.R04 | Quote import is not supported in MVP; requests are rejected with `SYS.REQUEST_MALFORMED` (reason `not_supported`). | MVP |
+| PS-032-10.R05 | Rollback of a release never edits ACCEPTED quotes; corrections go through F09 disputes. | MVP |
 
-## Requirements to specify
-- [ ] PS-032-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-032-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-032-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export envelope: `{ "schema_id": "svcquote.quote.export", "schema_version": "1.0.0", "quotes": [...] }`. Scope text included only for the requesting party's own quotes.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export is a query under `svq.read`. Emits `svcquote.exported` with count only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable. Restore runs under maintenance lock.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Digest mismatch → `SYS.INTERNAL`, restore halted.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export by parties only. Restore by operator with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-032-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Restore idempotent by backup digest. Offline export is a local file; no sync.
+
+## Privacy, retention, abuse
+Exports are FINANCIAL_EVIDENCE with UI warning; links valid 15 min; export rate limit 10 per day.
+
+## Observability & budgets
+Restore ≤ 20 min for 1 million quotes (ASSUMPTION). Metrics: `svcquote_exports_total`, `svcquote_restore_total{result}`.
+
+## Tests
+- TEST-PS-032-10-01 (integration): export → restore round trip; identical `price_hash` values.
+- TEST-PS-032-10-02 (negative): non-party export returns `SYS.NOT_FOUND`.
+- TEST-PS-032-10-03 (negative): import request rejected with `not_supported`.
+- TEST-PS-032-10-04 (fault): restore does not create duplicate `trx_` rows.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round-trip test passes with hash equality.
+2. Restore audit shows zero new `trx_` or events.
+3. Rollback runbook has no in-place ACCEPTED edits.
+
+## Assumptions & open decisions
+- ASSUMPTION: no signed exports in MVP.
+- PROVISIONAL: D07 retention and D06 signed-statement defaults (unapproved). See [DECISIONS.md](../../../DECISIONS.md).

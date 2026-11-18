@@ -1,35 +1,50 @@
-# PS-106-08 — observability performance
+# PS-106-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-106-08. **Owner:** [13_Notifications/02_preferences/mod_in](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_in. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_in. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for in within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-106-08.R01 | Unread count p95 ≤ 50 ms; list page p95 ≤ 150 ms. | MVP |
+| PS-106-08.R02 | Projection lag p95 ≤ 5 s. | MVP |
+| PS-106-08.R03 | Prune job failure rate < 0.1% per run, alert otherwise. | MVP |
+| PS-106-08.R04 | Logs carry no `object_ref` or `group_key` in clear. | MVP |
 
-## Requirements to specify
-- [ ] PS-106-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-106-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-106-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metrics: `inbox_projection_lag_seconds`, `inbox_prune_deleted_total`, `inbox_items{state}`, `inbox_query_seconds{query}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Spans carry `request_id` only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Gauges by state from workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Counts by code.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Operator dashboards aggregate only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-106-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Alert on replay duplicates (should be 0).
+
+## Privacy, retention, abuse
+Metrics 30 days; traces 7 days (ASSUMPTION).
+
+## Observability & budgets
+Projection worker memory ≤ 256 MB (ASSUMPTION).
+
+## Tests
+- TEST-PS-106-08-01 (load): unread count p95 under 1000 queries/s.
+- TEST-PS-106-08-02 (unit): label cardinality check.
+- TEST-PS-106-08-03 (contract): log scan finds no `group_key`.
+- TEST-PS-106-08-04 (integration): prune failure raises alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics documented.
+2. Budgets verified in load test (not yet run).
+3. Cardinality test passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above.
+- No Dxx directly applies.

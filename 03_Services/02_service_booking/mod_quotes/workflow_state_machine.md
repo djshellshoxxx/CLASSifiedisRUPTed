@@ -1,35 +1,61 @@
 # PS-032-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-032-03. **Owner:** [03_Services/02_service_booking/mod_quotes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_quotes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_quotes. **Parent:** [mod_quotes SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-COM-001, CTR-CAP-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the workflow state machine process for quotes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-032-03.R01 | States: `DRAFT`, `SENT`, `ACCEPTED`, `DECLINED`, `WITHDRAWN`, `EXPIRED`, `SUPERSEDED`. No other state. | MVP |
+| PS-032-03.R02 | Sending a quote places a hold on each `avw_` (PS-028-03), TTL 72 h (ASSUMPTION). | MVP |
+| PS-032-03.R03 | `ACCEPTED` requires re-checking holds and `valid_until` in the same transaction that creates the `trx_`. Failure leaves the quote `SENT`. | MVP |
+| PS-032-03.R04 | `ACCEPTED`, `DECLINED`, `WITHDRAWN`, `EXPIRED` and `SUPERSEDED` are terminal. Any price or scope change creates a new quote (`SUPERSEDED` links to new `svq_`). | MVP |
+| PS-032-03.R05 | No state is labelled "paid" or "settled". Accepted means "accepted by customer" only (CTR-COM-001 R15 applies to claims). | MVP |
 
-## Requirements to specify
-- [ ] PS-032-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-032-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-032-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`status`, `revision`, `valid_until`. `supersedes` and `superseded_by` link chains.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions from `svcquote.*` commands and from `svcavail.hold.expired` events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| DRAFT | svcquote.send | Validation passes; holds placed | SENT | Holds; notify customer |
+| DRAFT | svcquote.withdraw | Provider | WITHDRAWN | None |
+| SENT | svcquote.accept | Customer = addressed customer; hash matches; holds intact; now < valid_until | ACCEPTED | Create `trx_` via F09 (same transaction); BOOKED link |
+| SENT | svcquote.decline | Customer | DECLINED | Release holds |
+| SENT | svcquote.withdraw | Provider | WITHDRAWN | Release holds |
+| SENT | timer (valid_until) | now ≥ valid_until | EXPIRED | Release holds |
+| SENT | svcquote.supersede | Provider; new quote validated | SUPERSEDED | Release holds; link new quote |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Forbidden transitions return `SVCQUOTE.INVALID_TRANSITION` (409, not retryable). Accept after expiry returns `SVCQUOTE.EXPIRED` (410 gone class is not used; 422 unprocessable_state).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SVCQUOTE.INVALID_TRANSITION`; `SVCQUOTE.EXPIRED`; `SVCQUOTE.HOLD_LOST` (hold expired before accept → retryable false, customer must request a new quote).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-032-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Provider: create, send, withdraw, supersede (`svq.create`, `svq.update`). Customer: accept, decline (`svq.accept`, `svq.decline`). Timer runs as `sys`.
+
+## Failure, idempotency, concurrency, offline
+Accept is CAS on `revision` (CTR-EVT-001 R02) and on `price_hash`. Two concurrent accepts: one succeeds, the other receives `SYS.CONFLICT`. Outbox pattern: `trx_` creation and state change committed together; event delivery at-least-once.
+
+## Privacy, retention, abuse
+Customer identity shown to provider only after accept or decline. Expired and withdrawn quotes follow PS-032-07 retention.
+
+## Observability & budgets
+Metrics: `svcquote_transitions_total{from,to}`, `svcquote_accept_latency_seconds` p95 ≤ 300 ms, `svcquote_hold_lost_total`.
+
+## Tests
+- TEST-PS-032-03-01 (unit): every row in the table; other pairs rejected.
+- TEST-PS-032-03-02 (concurrency): two accepts on one quote → one ACCEPTED, one `SYS.CONFLICT`.
+- TEST-PS-032-03-03 (fault): trx creation fails → quote remains SENT, no `trx_` row.
+- TEST-PS-032-03-04 (integration): hold expired before accept → `SVCQUOTE.HOLD_LOST`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. State table complete; lint enumerates states.
+2. No state label contains "paid" or "settled" (lint over UI catalog).
+3. Accept is atomic with `trx_` creation in all fault tests.
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h hold TTL, aligned with PS-028-03.
+- PROVISIONAL: trx and claim semantics per CTR-COM-001 (D06 default, unapproved). See [DECISIONS.md](../../../DECISIONS.md) D04.

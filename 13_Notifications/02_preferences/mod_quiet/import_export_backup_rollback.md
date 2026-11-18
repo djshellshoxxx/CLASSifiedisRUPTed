@@ -1,35 +1,50 @@
-# PS-108-10 — import export backup rollback
+# PS-108-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-108-10. **Owner:** [13_Notifications/02_preferences/mod_quiet](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_quiet. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_quiet. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-FED-001.
 
-## Purpose and scope
-Define the import export backup rollback process for quiet within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-108-10.R01 | Export includes the active period (if any) and the last ended period, with absolute times. Class PRIVATE_PERSONAL. | MVP |
+| PS-108-10.R02 | Import of pause state is not supported; restored backups never restore an active pause. | MVP |
+| PS-108-10.R03 | Pause state is not federated. | MVP |
+| PS-108-10.R04 | Rollback: flag `quiet_gating` off stops holding; held items are released immediately if within 24 h, dropped otherwise. | MVP |
 
-## Requirements to specify
-- [ ] PS-108-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-108-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-108-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{ "quiet_period": { "preset", "starts_at", "ends_at", "end_reason" } | null, "schema_version": "1.0.0" }`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`account.export` includes section `quiet_period.export` (self).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore sets any active period to `ended` with reason `restored`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Import attempts return QUIET.IMPORT_NOT_SUPPORTED.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export self; rollback operator global dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-108-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export read-only and repeatable.
+
+## Privacy, retention, abuse
+Backups hold periods for 30 days max per backup policy.
+
+## Observability & budgets
+Export ≤ 1 s p95.
+
+## Tests
+- TEST-PS-108-10-01 (contract): export validates; contains absolute times only.
+- TEST-PS-108-10-02 (integration): restore yields no active period.
+- TEST-PS-108-10-03 (integration): rollback releases held items within 24 h and drops the rest.
+- TEST-PS-108-10-04 (negative): import attempt returns QUIET.IMPORT_NOT_SUPPORTED.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export lossless.
+2. Restore never reactivates a pause.
+3. Rollback drill recorded (not yet run).
+
+## Assumptions & open decisions
+- ASSUMPTION: restored pauses end.
+- D07 PROVISIONAL (D07 default, unapproved).

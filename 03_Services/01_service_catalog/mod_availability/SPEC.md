@@ -1,44 +1,48 @@
 # F03.S01.M02 — availability
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F03.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead (F03). **Parent:** F03.S01.
 
 ## Purpose and business behavior
-Provide availability as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Holds a provider's bookable time windows for a service listing (`srv_`), expressed in the provider's IANA timezone with an optional recurrence rule. Windows move between OPEN, HELD, BOOKED and BLOCKED under quote events from `mod_quotes`. Holds expire after 72 hours. This module does not store listing stock quantities (those stay in F01.S03.M01) and does not store precise service locations.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a provider, I publish weekly bookable windows and block a day without revealing my routine to strangers.
+- As a customer, I see open start times for a service and get a hold that a quote can convert to a booking.
+- As a provider, I import my existing calendar as ICS and see rejected entries listed by position, not by content.
 
 ## Scope
-- Required process spec: `availability_domain_model.md` (not yet authored)
-- Required process spec: `availability_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `availability_validation_and_authorization.md` (not yet authored)
-- Required process spec: `availability_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `availability_interfaces_and_events.md` (not yet authored)
-- Required process spec: `availability_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `availability_acceptance_and_property_tests.md` (not yet authored)
+- Owns: service availability windows (`avw_`, pending prefix registration), hold and booking-link state, ICS import and export.
+- Consumes: quote events from F03.S02.M01 `mod_quotes`; service listings from F03.S01 (`srv_`); offline pending writes from F15.S01.M01.
+- Out of scope: listing stock quantities (F01.S03.M01), quote pricing (F03.S02.M01), skill matching (F03.S01.M01).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `svcavail.create_window`, `svcavail.update_window`, `svcavail.hold`, `svcavail.block`, `svcavail.unblock`, `svcavail.retire`, `svcavail.import_ics`; query `svcavail.search_slots`; events `svcavail.window.*`, `svcavail.hold.expired`, `svcavail.booking.*`. Details in [commands_queries_events](commands_queries_events.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F01.S03.M01 (listing availability, separate record class), F03.S01.M01 `mod_skills`, F15.S01.M01 `mod_offline`. Downstream: F03.S02.M01 `mod_quotes`. Contracts: CTR-EVT-001, CTR-SCH-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Canonical owner of service-availability windows: F03.S01.M02 (this module), keyed by `avw_` (prefix PENDING CTR-ID-001). Canonical owner of listing stock quantity: F01.S03.M01. Both modules carry the slug `mod_availability`; consumers reference the full IDs only (review B-06). Quote and booking records are owned by F03.S02.M01 and F09.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Schedule leakage revealing a provider's routine or home presence.
+- Double booking under concurrent holds.
+- Timezone and DST errors producing wrong start times.
+- Stale availability after offline edits.
+- Calendar blocking abuse through fake holds.
+- Enumeration of provider windows by unauthenticated users.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specs (PS-028-01 to PS-028-10) are SPEC-DRAFT-COMPLETE; `avw` prefix registration is requested; B-06 owner note is recorded in CONTRACTS.md; implementation and tests are later-phase gates.
 
 ## Required process specification inventory
-- [ ] `availability_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `availability_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `availability_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `availability_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `availability_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `availability_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `availability_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-028-01
+- [x] [validation_rules.md](validation_rules.md) — PS-028-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-028-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-028-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-028-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-028-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-028-07
+- [x] [observability_performance.md](observability_performance.md) — PS-028-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-028-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-028-10

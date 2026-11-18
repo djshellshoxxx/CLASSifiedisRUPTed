@@ -1,35 +1,50 @@
-# PS-017-10 — import export backup rollback
+# PS-017-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-017-10. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_four](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_four. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_four. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R05–R09), CTR-FED-001 (R03), CTR-PRV-001 (R11).
 
-## Purpose and scope
-Define the import export backup rollback process for four within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-017-10.R01 | Participant export includes the participant's own cycles (all versions) in schema 1.0.0. | MVP |
+| PS-017-10.R02 | Four-party cycles are never federated in MVP (PS-017-07.R05). | MVP |
+| PS-017-10.R03 | Backup restores cycle rows with version numbers and consent flags unchanged. | MVP |
+| PS-017-10.R04 | Rollback disables new proposals and keeps existing cycles readable; locked cycles are handled by PS-024 recovery, not deleted. | MVP |
+| PS-017-10.R05 | Schema changes follow CTR-SCH-001; consented cycles are never rewritten. | MVP |
 
-## Requirements to specify
-- [ ] PS-017-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-017-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-017-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{cycles: [cycle record], schema_version}` limited to the requester's slots.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Import is not supported; replay of events rebuilds state.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback: no transitions forced; open proposals expire by rule.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unknown MAJOR returns SCH.UNKNOWN_VERSION.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export by participant only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-017-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Restore replays events in revision order; gaps block restore (EVT.REVISION_GAP).
+
+## Privacy, retention, abuse
+Export omits other slots' wants text.
+
+## Observability & budgets
+Export ≤ 64 KB per participant (ASSUMPTION).
+
+## Tests
+- TEST-PS-017-10-01 (contract): export validates.
+- TEST-PS-017-10-02 (restore): backup and restore preserve version and consent flags.
+- TEST-PS-017-10-03 (rollback): disabling proposals leaves consented cycles readable.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Restore reproduces cycles exactly in test fixtures.
+2. No four-party cycle appears in federation output.
+3. Rollback deletes zero cycle rows.
+
+## Assumptions & open decisions
+- PENDING: feature flag for four-party matching (F15 mod_flags).
+- PROVISIONAL (D02 default, unapproved): versioned matching rules.

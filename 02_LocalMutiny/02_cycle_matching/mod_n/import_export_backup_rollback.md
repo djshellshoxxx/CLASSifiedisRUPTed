@@ -1,35 +1,49 @@
-# PS-018-10 — import export backup rollback
+# PS-018-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-018-10. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_n](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_n. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_n. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R05–R09), CTR-FED-001 (R03), CTR-PRV-001 (R11).
 
-## Purpose and scope
-Define the import export backup rollback process for n within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-018-10.R01 | Search runs are not exported to peers or participants; the matcher may export run metadata for audit. | MVP |
+| PS-018-10.R02 | Replay with the same algorithm version reproduces every completed run byte-for-byte. | MVP |
+| PS-018-10.R03 | Rollback sets `max_length` to 4 (disables 5–8 runs) without deleting run records. | MVP |
+| PS-018-10.R04 | Algorithm changes are MAJOR when any golden fixture output changes. | MVP |
 
-## Requirements to specify
-- [ ] PS-018-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-018-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-018-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Audit export: `{run_id, status, parameters, candidate_count, algorithm_version}`; no candidate content.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay is an internal tool, not a command.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback path: disable runs → existing completed runs remain immutable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unknown MAJOR returns SCH.UNKNOWN_VERSION.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Audit export by operator with purpose and dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-018-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Backup excludes snapshot content (RET-EPH). Restore keeps run status and truncated flag.
+
+## Privacy, retention, abuse
+Audit export omits all refs.
+
+## Observability & budgets
+Replay ≤ 2 s per fixture run (ASSUMPTION).
+
+## Tests
+- TEST-PS-018-10-01 (contract): audit export validates.
+- TEST-PS-018-10-02 (golden): replay of golden fixtures matches.
+- TEST-PS-018-10-03 (rollback): max_length set to 4 deletes zero runs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Golden replay passes before any algorithm release.
+2. Rollback deletes zero records.
+3. Audit export contains no refs.
+
+## Assumptions & open decisions
+- PENDING: feature flag for generalised matching (F15 mod_flags).
+- PROVISIONAL (D02 default, unapproved).

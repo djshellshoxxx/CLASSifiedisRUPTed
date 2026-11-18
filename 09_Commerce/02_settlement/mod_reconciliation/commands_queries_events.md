@@ -1,35 +1,55 @@
-# PS-072-04 — commands queries events
+# PS-072-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-072-04. **Owner:** [09_Commerce/02_settlement/mod_reconciliation](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_reconciliation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_reconciliation (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03, R10), CTR-SCH-001, CTR-ERR-001, CTR-CAP-001. **Decisions:** D04 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the commands queries events process for reconciliation within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-072-04.R01 | `recon.run` carries `idempotency_key` and scope; returns `run_id`. | MVP |
+| PS-072-04.R02 | `recon.finding.resolve` carries `expected_revision` and `case_id`. | MVP |
+| PS-072-04.R03 | Events: `recon_run.completed`, `recon_finding.opened`, `recon_finding.resolved`. | MVP |
+| PS-072-04.R04 | No command in this module writes `clm_` state. | MVP |
 
-## Requirements to specify
-- [ ] PS-072-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-072-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-072-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Schema `recon_run` 1.0.0; `recon_finding` 1.0.0. `max_data_class` FINANCIAL_EVIDENCE for findings, PUBLIC for run summaries.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Event | Expected revision | Actor |
+|---|---|---|---|
+| `recon.run` | `recon_run.completed` (async) | n/a | sys_, ope_ |
+| `recon.finding.resolve` | `recon_finding.resolved` | required | ope_ |
+| `recon.finding.list` (query) | none | n/a | ope_ |
+| `recon.run.get` (query) | none | n/a | ope_ |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Maps to PS-072-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Per PS-072-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per PS-072-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-072-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Run key de-duplicates scheduled and on-demand runs with the same window.
+
+## Privacy, retention, abuse
+Events carry IDs and enums only.
+
+## Observability & budgets
+Latency for `recon.finding.list` p95 ≤ 500 ms for 1000 findings (ASSUMPTION).
+
+## Tests
+- TEST-PS-072-04-01 (contract): command and event schemas validate.
+- TEST-PS-072-04-02 (contract): module exposes no claim-state write (surface diff).
+- TEST-PS-072-04-03 (unit): duplicate run key returns original run.
+- TEST-PS-072-04-04 (unit): resolve with stale revision returns `SYS.CONFLICT`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command surface matches table.
+2. No state-changing claim command present.
+3. Idempotency tests pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: schemas start at 1.0.0.
+- D04 (PROVISIONAL, unapproved).

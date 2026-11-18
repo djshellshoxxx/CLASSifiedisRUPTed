@@ -1,35 +1,57 @@
 # PS-041-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-041-02. **Owner:** [05_Rentals/02_rental_lifecycle/mod_damage](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_damage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_damage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-COM-001 (amount and currency rules), CTR-ERR-001, CTR-PRV-001 (EXIF and diagnostics).
 
-## Purpose and scope
-Define the validation rules process for damage within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** Reporting window, line caps and evidence minimums are ASSUMPTION (OPEN, F05). D06 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-041-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-041-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-041-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-041-02.R01 | Report allowed only within 7 days after the renter's return attestation (`rtn_`). Later → `DAMAGE.WINDOW_CLOSED` (409). | MVP |
+| PS-041-02.R02 | Lines 1–20. Zero or 21+ → `DAMAGE.LINE_LIMIT` (422). | MVP |
+| PS-041-02.R03 | Each line with `amount_minor` > 0 has 1–10 digests. Missing → `DAMAGE.EVIDENCE_REQUIRED` (422). | MVP |
+| PS-041-02.R04 | Each line amount ≤ declared value of the affected item (`DAMAGE.AMOUNT_OVER_CAP`, 422). Declared value comes from the rental terms. | MVP |
+| PS-041-02.R05 | `amount_minor` matches `^(0\|[1-9][0-9]{0,38})$`. Else `COM.AMOUNT_INVALID` (400). Currency equals rental currency (`COM.CURRENCY_MISMATCH`, 422). | MVP |
+| PS-041-02.R06 | Sum of lines = `total_minor`. Otherwise `DAMAGE.TOTAL_MISMATCH` (422). | MVP |
+| PS-041-02.R07 | `description` ≤ 280 characters; e-mail, phone or address patterns → `DAMAGE.DESCRIPTION_CONTACT_DATA` (400). | MVP |
+| PS-041-02.R08 | Photos: image types JPEG, PNG, HEIC only; ≤ 10 MB each (ASSUMPTION); unsupported → `SYS.REQUEST_MALFORMED`. | MVP |
+| PS-041-02.R09 | Reporter must be the rental owner; `against` must be the renter. Else `SYS.NOT_FOUND`. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Check order: participant (R09) → window (R01) → shape → line and evidence rules (R02, R03, R05, R06, R07, R08) → cap (R04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Applies to `damage.report` at entry, and to per-line decisions at acknowledge or contest.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Gates only. Transitions in PS-041-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+All `DAMAGE.*` codes are non-retryable. Diagnostics name field path and rule ID only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-041-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+R09 is the only authorization rule here.
+
+## Failure, idempotency, concurrency, offline
+Offline report is queued (D08) with photo digests computed on device; bytes upload first. Server rejects if window closed at commit (`DAMAGE.WINDOW_CLOSED`, non-retryable).
+
+## Privacy, retention, abuse
+Rejected photos are discarded without storage. Validation logs carry no description text.
+
+## Observability & budgets
+`damage_validation_reject_total{code}`. Validation p95 ≤ 50 ms excluding upload (ASSUMPTION).
+
+## Tests
+- TEST-PS-041-02-01 (unit): one case per R01–R09 code.
+- TEST-PS-041-02-02 (boundary): 20 lines pass; 21 fail; exact cap passes; cap + 1 fails.
+- TEST-PS-041-02-03 (negative): line with amount and zero digests rejected.
+- TEST-PS-041-02-04 (negative): report on day 8 after return → `DAMAGE.WINDOW_CLOSED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every rule ID maps to one test and one registry code.
+2. Boundary tests pass at exact limits.
+3. No validation log contains description text.
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day window, 20-line cap, 10 MB photo limit (OPEN, F05).
+- PROVISIONAL (D06 default, unapproved).

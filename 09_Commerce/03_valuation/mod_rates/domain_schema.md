@@ -1,35 +1,59 @@
 # PS-075-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-075-01. **Owner:** [09_Commerce/03_valuation/mod_rates](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_rates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_rates (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (quote object; R04), CTR-ID-001 (`qte`), CTR-SCH-001, CTR-PRV-001 (PUBLIC). **Pending:** `rsrc` source prefix (CTR-ID-001). **Decisions:** D03 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the domain schema process for rates within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-075-01.R01 | Quote fields exactly as CTR-COM-001 quote object: `quote_id`, `base`, `quote`, `rate`, `rate_scale`, `rounding` (const `HALF_EVEN`), `source_id`, `observed_at`, `valid_until`, `quote_hash`. | MVP |
+| PS-075-01.R02 | `valid_until` − `observed_at` ≤ PT15M (ASSUMPTION). | MVP |
+| PS-075-01.R03 | `quote_hash` = SHA-256 of JCS(quote without `quote_hash`). | MVP |
+| PS-075-01.R04 | Source record: `source_id`, `adapter_pubkey`, `pairs[]`, `status`, `license_ref`. | MVP |
+| PS-075-01.R05 | Quotes are immutable once issued. | MVP |
 
-## Requirements to specify
-- [ ] PS-075-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-075-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-075-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Type / constraint | Class |
+|---|---|---|
+| `quote_id` | `qte_` + 26 Crockford chars | PUBLIC |
+| `base`, `quote` | currency objects (CTR-COM-001 `$defs/currency`) | PUBLIC |
+| `rate` | decimal string per CTR-COM-001 pattern | PUBLIC |
+| `rate_scale` | integer 0–18 | PUBLIC |
+| `source_id` | `^[a-z0-9_.-]{3,64}$` | PUBLIC |
+| `observed_at`, `valid_until` | RFC 3339 UTC | PUBLIC |
+| `quote_hash` | 64 hex | PUBLIC |
+| `source.status` | enum `active`, `stale`, `disabled` | PUBLIC |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+PS-075-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Quote: `issued` → `expired`. Source: PS-075-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+PS-075-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Quotes are public; source records are operator-managed.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-075-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Quote issuance idempotent by (`source_id`, pair, `observed_at`).
+
+## Privacy, retention, abuse
+Quotes contain no party data; a quote is linked to a claim or proposal by ID only.
+
+## Observability & budgets
+Gauge: active sources per pair.
+
+## Tests
+- TEST-PS-075-01-01 (unit): `valid_until` 15 min 1 s after `observed_at` rejected.
+- TEST-PS-075-01-02 (golden): quote hash matches reference JCS vector.
+- TEST-PS-075-01-03 (unit): mutation after issue rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Quote schema equals CTR-COM-001 quote object.
+2. Hash golden vectors pass.
+3. Immutability enforced.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute maximum validity.
+- D03 (PROVISIONAL default, unapproved).

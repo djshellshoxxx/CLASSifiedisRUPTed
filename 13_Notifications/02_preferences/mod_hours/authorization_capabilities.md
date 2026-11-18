@@ -1,35 +1,59 @@
-# PS-105-05 — authorization capabilities
+# PS-105-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-105-05. **Owner:** [13_Notifications/02_preferences/mod_hours](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_hours. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_hours. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the authorization capabilities process for hours within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-105-05.R01 | Only the owning `acc_` reads or writes its windows (`delivery_window.read`, `delivery_window.update`, scope self). | MVP |
+| PS-105-05.R02 | `sys_` dispatcher may execute `delivery_window.evaluate` with global scope, purpose `notification_gating`, expiry ≤ 72 h. | MVP |
+| PS-105-05.R03 | No `ope_`, `mod_` or `fpr_` principal can read windows, even with grant (PRIVATE_PERSONAL, CTR-CAP-001 R06). | MVP |
+| PS-105-05.R04 | Cross-account requests return `SYS.NOT_FOUND`. | MVP |
 
-## Requirements to specify
-- [ ] PS-105-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-105-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-105-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Principal | Capability | Scope | Outcome |
+|---|---|---|---|
+| user (owner) | `delivery_window.update` | self | ALLOW (ALLOW_OWNER) |
+| user (other) | `delivery_window.read` | foreign | DENY → SYS.NOT_FOUND |
+| sys | `delivery_window.evaluate` | global | ALLOW (grant) |
+| sys | `delivery_window.read` | global | DENY (evaluate returns decision only) |
+| ope | `delivery_window.read` | any | DENY (dual control cannot override R03) |
+| fpr | any | any | DENY (windows never federate) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Field visibility: `weekdays`, `start_min`, `end_min`, `tz` = `owner` only; `dwn_id`, `channel` = `participant`/`owner`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Grant creation and each evaluate batch emit `aud_` records (CTR-CAP-001 R08). Evaluate audit records carry counts, not windows.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Grant lifecycle only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Denials: `SYS.FORBIDDEN` for visible, `SYS.NOT_FOUND` otherwise.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-105-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Enforced server-side on every call. Account deletion removes windows and invalidates pending evaluation grants.
+
+## Failure, idempotency, concurrency, offline
+Decision cache TTL zero for writes; ≤ 60 s for evaluate per CTR-CAP-001 R09 (ASSUMPTION for window cache).
+
+## Privacy, retention, abuse
+Decision records (`dec_`) store outcome only. Retention RET-AUD 12 months.
+
+## Observability & budgets
+Counter `hours_decisions_total{capability,outcome}`.
+
+## Tests
+- TEST-PS-105-05-01 (unit): owner read succeeds; other account read returns NOT_FOUND.
+- TEST-PS-105-05-02 (integration): operator with single approval cannot read windows (DUAL_APPROVAL_MISSING and then denial).
+- TEST-PS-105-05-03 (unit): expired evaluate grant returns GRANT_EXPIRED.
+- TEST-PS-105-05-04 (contract): federation peer principal denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Capability matrix matches tests.
+2. No operator path exposes schedules.
+3. Every evaluate batch has `aud_` record.
+
+## Assumptions & open decisions
+- ASSUMPTION: purpose `notification_gating` registered with F16.
+- Privacy default for windows: D07 default, PROVISIONAL (D07 default, unapproved).

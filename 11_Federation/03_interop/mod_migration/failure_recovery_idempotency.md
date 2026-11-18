@@ -1,35 +1,54 @@
-# PS-090-06 — failure recovery idempotency
+# PS-090-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-090-06. **Owner:** [11_Federation/03_interop/mod_migration](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_migration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_migration. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R07, R08), CTR-EVT-001 (R02, R03), CTR-FED-001 (R09).
 
-## Purpose and scope
-Define the failure recovery idempotency process for migration within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-090-06.R01 | Writes are batched by aggregate with a checkpoint after each batch of ≤ 500 aggregates (ASSUMPTION). | MVP |
+| PS-090-06.R02 | Resume after crash starts at the last checkpoint; no aggregate is migrated twice. | MVP |
+| PS-090-06.R03 | A failing aggregate is quarantined with original bytes kept; the run continues only if the failure rate is below 0.1% (ASSUMPTION), otherwise it moves to `failed`. | MVP |
+| PS-090-06.R04 | Key migration does not invalidate verification of historic events signed under prior keys (CTR-FED-001 R09). | MVP |
 
-## Requirements to specify
-- [ ] PS-090-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-090-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-090-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Checkpoint: `run_id`, `batch_index`, `last_aggregate_id`, `digest`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry rules per [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Per [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | When |
+|---|---|---|
+| SCH.MIGRATION_FAILED | false | migration hook threw or produced invalid output; record quarantined |
+| MIGRATE.CHECKPOINT_CONFLICT | false | checkpoint digest mismatch |
+| SYS.UNAVAILABLE | true | store down |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Each batch re-checks run status is `running`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-090-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrent runs over overlapping scope are refused. Migrations are online only.
+
+## Privacy, retention, abuse
+Quarantine records hold IDs and codes only.
+
+## Observability & budgets
+Metric `migrate_quarantined_total`; throughput ≥ 1000 aggregates/min on fixture (ASSUMPTION).
+
+## Tests
+- TEST-PS-090-06-01 (resume): kill at batch 3 of 5; resume leaves no duplicates.
+- TEST-PS-090-06-02 (quarantine): one bad aggregate quarantined, others migrate.
+- TEST-PS-090-06-03 (threshold): failure rate over threshold moves run to failed.
+- TEST-PS-090-06-04 (key): historic event verifies after key migration.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Resume correct in all kill points.
+2. Threshold enforced.
+3. Historic signatures verify.
+
+## Assumptions & open decisions
+- ASSUMPTION: batch size 500; 0.1% threshold.
+- PROVISIONAL (D10 default, unapproved): user-controlled keys with documented rotation.

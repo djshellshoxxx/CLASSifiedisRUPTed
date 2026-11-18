@@ -1,35 +1,51 @@
-# PS-090-10 — import export backup rollback
+# PS-090-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-090-10. **Owner:** [11_Federation/03_interop/mod_migration](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_migration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_migration. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R07, R08), CTR-FED-001 (R08, R09), CTR-PRV-001 (R11).
 
-## Purpose and scope
-Define the import export backup rollback process for migration within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-090-10.R01 | Before execute, a full backup of affected stores is verified by restore test on a copy (ASSUMPTION). | MVP |
+| PS-090-10.R02 | Rollback restores prior version pointers and keeps original bytes; new derived views are discarded. | MVP |
+| PS-090-10.R03 | Interop export of migration reports is content-free (PS-090-07). Migrated node data exports use CTR-PRV-001 R11 rules. | MVP |
+| PS-090-10.R04 | Import of another node's migration plan is refused; plans are node-local. | MVP |
 
-## Requirements to specify
-- [ ] PS-090-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-090-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-090-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Backup manifest `migrate.backup@1.0.0` (PENDING registration).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`migration.rollback` (see [commands_queries_events.md](commands_queries_events.md)).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback from `completed` or `failed` per [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | When |
+|---|---|
+| MIGRATE.BACKUP_UNVERIFIED | restore test not passed before execute |
+| MIGRATE.ROLLBACK_WINDOW_CLOSED | after deadline |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Rollback: two approvers. Backup verification: Platform Lead.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-090-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Rollback idempotent per run; restore test idempotent per backup digest.
+
+## Privacy, retention, abuse
+Backups follow platform schedule; restore does not extend retention.
+
+## Observability & budgets
+`migrate_rollbacks_total`; rollback duration ≤ 1 h for fixture (ASSUMPTION).
+
+## Tests
+- TEST-PS-090-10-01 (backup): execute refused without verified backup.
+- TEST-PS-090-10-02 (rollback): prior pointers restored; original bytes unchanged.
+- TEST-PS-090-10-03 (node): cross-node plan import refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No execute without verified backup.
+2. Rollback leaves bytes unchanged.
+
+## Assumptions & open decisions
+- ASSUMPTION: backup verification gate; rollback time budget.
+- PROVISIONAL (D10 default, unapproved): keys in migration plans are referenced by ID, never by value.

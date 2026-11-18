@@ -1,35 +1,52 @@
-# PS-108-06 — failure recovery idempotency
+# PS-108-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-108-06. **Owner:** [13_Notifications/02_preferences/mod_quiet](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_quiet. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_quiet. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for quiet within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-108-06.R01 | Period end timer is stored as absolute `ends_at` and survives restart. | MVP |
+| PS-108-06.R02 | Release of held items is idempotent per (`ntf_id`, `qpd_id`). | MVP |
+| PS-108-06.R03 | If the release job is late, items are still released on the next run before their 24-hour limit; no item is released after 24 h. | MVP |
+| PS-108-06.R04 | Holding is fail-safe: if the gating service is unavailable, non-security notifications are held, not sent. | MVP |
 
-## Requirements to specify
-- [ ] PS-108-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-108-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-108-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Held key = (`ntf_id`, `qpd_id`). Retention 7 days after release.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Start and resume return the same result on replay. Events are emitted after commit.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.CONFLICT` on stale revision for replace; client re-reads.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Release uses sys grant valid at release time.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-108-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Crash during release: resume from held list; duplicate sends prevented by held-state check.
+- Offline: start queued per D08; if reconnect occurs after `ends_at`, the period is created already ended.
+- Concurrency: resume and expiry racing → one `ended` event (first commit wins).
+
+## Privacy, retention, abuse
+Held rows purged on release.
+
+## Observability & budgets
+Counter `quiet_release_late_total`; alert if release lag > 5 min.
+
+## Tests
+- TEST-PS-108-06-01 (integration): crash during release yields no duplicate sends.
+- TEST-PS-108-06-02 (offline): start offline after `ends_at` creates ended period.
+- TEST-PS-108-06-03 (chaos): gating unavailable holds non-security items.
+- TEST-PS-108-06-04 (integration): resume vs expiry race yields exactly one ended event.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Release idempotent in fault injection.
+2. Fail-safe holding verified.
+3. Race test passes 1000 iterations.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5-minute lag alert.
+- D08 PROVISIONAL (D08 default, unapproved).

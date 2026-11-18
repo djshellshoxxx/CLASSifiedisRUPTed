@@ -1,10 +1,9 @@
-# TODO
+# TODO — goods (controlled goods taxonomy)
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Process specs drafted; implementation not started.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
-- [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [x] Draft the 10 process specs (PS-144-01 to PS-144-10).
+- [ ] Governance Lead approves taxonomy v1 category list.
+- [ ] Map each restriction flag to a mod_prohibited or mod_jurisdictions rule ID.
+- [ ] Define migration rule for deprecated categories with F01 owner.
+- [ ] Implement taxonomy versioning — future phase.

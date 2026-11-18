@@ -1,35 +1,51 @@
-# PS-122-04 — commands queries events
+# PS-122-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-122-04. **Owner:** [15_Platform/03_operations/mod_recovery](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_recovery (F15.S03.M03). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for recovery within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-122-04.R01 | All commands are internal, require `expected_revision` on the run aggregate and an `idempotency_key`. | MVP |
+| PS-122-04.R02 | `restore_run.step` accepts only the next step name; any other returns `RECOVERY.STEP_ORDER_VIOLATION`. | MVP |
+| PS-122-04.R03 | Events carry run ID, status and counts only. | MVP |
 
-## Requirements to specify
-- [ ] PS-122-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-122-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-122-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Signature | Idempotency scope | Emits | Errors |
+|---|---|---|---|---|
+| `restore_run.create` | (bkp_id, target, change_ref) | (actor, key) | `restore.planned` (local record) | RECOVERY.ISOLATION_NOT_PROVEN, RECOVERY.SOURCE_NOT_RESTORABLE, RECOVERY.TARGET_NOT_APPROVED |
+| `restore_run.approve` | (rst_id, expected_revision) | (approver, rst_id) | `restore.started` on run start | CAP.SELF_APPROVAL_FORBIDDEN, CAP.DUAL_APPROVAL_REQUIRED |
+| `restore_run.step` | (rst_id, step_name, expected_revision) | (rst_id, step_name) | step events | RECOVERY.STEP_ORDER_VIOLATION, RECOVERY.HASH_CHAIN_BROKEN |
+| `restore_run.promote` | (rst_id, second_approver) | (rst_id) | `restore.promoted` | RECOVERY.NOT_READ_ONLY |
+| `restore_run.abort` | (rst_id, reason_code) | (rst_id) | `restore.aborted` | SYS.GONE on repeat |
+| `drill_record.create` | (rst_id, measured values, checks) | (rst_id) | `drill.recorded` | RECOVERY.DRILL_INCOMPLETE |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Effects follow PS-122-03.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Per PS-122-02 and PS-122-06.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+See PS-122-05.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Revision conflicts return `EVT.REVISION_CONFLICT`. Commands are safe to repeat.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-122-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+No object content in any payload.
+
+## Observability & budgets
+Step durations recorded per step name.
+
+## Tests
+- TEST-PS-122-04-01 (contract): each command signature and error list.
+- TEST-PS-122-04-02 (concurrency): two approvals race; one approval recorded.
+- TEST-PS-122-04-03 (negative): wrong step name refused.
+- TEST-PS-122-04-04 (privacy): event payload scan finds no record content.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command table matches internal API.
+2. TEST-PS-122-04-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h run retention before automatic destruction of isolated data.

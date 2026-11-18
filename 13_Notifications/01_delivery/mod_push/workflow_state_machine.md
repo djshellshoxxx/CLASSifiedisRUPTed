@@ -1,35 +1,64 @@
 # PS-104-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-104-03. **Owner:** [13_Notifications/01_delivery/mod_push](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_push. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_push. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001.
 
-## Purpose and scope
-Define the workflow state machine process for push within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-104-03.R01 | A subscription is `active`, `expired` or `revoked`. `expired` and `revoked` are terminal; re-subscribing creates a new `psb_`. | MVP |
+| PS-104-03.R02 | An attempt is `queued`, `retry_scheduled`, `sent`, `failed` or `expired`. `sent`, `failed` and `expired` are terminal. | MVP |
+| PS-104-03.R03 | An attempt is retried at most 4 times after the first (5 total) and never after its TTL. | MVP |
+| PS-104-03.R04 | A subscription with no provider success for 30 consecutive days moves to `expired` (ASSUMPTION). | MVP |
+| PS-104-03.R05 | Every transition emits exactly one event (see commands_queries_events). | MVP |
 
-## Requirements to specify
-- [ ] PS-104-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-104-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-104-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Transition guards read `push_subscription.status`, `consecutive_failures` and `push_attempt.attempt_no`. State is stored on the row; no derived state is persisted.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | `push.register_subscription` accepted | validation passes, count < 10 | subscription `active` | emit `push_subscription.registered` |
+| active | provider 201 | none | active | `last_success_at` set, `consecutive_failures`=0 |
+| active | provider 404 or 410 | none | `expired` | emit `push_subscription.expired`; stop sending |
+| active | provider 5xx, 429 or timeout | `consecutive_failures` < 10 | active | increment failures; attempt goes to retry_scheduled |
+| active | 30 days without success | R04 | `expired` | emit `push_subscription.expired` |
+| active | `push.revoke_subscription` or device revoked | caller authorized | `revoked` | emit `push_subscription.revoked`; cancel queued attempts |
+| queued | dispatch sends | subscription active | sent | emit `notification.push_accepted` |
+| queued | dispatch sends, provider 4xx other than 404/410/429 | none | failed | emit `notification.push_failed` (`PUSH.PROVIDER_REJECTED`) |
+| queued | dispatch sends, retryable failure | attempt_no < 5 and TTL not elapsed | retry_scheduled | schedule per failure_recovery policy |
+| retry_scheduled | timer fires | subscription active, TTL not elapsed | queued | attempt_no+1 |
+| queued or retry_scheduled | TTL elapsed or attempt_no = 5 | none | expired | emit `notification.push_failed` (`PUSH.TTL_ELAPSED`) |
+| queued or retry_scheduled | subscription becomes expired or revoked | none | expired | emit `notification.push_failed` (`PUSH.SUBSCRIPTION_INACTIVE`) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Concurrent transitions on one subscription are serialized by `revision` (CTR-EVT-001 R02).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions return `PUSH.INVALID_STATE_TRANSITION` (non-retryable). Those are never silent.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Only the owning account or `sys_` dispatcher may cause transitions; see authorization_capabilities.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-104-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Timers are durable. A crash mid-transition is recovered by replaying from the last committed revision. Details in failure_recovery_idempotency.
+
+## Privacy, retention, abuse
+Transitions record state and codes only. Expired attempts are purged per RET-OPS (30 days).
+
+## Observability & budgets
+Gauge `push_subscriptions{status}`; counter `push_transitions_total{from,to}`. Budget: transition commit p95 ≤ 50 ms.
+
+## Tests
+- TEST-PS-104-03-01 (unit): each row in the transition table is covered by one test.
+- TEST-PS-104-03-02 (property): no sequence of events takes an attempt past attempt_no 5 or past TTL into `sent`.
+- TEST-PS-104-03-03 (integration): HTTP 410 sets subscription `expired` and sends no further attempts for that subscription.
+- TEST-PS-104-03-04 (integration): revocation cancels all queued attempts for that subscription.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every transition has an event type and a test.
+2. No terminal state has an outgoing transition in code.
+3. Revocation takes effect within 60 s in integration environment.
+
+## Assumptions & open decisions
+- ASSUMPTION: 10 consecutive failures before expiry; 30-day inactivity expiry.
+- Retry timing defined in failure_recovery_idempotency.md.
+- D08 not applicable to server-side dispatch; no Dxx blocks this file.

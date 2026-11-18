@@ -1,35 +1,32 @@
-# PS-140-06 — failure recovery idempotency
+# PS-140-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-140-06. **Owner:** [17_Quality/02_performance/mod_offline](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_offline. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (idempotency keys), CTR-ERR-001 (retry rules).
 
-## Purpose and scope
-Define the failure recovery idempotency process for offline within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-140-06.R01 | Scenario run timeout is 30 minutes (ASSUMPTION); on timeout the run ends `aborted_infra`. | MVP |
+| PS-140-06.R02 | Infrastructure failures retry at most 2 times with backoff of 30 s then 120 s (ASSUMPTION). | MVP |
+| PS-140-06.R03 | Assertion failures are never retried automatically; a retry hides flakiness. | MVP |
+| PS-140-06.R04 | Re-sending `RecordOfflineRun` with the same key and payload returns the original record; same key with a different payload returns `SYS.CONFLICT`. | MVP |
+| PS-140-06.R05 | Runner buffers at most 50 unsent run records (ASSUMPTION) and flushes them in attempt order. | MVP |
 
-## Requirements to specify
-- [ ] PS-140-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-140-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-140-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Failure, idempotency, concurrency, offline
+- **Flake handling:** a run that passes after an infra retry is recorded as its own attempt. Its outcome is `pass` with `attempt` > 1, and the attempt history is kept. It is never silently merged.
+- **Concurrent runners** for the same scenario and build: attempt numbers are allocated with `expected_revision`; the loser receives `SYS.CONFLICT` and re-reads.
+- **Scenario retired mid-run:** the run completes against the pinned `scenario_version`.
+- **Offline runner:** a runner that cannot reach the CI API keeps records in its local buffer and does not mark runs complete locally.
+- **Clock:** timeouts use monotonic time in the harness, so the clock-skew scenario does not alter test timers.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Retryable codes: `SYS.UNAVAILABLE` (503). Non-retryable: `OFFTEST.*`, `SYS.CONFLICT`. Retry uses the same `idempotency_key` (CTR-ERR-001 TEST-07 rule).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Tests
+- TEST-PS-140-06-01 (unit): same key and payload returns original record; same key and different payload returns SYS.CONFLICT.
+- TEST-PS-140-06-02 (integration): run exceeding 30 minutes ends aborted_infra; no partial assertion set published.
+- TEST-PS-140-06-03 (integration): infra failure retried twice then recorded; assertion failure never retried.
+- TEST-PS-140-06-04 (offline): runner buffer of 50 records flushes in attempt order after network returns.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-140-06`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: timeout and retry values are defaults for the reference runner only.
+- D08 (offline writes) governs production queues, not test runners: PROVISIONAL (D08 default, unapproved).

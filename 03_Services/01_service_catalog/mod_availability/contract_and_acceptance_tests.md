@@ -1,35 +1,51 @@
 # PS-028-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-028-09. **Owner:** [03_Services/01_service_catalog/mod_availability](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_availability. **Parent:** [mod_availability SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-SCH-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for availability within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-028-09.R01 | Contract tests validate every command and event against CTR-SCH-001 schemas. | MVP |
+| PS-028-09.R02 | Booking flow test: create window → hold by quote → accept → booked; then decline path releases hold. | MVP |
+| PS-028-09.R03 | DST fixtures for Europe/Berlin, America/New_York and Australia/Lord_Howe. | MVP |
+| PS-028-09.R04 | Accessibility: slot picker operable by keyboard; each slot announced with date, local time and availability state. | MVP |
 
-## Requirements to specify
-- [ ] PS-028-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-028-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-028-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `fixtures/svcavail/dst_spring_gap.json`, `capacity_one_race.json`, `ics_mixed_valid_invalid.json` (names proposed; created in implementation phase). Each pins timezone database version.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay of recorded quote events through the hold and release state machine.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Each state in PS-028-03 has positive and negative tests.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error-code coverage 100% for SVCAVAIL codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests from PS-028-05 included.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-028-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Chaos: duplicate quote events, clock skew of ±2 min between nodes, timer restart.
+
+## Privacy, retention, abuse
+Fixtures use synthetic accounts and no real addresses. Test data purged after run.
+
+## Observability & budgets
+Suite ≤ 10 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-028-09-01 (contract): all commands and events validate.
+- TEST-PS-028-09-02 (e2e): create → hold → accept → booked.
+- TEST-PS-028-09-03 (property): recurrence expansion over 366 days never produces overlapping occurrences for capacity 1.
+- TEST-PS-028-09-04 (a11y): slot picker passes keyboard and announcement checks.
+- TEST-PS-028-09-05 (unit): ICS with 256 KB + 1 byte rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All DST fixtures pass for the three zones.
+2. Booking flow e2e passes including decline release.
+3. Error-code coverage 100%.
+
+## Assumptions & open decisions
+- ASSUMPTION: WCAG 2.1 AA as the CI accessibility mapping.
+- OPEN: timezone database update policy (see PS-028-10). See [DECISIONS.md](../../../DECISIONS.md) D05.

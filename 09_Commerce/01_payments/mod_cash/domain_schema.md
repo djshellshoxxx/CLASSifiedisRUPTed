@@ -1,35 +1,61 @@
 # PS-067-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-067-01. **Owner:** [09_Commerce/01_payments/mod_cash](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_cash. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_cash (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (claim, R01–R08, R13), CTR-ID-001 (`clm`, `trx`, `qte`), CTR-PRV-001 (FINANCIAL_EVIDENCE), CTR-SCH-001. **Decisions:** D03, D06, D09 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the domain schema process for cash within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-067-01.R01 | The cash method adds no persisted claim field. The claim is the CTR-COM-001 `clm_` object with `method = "cash"`. | MVP |
+| PS-067-01.R02 | Cash method configuration is a separate record `cashcfg` keyed by (`currency_code`, `region_class`). | MVP |
+| PS-067-01.R03 | `region_class` is an enum (`metro`, `national`, `none`), never a place name or coordinate. | MVP |
+| PS-067-01.R04 | `ceiling_minor` is a decimal string (CTR-COM-001 R02), ≤ 39 digits, scaled by the currency exponent from `cur_`. | MVP |
+| PS-067-01.R05 | No record holds cash, balance, payout or wallet data (CTR-COM-001 R01, `COM.CUSTODY_FORBIDDEN`). | MVP |
 
-## Requirements to specify
-- [ ] PS-067-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-067-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-067-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Type / constraint | Class |
+|---|---|---|
+| `cashcfg_id` | opaque ID, PENDING prefix `ccf` (CTR-ID-001) | PUBLIC |
+| `currency_code` | ISO 4217 alpha-3 or `cur_` reference | PUBLIC |
+| `region_class` | enum `metro` \| `national` \| `none` | PUBLIC |
+| `enabled` | boolean | PUBLIC |
+| `ceiling_minor` | decimal string, `^(0\|[1-9][0-9]{0,38})$` | PUBLIC |
+| `config_revision` | integer ≥ 1 | — |
+| `changed_by` | `ope_` reference | PSEUDONYMOUS |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Claim fields, including `amount_minor`, `currency`, `method`, `state`, are owned by CTR-COM-001 (FINANCIAL_EVIDENCE).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Specified in PS-067-04.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Configuration states: `enabled`, `disabled` (PS-067-03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See PS-067-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-067-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Configuration read is public; writes are operator-only (PS-067-05).
+
+## Failure, idempotency, concurrency, offline
+Configuration writes use `expected_revision` (CTR-EVT-001 R02).
+
+## Privacy, retention, abuse
+Configuration is not personal data. `changed_by` is retained with the audit record.
+
+## Observability & budgets
+Gauge: enabled configurations by currency.
+
+## Tests
+- TEST-PS-067-01-01 (contract): `cashcfg` schema rejects float ceilings and unknown `region_class` values.
+- TEST-PS-067-01-02 (lint): no schema in this module contains balance, wallet or payout fields.
+- TEST-PS-067-01-03 (unit): ceiling of 39 digits accepted; 40 rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero new claim fields compared with CTR-COM-001 (diff test).
+2. Every field has one class.
+3. Custody lint passes (CTR-COM-001 test 02).
+
+## Assumptions & open decisions
+- ASSUMPTION: `region_class` enum is sufficient; no place names stored.
+- D09 (PROVISIONAL default, unapproved): no platform custody; direct arrangements only.
+- D03 (PROVISIONAL default, unapproved): integer minor units.

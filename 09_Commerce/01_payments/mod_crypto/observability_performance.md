@@ -1,35 +1,51 @@
-# PS-068-08 — observability performance
+# PS-068-08 — observability and performance budgets
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-068-08. **Owner:** [09_Commerce/01_payments/mod_crypto](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_crypto. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_crypto (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (Observability section), CTR-EVT-001, CTR-PRV-001 (R09). **Decisions:** D04 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the observability performance process for crypto within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-068-08.R01 | `com_adapter_latency_ms{chain,provider}` p95 ≤ 2 s (CTR-COM-001). | MVP |
+| PS-068-08.R02 | `com_transitions_total{from,to}` and `com_reorg_events_total{chain}`. Labels are enums only. | MVP |
+| PS-068-08.R03 | Alert: any transition into `FINAL` without an adapter record (must be 0). | MVP |
+| PS-068-08.R04 | Alert: provider disagreement sustained > 15 min on one chain. | MVP |
+| PS-068-08.R05 | Logs: claim ID, chain (CAIP-2), code, provider ID, block height. No address or hash. | MVP |
 
-## Requirements to specify
-- [ ] PS-068-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-068-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-068-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Closed metric label sets; chain IDs from registry.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Event counts by type.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Gauge of crypto claims by state.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Counter by code and chain.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards aggregate per chain; addresses never shown.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-068-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Provider health per chain as a gauge.
+
+## Privacy, retention, abuse
+Metrics 90 days; logs 14 days (ASSUMPTION).
+
+## Observability & budgets
+Reorg events alert within 1 min of detection.
+
+## Tests
+- TEST-PS-068-08-01 (contract): metric label lint.
+- TEST-PS-068-08-02 (load): 200 verifications per minute within latency budget (ASSUMPTION profile).
+- TEST-PS-068-08-03 (integration): synthetic reorg triggers alert.
+- TEST-PS-068-08-04 (unit): log redaction removes address and hash fields.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Latency and alert conditions verified in staging.
+2. No address or tx hash in logs or metrics.
+3. Must-be-zero alert tested.
+
+## Assumptions & open decisions
+- ASSUMPTION: load profile.
+- D04 (PROVISIONAL default, unapproved).

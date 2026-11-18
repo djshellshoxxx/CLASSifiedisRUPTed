@@ -1,35 +1,56 @@
 # PS-107-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-107-03. **Owner:** [13_Notifications/02_preferences/mod_opt](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_opt. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_opt. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the workflow state machine process for opt within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-107-03.R01 | Each push or email cell is `off`, `pending_confirm` or `on`. Inapp/security is always `on`. | MVP |
+| PS-107-03.R02 | Email enabling enters `pending_confirm` for 72 h; confirmation moves it to `on`; expiry moves it to `off`. | MVP |
+| PS-107-03.R03 | Withdrawal takes effect at the next dispatch decision (zero cache). | MVP |
+| PS-107-03.R04 | Confirmation is a POST from a page; a GET never confirms (protects against link scanners). | MVP |
 
-## Requirements to specify
-- [ ] PS-107-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-107-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-107-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Confirmation record: token hash, `npf_id`, cell key, `expires_at`, `used_at`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| off | settings: enable push | explicit action | on | emit `notification_preference.granted` (source settings) |
+| off | settings: enable email | explicit action | pending_confirm | send confirmation notice to address on file; token created |
+| pending_confirm | POST confirm with valid token | token unused and ≤ 72 h | on | `used_at` set; emit `notification_preference.granted` (source email_confirmation) |
+| pending_confirm | 72 h elapsed | none | off | emit `notification_preference.confirmation_expired` |
+| pending_confirm | settings: cancel | owner | off | token invalidated |
+| on | settings or unsubscribe token: withdraw | owner or valid token for this cell | off | emit `notification_preference.withdrawn` |
+| on | `opt.withdraw_all` | owner | off for push and email | emit one withdrawn event per cell |
+| inapp/security | any | any | on | rejected (PS-107-02.R03) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+`OPT.CONFIRMATION_EXPIRED` for expired token; `OPT.CONFIRMATION_INVALID` for reuse or unknown token. Both non-retryable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Owner, or a scoped unsubscribe token for a single cell (see authorization_capabilities).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Withdrawal is idempotent; repeated withdrawal returns off without new event. Confirmation replay returns `CONFIRMATION_INVALID` after first use.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-107-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Expired tokens are purged 30 days later (RET-SEC).
+
+## Observability & budgets
+Counters for grants, withdrawals, confirmation expiries by channel. Transition p95 ≤ 100 ms.
+
+## Tests
+- TEST-PS-107-03-01 (unit): each transition row covered.
+- TEST-PS-107-03-02 (integration): GET to confirm URL does not change state.
+- TEST-PS-107-03-03 (integration): confirmation after 72 h yields expired and cell off.
+- TEST-PS-107-03-04 (integration): withdrawal effective on next dispatch decision.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Email cannot be `on` without confirmation.
+2. Security inapp cannot leave `on` in any fixture.
+3. All transitions emit events.
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h confirmation window.
+- No D-ID blocks state logic.

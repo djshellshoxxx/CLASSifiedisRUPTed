@@ -1,35 +1,52 @@
-# PS-009-07 — privacy retention abuse
+# PS-009-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-009-07. **Owner:** [01_LocalBazaar/03_inventory/mod_variants](SPEC.md). **Implementing module:** 01_LocalBazaar/03_inventory/mod_variants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 01_LocalBazaar/03_inventory/mod_variants. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R06, R09), CTR-FED-001 (R02), CTR-EVT-001 (R11).
 
-## Purpose and scope
-Define the privacy retention abuse process for variants within 03_inventory. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-009-07.R01 | All variant fields are class PUBLIC (PS-009-01.R07). Lint fails the build if a field without a class is added. | MVP |
+| PS-009-07.R02 | Label values pass the PII pattern check (PS-009-02.R03) before storage. | MVP |
+| PS-009-07.R03 | Variant rows follow listing retention class RET-ACC (account lifetime + 30 days grace). | MVP |
+| PS-009-07.R04 | Listing deletion removes variant rows and replicas within 24 h (CTR-PRV-001 R06). | MVP |
+| PS-009-07.R05 | Variants federate only when their listing federates (PUBLIC items, CTR-FED-001 R02). | Future |
+| PS-009-07.R06 | Abuse: ≤ 30 variant writes per account per minute (ASSUMPTION); ≥ 5 near-duplicate labels in one listing raise a signal to F12. | MVP |
 
-## Requirements to specify
-- [ ] PS-009-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-009-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-009-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Classes per field: all PUBLIC. No LOCATION fields. `aud_` records hold only IDs and counts.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events are PUBLIC and carry no account names (CTR-EVT-001 R06).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Archive removes the variant from public reads at once; the row remains for owner history (RET-ACC).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+PII-pattern rejection uses `VARIANT.VALUE_INVALID` with rule `pii_pattern`; the value is never echoed.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner-only writes; see PS-009-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-009-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deletion is retried until confirmed; a deletion record (`aud_`, counts only) is written (CTR-PRV-001 R12).
+
+## Privacy, retention, abuse
+- Threats: personal data hidden in labels; spam by many variants; scraping of variant lists. Controls: PII check, cap of 25, rate limit, listing-level read rules.
+- Pseudonymity: the `acc_` on the listing is not a real identity; labels must not add one.
+
+## Observability & budgets
+No label values in metrics or logs.
+
+## Tests
+- TEST-PS-009-07-01 (negative): email, phone and URL labels rejected; false-positive set reviewed by F10.
+- TEST-PS-009-07-02 (integration): listing deletion removes variants within 24 h in a simulated run.
+- TEST-PS-009-07-03 (abuse): 31st write in one minute rate-limited.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No variant field is unclassified (lint passes).
+2. PII heuristic false-negative rate is reported to F10 with a fixture set; no target is claimed as met.
+3. Deletion completes within 24 h in 100% of simulated runs.
+
+## Assumptions & open decisions
+- ASSUMPTION: PII heuristic is a signal; it does not prove absence of personal data.
+- PROVISIONAL (D07 default, unapproved): minimal retention with legal-hold exceptions (CTR-PRV-001 R07).

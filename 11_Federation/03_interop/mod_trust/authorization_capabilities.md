@@ -1,35 +1,61 @@
 # PS-091-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-091-05. **Owner:** [11_Federation/03_interop/mod_trust](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_trust. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_trust. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (grant model, decision records), CTR-FED-001 (peer scopes).
 
-## Purpose and scope
-Define the authorization capabilities process for trust within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-091-05.R01 | Capabilities used: `fpr.read`, `fpr.update`, `fpr.administer`, `fpr.moderate`. No other verbs are declared by this module. | MVP |
+| PS-091-05.R02 | Default deny (CTR-CAP-001 R01). Automated actors cannot admit, restore or revoke. | MVP |
+| PS-091-05.R03 | `admit`, `restore` and `revoke` require two distinct `ope_` approvers; self-approval returns `CAP.SELF_APPROVAL_FORBIDDEN`. | MVP |
+| PS-091-05.R04 | Every decision emits an `aud_` record with decision ID and reason code, no content (CTR-CAP-001 R08). | MVP |
+| PS-091-05.R05 | Peers may read only their own `trust_state`. | MVP |
 
-## Requirements to specify
-- [ ] PS-091-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-091-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-091-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Action matrix (normative for this module):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Actor | Action | Resource / scope | Outcome |
+|---|---|---|---|
+| `ope_` (approver 1 and 2) | `fpr.administer` (admit, restore, revoke) | `fpr_` global | ALLOW only with second distinct `ope_` approval |
+| `ope_` | `fpr.administer` (restrict, quarantine) | `fpr_` global | ALLOW single operator |
+| `sys_` threshold engine | `fpr.update` (restrict only) | `fpr_` global | ALLOW; other transitions DENY `FED.PEER_NOT_TRUSTED` |
+| `mod_` with grant | `fpr.moderate` (quarantine) | `case:cas_` | ALLOW only with matching `case_id`; restore DENY |
+| `fpr_` (the peer) | `fpr.read` | self | ALLOW own `trust_state` and `revision` |
+| any `acc_` | any | `fpr_` | DENY `SYS.NOT_FOUND` (CTR-ERR-001 R08) |
+| any actor | any | `trs_` content | DENY except `ope_` with case scope and dual control |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Grants for `mod_` or `sys_` carry `constraints.purpose` and `expires_at` ≤ 72 h after `not_before` (CTR-CAP-001 R06).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+Authorization check runs before validation of the body (CTR-ERR-001 R08 for unreadable resources).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Authorization does not change state. A denied command writes a `dec_` record only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-091-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Denials: `CAP.SELF_APPROVAL_FORBIDDEN` (forbidden), `CAP.GRANT_NOT_ACTIVE`, `FED.PEER_NOT_TRUSTED` for peer-to-peer checks.
+
+## Failure, idempotency, concurrency, offline
+Revocation of a grant takes effect at the next decision. Writes have zero decision-cache TTL (CTR-CAP-001 R09).
+
+## Privacy, retention, abuse
+`trs_` reads by `ope_` are privileged reads with `aud_` records; `reason_code` visible to case scope only.
+
+## Observability & budgets
+Metric `trust_authz_denied_total{capability,actor_kind}`; alert on any `sys_` denial spike.
+
+## Tests
+- `TEST-PS-091-05-01` unit: every matrix row yields its stated outcome.
+- `TEST-PS-091-05-02` negative: `sys_` attempts quarantine → denied and `dec_` written.
+- `TEST-PS-091-05-03` negative: same `ope_` approves own admission → `CAP.SELF_APPROVAL_FORBIDDEN`.
+- `TEST-PS-091-05-04` negative: `acc_` reads a peer → `SYS.NOT_FOUND`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command in PS-091-04 maps to exactly one capability row.
+2. No automated actor can change any state other than `trusted` → `restricted`.
+3. Dual control is enforced in code and in tests.
+
+## Assumptions & open decisions
+- ASSUMPTION: "admin" in PS-091-03 means `ope_` operator principal (F16 owns `ope_`).
+- ASSUMPTION: `fpr.moderate` is a new capability ID requiring F16 vocabulary approval (CTR-CAP-001 versioning: MINOR).
+- D10 (auth and portability), PROVISIONAL default: user-controlled keys; operator recovery never bypasses proof (unapproved).

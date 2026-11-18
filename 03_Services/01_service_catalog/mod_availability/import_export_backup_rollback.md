@@ -1,35 +1,51 @@
 # PS-028-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-028-10. **Owner:** [03_Services/01_service_catalog/mod_availability](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_availability. **Parent:** [mod_availability SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the import export backup rollback process for availability within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-028-10.R01 | Provider exports own windows as JSON (`svcavail.window` 1.0.0) and as ICS (VEVENT per occurrence, no customer data). Export ≤ 2 MB. | MVP |
+| PS-028-10.R02 | ICS import is supported (PS-028-02 R07); JSON import is not supported in MVP. | MVP |
+| PS-028-10.R03 | Backup restore preserves `revision`, `status`, `hold_expires_at`; on restore, any HELD window whose hold has expired is set to OPEN and an event is emitted. | MVP |
+| PS-028-10.R04 | Timezone database version is recorded per window's validation; upgrades do not rewrite stored UTC times. | MVP |
+| PS-028-10.R05 | Rollback of a release never edits BOOKED windows. | MVP |
 
-## Requirements to specify
-- [ ] PS-028-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-028-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-028-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export envelope: `{ "schema_id": "svcavail.window.export", "schema_version": "1.0.0", "srv_id", "windows": [...] }`. ICS export contains only UID (opaque, not window ID), DTSTART, DTEND, RRULE.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export is a query under `srv.read` (self). Import via `svcavail.import_ics`. Emits `svcavail.window.created` per imported window.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore follows R03 rules; no other state change.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Corrupt backup → `SYS.INTERNAL`, restore halted. ICS errors per PS-028-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: provider only. Restore: operator with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-028-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Restore idempotent by backup digest. Import all-or-nothing. Offline export is a local file; no sync.
+
+## Privacy, retention, abuse
+Export files are PRIVATE_PERSONAL; download link valid 15 min. ICS export keeps TZID on DTSTART (required for correct local time) and contains no customer data. Import rate limit 10 per day per provider.
+
+## Observability & budgets
+Restore ≤ 10 min for 1 million windows (ASSUMPTION). Metrics: `svcavail_exports_total{format}`, `svcavail_restore_total{result}`.
+
+## Tests
+- TEST-PS-028-10-01 (integration): export → restore round trip; identical UTC times and revisions.
+- TEST-PS-028-10-02 (integration): expired hold after restore becomes OPEN with event.
+- TEST-PS-028-10-03 (negative): ICS export contains no customer identifier.
+- TEST-PS-028-10-04 (regression): timezone database upgrade leaves stored UTC times unchanged.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round-trip test passes.
+2. ICS export audited for personal data: zero customer fields.
+3. Rollback runbook has no in-place BOOKED edits.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute download link expiry; 10 imports per day.
+- PROVISIONAL: D05 and D07 defaults (unapproved). See [DECISIONS.md](../../../DECISIONS.md).

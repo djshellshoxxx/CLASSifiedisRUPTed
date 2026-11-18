@@ -1,35 +1,68 @@
-# PS-066-05 — authorization capabilities
+# PS-066-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-066-05. **Owner:** [08_Communications/03_meetups/mod_safe](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_safe. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_safe (Platform Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01–R08), CTR-PRV-001 (R07), CTR-ERR-001 (R08). **Decisions:** D05, D10 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the authorization capabilities process for safe within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-066-05.R01 | Default deny. Only the two plan parties hold `meetup.*` rights on a plan. | MVP |
+| PS-066-05.R02 | A trusted-contact grant is scoped to one plan, one action (`meetup.read`), one purpose (`safety_status`), and expires at `window_end + 1 h`. | MVP |
+| PS-066-05.R03 | Trusted contact sees only `status` and `window_end` (rounded to 5 min). | MVP |
+| PS-066-05.R04 | Moderators see plan data only under a `case:` grant, and never see `trusted_contact_hash` or `checkin_code_hash`. | MVP |
+| PS-066-05.R05 | No operator (`ope_`) right to read plan content exists by default. Any grant requires dual control (CTR-CAP-001 R07). | MVP |
+| PS-066-05.R06 | Non-parties receive `SYS.NOT_FOUND`, identical to nonexistent plans. | MVP |
 
-## Requirements to specify
-- [ ] PS-066-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-066-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-066-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Grant record uses CTR-CAP-001 `grt_`. Constraints stored: `plan_id`, `action`, `purpose`, `fields`, `not_after`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Action (CTR-CAP-001 verb) | Actor |
+|---|---|---|
+| `meetup.propose` | `meetup.propose` | participant |
+| `meetup.confirm` | `meetup.accept` | other participant |
+| `meetup.cancel` | `meetup.withdraw` | either participant |
+| `meetup.check_in`, `meetup.check_out` | `meetup.execute` | participant |
+| `meetup.safe_exit` | `meetup.withdraw` | either participant |
+| `meetup.set_trusted_contact` | `meetup.update` | self only |
+| `meetup.get` | `meetup.read` | participant or grant holder |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Grant states: `active`, `revoked` (by the granting party at any time), `expired`. Revocation takes effect on the next decision (CTR-CAP-001 R09).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unauthorized action returns `SYS.FORBIDDEN` only when the actor is a party; otherwise `SYS.NOT_FOUND`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Field visibility:
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-066-05`; scenarios and fixtures to be detailed in Prompt 3.
+| Field | Counterparty | Trusted contact | Moderator (case) |
+|---|---|---|---|
+| status | yes | yes | yes |
+| window_end | yes | yes (rounded) | yes |
+| window_start, venue_ref | after `CONFIRMED` | no | yes |
+| trusted_contact_hash | no | no | no |
+| checkin_code_hash | no | no | no |
+
+## Failure, idempotency, concurrency, offline
+Grant checks run on each read; a revoked grant fails within one request.
+
+## Privacy, retention, abuse
+Grant creation and revocation emit `aud_` records (CTR-CAP-001 R08) containing IDs and purpose only.
+
+## Observability & budgets
+Counter of grant reads per plan; alert if one grant is read more than 100 times (scraping signal, ASSUMPTION).
+
+## Tests
+- TEST-PS-066-05-01 (unit): each row of the command table allows the listed actor and denies others.
+- TEST-PS-066-05-02 (integration): trusted contact cannot read `venue_ref` or `window_start`.
+- TEST-PS-066-05-03 (integration): revoked grant returns `SYS.FORBIDDEN` on the next read.
+- TEST-PS-066-05-04 (negative): non-party and nonexistent plan responses are identical.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix matches implementation (generated test).
+2. No role can read hashes of codes or contacts.
+3. Grants expire at the configured time (time-travel test).
+
+## Assumptions & open decisions
+- ASSUMPTION: one active trusted-contact grant per party per plan.
+- D05 (PROVISIONAL default, unapproved). D10 (PROVISIONAL, unapproved): key-based identity affects grant verification only when adopted.

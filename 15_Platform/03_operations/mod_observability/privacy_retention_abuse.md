@@ -1,35 +1,51 @@
-# PS-121-07 — privacy retention abuse
+# PS-121-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-121-07. **Owner:** [15_Platform/03_operations/mod_observability](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_observability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_observability (F15.S03.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for observability within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-121-07.R01 | Logs and telemetry carry pseudonymous IDs only (`actor_hash`); raw `acc_` IDs are not stored in logs (CTR-PRV-001 R09). | MVP |
+| PS-121-07.R02 | IP addresses stored only as truncated prefix (IPv4 /24, IPv6 /48). | MVP |
+| PS-121-07.R03 | Operational logs RET-OPS 30 days; aggregated metrics without identifiers 400 days; alert records RET-AUD 12 months. | MVP |
+| PS-121-07.R04 | Redaction tests run on application logs, reverse-proxy logs, analytics, crash reports and support exports (CTR-PRV-001 BT-08). | MVP |
+| PS-121-07.R05 | Telemetry is not sent to third-party vendors unless the vendor is listed in the disclosure matrix as an approved processor (OPEN, F10). | MVP |
+| PS-121-07.R06 | Support exports contain aggregates and redacted logs only. | MVP |
 
-## Requirements to specify
-- [ ] PS-121-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-121-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-121-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention classes from CTR-PRV-001: RET-OPS, RET-AUD. Aggregated metrics: class PSEUDONYMOUS-free aggregate (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retention sweep runs as a sys job; it emits no events for expired log records.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Records expire; partition seal then drop (PS-121-06 R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`PRV.PRECISE_LOCATION_FORBIDDEN` if a precise-location pattern reaches ingest (rejected and alerted).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-121-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-121-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Not applicable to clients.
+
+## Privacy, retention, abuse
+Abuse: log injection (control characters stripped at ingest); enumeration through error logs (codes only). Legal hold applies by case to telemetry records only when a case ID is present (CTR-PRV-001 R07).
+
+## Observability & budgets
+Alert on any redaction failure in production (zero tolerance).
+
+## Tests
+- TEST-PS-121-07-01 (privacy zero tolerance): fixtures with coordinates, addresses and emails produce no stored occurrence across all sinks.
+- TEST-PS-121-07-02 (retention): log record removed at 30 days in staging clock test.
+- TEST-PS-121-07-03 (injection): newline and control-character payloads stored escaped.
+- TEST-PS-121-07-04 (export): support export fixture contains no `actor_hash` values.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero identifiers in sinks across the fixture corpus (TEST-01).
+2. TEST-PS-121-07-01 through -04 pass.
+
+## Assumptions & open decisions
+- PROVISIONAL (D07 default).
+- OPEN (F10): approved processor list for telemetry.

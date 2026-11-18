@@ -1,35 +1,51 @@
 # PS-028-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-028-07. **Owner:** [03_Services/01_service_catalog/mod_availability](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_availability. **Parent:** [mod_availability SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for availability within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-028-07.R01 | Window schedules are PRIVATE_PERSONAL: they reveal routine and possibly home presence. Never included in public search, federation or analytics export. | MVP |
+| PS-028-07.R02 | `service_region` is LOCATION_COARSE (D05 default). No precise location is stored (PS-028-02 R06). | MVP |
+| PS-028-07.R03 | Retention: OPEN, BLOCKED and RETIRED windows with end date older than 30 days are deleted (ASSUMPTION). BOOKED windows are retained with their booking under the booking's retention. | MVP |
+| PS-028-07.R04 | Per customer per `srv_`: ≤ 3 holds per day (ASSUMPTION); excess → `SYS.RATE_LIMITED`. | MVP |
+| PS-028-07.R05 | Per provider: ≤ 500 window writes per hour; excess → `SYS.RATE_LIMITED`. | MVP |
 
-## Requirements to specify
-- [ ] PS-028-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-028-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-028-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention fields: `retain_until` (computed), `legal_hold` (set by F10 only). Deletion removes schedule fields and keeps an aggregate count per day.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Deletion runs as `sys` and emits `svcavail.window.purged` with count only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+ACTIVE → EXPIRED_HISTORY (end + 30 days) → PURGED. BOOKED windows follow booking retention.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Export or deletion under legal hold → `SYS.CONFLICT` (reason `legal_hold`).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Provider may export and delete own windows (`srv.update`). Purge job is `sys`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-028-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge idempotent per window. Hold abuse: holds without quote activity expire at TTL (PS-028-03 R02) and do not count against the daily cap after release.
+
+## Privacy, retention, abuse
+Abuse patterns: calendar blocking by fake holds; scraping of schedules to infer routines; enumeration of provider windows. Controls: R04, R05, aggregate-only anonymous search (PS-028-05 R03), enumeration alert (PS-028-08). Pseudonyms do not hide the provider's routine from a booked customer.
+
+## Observability & budgets
+Metrics: `svcavail_rate_limited_total{kind}`, `svcavail_windows_purged_total`. No schedule content in logs.
+
+## Tests
+- TEST-PS-028-07-01 (lint): schedule fields carry PRIVATE_PERSONAL; no coordinate field.
+- TEST-PS-028-07-02 (abuse): 4th hold in one day rejected with `SYS.RATE_LIMITED`.
+- TEST-PS-028-07-03 (integration): purge after 30 days leaves only daily counts.
+- TEST-PS-028-07-04 (negative): scraping test of anonymous search finds no provider IDs or exact times.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retention job matches R03 in scheduler configuration.
+2. Public response scan finds zero schedule fields.
+3. Rate limits enforced in staging load test.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day history; 3 holds per customer per service per day; 500 writes per provider per hour.
+- PROVISIONAL: D05 coarse-region default; D07 retention default (unapproved). See [DECISIONS.md](../../../DECISIONS.md).

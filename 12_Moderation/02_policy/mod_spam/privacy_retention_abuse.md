@@ -1,35 +1,64 @@
 # PS-097-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-097-07. **Owner:** [12_Moderation/02_policy/mod_spam](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_spam. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_spam. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R03, R09, R10), CTR-FED-001 (R03, R08), CTR-CAP-001 (R04).
 
-## Purpose and scope
-Define the privacy retention abuse process for spam within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-097-07.R01 | Message content is never read by this module; only metadata features are computed (PS-097-01 R04). | MVP |
+| PS-097-07.R02 | Text is processed in memory and discarded after feature extraction; no text is persisted by this module. | MVP |
+| PS-097-07.R03 | Feature hashes use a rotating key (90-day rotation, ASSUMPTION) so hashes cannot be joined across rotations. | MVP |
+| PS-097-07.R04 | Verdicts are not exported to federation peers. Federated items' verdicts stay local. | MVP |
+| PS-097-07.R05 | Sender-visible messages state only "Your messages are being sent more slowly" when throttled (no classifier detail). | MVP |
 
-## Requirements to specify
-- [ ] PS-097-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-097-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-097-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention (D07, PROVISIONAL):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Record | Retention | After expiry |
+|---|---|---|
+| `spm_verdict` (allow, released) | 90 days | hard delete |
+| `spm_verdict` (rejected) | 12 months (supports appeals) | hard delete after appeal window closes |
+| `feature_hash` | 90 days | hard delete |
+| Evaluation queue | until processed or 7 days | hard delete |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Legal holds apply per `cas_` (CTR-PRV-001 R07).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+No export command. Owner access is limited to status (PS-097-05).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Retention deletes rows but never changes an unresolved quarantine.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-097-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+No privacy-sensitive values in errors.
+
+## Authorization
+Verdict deletion is a system job only.
+
+## Failure, idempotency, concurrency, offline
+Retention job idempotent by `spm_id` cursor.
+
+## Privacy, retention, abuse
+- Abuse 1 (classifier probing): message responses are binary (throttled or not); event payloads omit confidence for `msg` (PS-097-04); per-sender probe rate limit through `mod_rate`.
+- Abuse 2 (evasion of rules): reason codes are generic in author notices; thresholds are not published.
+- Abuse 3 (discriminatory filtering): per-language and per-locale false-positive rates tracked, reviewed by F14 (accessibility and internationalization).
+- Abuse 4 (surveillance through features): no feature derived from precise location or contact lists.
+
+## Observability & budgets
+Logs contain `spm_id`, `subject_type`, `reason_code` only.
+
+## Tests
+- `TEST-PS-097-07-01` privacy: no text persisted in DB, cache or logs after evaluation (memory-only test with canary strings).
+- `TEST-PS-097-07-02` privacy: message throttle notice contains no classifier detail.
+- `TEST-PS-097-07-03` retention: allow verdict removed at 90 days in simulated clock.
+- `TEST-PS-097-07-04` federation: verdict export attempt refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Canary text never appears in storage or logs.
+2. Message verdicts contain metadata features only.
+3. Per-language false positive rate reported monthly with no locale above threshold (threshold set by F14).
+
+## Assumptions & open decisions
+- ASSUMPTION: 90-day rotation and 12-month rejected retention are placeholders pending F10 review.
+- D07 (retention), PROVISIONAL default: minimal retention with legal-hold exceptions (unapproved).
+- D01 (federated protocol), PROVISIONAL default: verdicts stay local (unapproved).

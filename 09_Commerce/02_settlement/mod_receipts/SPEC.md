@@ -1,44 +1,42 @@
 # F09.S02.M01 — receipts
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F09.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead (F09). **Parent:** [F09.S02 settlement](../SPEC.md). **Canonical contracts:** CTR-COM-001 (evidence, claim_hash, attestation), CTR-ID-001 (`clm`, `evd`, `trx`, `qte`), CTR-PRV-001 (R03, R06, RET-EVD), CTR-SCH-001, CTR-EVT-001. **Decisions:** D06, D07 (PROVISIONAL defaults, unapproved).
 
 ## Purpose and business behavior
-Provide receipts as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Signed statements about payment and settlement claims. A receipt is the claim body, its evidence digests and the signatures of the claimant and, after attestation, the counterparty. Encrypted evidence items hold screenshots, documents or text notes; their metadata is stripped before hashing. A receipt records what each party asserted. It does not prove that a payment or handover happened.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a claimant, I attach evidence to a claim and the counterparty sees a digest and an encrypted copy they can open.
+- As a counterparty, I attest a claim only after checking the amount and method it states.
+- As a participant, I export my receipts with their signatures so I can check them later.
 
 ## Scope
-- Required process spec: `receipts_domain_model.md` (not yet authored)
-- Required process spec: `receipts_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `receipts_validation_and_authorization.md` (not yet authored)
-- Required process spec: `receipts_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `receipts_interfaces_and_events.md` (not yet authored)
-- Required process spec: `receipts_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `receipts_acceptance_and_property_tests.md` (not yet authored)
+- In scope: receipt assembly, signatures over `claim_hash`, evidence items (`evd_`), metadata stripping, receipt export.
+- Out of scope: claim state machine (CTR-COM-001), external verification (mod_crypto), reconciliation (mod_reconciliation), dispute resolution (mod_disputes), messaging attachments (F08 mod_attachments).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `evd.upload`, `evd.redact`, `receipt.export`; query `receipt.get`. Events `evd.uploaded`, `evd.redacted`, `receipt.exported`. Claim events from CTR-COM-001.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: `clm_` claims and states (CTR-COM-001), `trx_` (F09), `cur_` currency registry (09 mod_currency, PENDING prefix), account keys (F07). Downstream: disputes (mod_disputes), moderation cases (F12), owner export.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns receipt assembly rules and `evd_` evidence items. Canonical owner of the evidence record class is `evd_` (F09, CTR-ID-001). Claim records belong to CTR-COM-001.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Forged or edited evidence; EXIF and GPS leakage in photos; personal data placed in free text; digest mismatch between implementations; evidence retained beyond RET-EVD; receipts mistaken for proof of payment.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Golden vectors for JCS and hashing pass in two implementations; EXIF stripping tested on the reference image set; F10 approval of evidence retention; F16 review of signing (not audited).
 
 ## Required process specification inventory
-- [ ] `receipts_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `receipts_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `receipts_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `receipts_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `receipts_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `receipts_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `receipts_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-071-01
+- [x] `validation_rules.md` — PS-071-02
+- [x] `workflow_state_machine.md` — PS-071-03
+- [x] `commands_queries_events.md` — PS-071-04
+- [x] `authorization_capabilities.md` — PS-071-05
+- [x] `failure_recovery_idempotency.md` — PS-071-06
+- [x] `privacy_retention_abuse.md` — PS-071-07
+- [x] `observability_performance.md` — PS-071-08
+- [x] `contract_and_acceptance_tests.md` — PS-071-09
+- [x] `import_export_backup_rollback.md` — PS-071-10

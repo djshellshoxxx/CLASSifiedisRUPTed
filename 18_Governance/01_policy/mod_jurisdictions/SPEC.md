@@ -1,44 +1,47 @@
-# F18.S01.M01 — jurisdictions
+# F18.S01.M01 — jurisdictions (legal-rule register by region)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F18.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Governance Lead (F18). **Parent:** [F18.S01 policy](../SPEC.md).
 
 ## Purpose and business behavior
-Provide jurisdictions as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Hold the versioned register of jurisdiction rules: for each coarse region, which goods categories, listing types and service types are permitted, restricted, subject to disclosure, or prohibited, and which rule text version applies. Consumers ([mod_prohibited](../mod_prohibited/SPEC.md), listing validation in F01) read the register to apply the rule for a listing's region. This module records what a rule says and who approved it; it is not legal advice and does not decide any individual case.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a policy editor, I publish a rule for a region with its source reference and approval.
+- As a participant, I see which disclosures apply to my listing's region before I publish.
+- As an auditor, I can see which rule version applied to a past decision.
 
 ## Scope
-- Required process spec: `jurisdictions_domain_model.md` (not yet authored)
-- Required process spec: `jurisdictions_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `jurisdictions_validation_and_authorization.md` (not yet authored)
-- Required process spec: `jurisdictions_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `jurisdictions_interfaces_and_events.md` (not yet authored)
-- Required process spec: `jurisdictions_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `jurisdictions_acceptance_and_property_tests.md` (not yet authored)
+- Process specs (SPEC-DRAFT-COMPLETE, pending approval): domain_schema, validation_rules, workflow_state_machine, commands_queries_events, authorization_capabilities, failure_recovery_idempotency, privacy_retention_abuse, observability_performance, contract_and_acceptance_tests, import_export_backup_rollback.
+- Process IDs: PS-145-01 to PS-145-10.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `ProposeJurisdictionRule`, `PublishJurisdictionRule`, `WithdrawJurisdictionRule`. Queries `GetJurisdictionRules`, `ListJurisdictionRuleVersions`. Events `jurisdiction_rule.proposed`, `jurisdiction_rule.published`, `jurisdiction_rule.withdrawn`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: [mod_goods](../mod_goods/SPEC.md) category keys; [mod_governance](../../02_community/mod_governance/SPEC.md) approvals; CTR-PRV-001 (region precision class LOCATION_COARSE); CTR-CAP-001. Downstream: mod_prohibited, F01 listing validation, F12 moderation references.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns rule records, region codes and rule-version history. Does not own user location (F10 and D05 govern it), listings or individual enforcement decisions.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Wrong or outdated legal mapping applied to listings; rule text presented as legal advice; region inference that exposes a user's location; withdrawn rules still applied to old decisions; approval without a linked source reference.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Register structure approved by Governance Lead and Privacy Lead; every published rule has a source reference and approver; rule-version lookup reproducible for past decisions in a later phase.
 
 ## Required process specification inventory
-- [ ] `jurisdictions_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `jurisdictions_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `jurisdictions_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `jurisdictions_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `jurisdictions_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `jurisdictions_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `jurisdictions_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-145-01 drafted
+- [x] `validation_rules.md` — PS-145-02 drafted
+- [x] `workflow_state_machine.md` — PS-145-03 drafted
+- [x] `commands_queries_events.md` — PS-145-04 drafted
+- [x] `authorization_capabilities.md` — PS-145-05 drafted
+- [x] `failure_recovery_idempotency.md` — PS-145-06 drafted
+- [x] `privacy_retention_abuse.md` — PS-145-07 drafted
+- [x] `observability_performance.md` — PS-145-08 drafted
+- [x] `contract_and_acceptance_tests.md` — PS-145-09 drafted
+- [x] `import_export_backup_rollback.md` — PS-145-10 drafted
+
+## Assumptions and open decisions
+- ASSUMPTION: rule content is supplied by qualified reviewers outside this repository; this module stores their output.
+- D05 (geoprivacy), default "coarse public regions and user-initiated precision disclosure": PROVISIONAL (D05 default, unapproved).
+- D07 (retention), default "minimal per-category defaults with legal-hold exceptions": PROVISIONAL (D07 default, unapproved). See [DECISIONS](../../../DECISIONS.md).

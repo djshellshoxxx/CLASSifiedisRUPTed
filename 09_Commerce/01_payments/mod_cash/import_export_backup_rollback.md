@@ -1,35 +1,51 @@
-# PS-067-10 — import export backup rollback
+# PS-067-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-067-10. **Owner:** [09_Commerce/01_payments/mod_cash](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_cash. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_cash (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R05–R08), CTR-PRV-001 (R06, R07), CTR-FED-001 (R03). **Decisions:** D06, D07 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the import export backup rollback process for cash within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-067-10.R01 | Cash claims are never imported from federation or third-party systems. | MVP |
+| PS-067-10.R02 | Owner export includes the owner's cash claims as signed records (original bytes, CTR-SCH-001 R08) plus a lossless view. | MVP |
+| PS-067-10.R03 | Configuration export is operator-only and includes `cashcfg` records and revisions. | MVP |
+| PS-067-10.R04 | Rollback that disables the method leaves claims and their states unchanged. | MVP |
+| PS-067-10.R05 | Backups are encrypted; restore replays redactions and legal-hold scopes (CTR-PRV-001 R06, R07). | MVP |
 
-## Requirements to specify
-- [ ] PS-067-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-067-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-067-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export manifest: `schema_version`, `claim_count`, `sha256`, `generated_at`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`clm.exported` event with count only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Export: `queued` → `generated` → `expired` (24 h).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.RATE_LIMITED` for export frequency; no error for empty export.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner exports own claims; operators export configuration only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-067-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent by export ID. Restore reconciles with redaction log.
+
+## Privacy, retention, abuse
+Export files are FINANCIAL_EVIDENCE; deleted 24 h after generation; not sent by email.
+
+## Observability & budgets
+Export p95 ≤ 10 s for up to 500 claims (ASSUMPTION).
+
+## Tests
+- TEST-PS-067-10-01 (contract): export preserves signed bytes and `claim_hash`.
+- TEST-PS-067-10-02 (integration): restore reapplies redaction at 12 months.
+- TEST-PS-067-10-03 (integration): rollback keeps attested claims attested.
+- TEST-PS-067-10-04 (unit): export file deleted at 24 h.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Exported claims verify against stored `claim_hash`.
+2. Rollback test shows zero state changes.
+3. Restore never reintroduces redacted fields.
+
+## Assumptions & open decisions
+- ASSUMPTION: export limit 1 per 24 h.
+- D06, D07 (PROVISIONAL, unapproved).

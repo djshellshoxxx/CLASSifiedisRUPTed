@@ -1,35 +1,72 @@
 # PS-056-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-056-05. **Owner:** [07_Identity/02_profiles/mod_profiles](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_profiles. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_profiles. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01, R02, R04 scopes, R05, R10 field visibility, R11 server-side), CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for profiles within 02_profiles. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-056-05.R01 | Profile actions are evaluated on the owning `acc_` of the `prf_`; `prf_` is never a principal. | MVP |
+| PS-056-05.R02 | Private block readable only by owner or by a counterparty holding an unexpired disclosure grant for that field. | MVP |
+| PS-056-05.R03 | Counterparty scope (`participant`) exists only while a proposal, transaction, meetup or dispute links both pseudonyms; the link is derived from owning modules. | MVP |
+| PS-056-05.R04 | Moderators (`mod_`) see public fields and `contact_methods` presence only on a case scope; never values (CTR-CAP-001 R04). | MVP |
+| PS-056-05.R05 | Disclosure grants are created only by the owner and require `profile.disclose` on `self`. | MVP |
+| PS-056-05.R06 | Default deny; unlisted combination → `SYS.FORBIDDEN`. | MVP |
 
-## Requirements to specify
-- [ ] PS-056-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-056-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-056-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field visibility matrix (CTR-CAP-001 R10):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | public | participant (granted) | owner | case (mod_) | never |
+|---|---|---|---|---|---|
+| `bio`, `languages`, `region_cell` | Y | Y | Y | Y | |
+| `contact_methods` values | | granted only | Y | presence only | |
+| `visibility`, `revision` | | | Y | | |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Action | Actor | Scope | Result |
+|---|---|---|---|
+| `profile.read` | any | public | public fields |
+| `profile.read` | counterparty | participant | public + granted fields |
+| `profile.read` | owner | self | all fields |
+| `profile.update` | owner | self | allow |
+| `profile.set_visibility` | owner | self | allow |
+| `profile.disclose` | owner | self | allow with counterparty in `participant` scope |
+| `profile.revoke_disclosure` | owner | self | allow |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Denied writes do not change state. Decisions recorded as `dec_` with reason code (CTR-CAP-001 R13).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `SYS.NOT_FOUND` | false | `err.sys.not_found` |
+| `SYS.FORBIDDEN` | false | `err.sys.forbidden` |
+| `PROF.DISCLOSURE_NOT_ALLOWED` | false | `err.prof.disclosure_not_allowed` |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-056-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Relation rules derived at decision time. Revocation effective at next decision; zero cache for writes and private reads (CTR-CAP-001 R09).
+
+## Failure, idempotency, concurrency, offline
+Authorization is re-evaluated on retry. Offline-cached private fields are only shown while the local session is authenticated (CTR-PRV-001).
+
+## Privacy, retention, abuse
+Moderator case reads emit `aud_` with `prf_id` and purpose (CTR-CAP-001 R08). Disclosure grants visible to owner only.
+
+## Observability & budgets
+`prof_authz_deny_total{action}`; alert on repeated `profile.disclose` denials from one account.
+
+## Tests
+- TEST-PS-056-05-01 (unit): matrix cell per principal × action × field.
+- TEST-PS-056-05-02 (integration): counterparty sees granted contact value only during grant window.
+- TEST-PS-056-05-03 (integration): revocation takes effect at next read.
+- TEST-PS-056-05-04 (negative): moderator without case grant gets `SYS.NOT_FOUND`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix implemented; default deny verified.
+2. Contact values never visible to moderators.
+3. Revocation effective at next decision.
+4. Counterparty scope ends when linked relation ends.
+
+## Assumptions & open decisions
+- ASSUMPTION: moderator sees `contact_methods` presence only.
+- Consent record canonical owner ID: PENDING (duplicate slug `mod_consent`, see mod_consent owner decision). Disclosure grants reference it by full ID once assigned.
+- PROVISIONAL (D10 default, unapproved): no change to matrix from user-controlled keys in MVP.

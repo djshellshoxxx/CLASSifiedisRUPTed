@@ -1,44 +1,44 @@
 # F16.S02.M02 — management
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F16.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Security Lead (F16). **Parent:** F16.S02.
 
 ## Purpose and business behavior
-Provide management as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Governs cryptographic policy metadata for ClassRup: which signature and wrapping suites are allowed, minimum strength, per-key-class rotation intervals, activation windows and deprecation/retirement of suites. Policy changes are dual-approved, scheduled, versioned and public so that peers and clients can verify which rules applied at any time. This module does not hold key material (F16.S02.M01 `mod_key`) and does not sign anything (F16.S02.M03 `mod_signatures`).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a Security Lead, I propose a suite deprecation and a second `ope` approves it, so no single operator can weaken signing.
+- As a client, I can read the active policy for a key class and know which suites to accept.
+- As a federated peer operator, I can import a signed policy bundle and see it queued for local approval, never auto-activated.
 
 ## Scope
-- Required process spec: `management_domain_model.md` (not yet authored)
-- Required process spec: `management_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `management_validation_and_authorization.md` (not yet authored)
-- Required process spec: `management_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `management_interfaces_and_events.md` (not yet authored)
-- Required process spec: `management_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `management_acceptance_and_property_tests.md` (not yet authored)
+- Policy records and state machine (`crypto_policy`).
+- Suite registry metadata (identifiers, status, dates; no implementations).
+- Rotation schedule per key class and overdue alerts.
+- Excludes: key generation, storage, wrapping (`mod_key`); signing and verification (`mod_signatures`).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+`crypto_policy.propose | approve | cancel | deprecate | get | list_active` and events `crypto_policy.*`. Errors `MGMT.*`. Detail in PS-129-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: none (DEPENDENCY_MATRIX). Downstream: F09.S01.M03, F15.S02.M03 (`mod_storage`), F15.S03.M02 (`mod_observability`), F16.S01.M02, F16.S02.M01 (`mod_key`, which reads rotation intervals). Contracts: CTR-SCH-001, CTR-CAP-001. Integration tests use contract fixtures; policy reads are cached up to 24 h by clients.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `crypto_policy` records and suite registry metadata. Does not own key records (`key_` prefix, F16 via `mod_key`), signatures, or approver identities (F07). Export and rollback are forward-only.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Downgrade to weak or deprecated suites by a single or compromised operator; stale clients accepting retired suites; activation lost or doubled across a scheduler crash; silent rotation failure leaving keys past their interval; policy bundles from malicious peers; approvals by colluding operators. Mitigations: dual control, forward-only versions, 24 h stale-cache limit, overdue alerts, signed exports. No platform custody of money. Pseudonyms do not guarantee anonymity of approvers.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs approved; PROVISIONAL decisions D07 and D10 resolved; `pol` prefix registered in CTR-ID-001; privacy and security review passed; traceability to TEST-PS-129-* complete.
 
 ## Required process specification inventory
-- [ ] `management_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `management_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `management_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `management_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `management_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `management_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `management_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-129-01 (SPEC-DRAFT-COMPLETE)
+- [x] [validation_rules.md](validation_rules.md) — PS-129-02 (SPEC-DRAFT-COMPLETE)
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-129-03 (SPEC-DRAFT-COMPLETE)
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-129-04 (SPEC-DRAFT-COMPLETE)
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-129-05 (SPEC-DRAFT-COMPLETE)
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-129-06 (SPEC-DRAFT-COMPLETE)
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-129-07 (SPEC-DRAFT-COMPLETE)
+- [x] [observability_performance.md](observability_performance.md) — PS-129-08 (SPEC-DRAFT-COMPLETE)
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-129-09 (SPEC-DRAFT-COMPLETE)
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-129-10 (SPEC-DRAFT-COMPLETE)

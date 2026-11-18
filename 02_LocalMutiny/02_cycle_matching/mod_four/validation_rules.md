@@ -1,35 +1,53 @@
 # PS-017-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-017-02. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_four](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_four. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_four. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001, CTR-COM-001 (value fields only). Module code `CYCFOUR` (PENDING CTR-ERR-001).
 
-## Purpose and scope
-Define the validation rules process for four within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-017-02.R01 | Input must reference a `ccd_` verdict of FEASIBLE with length 4; any other verdict is refused. | MVP |
+| PS-017-02.R02 | Four participant refs and four `lst_` refs are pairwise distinct. | MVP |
+| PS-017-02.R03 | Every slot's `wants_ref` is satisfied by the next slot's `offer_ref` in the verdict. | MVP |
+| PS-017-02.R04 | Proposal is refused if the feasibility verdict is older than its snapshot window (15 min, PS-016-03). | MVP |
+| PS-017-02.R05 | Value gap is within the verdict's tolerance; otherwise refused with CYCFOUR.VALUE_GAP (compensation is out of scope here). | MVP |
 
-## Requirements to specify
-- [ ] PS-017-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-017-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-017-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Parameters: `length=4` fixed (not configurable); window 15 min (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+| Code | Category (HTTP) | Retryable | Trigger | details[].rule |
+|---|---|---|---|---|
+| CYCFOUR.LENGTH_MISMATCH | validation (400) | false | candidate length ≠ 4 | length |
+| CYCFOUR.NOT_FEASIBLE | unprocessable_state (422) | false | verdict not FEASIBLE | verdict |
+| CYCFOUR.DUPLICATE_PARTICIPANT | validation (400) | false | repeated participant | distinct_participants |
+| CYCFOUR.DUPLICATE_LISTING | validation (400) | false | repeated lst_ | distinct_listings |
+| CYCFOUR.STALE_VERDICT | precondition_failed (412) | true | verdict outside window | verdict_age |
+| CYCFOUR.VALUE_GAP | unprocessable_state (422) | false | gap above tolerance | value_gap |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Messages: `err.cycfour.<code>` keys; no values echoed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Proposer must be a sys_ matcher or the proposal flow of F02.S01; participants never submit raw cycles.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Validation is deterministic for the same verdict.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-017-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Errors carry no participant refs.
+
+## Observability & budgets
+Rejection counters per code.
+
+## Tests
+- TEST-PS-017-02-01 (unit): one fixture per code.
+- TEST-PS-017-02-02 (negative): 3- and 5-slot inputs return LENGTH_MISMATCH.
+- TEST-PS-017-02-03 (boundary): verdict at 15 min passes, at 15 min + 1 s is refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each code produced only by its trigger.
+2. No proposal is created from a non-FEASIBLE verdict in 100% of runs.
+3. Repeated participants or listings never reach storage.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15 min verdict window.
+- PROVISIONAL (D03 default, unapproved): integer minor-unit tolerance.

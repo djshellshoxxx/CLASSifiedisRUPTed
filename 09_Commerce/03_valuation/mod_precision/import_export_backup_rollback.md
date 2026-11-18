@@ -1,35 +1,47 @@
-# PS-074-10 — import export backup rollback
+# PS-074-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-074-10. **Owner:** [09_Commerce/03_valuation/mod_precision](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_precision. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_precision (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R05–R08), CTR-COM-001 (R08 quote_hash). **Decisions:** D03 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the import export backup rollback process for precision within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-074-10.R01 | Rule-set releases are published with version, vector-suite digest and library version pin. | MVP |
+| PS-074-10.R02 | Rollback to a previous rule-set version is allowed only for replay, not for new quotes. | MVP |
+| PS-074-10.R03 | Stored results are never recomputed under a different rule set without a new version record. | MVP |
+| PS-074-10.R04 | No data import or export: library holds no data. | MVP |
 
-## Requirements to specify
-- [ ] PS-074-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-074-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-074-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Release record: `rules_version`, `vector_sha256`, `library_version`, `released_at`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Release states: `draft`, `published`, `replay_only`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Attempt to create a new quote with `replay_only` version: `PREC.ROUNDING_UNSUPPORTED` or `SYS.PRECONDITION_FAILED` (policy: `SYS.PRECONDITION_FAILED`).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Release requires two approvers (PS-074-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-074-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Release is idempotent by version.
+
+## Privacy, retention, abuse
+Not applicable.
+
+## Observability & budgets
+Not applicable.
+
+## Tests
+- TEST-PS-074-10-01 (integration): replay of stored results under pinned version reproduces outputs.
+- TEST-PS-074-10-02 (negative): new quote with replay-only version refused.
+- TEST-PS-074-10-03 (unit): release without two approvers refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Replay determinism verified across releases.
+2. Replay-only versions cannot mint quotes.
+
+## Assumptions & open decisions
+- D03 (PROVISIONAL default, unapproved).

@@ -1,61 +1,61 @@
 # Process inventory and integration checklist
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
+- [x] [domain_schema.md](domain_schema.md) — one profile per `prf_`, public vs private block, `region_cell` on K_MIN grid
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (CTR-ID-001, CTR-PRV-001, CTR-SCH-001)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [validation_rules.md](validation_rules.md) — bio and language rules, contact-pattern rejection, region K_MIN check
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (F14 locale list, region registry)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — editable/frozen/purged, disclosure grant transitions
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (`pseudonym.retired`)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [commands_queries_events.md](commands_queries_events.md) — four commands, three queries, six `profile.*` events
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (CTR-EVT-001, CTR-ERR-001)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — field visibility matrix, counterparty scope, moderator presence-only
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (CTR-CAP-001 R10)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — grant vs revocation race, offline patches, device value removal on freeze
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (CTR-EVT-001 R02, R03)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — private block never leaves owner or granted view, 30-day purge, 30-day grant maximum
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (CTR-PRV-001)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [observability_performance.md](observability_performance.md) — no profile values in labels; read and write budgets
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (CTR-ERR-001 diagnostics)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — K_MIN boundary fixtures, contact fixtures, grant-window fixtures
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (CTR-SCH-001)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — owner export, grant expiry on restore, purge preserved on restore
+- [x] Expand requirements, state and error contracts for this process
+- [x] Map upstream producers, downstream consumers and canonical contracts (CTR-PRV-001 R11)
+- [x] Review privacy, fraud, moderation, accessibility and offline behavior
+- [x] Define test fixtures and measurable acceptance conditions
 
 ## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
+- [ ] Resolve cross-module ownership and dependencies (consent owner ID PENDING; region grid owner in 06_Discovery).
+- [ ] Validate typed errors, capabilities, events and schema versioning (CTR-SCH-001 registration pending).
+- [ ] Cover rollback, backup/restore, import/export and retention (specified; drill pending).
+- [ ] Record unresolved choices in DECISIONS.md (D05, D07, D08, D10 open).
 - [ ] Complete Prompt 3 specification-quality review before implementation.

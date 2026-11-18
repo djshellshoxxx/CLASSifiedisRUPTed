@@ -1,35 +1,53 @@
 # PS-092-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-092-06. **Owner:** [12_Moderation/01_reporting/mod_appeals](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_appeals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_appeals. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03, R08), CTR-ERR-001, CTR-CAP-001 (R09).
 
-## Purpose and scope
-Define the failure recovery idempotency process for appeals within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-092-06.R01 | Submit is idempotent on (appellant, `appeal.submit`, key). Same digest → original `apl_`; different digest → `EVT.IDEMPOTENCY_KEY_REUSED`. | MVP |
+| PS-092-06.R02 | Reversal to `mod_enforcement` is exactly-once in effect: consumer dedupes on `apl_id` + `decision_revision`. | MVP |
+| PS-092-06.R03 | `decided` persists even if the enforcement service is unavailable; the outbox retries with backoff 1 s → 10 min cap (ASSUMPTION). | MVP |
+| PS-092-06.R04 | Two reviewers deciding the same `apl_` → one wins by `expected_revision`; the other gets `EVT.REVISION_CONFLICT`. | MVP |
+| PS-092-06.R05 | Backlog job lists `decided` appeals without `implemented` after 24 h; operator resolves, no automatic reversal. | MVP |
 
-## Requirements to specify
-- [ ] PS-092-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-092-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-092-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency rows as in PS-091-06 (`actor_ref`, `command_type`, key, digest, response, 7-day retention). Outbox row: `event_id`, `apl_id`, `revision`, `payload_digest`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each decide command is one transaction: check revision, insert `apl_event`, update `apl_appeal`, insert outbox row.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+No state is visible without its event row. Rollback of a partial transaction leaves the prior state intact.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Retry-safe: `EVT.REVISION_CONFLICT` no (re-read first); `SYS.UNAVAILABLE` yes (shared code, backoff). Validation codes are non-retryable.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Authorization is re-evaluated on every retry (a revoked reviewer grant denies the retry).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-092-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Timeouts: server 2 s; clients retry only with the same key, max 5 attempts, jittered backoff.
+- Offline: the PWA may queue an appeal draft locally under D08 (pending until server acknowledgement). Submission is not final until `appeal.received`. Drafts with body text stay on-device and are not synced until the user submits.
+- Partial failure after `decided` but before outbox insert is impossible (same transaction).
+
+## Privacy, retention, abuse
+Idempotency rows store digests, never body text.
+
+## Observability & budgets
+Metric `appeals_backlog_age_seconds` (oldest `decided` without `implemented`); alert at 24 h.
+
+## Tests
+- `TEST-PS-092-06-01` integration: 20 parallel `appeal.decide` → one winner per revision.
+- `TEST-PS-092-06-02` integration: enforcement service offline for 1 h → decision persists, reversal applied once on recovery.
+- `TEST-PS-092-06-03` integration: duplicate `appeal.decided` delivery → single enforcement reversal.
+- `TEST-PS-092-06-04` offline: draft survives app restart; not transmitted before submit.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero double reversals in the fault-injection suite.
+2. No `decided` appeal lost across restarts.
+3. Backlog alert verified in drill.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h backlog threshold and 14-day SLA are defaults for F12 review.
+- D08 (PWA offline writes), PROVISIONAL default: local pending queue until authenticated relay acknowledgement (unapproved).

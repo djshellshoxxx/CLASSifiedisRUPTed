@@ -1,35 +1,55 @@
 # PS-106-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-106-03. **Owner:** [13_Notifications/02_preferences/mod_in](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_in. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_in. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for in within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-106-03.R01 | Inbox item states: `unread`, `read`, `archived`, `pruned`. `pruned` is terminal. | MVP |
+| PS-106-03.R02 | Mark-read is monotonic: `read` never returns to `unread`. | MVP |
+| PS-106-03.R03 | Items older than `retention_days` at prune time move to `pruned`. | MVP |
+| PS-106-03.R04 | Items beyond 1000 per account are pruned oldest-first (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-106-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-106-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-106-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Transitions read `inbox_state`, `created_at` and `inp_.retention_days`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | `ntf_` projected to inbox | category enabled in preference | unread | emit `notification.inbox_recorded` (no content) |
+| (none) | projected, category disabled | none | not projected | none |
+| unread | `inbox.mark_read` | owner | read | `read_at` set; emit `notification.marked_read` |
+| unread or read | `inbox.archive` | owner | archived | emit `notification.archived` |
+| read | `inbox.mark_unread` (not in MVP) | Future | n/a | n/a |
+| any non-pruned | prune job: age > retention_days or cap exceeded | none | pruned | emit `notification.inbox_pruned`; delete projection |
+| archived | prune job: age > retention_days | none | pruned | as above |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+`INPREF.INVALID_STATE` on transition from pruned (non-retryable).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Owner transitions read/archive; sys transitions prune and record.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Mark-read repeated is no-op with same result. Prune is idempotent.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-106-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Pruned items leave no content; event carries `ntf_id` only.
+
+## Observability & budgets
+Gauge `inbox_items{state}` aggregated, no per-account labels. Prune job completes ≤ 15 min per 1M accounts (ASSUMPTION).
+
+## Tests
+- TEST-PS-106-03-01 (unit): each transition row covered.
+- TEST-PS-106-03-02 (property): no path from read to unread.
+- TEST-PS-106-03-03 (integration): item beyond retention is pruned on next job run.
+- TEST-PS-106-03-04 (integration): cap of 1000 prunes oldest first.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Transition table implemented one-to-one.
+2. Monotonic read verified in property test.
+3. Prune idempotent under double run.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1000 item cap.
+- No D-ID blocks state logic.

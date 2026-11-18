@@ -1,35 +1,55 @@
-# PS-090-05 — authorization capabilities
+# PS-090-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-090-05. **Owner:** [11_Federation/03_interop/mod_migration](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_migration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_migration. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R05–R07, R09), CTR-FED-001.
 
-## Purpose and scope
-Define the authorization capabilities process for migration within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-090-05.R01 | Plan, approve, execute and rollback require `ope` principals with dual control on each run. | MVP |
+| PS-090-05.R02 | Approvers must differ from the planner and from each other. | MVP |
+| PS-090-05.R03 | Execution by `sys_` job only after approval; grant expiry ≤ 72 h (CTR-CAP-001 R06). | MVP |
+| PS-090-05.R04 | No `mod` principal may plan or execute migrations. | MVP |
+| PS-090-05.R05 | Default deny. | MVP |
 
-## Requirements to specify
-- [ ] PS-090-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-090-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-090-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capabilities: `migration.plan`, `migration.approve`, `migration.execute`, `migration.rollback`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+[commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Authorization does not change state.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.FORBIDDEN`, `CAP.DUAL_APPROVAL_REQUIRED`, `CAP.SELF_APPROVAL_FORBIDDEN`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Outcome |
+|---|---|---|---|
+| ope A | migration.plan | run | ALLOW |
+| ope A | migration.approve | own plan | DENY, CAP.SELF_APPROVAL_FORBIDDEN |
+| ope B | migration.approve | plan by A | ALLOW (approval 1 of 2) |
+| ope A | migration.execute | approved plan | DENY until second approval (CAP.DUAL_APPROVAL_REQUIRED) |
+| mod | migration.plan | run | DENY, SYS.FORBIDDEN |
+| sys_ job | migration.execute | approved run | ALLOW |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-090-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Decision fails closed. No offline path.
+
+## Privacy, retention, abuse
+Every privileged decision emits an `aud_` record (CTR-CAP-001 R08).
+
+## Observability & budgets
+`migrate_authz_denies_total{action}`.
+
+## Tests
+- TEST-PS-090-05-01 (matrix): table outcomes.
+- TEST-PS-090-05-02 (dual control): execute blocked with one approval.
+- TEST-PS-090-05-03 (mod): mod principal cannot plan.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix passes.
+2. Dual control holds.
+
+## Assumptions & open decisions
+- PROVISIONAL (CTR-CAP-001 default, unapproved).

@@ -1,35 +1,51 @@
-# PS-066-08 — observability performance
+# PS-066-08 — observability and performance budgets
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-066-08. **Owner:** [08_Communications/03_meetups/mod_safe](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_safe. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_safe (Platform Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (logging fields), CTR-PRV-001 (R04, R09), CTR-ERR-001 (R10). **Decisions:** D07 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the observability performance process for safe within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-066-08.R01 | Metrics are emitted as counts or latency histograms with no plan-level labels. | MVP |
+| PS-066-08.R02 | Latency targets (p95, server side): propose 500 ms; confirm, check-in, check-out, safe exit 300 ms; `meetup.get` 200 ms. | MVP |
+| PS-066-08.R03 | Timer lag p95 ≤ 60 s; alert at 5 min. | MVP |
+| PS-066-08.R04 | Log line fields: `meetup_plan_id`, `event_type`, `revision`, `code`, `request_id`, timing. No other fields. | MVP |
+| PS-066-08.R05 | Dashboards show aggregates; any breakdown by venue requires ≥ 5 plans. | MVP |
 
-## Requirements to specify
-- [ ] PS-066-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-066-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-066-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric names: `safe_plans_total{status}`, `safe_command_latency_ms{command}`, `safe_timer_lag_seconds{timer_kind}`, `safe_error_total{code}`, `safe_rate_limited_total{limit}`, `safe_outbox_age_seconds`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Per-command latency histogram; per-event counter by `event_type`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Gauge of plans per state; derived from events, not from the live table.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error counters by code only. Validation error values are never recorded.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards are restricted to the Platform Lead and on-call; aggregate views only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-066-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Client-side outbox age reported in aggregate, with no device identifier.
+
+## Privacy, retention, abuse
+Metrics retention 30 days; logs 14 days (ASSUMPTION). Trace sampling excludes the body of any safe-exit request.
+
+## Observability & budgets
+Alerts: timer lag > 5 min; `SAFE.CHECKIN_CODE_INVALID` > 20% per hour; safe-exit rate above 3x 7-day baseline in any K_MIN-sized group.
+
+## Tests
+- TEST-PS-066-08-01 (contract): metric label set lint has no plan or venue label.
+- TEST-PS-066-08-02 (load): 500 check-ins per second meet R02 budgets (ASSUMPTION load profile).
+- TEST-PS-066-08-03 (integration): timer lag alert fires at 5 min in a staged delay.
+- TEST-PS-066-08-04 (unit): log redaction removes any field outside the R04 allowlist.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Latency budgets met in load test.
+2. No log or metric contains a venue, window, handle or code.
+3. Alerts fire in staging for each named condition.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day metric and 14-day log retention; load profile is 10x expected peak.
+- D07 (PROVISIONAL default, unapproved).

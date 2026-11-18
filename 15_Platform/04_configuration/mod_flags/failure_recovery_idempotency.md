@@ -1,35 +1,52 @@
-# PS-124-06 — failure recovery idempotency
+# PS-124-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-124-06. **Owner:** [15_Platform/04_configuration/mod_flags](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/04_configuration/mod_flags (F15.S04.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for flags within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-124-06.R01 | Evaluation is deterministic: bucket = first 4 bytes of HMAC-SHA-256(flag salt, pseudonymous subject ID) mod 10000, compared with `rollout_bp`. | MVP |
+| PS-124-06.R02 | Flag salt is generated once per flag and changes only on explicit reset approved by two `ope` principals. | MVP |
+| PS-124-06.R03 | Store unavailable: nodes evaluate from last-known-good rules up to 15 min old, then return defaults and alert. | MVP |
+| PS-124-06.R04 | Evaluation errors return the default value and never throw into user flows. | MVP |
+| PS-124-06.R05 | Rule push is all-or-nothing per revision (PS-123 R02 analog). | MVP |
 
-## Requirements to specify
-- [ ] PS-124-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-124-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-124-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Evaluation result includes `source` (`live`, `last_known_good`, `default`) for diagnostics without identifiers.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`flag.evaluate` is pure given rules and subject bucket.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable beyond PS-124-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| FLAG.RULES_STALE | true | unavailable / 503 | Admin path only; evaluation still returns defaults. |
+| FLAG.UNKNOWN_KEY | false | not_found / 404 | Admin path; evaluation returns default. |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Not applicable at evaluation.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-124-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Clients use cached values offline for up to 24 h (R09 in PS-124 requirements, see PS-124-07).
+
+## Privacy, retention, abuse
+Salt reset changes bucket assignment; reset is audited.
+
+## Observability & budgets
+Metric: `flag_evaluations_total{source}`; alert when `default` source > 1% for 10 min.
+
+## Tests
+- TEST-PS-124-06-01 (property): same subject and salt always same bucket; distribution within ±1% over 1,000,000 subjects.
+- TEST-PS-124-06-02 (fault): store down; last-known-good serves; after 15 min defaults.
+- TEST-PS-124-06-03 (integration): rule push partially fails; no node applies partial revision.
+- TEST-PS-124-06-04 (unit): evaluation exception returns default.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Bucket determinism and distribution (TEST-01).
+2. TEST-PS-124-06-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute last-known-good window.

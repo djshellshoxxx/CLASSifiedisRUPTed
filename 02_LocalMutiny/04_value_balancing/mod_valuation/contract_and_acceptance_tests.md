@@ -1,35 +1,50 @@
 # PS-027-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-027-09. **Owner:** [02_LocalMutiny/04_value_balancing/mod_valuation](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_valuation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_valuation. **Parent:** [mod_valuation SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (quote, currency), CTR-EVT-001, CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for valuation within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-027-09.R01 | Contract tests validate snapshot against the quote and currency `$ref` definitions in CTR-COM-001. | MVP |
+| PS-027-09.R02 | Rounding test vectors cover HALF_EVEN ties at exponent 0, 2 and 6. | MVP |
+| PS-027-09.R03 | Negative tests cover all seven VALUE codes and both STALE transitions. | MVP |
+| PS-027-09.R04 | Accessibility: snapshot table has row/column headers, and currency codes are announced with amounts. | MVP |
 
-## Requirements to specify
-- [ ] PS-027-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-027-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-027-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `fixtures/valuation/two_party_eur_usd.json`, `sixteen_items_mixed_currency.json`, `tie_rounding_vectors.json` (names proposed; created in implementation phase). Each pins quotes and expected hashes.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract tests replay recorded quote events and compare snapshot hashes.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Each state in PS-027-03 has positive and negative tests.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error-code coverage must reach 100% for VALUE codes in CI.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests from PS-027-05 included.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-027-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Chaos cases: quote duplicate delivery, out-of-order quote expiry, revision change during compute.
+
+## Privacy, retention, abuse
+Fixtures use synthetic `acc_` and `lst_` IDs only.
+
+## Observability & budgets
+Contract suite ≤ 10 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-027-09-01 (contract): snapshot validates against CTR-COM-001 quote/currency refs.
+- TEST-PS-027-09-02 (property): sum of converted lines equals per-party totals after rounding; error bound ≤ 1 minor unit per line.
+- TEST-PS-027-09-03 (unit): HALF_EVEN vectors at exponent 0, 2, 6 match.
+- TEST-PS-027-09-04 (a11y): snapshot table passes header and announcement checks.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All tie-rounding vectors pass.
+2. Error-code coverage 100%.
+3. Hash stability test passes across implementations (JCS).
+
+## Assumptions & open decisions
+- ASSUMPTION: WCAG 2.1 AA as the CI accessibility mapping.
+- PROVISIONAL: HALF_EVEN rounding (D03 default, unapproved). Rounding authority is F09.S03.M03. See [DECISIONS.md](../../../DECISIONS.md).

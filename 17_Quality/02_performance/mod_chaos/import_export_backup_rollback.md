@@ -1,35 +1,47 @@
-# PS-138-10 — import export backup rollback
+# PS-138-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-10. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_chaos. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001, CTR-FED-001
 
-## Purpose and scope
-Define the import export backup rollback process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-138-10.R01 | Experiment definitions are versioned in the repository; changes require review. | MVP |
+| PS-138-10.R02 | Results export contains verdicts and metrics, not raw telemetry payloads. | MVP |
+| PS-138-10.R03 | Rollback of an experiment definition is a new commit; history kept. | MVP |
+| PS-138-10.R04 | Experiment records are not restored into running state after backup restore; they are marked `aborted`. | MVP |
 
-## Requirements to specify
-- [ ] PS-138-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `experiment_id`, `version`, `verdict`, `metric_summary`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+N/A beyond registry operations.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore marks `running` as `aborted`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+N/A.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export requires `chaos_experiment.approve` role (read).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Restore idempotent by `experiment_id`.
+
+## Privacy, retention, abuse
+Exports exclude target hostnames.
+
+## Observability & budgets
+Counter `chaos_export_total`.
+
+## Tests
+- TEST-PS-138-10-01: restore marks running experiment aborted.
+- TEST-PS-138-10-02: export excludes hostnames.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No experiment resumes after restore.
+2. Export passes hostname lint.
+
+## Assumptions & open decisions
+- ASSUMPTION: 'aborted' on restore.
+- D07 (archive retention): PROVISIONAL (D07 default, unapproved).

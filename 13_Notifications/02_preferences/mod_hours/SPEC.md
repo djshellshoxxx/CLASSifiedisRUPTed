@@ -1,44 +1,46 @@
 # F13.S02.M02 — hours
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F13.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead. **Parent:** [F13.S02 preferences](../SPEC.md).
 
 ## Purpose and business behavior
-Provide hours as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Hold each account's recurring weekly delivery windows (local time, per channel) and decide whether a gated notification is delivered now, deferred to the next window, or dropped. Windows restrict interruptions only; the in-app inbox still records items outside windows (mod_in). Security notices bypass windows; deadline notices bypass windows but not quiet pauses (mod_quiet).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I can allow push and email only between 08:00 and 22:00 on weekdays, and receive deadline notices regardless.
+- As a participant, I can change my time zone when I travel, and my windows keep their local meaning across daylight-saving changes.
+- As an operator, I can see how many notifications are deferred per channel without seeing any schedule.
 
 ## Scope
-- Required process spec: `hours_domain_model.md` (not yet authored)
-- Required process spec: `hours_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `hours_validation_and_authorization.md` (not yet authored)
-- Required process spec: `hours_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `hours_interfaces_and_events.md` (not yet authored)
-- Required process spec: `hours_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `hours_acceptance_and_property_tests.md` (not yet authored)
+- In scope: window storage, validation, gating decisions, deferral timers, DST rules, export.
+- Out of scope: quiet pauses (F13.S02.M01), channel consent (F13.S02.M03), inbox recording (F13.S02.M04), zone detection from location (F10 precision rules).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `hours.set_windows`; internal `hours.evaluate`; query `hours.get_windows`. Events `delivery_window.updated`, `notification.window_*`. See [commands_queries_events.md](commands_queries_events.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: profile time zone (F07.S02.M02); consent and privacy controls (F10.S01.M01, mod_consent). Downstream: mod_quiet and mod_in (gating order), push and email dispatch (F13.S01). Contracts: CTR-PRV-001, CTR-SCH-001, CTR-ERR-001. Edges per DEPENDENCY_MATRIX.md.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `delivery_window` (`dwn_`, PENDING CTR-ID-001) and deferral records. Time zone value remains owned by F07 profile; this module stores its copy only for gating and references the profile by `acc_`. Consent evidence is owned by F10.S01.M01 (canonical owner: `10_Privacy/01_data_controls/mod_consent`); this module references consent by ID only.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Privacy: schedules reveal sleep and work patterns; leakage via event timing or logs.
+- Correctness: DST gaps and overlaps, stale tzdata, clock skew.
+- Abuse: window-toggling to load the evaluator; enumeration of others' schedules through deferral timing.
+- Failure: evaluator outage leaves notifications deferred; dropped items must be explained to users.
+- No platform custody of money; not applicable.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Process specs PS-105-01 to PS-105-10 at SPEC-DRAFT-COMPLETE; DST fixtures defined; Privacy Lead review pending; PENDING prefix resolved.
 
 ## Required process specification inventory
-- [ ] `hours_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `hours_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `hours_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `hours_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `hours_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `hours_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `hours_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-105-01
+- [x] [validation_rules.md](validation_rules.md) — PS-105-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-105-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-105-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-105-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-105-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-105-07
+- [x] [observability_performance.md](observability_performance.md) — PS-105-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-105-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-105-10

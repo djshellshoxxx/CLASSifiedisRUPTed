@@ -1,35 +1,49 @@
-# PS-090-07 — privacy retention abuse
+# PS-090-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-090-07. **Owner:** [11_Federation/03_interop/mod_migration](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_migration. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_migration. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R07), CTR-SCH-001 (R10), CTR-FED-001 (R08).
 
-## Purpose and scope
-Define the privacy retention abuse process for migration within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-090-07.R01 | Migration never raises a data class without F10 review (PS-090-02.R03). | MVP |
+| PS-090-07.R02 | Run records and reports hold IDs, versions and counts; no record content. | MVP |
+| PS-090-07.R03 | Run records retained 3 years for audit (ASSUMPTION), subject to legal hold (CTR-PRV-001 R07). | MVP |
+| PS-090-07.R04 | Abuse: planning more than 3 migrations per month per operator raises alert (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-090-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-090-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-090-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Run records PSEUDONYMOUS (operator refs).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retention purge is outside the run state machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SCH.DATA_CLASS_CHANGE_REQUIRES_REVIEW` (PS-090-02).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-090-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge job idempotent per run.
+
+## Privacy, retention, abuse
+Retention above; abuse alert above; no content in reports.
+
+## Observability & budgets
+Alert on R04.
+
+## Tests
+- TEST-PS-090-07-01 (privacy): class raise without review blocked.
+- TEST-PS-090-07-02 (report): dry-run report contains no record content.
+- TEST-PS-090-07-03 (abuse): fourth plan in a month alerts.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Class raise blocked.
+2. Reports content-free.
+3. Abuse alert tested.
+
+## Assumptions & open decisions
+- ASSUMPTION: 3-year run retention; 3 plans per month.
+- PROVISIONAL (D07 default, unapproved).

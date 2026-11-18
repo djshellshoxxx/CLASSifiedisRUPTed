@@ -1,35 +1,26 @@
 # PS-145-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-145-02. **Owner:** [18_Governance/01_policy/mod_jurisdictions](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_jurisdictions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 18_Governance/01_policy/mod_jurisdictions. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the validation rules process for jurisdictions within 01_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-145-02.R01 | Reject any region code that is not on the approved list. | MVP |
+| PS-145-02.R02 | Reject a rule without `source_ref` or with `effective_to` before `effective_from`. | MVP |
+| PS-145-02.R03 | Reject `effect` = `prohibited` unless a `prohibited` rule ID from mod_prohibited is linked. | MVP |
+| PS-145-02.R04 | Reject any field matching a coordinate, postal-code or address pattern. | MVP |
 
-## Requirements to specify
-- [ ] PS-145-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-145-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-145-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Validation and errors
+| Code | Retryable | Category / HTTP | Message key | Privacy-safe diagnostic |
+|---|---|---|---|---|
+| JURIS.REGION_UNKNOWN | false | validation / 400 | err.juris.region_unknown | none (value not echoed) |
+| JURIS.SOURCE_MISSING | false | validation / 400 | err.juris.source_missing | field name |
+| JURIS.DATE_RANGE_INVALID | false | validation / 400 | err.juris.date_range_invalid | none |
+| JURIS.PROHIBITION_LINK_MISSING | false | precondition_failed / 412 | err.juris.prohibition_link_missing | rule key |
+| JURIS.PRECISION_FIELD_FORBIDDEN | false | validation / 400 | err.juris.precision_field_forbidden | field name only |
+| JURIS.INVALID_TRANSITION | false | unprocessable_state / 422 | err.juris.invalid_transition | from and event names |
+| SYS.CONFLICT | false | conflict / 409 | err.sys.conflict | revision mismatch |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-145-02`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: approved region list is maintained by Governance Lead.
+- D05 (geoprivacy) governs region granularity: PROVISIONAL (D05 default, unapproved).

@@ -1,44 +1,41 @@
-# F02.S02.M02 — four
+# F02.S02.M02 — mod_four
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.S02.
+**Status:** SPEC-DRAFT-COMPLETE. **Owner:** Marketplace Lead (accountable role). **Parent:** F02.S02 (cycle_matching). **Canonical record owner:** this module, for four-party cycle proposals (`cyc_` with four slots).
 
 ## Purpose and business behavior
-Provide four as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Builds and proposes exact four-party barter cycles (A gives to B, B to C, C to D, D to A) from FEASIBLE candidates. It fixes one canonical slot order per cycle, collects consent from all four participants to one cycle version, and hands a fully consented cycle to lock. Four-party cycles have their own rules (distinct listings, unique rotation, four consents), kept separate from the generalised N-party module so that the common path stays simple to test.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant in a four-party cycle, I see the other three roles by pseudonym and what each gives, and I consent once to a fixed version.
+- As a participant, if the cycle changes I am asked again; I am never bound to a version I did not see.
+- As an operator, I can disable four-party matching without affecting three-party or N-party matching.
 
 ## Scope
-- Required process spec: `four_domain_model.md` (not yet authored)
-- Required process spec: `four_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `four_validation_and_authorization.md` (not yet authored)
-- Required process spec: `four_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `four_interfaces_and_events.md` (not yet authored)
-- Required process spec: `four_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `four_acceptance_and_property_tests.md` (not yet authored)
+Ten process specifications (inventory below). Lengths other than four are out of scope and rejected.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands: `cycle.propose_four`, `cycle.consent`, `cycle.decline`. Queries: `cycle.get`. Events: `cycle.proposed`, `cycle.version_superseded`, `cycle.slot_consented`, `cycle.declined`, `cycle.expired`, `cycle.consented`. Error module code `CYCFOUR`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F02.S02.M05 (mod_feasibility, FEASIBLE candidates); F02.S02.M01 (mod_three, shares the rotation rule as a contract, not code); F15.S03.M01 (observability). Downstream: F02.S02.M03 (mod_n uses this module's canonical order and fixtures as a regression baseline); F02.S03.M02 (mod_lock, receives consented cycles). Slots use `par_` IDs owned by F02.S01.M02 (see mod_party). Shared contracts: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns four-party cycle proposal records, versions and consent state. Does not own offers (F02.S01), slots' identity (F02.S01.M02), locks (F02.S03.M02) or quotes (F09.S03).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Consent to a version that later changed, duplicate participants across slots, consent replay across versions, stale feasibility results, and proposal flooding by fake accounts. Pseudonyms do not guarantee anonymity; each slot shows only its pseudonym and its own offer.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Ten process specs at SPEC-DRAFT-COMPLETE; canonical rotation and tie-break fixtures agreed with mod_n; consent state machine tests defined.
 
 ## Required process specification inventory
-- [ ] `four_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `four_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `four_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `four_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `four_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `four_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `four_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-017-01
+- [x] `validation_rules.md` — PS-017-02
+- [x] `workflow_state_machine.md` — PS-017-03
+- [x] `commands_queries_events.md` — PS-017-04
+- [x] `authorization_capabilities.md` — PS-017-05
+- [x] `failure_recovery_idempotency.md` — PS-017-06
+- [x] `privacy_retention_abuse.md` — PS-017-07
+- [x] `observability_performance.md` — PS-017-08
+- [x] `contract_and_acceptance_tests.md` — PS-017-09
+- [x] `import_export_backup_rollback.md` — PS-017-10

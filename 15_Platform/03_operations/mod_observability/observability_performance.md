@@ -1,35 +1,51 @@
-# PS-121-08 — observability performance
+# PS-121-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-121-08. **Owner:** [15_Platform/03_operations/mod_observability](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_observability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_observability (F15.S03.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the observability performance process for observability within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-121-08.R01 | Health metrics for the pipeline: `telemetry_ingest_latency_ms` (p95 <= 100 ms per batch), `telemetry_dropped_total{reason}`, `telemetry_redaction_failures_total`. | MVP |
+| PS-121-08.R02 | Alert: any redaction failure in production (page). | MVP |
+| PS-121-08.R03 | Alert: any `CTR-ERR-001` code above 5% of responses for 5 min (BT-01). | MVP |
+| PS-121-08.R04 | Dashboards show aggregates only; no per-user drill-down. | MVP |
+| PS-121-08.R05 | Ingest availability target 99.9% monthly (ASSUMPTION). | MVP |
+| PS-121-08.R06 | Pipeline overhead on emitters < 1% CPU at 1,000 records/s (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-121-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-121-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-121-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Label enums only (module code, code, severity, reason).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None. Health alerts use PS-121-03 states.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Pipeline errors are reported with codes from CTR-ERR-001 (`SYS.UNAVAILABLE`, `OBSERV.*`).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboard reads per PS-121-05 R02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-121-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Pipeline degrades by dropping non-alert records first (PS-121-06).
+
+## Privacy, retention, abuse
+Health metrics carry no identifiers.
+
+## Observability & budgets
+Budgets in R01 and R06.
+
+## Tests
+- TEST-PS-121-08-01 (unit): alert rules for R02, R03 fire at thresholds.
+- TEST-PS-121-08-02 (performance): 1,000 records/s load for 30 min meets R01 and R06.
+- TEST-PS-121-08-03 (negative): dashboard API has no per-user endpoint.
+- TEST-PS-121-08-04 (chaos): pipeline down; platform error budget unaffected (no blocking).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Performance budgets met in load test (TEST-02).
+2. TEST-PS-121-08-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 99.9% ingest target.
+- OPEN (F17): load profile for CI.

@@ -1,35 +1,61 @@
 # PS-139-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-139-01. **Owner:** [17_Quality/02_performance/mod_load](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_load. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_load. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-FED-001, CTR-PRV-001, CTR-SCH-001
 
-## Purpose and scope
-Define the domain schema process for load within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-139-01.R01 | One `workload_model` per journey: weighted operation mix, think times, payload size distribution, synthetic population size. | MVP |
+| PS-139-01.R02 | One `load_profile` per run: ramp, steady, spike, soak shape; duration; target rate. | MVP |
+| PS-139-01.R03 | One `load_run` per execution with environment ID, build SHA, profile ID, population seed and result summary. | MVP |
+| PS-139-01.R04 | Every journey in the workload model names a canonical operation ID (module command or query). | MVP |
+| PS-139-01.R05 | Synthetic population uses `acc_` IDs generated for the test and never mapped to real accounts. | MVP |
 
-## Requirements to specify
-- [ ] PS-139-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-139-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-139-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "workload_id": "wkl_ (PENDING CTR-ID-001 prefix, proposed wkl, class opaque)",
+  "operations": [{"operation_id": "module.command_or_query", "weight": "decimal string 0-1", "payload_bytes_p50": "integer", "payload_bytes_p99": "integer"}],
+  "think_time_ms": {"p50": "integer", "p95": "integer"},
+  "population": {"size": "integer", "seed": "uint64"},
+  "profile": {"shape": "ramp | steady | spike | soak", "target_rps": "integer", "duration_s": "integer"},
+  "run_id": "lrn_ (PENDING, proposed lod, class ulid)",
+  "build_sha": "40 hex",
+  "result": {"p95_ms": "number", "error_rate": "decimal string", "rate_limited_ratio": "decimal string"},
+  "data_class": "PUBLIC"
+}
+```
+`weight` values across `operations` sum to exactly 1.000000 (decimal string).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-139-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Runs are reproducible from (`workload_id`, `profile`, `population.seed`, `build_sha`).
+
+## Privacy, retention, abuse
+Synthetic population only (PS-139-07).
+
+## Observability & budgets
+Gauge `load_active_virtual_users`.
+
+## Tests
+- TEST-PS-139-01-01: unit, weights sum to 1.
+- TEST-PS-139-01-02: unit, every operation ID resolves to a registered command or query.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every workload references only registered operation IDs.
+2. Runs reproduce arrival sequence from seed.
+
+## Assumptions & open decisions
+- PENDING CTR-ID-001: prefixes `wkl` and `lrn`.
+- D02 (cycle optimizer load): PROVISIONAL (D02 default, unapproved).

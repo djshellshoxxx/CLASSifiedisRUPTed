@@ -1,35 +1,55 @@
-# PS-066-06 — failure recovery idempotency
+# PS-066-06 — failure, recovery, idempotency and offline behavior
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-066-06. **Owner:** [08_Communications/03_meetups/mod_safe](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_safe. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_safe (Platform Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-ERR-001 (R03), CTR-SCH-001. **Decisions:** D08 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the failure recovery idempotency process for safe within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-066-06.R01 | Idempotency scope (actor, command, key) retained 7 days (CTR-EVT-001 R03). | MVP |
+| PS-066-06.R02 | Safe exit is queued locally with top priority and sent before other queued commands when online. | MVP |
+| PS-066-06.R03 | A safe exit received after a terminal state is stored as an audit note (`meetup_plan.safe_exit_late`) with no state change. | MVP |
+| PS-066-06.R04 | Timer jobs run at least once; each is idempotent by `(meetup_plan_id, timer_kind, scheduled_for)`. | MVP |
+| PS-066-06.R05 | API timeout 3 s; client retries with exponential backoff (base 1 s, factor 2, jitter ±20%), max 5 attempts. | MVP |
+| PS-066-06.R06 | The active plan is cached on the client for at most 24 h (window end plus 1 h). Cache holds venue text and window only, never codes. | MVP |
 
-## Requirements to specify
-- [ ] PS-066-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-066-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-066-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Outbox row: `command_id`, `command_type`, `payload_digest`, `priority` (`safety` > `normal`), `attempts`, `next_attempt_at`. Timer row: `timer_kind`, `scheduled_for`, `status`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries reuse the original `idempotency_key`; a new key is never generated for a retry.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Outbox states: `pending`, `sent`, `acknowledged`, `failed_permanent`. A command moves to `failed_permanent` only on a non-retryable code.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.UNAVAILABLE` and `SYS.RATE_LIMITED` are retryable; `SAFE.INVALID_TRANSITION` and `SAFE.OUTSIDE_WINDOW` (after window) are not. Permanent failures show the user a local message and keep the plan visible.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries reuse original authorization; no token is cached beyond the session lifetime.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-066-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Relay outage: outbox persists across app restarts; no data loss on app kill.
+- Server outage: check-in and safe exit remain available locally; the user is told the counterparty may not see the update until sync.
+- Clock skew: server time decides window checks; client shows a warning when device clock differs by more than 2 min.
+- Replay: duplicate delivery returns the original result (PS-066-04).
+
+## Privacy, retention, abuse
+Outbox rows are deleted on acknowledgment or after 7 days, whichever is first. Payloads store digests, not handles or codes.
+
+## Observability & budgets
+Metric: outbox age p95 (target < 60 s online; ASSUMPTION). Metric: permanent failures per day.
+
+## Tests
+- TEST-PS-066-06-01 (integration): kill app after queueing safe exit; restart sends it once.
+- TEST-PS-066-06-02 (integration): relay down 10 min; queued check-in sent on recovery with original key.
+- TEST-PS-066-06-03 (property): duplicate delivery of any command yields one state change.
+- TEST-PS-066-06-04 (integration): timer delivered twice produces one transition.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No queued safety command is discarded while the plan is open.
+2. Retries never change the idempotency key.
+3. Client cache never contains a code value (test scan of local store).
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day outbox retention; 24 h cache ceiling.
+- D08 (PROVISIONAL default, unapproved): local pending queue until authenticated relay acknowledgment.

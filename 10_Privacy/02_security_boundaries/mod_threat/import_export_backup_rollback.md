@@ -1,35 +1,51 @@
-# PS-082-10 — import export backup rollback
+# PS-082-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-082-10. **Owner:** [10_Privacy/02_security_boundaries/mod_threat](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_threat. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_threat. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R07), CTR-EVT-001 (R08).
 
-## Purpose and scope
-Define the import export backup rollback process for threat within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-082-10.R01 | Register export is restricted: reviewers only, signed, watermarked with export ID. | MVP |
+| PS-082-10.R02 | Import creates threats only in `identified` state and requires PS-082-02 validation. | MVP |
+| PS-082-10.R03 | Rollback of a threat revision re-points to a prior revision; no revision is deleted. | MVP |
 
-## Requirements to specify
-- [ ] PS-082-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-082-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-082-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export `threat.export@1.0.0` (PENDING registration). Fields per [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`threat.export`, `threat.import`, `threat.rollback`. Events `threat.exported`, `threat.imported`, `threat.rolled_back`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Import cannot set `mitigated` or `closed` directly.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | When |
+|---|---|
+| THREAT.IMPORT_STATE_FORBIDDEN | import sets non-`identified` state |
+| THREAT.ROLLBACK_TARGET_INVALID | target revision not found |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: reviewers with `threat.read`. Import: Security Lead. Rollback: two approvers.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-082-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent per request ID. Import idempotent per `threat_id` + digest.
+
+## Privacy, retention, abuse
+Exports carry restricted watermark; audit record per export.
+
+## Observability & budgets
+Metric `threat_exports_total`; export p95 ≤ 5 s for 500 threats (ASSUMPTION).
+
+## Tests
+- TEST-PS-082-10-01 (import): import in `mitigated` state rejected.
+- TEST-PS-082-10-02 (export): non-reviewer export refused.
+- TEST-PS-082-10-03 (rollback): prior revision restored; history intact.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Import cannot skip states.
+2. Export restricted and audited.
+3. Rollback keeps history.
+
+## Assumptions & open decisions
+- ASSUMPTION: export budget.
+- PROVISIONAL (D10 default, unapproved): signed exports use reviewer-held keys.

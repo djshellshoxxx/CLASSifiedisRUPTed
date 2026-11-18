@@ -1,35 +1,52 @@
 # PS-019-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-019-02. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001. Module code `CYCPARTY` (PENDING CTR-ERR-001).
 
-## Purpose and scope
-Define the validation rules process for party within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-019-02.R01 | `par_` must exist, belong to the caller's proposal flow, and be in `pending` at the source (F02.S01.M02). | MVP |
+| PS-019-02.R02 | `slot_index` must be in 0..(cycle length − 1). | MVP |
+| PS-019-02.R03 | `expected_version` must equal the cycle's current version. | MVP |
+| PS-019-02.R04 | Participant may not hold another live slot (R02 of PS-019-01). | MVP |
+| PS-019-02.R05 | Withdrawal is allowed only before lock, or after lock through PS-024 recovery only. | MVP |
 
-## Requirements to specify
-- [ ] PS-019-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-019-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-019-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Rule parameters: `max_cycle_length=8` (from PS-018), live-status set as in PS-019-01.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+| Code | Category (HTTP) | Retryable | Trigger | details[].rule |
+|---|---|---|---|---|
+| CYCPARTY.SLOT_TAKEN | unprocessable_state (422) | false | participant has another live slot | live_slot |
+| CYCPARTY.INDEX_OUT_OF_RANGE | validation (400) | false | slot_index outside cycle | slot_index |
+| CYCPARTY.VERSION_STALE | conflict (409) | true | expected_version ≠ current | expected_version |
+| CYCPARTY.PAR_NOT_PENDING | unprocessable_state (422) | false | par_ not pending at source | par_status |
+| CYCPARTY.LOCKED | unprocessable_state (422) | false | withdrawal of locked slot outside recovery | lock_status |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Messages: `err.cycparty.<code>`; no values echoed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Validation runs after PS-019-05 checks.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Deterministic for the same binding state.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-019-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Errors carry no slot pseudonyms of other participants.
+
+## Observability & budgets
+Rejection counts per code.
+
+## Tests
+- TEST-PS-019-02-01 (unit): one fixture per code.
+- TEST-PS-019-02-02 (negative): second live slot attempt returns SLOT_TAKEN.
+- TEST-PS-019-02-03 (boundary): index N−1 accepted, N refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each code produced only by its trigger.
+2. Live-slot rule holds under concurrent binds (see PS-019-06).
+3. No other participant's ref appears in errors.
+
+## Assumptions & open decisions
+- ASSUMPTION: one live slot per participant.
+- PROVISIONAL (D04 default, unapproved).

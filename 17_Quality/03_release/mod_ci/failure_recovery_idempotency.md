@@ -1,35 +1,31 @@
-# PS-141-06 — failure recovery idempotency
+# PS-141-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-141-06. **Owner:** [17_Quality/03_release/mod_ci](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_ci. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/03_release/mod_ci. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (idempotency keys), CTR-ERR-001 (retry rules).
 
-## Purpose and scope
-Define the failure recovery idempotency process for ci within 03_release. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-141-06.R01 | Job timeout defaults to 45 minutes for PR pipelines and 90 minutes for release pipelines (ASSUMPTION). | MVP |
+| PS-141-06.R02 | A run lost to runner failure is retried once as a new `attempt`; a second loss ends `aborted_infra`. | MVP |
+| PS-141-06.R03 | Test assertion failures are never retried automatically. Re-running to hide a failure requires a logged maintainer action. | MVP |
+| PS-141-06.R04 | Duplicate `StartCiRun` with the same key returns the original run; no second run is dispatched. | MVP |
 
-## Requirements to specify
-- [ ] PS-141-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-141-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-141-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Failure, idempotency, concurrency, offline
+- **Partial job results:** a job that reports artifact digests and then fails is recorded `failed`; its digests are kept but cannot satisfy a gate.
+- **Flaky tests:** a test that fails and passes on rerun is recorded as two attempts with a `flake` tag. It does not turn the first attempt into `passed`.
+- **Concurrent pipeline edits:** `DefineCiPipeline` uses `expected_revision`; the loser gets `SYS.CONFLICT`.
+- **Cache poisoning:** caches are keyed by branch and lockfile digest; fork-run caches are never read by main-branch runs.
+- **Network loss at runner:** the runner retries result upload with backoff 10 s, 60 s, 300 s (ASSUMPTION), then marks the job `aborted_infra`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE` (503), `SYS.RATE_LIMITED` (429). Non-retryable: `CIPIPE.*`, `SYS.CONFLICT`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Tests
+- TEST-PS-141-06-01 (integration): duplicate webhook yields one run.
+- TEST-PS-141-06-02 (integration): runner killed mid-job yields `aborted_infra` after one retry.
+- TEST-PS-141-06-03 (unit): flaky test shows two attempts with `flake` tag; first attempt stays `failed`.
+- TEST-PS-141-06-04 (concurrency): two definition edits at the same revision; one wins.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-141-06`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: timeout and backoff values are defaults for the reference provider.
+- D07 (retention) affects how long aborted run logs are kept: PROVISIONAL (D07 default, unapproved).

@@ -1,35 +1,62 @@
 # PS-026-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-026-05. **Owner:** [02_LocalMutiny/04_value_balancing/mod_mixed](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_mixed. **Parent:** [mod_mixed SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for mixed within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-026-05.R01 | Only the proposer of a slot may declare or withdraw a leg where `from_par` is that slot. Action `cyc.propose`, scope `participant`. | MVP |
+| PS-026-05.R02 | Only the receiving party of a leg may attest it. Action `cyc.attest`, scope `participant`. Payer cannot attest own leg (`SYS.FORBIDDEN`). | MVP |
+| PS-026-05.R03 | All active participants of a revision may read every leg of that revision (informed consent). Non-participants receive `SYS.NOT_FOUND`. | MVP |
+| PS-026-05.R04 | Operators and moderators read leg content only through a `case:` scope with dual control (CTR-CAP-001 R06, R07). | MVP |
+| PS-026-05.R05 | `in_kind_compensation` description is visible to participants of the revision only (field visibility `participant`). | MVP |
 
-## Requirements to specify
-- [ ] PS-026-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-026-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-026-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Action matrix (principal × action × resource → outcome):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Principal | Action | Resource | Outcome |
+|---|---|---|---|
+| user, from_par owner | `cyc.propose` | own slot's legs | ALLOW (participant) |
+| user, to_par owner | `cyc.propose` | those legs | DENY → `SYS.FORBIDDEN` |
+| user, to_par owner | `cyc.attest` | claim on leg | ALLOW after `CLAIMED` |
+| user, from_par owner | `cyc.attest` | own leg | DENY → `SYS.FORBIDDEN` |
+| user, non-participant | `cyc.read` | revision | DENY → `SYS.NOT_FOUND` |
+| mod, case scope | `cyc.read` | legs in `cas_` | ALLOW (grant, purpose required) |
+| ope, single approval | `cyc.read` | legs | DENY (dual control) |
+| sys (timer) | `cyc.execute` | legs | ALLOW (scope `global`, no content read) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command in PS-026-04 maps to one action above. Decision records (`dec_`) store outcome and reason code only (CTR-CAP-001 R13).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization is re-evaluated at each transition. Relation rules derive from revision participation at decision time (CTR-CAP-001 R05); a participant removed by a new revision loses read access to later revisions.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Unauthorized writes return `SYS.FORBIDDEN`; unauthorized reads of hidden revisions return `SYS.NOT_FOUND` (CTR-ERR-001 R08).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-026-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Capability IDs: `cyc.propose`, `cyc.consent`, `cyc.attest`, `cyc.withdraw`, `cyc.read`, `cyc.execute`. Module declares no additional verbs.
+
+## Failure, idempotency, concurrency, offline
+Decision cache TTL is zero for writes and for any read of FINANCIAL_EVIDENCE (CTR-CAP-001 R09). Revoked grants take effect at the next decision.
+
+## Privacy, retention, abuse
+Pseudonyms (`prf_`) are views of `acc_`; authorization uses `acc_` only (CTR-CAP-001 R02). Moderator access to leg content creates an `aud_` record with purpose and decision ID, no content.
+
+## Observability & budgets
+Metric: `mixed_authz_denials_total{action,code}`. Alert on a burst of `SYS.NOT_FOUND` from one principal (enumeration signal).
+
+## Tests
+- TEST-PS-026-05-01 (negative): each row of the matrix returns the stated outcome.
+- TEST-PS-026-05-02 (integration): removed participant cannot read the next revision.
+- TEST-PS-026-05-03 (negative): payer attempting `cyc.attest` on own leg returns `SYS.FORBIDDEN`.
+- TEST-PS-026-05-04 (negative): operator without second approver cannot read legs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every action used by this module appears in CTR-CAP-001 R03 verb list.
+2. Matrix tests pass in CI with zero unlisted outcomes.
+3. No leg content is returned to a non-participant, including in error bodies.
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h grant maximum for moderator case access (CTR-CAP-001 R06).
+- OPEN: whether a counterparty outside the revision may see the in-kind description after a dispute. See [DECISIONS.md](../../../DECISIONS.md) D04.

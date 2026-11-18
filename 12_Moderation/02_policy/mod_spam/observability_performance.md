@@ -1,35 +1,57 @@
 # PS-097-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-097-08. **Owner:** [12_Moderation/02_policy/mod_spam](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_spam. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_spam. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09), CTR-EVT-001 (R04).
 
-## Purpose and scope
-Define the observability performance process for spam within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-097-08.R01 | Metrics carry no `spm_id`, `lst_`, `acc_` or message identifiers as labels. | MVP |
+| PS-097-08.R02 | Evaluate p95 ≤ 200 ms (listings), ≤ 50 ms (message metadata). | MVP |
+| PS-097-08.R03 | Listing pending-evaluation time p95 ≤ 60 s; p99 ≤ 15 min. | MVP |
+| PS-097-08.R04 | Precision and recall estimates from reviewer labels reported weekly per model version. | MVP |
+| PS-097-08.R05 | Per-language false positive rate reported monthly (F14). | MVP |
 
-## Requirements to specify
-- [ ] PS-097-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-097-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-097-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Metric | Type | Labels |
+|---|---|---|
+| `spam_evaluate_latency_seconds` | histogram | `subject_type` |
+| `spam_verdict_total` | counter | `decision`, `reason_code`, `model_version` |
+| `spam_quarantine_age_seconds` | gauge | none |
+| `spam_evaluation_backlog_seconds` | gauge | `subject_type` |
+| `spam_throttle_total` | counter | none |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Spans `spam.evaluate` with `model_version`, `subject_type`, outcome code (no IDs).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Dashboard counts per state; quarantine age histogram.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`spam_validation_error_total{code}`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards: `ope_` and Trust&Safety role, aggregate only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-097-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Alerts: backlog > 15 min for listings (page); false-positive rate increase > 2× baseline per locale (ticket); scorer error rate > 5 % for 5 min (page).
+
+## Privacy, retention, abuse
+No content or feature values in metrics; sampling of evaluations for human review uses pseudonymous IDs and stays within case scope.
+
+## Observability & budgets
+Model evaluation budget ≤ 10 ms CPU median for listings (ASSUMPTION). Storage ≤ 0.5 KB per verdict.
+
+## Tests
+- `TEST-PS-097-08-01` load: 100 listing evaluations/s for 10 min meet R02.
+- `TEST-PS-097-08-02` contract: metric label set has no identifiers.
+- `TEST-PS-097-08-03` alert: 20 min backlog triggers page in staging.
+- `TEST-PS-097-08-04` log scan: canary strings absent.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All metrics documented with label sets.
+2. Latency and backlog budgets met in staging.
+3. Quality reports generated for two consecutive weeks in staging.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets are reference-node estimates.
+- D07 (retention), PROVISIONAL default governs metric and label-report retention (unapproved).

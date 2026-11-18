@@ -1,35 +1,52 @@
-# PS-082-08 — observability performance
+# PS-082-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-082-08. **Owner:** [10_Privacy/02_security_boundaries/mod_threat](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_threat. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_threat. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09).
 
-## Purpose and scope
-Define the observability performance process for threat within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-082-08.R01 | Count of threats with no passing mitigation test; target 0 for `mitigated`. | MVP |
+| PS-082-08.R02 | Count of overdue reviews (`next_review_on` passed); target 0. | MVP |
+| PS-082-08.R03 | Register query p95 ≤ 200 ms for ≤ 500 threats (ASSUMPTION). | MVP |
+| PS-082-08.R04 | Logs carry `threat_id` and codes only. | MVP |
 
-## Requirements to specify
-- [ ] PS-082-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-082-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-082-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Labels: `category`, `state`, `code`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Consumes `threat.*` events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Telemetry failure never blocks register writes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboard visible to reviewers; metrics contain no exploit text.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-082-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metrics loss tolerated; overdue check also runs in timer job (PS-082-06).
+
+## Privacy, retention, abuse
+Logs retained 30 days (ASSUMPTION).
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| threat_unmitigated_tested_total | 0 |
+| threat_overdue_review_total | 0 |
+| threat_query_latency_ms p95 | ≤ 200 |
+
+## Tests
+- TEST-PS-082-08-01 (metric): seeded overdue review increments metric.
+- TEST-PS-082-08-02 (redaction): log output omits titles.
+- TEST-PS-082-08-03 (performance): 500-threat fixture meets p95.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics exported.
+2. Redaction passes.
+3. Performance target met on fixture.
+
+## Assumptions & open decisions
+- ASSUMPTION: targets above pending F16 validation.

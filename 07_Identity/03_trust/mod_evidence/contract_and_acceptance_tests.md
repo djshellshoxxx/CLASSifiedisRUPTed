@@ -1,35 +1,61 @@
 # PS-057-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-057-09. **Owner:** [07_Identity/03_trust/mod_evidence](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_evidence. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_evidence. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001 (envelope and signature-field lint), CTR-ERR-001 (registry lint), CTR-CAP-001 (matrix), CTR-PRV-001 (zero-tolerance), CTR-COM-001 (signature test vectors reused by reference).
 
-## Purpose and scope
-Define the contract and acceptance tests process for evidence within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-057-09.R01 | Every command, query, event and code has a named contract test. | MVP |
+| PS-057-09.R02 | Build fails on unversioned schema change. | MVP |
+| PS-057-09.R03 | Signature test vectors for Ed25519 (valid, tampered, revoked key) run in CI from the chosen audited library's vectors. | MVP |
+| PS-057-09.R04 | Fixtures cover PS-057-01 to PS-057-08 cases. | MVP |
+| PS-057-09.R05 | Summary and record views pass automated a11y checks. | MVP |
+| PS-057-09.R06 | Cross-module contract test with mod_reputation summary consumer. | Future |
 
-## Requirements to specify
-- [ ] PS-057-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-057-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-057-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Fixture | Content |
+|---|---|
+| `fx_tev_kinds` | one record per `kind`, valid and invalid |
+| `fx_tev_sig` | valid, tampered, revoked-key signatures |
+| `fx_tev_supersede` | chains, cycles, withdrawn targets |
+| `fx_tev_equiv` | equivocating pairs |
+| `fx_tev_privacy` | document-like and contact-laden content |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Covered by [commands_queries_events.md](commands_queries_events.md) tests.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Oracle: [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Registry lint for `EVIDENCE.*` codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests from [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-057-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection and offline replay from PS-057-06 in nightly suite.
+
+## Privacy, retention, abuse
+Privacy fixtures from PS-057-07 in every build.
+
+## Observability & budgets
+Metric names and labels asserted against PS-057-08.
+
+## Tests
+- TEST-PS-057-09-01 (contract): payloads validate against registry.
+- TEST-PS-057-09-02 (lint): error registry and message keys.
+- TEST-PS-057-09-03 (contract): Ed25519 vectors from the chosen library pass.
+- TEST-PS-057-09-04 (integration): record → supersede → withdraw flow with fixtures.
+- TEST-PS-057-09-05 (a11y): record and summary views.
+- TEST-PS-057-09-06 (load): nightly budget run.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100% of commands, queries, events and codes covered.
+2. Unversioned schema change fails build.
+3. Signature vectors pass; tampered and revoked cases fail as specified.
+4. Privacy fixtures pass with zero occurrences.
+
+## Assumptions & open decisions
+- ASSUMPTION: audited Ed25519 library chosen in research record (pending).
+- PROVISIONAL (D06 default, unapproved): signed statements only.

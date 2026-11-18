@@ -1,35 +1,25 @@
 # PS-142-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-142-01. **Owner:** [17_Quality/03_release/mod_compatibility](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_compatibility. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/03_release/mod_compatibility. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-SCH-001, CTR-FED-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the domain schema process for compatibility within 03_release. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-142-01.R01 | Each matrix row names one dimension: `client_platform`, `assistive_tech`, `schema_version`, or `peer_protocol`. | MVP |
+| PS-142-01.R02 | Each support status is one of `supported`, `deprecated` (with end date), `unsupported`. | MVP |
+| PS-142-01.R03 | Result records reference a `commit_sha` and matrix `version`; a result for an older commit cannot satisfy a newer release. | MVP |
+| PS-142-01.R04 | `max_data_class` is `PUBLIC`; no device identifiers or user data. | MVP |
 
-## Requirements to specify
-- [ ] PS-142-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-142-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-142-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`compat_matrix` (versioned):
+- `matrix_key`: string; `version`: semver; `revision`: integer ≥ 1.
+- `rows`: array of `{row_key, dimension, value, support_status, deprecation_end?}`.
+- `value` examples: browser major version, OS major version, `screen-reader-current`, `schema 1.x`, `protocol 1.0.0`.
+- `published_at`: RFC 3339 UTC; `published_by`: `acc_` ID.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+`compat_result`:
+- `result_id`: entity ID `<prefix>_<body>`; prefix PENDING CTR-ID-001 registry entry.
+- `matrix_key`, `matrix_version`, `row_key`, `commit_sha` (40 hex), `outcome`: `pass`, `fail`, `not_run`.
+- `suite_ref`: test suite key from mod_ci; `runner_ref`: `sys_` ID; `recorded_at`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-142-01`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Schema reader compatibility is checked against CTR-SCH-001 minor and major rules; this module stores results only.

@@ -1,35 +1,58 @@
-# PS-056-04 — commands queries events
+# PS-056-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-056-04. **Owner:** [07_Identity/02_profiles/mod_profiles](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_profiles. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_profiles. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (envelope, R03 idempotency), CTR-ERR-001, CTR-SCH-001, CTR-CAP-001 (`profile.*` actions), CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for profiles within 02_profiles. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-056-04.R01 | Every write carries `idempotency_key` (26-char ULID) and `expected_revision`. | MVP |
+| PS-056-04.R02 | `UpdateProfile` p95 ≤ 300 ms server-side; response returns new `revision`. | MVP |
+| PS-056-04.R03 | Public query `GetPublicProfile(prf_id)` returns public-visibility fields only; absent fields omitted (CTR-CAP-001 R10). | MVP |
+| PS-056-04.R04 | Event payloads carry field names changed, never field values, except `profile.updated` with `public` field names only. | MVP |
+| PS-056-04.R05 | Schema IDs `profile.updated`, `profile.visibility_changed`, `profile.frozen`, `profile.disclosure_granted`, `profile.disclosure_revoked`, `profile.private_purged`, version 1.0.0. | MVP |
+| PS-056-04.R06 | Bulk profile import. | Future |
 
-## Requirements to specify
-- [ ] PS-056-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-056-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-056-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Payload | Error codes |
+|---|---|---|
+| `UpdateProfile` | `prf_id`, `patch` (subset of public and private fields), `expected_revision`, `idempotency_key` | `PROF.BIO_*`, `LANGUAGE_INVALID`, `REGION_UNAVAILABLE`, `CONTACT_*`, `PROFILE_FROZEN`, `EVT.REVISION_CONFLICT` |
+| `SetFieldVisibility` | `prf_id`, `field`, `visibility`, `expected_revision` | `CONTACT_NOT_PUBLIC`, `PROFILE_FROZEN` |
+| `DisclosePrivateField` | `prf_id`, `counterparty_ref` (`prf_` or `acc_`), `fields[]`, `expires_at` | `DISCLOSURE_NOT_ALLOWED`, `PROFILE_FROZEN` |
+| `RevokeDisclosure` | `grant_id`, `expected_revision` | `SYS.NOT_FOUND` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Queries: `GetPublicProfile(prf_id)`; `GetOwnProfile(prf_id)` (owner, all fields); `GetCounterpartyView(prf_id, relation_ref)` (participant; granted fields only).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Events map to [workflow_state_machine.md](workflow_state_machine.md). Consumed events: `pseudonym.created`, `pseudonym.retired`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Field rules in [validation_rules.md](validation_rules.md). Error envelope per CTR-ERR-001.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Actions: `profile.read`, `profile.update`, `profile.set_visibility`, `profile.disclose`, `profile.revoke_disclosure`. Matrix in [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-056-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Same key and digest → original result, no new event (CTR-EVT-001 R03).
+- Offline edits queued (D08 PROVISIONAL) and replayed with original `expected_revision`; conflicts become `not_applied` with user message.
+
+## Privacy, retention, abuse
+`actor_ref` is `acc_`; no `acc_` in profile events. Counterparty views logged to `aud_` with `prf_id` and grant ID only.
+
+## Observability & budgets
+`prof_cmd_total{command,result}`; no field values as labels.
+
+## Tests
+- TEST-PS-056-04-01 (contract): payload schemas for all commands and events.
+- TEST-PS-056-04-02 (integration): duplicate `UpdateProfile` returns same revision; one event.
+- TEST-PS-056-04-03 (contract): `profile.updated` contains no private values (fixture).
+- TEST-PS-056-04-04 (negative): `GetPublicProfile` for a private-only field returns field absent, not null.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All commands, queries and events implemented with listed payloads.
+2. Idempotency and revision rules tested.
+3. Event payload lint passes CTR-EVT-001.
+4. Public query never returns non-public fields.
+
+## Assumptions & open decisions
+- ASSUMPTION: aggregate type `profile` registered in CTR-SCH-001.
+- PROVISIONAL (D08 default, unapproved): offline queue until relay acknowledgment.

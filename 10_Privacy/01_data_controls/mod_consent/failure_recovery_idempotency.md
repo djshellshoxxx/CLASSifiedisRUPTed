@@ -1,35 +1,57 @@
-# PS-076-06 — failure recovery idempotency
+# PS-076-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-076-06. **Owner:** [10_Privacy/01_data_controls/mod_consent](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_consent. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-CAP-001 (Failure section), CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for consent within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-076-06.R01 | Withdrawal is never lost: a withdrawal accepted by the client is persisted before acknowledgement or is held in the offline queue. | MVP |
+| PS-076-06.R02 | Retries of grant or withdraw with the same idempotency key return the original result. | MVP |
+| PS-076-06.R03 | If the consent store is unavailable, the consent check returns "not granted" (fail closed) with `SYS.UNAVAILABLE` (retryable). | MVP |
+| PS-076-06.R04 | Conflicting offline grant and withdrawal are resolved by server revision order; a stale queued grant is rejected at commit. | MVP |
 
-## Requirements to specify
-- [ ] PS-076-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-076-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-076-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Uses `revision` and `idempotency_key` fields from CTR-EVT-001. Idempotency records retained 7 days (CTR-EVT-001 R03).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries apply to all commands in [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery paths map onto [workflow_state_machine.md](workflow_state_machine.md). Partial failure after event append and before downstream notify: replay from the event log, never re-run the state change.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | When |
+|---|---|---|
+| SYS.UNAVAILABLE | true | store or policy down |
+| EVT.REVISION_CONFLICT | false | client reloads then retries |
+| CONSENT.PROPAGATION_PENDING | true | downstream acknowledgement not yet received (ASSUMPTION) |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries re-run authorization on every attempt (CTR-CAP-001 R11).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-076-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Concurrency: aggregate lock per (subject, purpose, scope); `expected_revision` check.
+- Offline (D08 default, unapproved): grants and withdrawals queue locally; grant queued with a stale `notice_version` is rejected at commit with `CONSENT.NOTICE_VERSION_STALE`.
+- Timeouts: consent check 2 s, then fail closed (ASSUMPTION).
+- Backoff for retryable codes: exponential, full jitter, base 1 s, cap 60 s (ASSUMPTION).
+
+## Privacy, retention, abuse
+Recovery logs carry request IDs and codes only.
+
+## Observability & budgets
+Metrics: `consent_idempotent_replays_total`, `consent_failclosed_total`. Check p95 ≤ 20 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-076-06-01 (idempotency): replay grant returns same `consent_id`, one event.
+- TEST-PS-076-06-02 (fault): store outage during check returns not-granted and retryable error.
+- TEST-PS-076-06-03 (offline): queued withdrawal survives app restart and is applied once.
+- TEST-PS-076-06-04 (concurrency): two offline devices, grant vs withdraw, resolved by revision order.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero lost withdrawals in fault-injection runs.
+2. Every retry path tested for idempotency.
+3. Fail-closed behavior verified for consent checks.
+
+## Assumptions & open decisions
+- ASSUMPTION: timeouts and backoff values above.
+- PROVISIONAL (D08 default, unapproved): local pending queue until relay acknowledgement.

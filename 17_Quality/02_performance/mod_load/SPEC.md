@@ -1,44 +1,42 @@
 # F17.S02.M01 — load
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F17.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** QA Lead (F17). **Parent:** F17.S02.
 
 ## Purpose and business behavior
-Provide load as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Measures whether the platform meets its performance budgets at realistic and peak demand: listing reads, message sends, region queries (budget and K-threshold per CTR-PRV-001), relay batch ingest (CTR-FED-001 limits) and the cycle optimizer's bounded search (D02). Runs use a synthetic population in staging with reference profiles LD-01 to LD-04. A release is gated on the SLO results and on comparison with the baseline of the same build line.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a release manager, I see whether this build keeps region queries under 400 ms p95 at reference load before I approve it.
+- As an engineer, I learn that my change slowed relay ingest by more than 10% before it reaches the main branch.
+- As an SRE, I can abort a load run within 10 seconds if production-like staging degrades.
 
 ## Scope
-- Required process spec: `load_domain_model.md` (not yet authored)
-- Required process spec: `load_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `load_validation_and_authorization.md` (not yet authored)
-- Required process spec: `load_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `load_interfaces_and_events.md` (not yet authored)
-- Required process spec: `load_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `load_acceptance_and_property_tests.md` (not yet authored)
+- Workload models, load profiles LD-01 to LD-04, run lifecycle, baseline comparison, SLO gate.
+- Excludes: fault injection (`mod_chaos`), single-request correctness (`mod_unit`, `mod_integration`), CI pipeline configuration (F17.S03).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+`load.define_workload | define_profile | run | abort | get_result | list_runs`; events `load_run.*`. Errors `LOAD.*`. Detail in PS-139-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F15.S02.M02 (`mod_relays`, relay ingest under test), F17.S01.M04 (`mod_e2e`, journeys reused as workload operations). Downstream: F17.S02.M02 (`mod_chaos`, steady-state baselines), F17.S03.M01 (`mod_ci`, release gate). Contracts: CTR-ERR-001, CTR-FED-001, CTR-PRV-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns workload models, profiles, run summaries and baselines. Does not own the measured services or their SLO definitions beyond the budget table.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Load tests that look green because the harness is the bottleneck; generators hitting real services; rate-limit behaviour mistaken for failure or hidden; synthetic data that breaks privacy rules; baselines compared across different hardware. Mitigations: harness metrics separated, production block, rate-limited ratio reported separately, synthetic population lint, environment-scoped baselines. No platform custody of money. Pseudonyms do not guarantee anonymity of synthetic accounts.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+LD-01 to LD-04 pass for three consecutive release candidates; release gate wired to F17.S03; D02, D01, D05 resolved for load-relevant portions; budget table confirmed by owners.
 
 ## Required process specification inventory
-- [ ] `load_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `load_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-139-01 (SPEC-DRAFT-COMPLETE)
+- [x] [validation_rules.md](validation_rules.md) — PS-139-02 (SPEC-DRAFT-COMPLETE)
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-139-03 (SPEC-DRAFT-COMPLETE)
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-139-04 (SPEC-DRAFT-COMPLETE)
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-139-05 (SPEC-DRAFT-COMPLETE)
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-139-06 (SPEC-DRAFT-COMPLETE)
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-139-07 (SPEC-DRAFT-COMPLETE)
+- [x] [observability_performance.md](observability_performance.md) — PS-139-08 (SPEC-DRAFT-COMPLETE)
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-139-09 (SPEC-DRAFT-COMPLETE)
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-139-10 (SPEC-DRAFT-COMPLETE)

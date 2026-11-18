@@ -1,35 +1,35 @@
-# PS-140-05 — authorization capabilities
+# PS-140-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-140-05. **Owner:** [17_Quality/02_performance/mod_offline](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_offline. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (action matrix, scopes, default deny), CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for offline within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-140-05.R01 | Default deny: an action without a matching grant returns `SYS.FORBIDDEN` (or `SYS.NOT_FOUND` for unreadable objects). | MVP |
+| PS-140-05.R02 | Scenario writes require capability `offtest.scenario.administer`, held through an explicit grant with `expires_at` ≤ 90 days (ASSUMPTION). | MVP |
+| PS-140-05.R03 | Run recording is limited to `sys_` runner principals holding `offtest.run.record`. | MVP |
+| PS-140-05.R04 | This module grants no access to F15 pending-write or device records. Such reads are denied at every scope. | MVP |
 
-## Requirements to specify
-- [ ] PS-140-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-140-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-140-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Authorization
+| Actor (principal) | Action (CTR-CAP-001 verb) | Scope | Decision |
+|---|---|---|---|
+| QA maintainer `acc_` with `offtest.scenario.administer` | offline_scenario.create, update, retire | global | ALLOW |
+| Same maintainer | offline_scenario.activate (second approver) | global | ALLOW only if approver ≠ requester (CTR-CAP-001 R07 analogue, ASSUMPTION) |
+| CI runner `sys_` with `offtest.run.record` | offline_run.create | global | ALLOW |
+| CI runner `sys_` | offline_scenario.update | global | DENY |
+| Any `acc_` with `offtest.run.read` | offline_run.read (summary fields) | global | ALLOW |
+| `mod_` or `ope_` principal, no grant | any write | global | DENY |
+| Any principal | offline_run.read with fixture body | global | DENY (no fixture bodies stored) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Principal types per CTR-CAP-001 R02. Authorization uses `acc_` identity only; request-body actor fields are ignored (CTR-CAP-001 R11).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Denied requests return `SYS.FORBIDDEN` (403). Hidden scenario or run IDs return `SYS.NOT_FOUND` (404) so existence is not revealed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Failure, idempotency, concurrency, offline
+- Grant revocation takes effect at the next decision; the runner re-checks `offtest.run.record` before each `RecordOfflineRun`.
+- Runners are offline-tolerant only in the sense of buffering run records; authorization is always checked online at flush.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-140-05`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: capability names and 90-day grant ceiling are provisional until F16 Security Lead review.
+- D10 (auth and portability) is not affected by this module: PROVISIONAL (D10 default, unapproved).

@@ -1,35 +1,57 @@
 # PS-132-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-132-03. **Owner:** [16_Security/03_assurance/mod_response](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_response. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_response. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-FED-001
 
-## Purpose and scope
-Define the workflow state machine process for response within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-132-03.R01 | Only transitions in the table are permitted. | MVP |
+| PS-132-03.R02 | Execution must start within 5 min of approval or the action `expires` (ASSUMPTION). | MVP |
+| PS-132-03.R03 | A `failed` action is retried at most 3 times; then it requires human decision. | MVP |
+| PS-132-03.R04 | `rolled_back` is recorded as a new event; the original `executed` record is not edited. | MVP |
 
-## Requirements to specify
-- [ ] PS-132-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-132-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-132-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`status` in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events `response.<past-tense>` (CTR-EVT-001 R10).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | propose | validated | proposed | emit `response.proposed` |
+| proposed | approve (1st) | not proposer | proposed | emit `response.approved` (count 1) |
+| proposed | approve (2nd) | distinct approver; blast radius rule satisfied | approved | emit `response.approved` (count 2) |
+| approved | execute | within 5 min | executing | emit `response.executing` |
+| approved | expire | 5 min elapsed | expired | emit `response.expired` |
+| executing | complete | effect verified | executed | emit `response.executed` |
+| executing | error | step failed | failed | emit `response.failed` |
+| failed | retry | attempts < 3 | executing | emit `response.executing` |
+| executed | rollback | `reversible` = true; approver | rolled_back | emit `response.rolled_back` |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`RESPONSE.TRANSITION_INVALID` (conflict, 409) for other pairs.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Execute guard requires `sys_` executor with capability for the action type.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-132-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Executor steps are idempotent. Concurrent execute: one wins under lock.
+
+## Privacy, retention, abuse
+Transitions contain no personal data.
+
+## Observability & budgets
+Metric `response_action_latency_seconds{action_type}`.
+
+## Tests
+- TEST-PS-132-03-01: unit, full table.
+- TEST-PS-132-03-02: chaos, executor crash mid-step; restart completes once.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No action reaches `executed` with fewer than required approvers.
+2. Expired actions never execute.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5-minute execution window, 3 retries.
+- D10 (rotation after compromise): PROVISIONAL (D10 default, unapproved).

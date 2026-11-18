@@ -1,35 +1,68 @@
 # PS-058-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-058-05. **Owner:** [07_Identity/03_trust/mod_reputation](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_reputation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_reputation. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01, R02, R04, R10, R11), CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for reputation within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-058-05.R01 | Reputation actions are evaluated on the owning `acc_` of the `prf_`; `prf_` is never a principal. | MVP |
+| PS-058-05.R02 | Counter fields visible to subject only. Band and status visible to public. | MVP |
+| PS-058-05.R03 | Counterparty identifiers never returned by this module to any principal other than the owning module that supplied them. | MVP |
+| PS-058-05.R04 | Input writes accepted only from allow-listed `sys_` principals per source. | MVP |
+| PS-058-05.R05 | Moderators see band, status and review state under case grant; no counters beyond case scope needs. | MVP |
+| PS-058-05.R06 | Default deny. | MVP |
 
-## Requirements to specify
-- [ ] PS-058-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-058-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-058-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field visibility (CTR-CAP-001 R10):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | public | subject | sys (source) | case (mod_) | never |
+|---|---|---|---|---|---|
+| `band`, `status` | Y | Y | Y | Y | |
+| counters | | Y | | | |
+| `distinct_counterparties` | | Y | | | |
+| counterparty identifiers | | | owning module only | | Y otherwise |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Action | Actor | Scope | Result |
+|---|---|---|---|
+| `reputation.read_band` | any | public | band, status |
+| `reputation.read_own` | `acc_` owner | self | counters and band |
+| `reputation.input` | allow-listed `sys_` | source scope | write input |
+| `reputation.read_case` | `mod_` | case | band, status, review state |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Denied requests make no state change; decision records store outcome only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `SYS.NOT_FOUND` | false | `err.sys.not_found` |
+| `SYS.FORBIDDEN` | false | `err.sys.forbidden` |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-058-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Relation rules derived at decision time. No grant objects stored for MVP.
+
+## Failure, idempotency, concurrency, offline
+Re-authorized each retry. Public reads may serve cached band up to 60 s old (CTR-CAP-001 R09).
+
+## Privacy, retention, abuse
+Case reads emit `aud_` with `prf_id` and purpose. Source modules' counterparty identifiers are not copied into this module's responses.
+
+## Observability & budgets
+`repute_authz_deny_total{action}`; alert on unusual rate of `reputation.read_own` by one account (scraping of own data is not a threat, but automated polling is).
+
+## Tests
+- TEST-PS-058-05-01 (unit): matrix per principal × action × field.
+- TEST-PS-058-05-02 (negative): non-allow-listed `sys_` input rejected.
+- TEST-PS-058-05-03 (integration): public band response has no counter fields.
+- TEST-PS-058-05-04 (negative): counterparty identifier absent from all non-owner responses.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix implemented; default deny verified.
+2. Counters subject-only.
+3. Input allow-list enforced.
+4. Counterparty IDs never leaked by this module.
+
+## Assumptions & open decisions
+- ASSUMPTION: allow-list of source `sys_` principals maintained by F16.
+- PROVISIONAL (D10 default, unapproved): no change to matrix from user-controlled keys in MVP.

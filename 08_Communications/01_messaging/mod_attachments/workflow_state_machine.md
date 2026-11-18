@@ -1,35 +1,63 @@
 # PS-059-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-059-03. **Owner:** [08_Communications/01_messaging/mod_attachments](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_attachments. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_attachments. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (revision), CTR-ERR-001, CTR-CAP-001 (R11), CTR-PRV-001 (RET-PRIV).
 
-## Purpose and scope
-Define the workflow state machine process for attachments within 01_messaging. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-059-03.R01 | Upload states: `uploading`, `scanning`, `available`, `rejected`, `purged`. `available` only after scan `passed`. | MVP |
+| PS-059-03.R02 | Attachment is downloadable only in `available` and only while its message is not deleted for all. | MVP |
+| PS-059-03.R03 | Message deletion-for-all moves attachments to `purged` within 24 h. | MVP |
+| PS-059-03.R04 | Retention purge moves `available` → `purged` after RET-PRIV period (PS-059-07). | MVP |
+| PS-059-03.R05 | Abandoned uploads (no `CompleteUpload` within 1 h) move to `rejected` and their bytes are deleted. | MVP |
+| PS-059-03.R06 | Re-scan of `available` attachments when signature database updates. | Future (requires ops decision) |
 
-## Requirements to specify
-- [ ] PS-059-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-059-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-059-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`attachment_state` enum closed: `uploading`, `scanning`, `available`, `rejected`, `purged`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`InitiateUpload`, `UploadChunk`, `CompleteUpload`, `CommitWithMessage` (called by mod_private), `PurgeAttachment`; events `attachment.uploaded`, `attachment.scan_passed`, `attachment.scan_failed`, `attachment.purged`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | `InitiateUpload` | quota ok, uploader is `prf_` in thread | `uploading` | reserve quota |
+| `uploading` | `CompleteUpload` | size and sniffing pass | `scanning` | event `attachment.uploaded` |
+| `uploading` | timeout 1 h | — | `rejected` | bytes deleted |
+| `scanning` | scan passed | — | `available` | event `attachment.scan_passed` |
+| `scanning` | scan failed | — | `rejected` | event `attachment.scan_failed`; bytes deleted |
+| `available` | message deleted for all | — | `purged` | bytes deleted within 24 h |
+| `available` | retention | RET-PRIV | `purged` | bytes deleted |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Codes in [validation_rules.md](validation_rules.md); state errors: `ATTACH.NOT_AVAILABLE` (retryable false for purged; true while scanning).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Transitions by uploader (up to `scanning`) and `sys_` scanner/purge jobs.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-059-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Chunked upload resumes from last committed chunk; `UploadChunk` idempotent per chunk index.
+- Scanner timeout retries with backoff; after 3 failures, `rejected` with `scan_failed` reason `scanner_unavailable` (not passed).
+- Purge is idempotent; storage delete retried until confirmed.
+
+## Privacy, retention, abuse
+Rejected bytes deleted; metadata kept only for audit counts.
+
+## Observability & budgets
+`attach_transition_total{from,to}`; scan queue lag p95 ≤ 30 s.
+
+## Tests
+- TEST-PS-059-03-01 (unit): transition table complete.
+- TEST-PS-059-03-02 (integration): unscanned attachment never downloadable.
+- TEST-PS-059-03-03 (integration): deletion-for-all purges within 24 h.
+- TEST-PS-059-03-04 (fault): scanner down → no `available` transition.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No path reaches `available` without `passed`.
+2. Purge deadlines met.
+3. Abandoned uploads removed within 1 h.
+4. Scanner outage fails closed.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1 h upload timeout; 24 h purge after deletion.
+- PROVISIONAL (D07 default, unapproved): RET-PRIV retention.

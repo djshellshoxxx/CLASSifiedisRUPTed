@@ -1,35 +1,50 @@
 # PS-105-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-105-09. **Owner:** [13_Notifications/02_preferences/mod_hours](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_hours. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_hours. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for hours within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-105-09.R01 | Contract tests cover every HOURS.* code and every event in PS-105-04. | MVP |
+| PS-105-09.R02 | Settings UI passes keyboard-only and screen-reader checks; each window row has a labeled day, start and end control. | MVP |
+| PS-105-09.R03 | Time-zone picker has a text-search alternative; no color-only status. | MVP |
+| PS-105-09.R04 | Tests run with pinned tzdata and fixed clock. | MVP |
 
-## Requirements to specify
-- [ ] PS-105-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-105-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-105-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: accounts in Europe/Berlin, America/New_York, Australia/Sydney, Pacific/Chatham (+12:45 edge), and a non-DST zone.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay each command with valid, invalid, duplicate and stale-revision inputs.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+All rows of workflow_state_machine covered.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+One failing fixture per validation rule in PS-105-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Cross-account and sys-only fixtures (PS-105-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-105-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault-injection fixtures from PS-105-06.
+
+## Privacy, retention, abuse
+Log and event scans for window values (PS-105-07).
+
+## Observability & budgets
+Suite runtime ≤ 5 min for contract layer.
+
+## Tests
+- TEST-PS-105-09-01 (contract): all HOURS codes match CTR-ERR-001.
+- TEST-PS-105-09-02 (e2e): create three windows, verify push deferral in fixed clock.
+- TEST-PS-105-09-03 (a11y): settings keyboard path and labels.
+- TEST-PS-105-09-04 (offline): edit while offline, reconnect, conflict view.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Contract suite green on CI.
+2. DST fixtures pass for all five zones.
+3. Accessibility checklist submitted to Accessibility Lead (future gate).
+
+## Assumptions & open decisions
+- ASSUMPTION: fixture zone list.
+- No Dxx blocks test scope.

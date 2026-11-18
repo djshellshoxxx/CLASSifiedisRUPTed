@@ -1,35 +1,62 @@
 # PS-091-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-091-02. **Owner:** [11_Federation/03_interop/mod_trust](SPEC.md). **Implementing module:** 11_Federation/03_interop/mod_trust. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/03_interop/mod_trust. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the validation rules process for trust within 03_interop. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-091-02.R01 | `peer_id` must match `^fpr_[0-9A-HJKMNP-TV-Z]{26}$` after lowercase-prefix/uppercase-body normalization. Other lengths return `ID.MALFORMED`. | MVP |
+| PS-091-02.R02 | `reason_code` must be in the registry: `EQUIVOCATION`, `SIG_FAILURES`, `KEY_COMPROMISED`, `MODERATION_CASE`, `FINGERPRINT_CONFIRMED`, `ADMIN_REVIEW`, `RECOVERY_REVIEWED`. Unknown → `TRUST.REASON_UNKNOWN`. | MVP |
+| PS-091-02.R03 | `evidence_ref` is required for `EQUIVOCATION`, `KEY_COMPROMISED` and `MODERATION_CASE`. Missing → `TRUST.EVIDENCE_REQUIRED`. | MVP |
+| PS-091-02.R04 | `fingerprint_confirmation` (SHA-256 of the peer's Ed25519 public key, ASSUMPTION) must equal the current key fingerprint for `peer.admit`. Mismatch → `TRUST.FINGERPRINT_MISMATCH`. | MVP |
+| PS-091-02.R05 | `expected_revision` is required on every command. Mismatch → `EVT.REVISION_CONFLICT`. | MVP |
+| PS-091-02.R06 | No free-text reason field exists. Input values are never echoed in errors (CTR-ERR-001 R07). | MVP |
 
-## Requirements to specify
-- [ ] PS-091-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-091-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-091-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Error registry for this module (envelope per CTR-ERR-001). Module prefix is `TRUST` (≤ 8 characters).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Code | Category | HTTP | Retryable | `message_key` | `details.rule` |
+|---|---|---|---|---|---|
+| `TRUST.PEER_NOT_FOUND` | not_found | 404 | false | `err.trust.peer_not_found` | — |
+| `TRUST.TRANSITION_NOT_ALLOWED` | unprocessable_state | 422 | false | `err.trust.transition_not_allowed` | `from_state` |
+| `TRUST.FINGERPRINT_MISMATCH` | unprocessable_state | 422 | false | `err.trust.fingerprint_mismatch` | `fingerprint_confirmation` |
+| `TRUST.EVIDENCE_REQUIRED` | validation | 400 | false | `err.trust.evidence_required` | `evidence_ref` |
+| `TRUST.REASON_UNKNOWN` | validation | 400 | false | `err.trust.reason_unknown` | `reason_code` |
+| `EVT.REVISION_CONFLICT` | conflict | 409 | false | `err.evt.revision_conflict` | `expected_revision` |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+`retryable: false` for `EVT.REVISION_CONFLICT`: the same unchanged request with the same `expected_revision` fails again. The client must re-read `trust_state` and resend with the new revision.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+Validation runs before the state table (PS-091-03). Order: format, enum, required fields, fingerprint, revision, transition guard.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Guards referenced from PS-091-03; validation failures never write `trs_`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-091-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Diagnostics are privacy-safe: no peer hostname, key bytes or evidence content in any response or log (CTR-ERR-001 R06).
+
+## Authorization
+Validation is independent of actor. Authorization is evaluated first for existence (`TRUST.PEER_NOT_FOUND` is returned for peers the actor cannot read, CTR-ERR-001 R08).
+
+## Failure, idempotency, concurrency, offline
+Validation errors are not stored in the idempotency table (only successful results are, CTR-EVT-001 R03).
+
+## Privacy, retention, abuse
+Rejected requests are logged by code and `request_id` only.
+
+## Observability & budgets
+Counter `trust_validation_error_total{code}`; no peer label.
+
+## Tests
+- `TEST-PS-091-02-01` unit: each registry code triggers on its exact condition and no other.
+- `TEST-PS-091-02-02` negative: fingerprint off by one character returns `TRUST.FINGERPRINT_MISMATCH` and writes no row.
+- `TEST-PS-091-02-03` contract: error bodies validate against CTR-ERR-001 and contain no input echo.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command rejects invalid input before any write.
+2. Registry codes match CTR-ERR-001 format; `message_key` derived mechanically from `code`.
+3. Zero input values appear in error responses in the test corpus.
+
+## Assumptions & open decisions
+- ASSUMPTION: fingerprint is SHA-256 over the Ed25519 public key bytes; F16 must confirm the algorithm.
+- D01 (federated protocol), PROVISIONAL default: signed envelopes, explicit opt-in (unapproved).

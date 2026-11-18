@@ -1,35 +1,51 @@
 # PS-020-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-02. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_three. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001. Module code `CYCTHREE` (PENDING CTR-ERR-001).
 
-## Purpose and scope
-Define the validation rules process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-020-02.R01 | Input must reference a FEASIBLE `ccd_` verdict with length 3. | MVP |
+| PS-020-02.R02 | Three participant refs and three `lst_` refs are pairwise distinct. | MVP |
+| PS-020-02.R03 | No listing may be in a locked exchange or another live three-party cycle (checked at proposal and again at lock). | MVP |
+| PS-020-02.R04 | Verdict must be younger than 15 min (PS-016-03 window). | MVP |
+| PS-020-02.R05 | F06 relevance score may order candidates but never makes an infeasible cycle eligible. | MVP |
 
-## Requirements to specify
-- [ ] PS-020-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Parameters: `length=3` fixed; window 15 min (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+| Code | Category (HTTP) | Retryable | Trigger | details[].rule |
+|---|---|---|---|---|
+| CYCTHREE.LENGTH_MISMATCH | validation (400) | false | length ≠ 3 | length |
+| CYCTHREE.NOT_FEASIBLE | unprocessable_state (422) | false | verdict not FEASIBLE | verdict |
+| CYCTHREE.DUPLICATE_PARTICIPANT | validation (400) | false | repeated participant | distinct_participants |
+| CYCTHREE.LISTING_LOCKED | unprocessable_state (422) | true | listing in locked exchange or live cycle | listing_status |
+| CYCTHREE.STALE_VERDICT | precondition_failed (412) | true | verdict older than window | verdict_age |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Messages: `err.cycthree.<code>`; no values echoed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Proposer is the sys_ matcher; users do not submit cycles.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Deterministic for same input and state.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Errors carry no candidate refs.
+
+## Observability & budgets
+Counts per code.
+
+## Tests
+- TEST-PS-020-02-01 (unit): one fixture per code.
+- TEST-PS-020-02-02 (negative): length 4 input refused with LENGTH_MISMATCH.
+- TEST-PS-020-02-03 (property): relevance score changes order only, never eligibility.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each code produced only by its trigger.
+2. No locked listing reaches a proposal in 100% of runs.
+3. Relevance score has no effect on the set of eligible candidates.
+
+## Assumptions & open decisions
+- PROVISIONAL (D02 default, unapproved).

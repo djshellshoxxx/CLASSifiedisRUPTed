@@ -1,35 +1,60 @@
 # PS-105-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-105-02. **Owner:** [13_Notifications/02_preferences/mod_hours](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_hours. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_hours. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the validation rules process for hours within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-105-02.R01 | `tz` must be a canonical IANA name present in the pinned tzdata release recorded in config. Aliases are normalized to canonical name before storage. | MVP |
+| PS-105-02.R02 | `weekdays` values are integers 1–7 (ISO Monday=1). Empty array is rejected. | MVP |
+| PS-105-02.R03 | `start_min` and `end_min` are integers in 0–1440 and multiples of 15. `end_min` = 1440 is allowed; `start_min` = `end_min` is rejected. | MVP |
+| PS-105-02.R04 | Replace-all payload is at most 14 windows per channel and 56 total. | MVP |
+| PS-105-02.R05 | Overlapping windows on the same channel and weekday are merged server-side, and the response reports the merged set. | MVP |
 
-## Requirements to specify
-- [ ] PS-105-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-105-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-105-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Rule | Error code | Retryable | message_key |
+|---|---|---|---|---|
+| tz | R01 | HOURS.TZ_UNKNOWN | false | err.hours.tz_unknown |
+| weekdays | R02 | HOURS.WEEKDAY_INVALID | false | err.hours.weekday_invalid |
+| start_min, end_min | R03 | HOURS.TIME_RANGE_INVALID | false | err.hours.time_range_invalid |
+| window count | R04 | HOURS.WINDOW_LIMIT | false | err.hours.window_limit |
+| channel | enum push, email, inapp | HOURS.CHANNEL_UNKNOWN | false | err.hours.channel_unknown |
+| revision | matches stored | SYS.CONFLICT | true | err.sys.conflict |
+| account | must be `acc_` principal | SYS.FORBIDDEN | false | err.sys.forbidden |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Validation runs before write. Rejected writes emit no event.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable (guard only).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Envelope per CTR-ERR-001. `details[].field` uses JSON-pointer style (`/windows/3/start_min`). Input values are never echoed (CTR-ERR-001 R07).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation does not authorize. See authorization_capabilities.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-105-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Validation is deterministic. Clients may pre-validate windows offline using the same tzdata snapshot; server remains authoritative.
+
+## Privacy, retention, abuse
+Rejected `tz` values are not logged in clear. Logs carry rule enum only.
+
+## Observability & budgets
+Counter per code. Validation p95 ≤ 2 ms.
+
+## Tests
+- TEST-PS-105-02-01 (unit): alias `Europe/Berlin` vs legacy alias normalizes to canonical name.
+- TEST-PS-105-02-02 (property): all start and end values not multiple of 15 are rejected.
+- TEST-PS-105-02-03 (unit): overlapping windows merge and return merged set.
+- TEST-PS-105-02-04 (contract): each code matches CTR-ERR-001 format.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every rule has one failing and one passing fixture.
+2. Pinned tzdata version is enforced at startup.
+3. No echoed input in responses.
+
+## Assumptions & open decisions
+- ASSUMPTION: tzdata updated monthly by platform operations.
+- Message keys pending mod_languages catalog.
+- D05 PROVISIONAL (D05 default, unapproved) governs zone source.

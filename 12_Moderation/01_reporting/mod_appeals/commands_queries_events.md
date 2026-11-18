@@ -1,35 +1,66 @@
 # PS-092-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-092-04. **Owner:** [12_Moderation/01_reporting/mod_appeals](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_appeals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_appeals. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the commands queries events process for appeals within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-092-04.R01 | State-changing commands require `Idempotency-Key` and `expected_revision`. | MVP |
+| PS-092-04.R02 | Submit p95 ≤ 300 ms; decision commands p95 ≤ 300 ms; hard timeout 2 s. | MVP |
+| PS-092-04.R03 | Events are `appeal.<past-tense verb>` (CTR-EVT-001 R10), schema_version 1.0.0. | MVP |
+| PS-092-04.R04 | Event payloads carry IDs, state and decision code only; never `body` or reviewer notes. | MVP |
 
-## Requirements to specify
-- [ ] PS-092-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-092-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-092-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Body | Event |
+|---|---|---|
+| `appeal.submit` | `target_id`, `body`, `evidence_refs[]` | `appeal.received` |
+| `appeal.withdraw` | `apl_id`, `expected_revision` | `appeal.withdrawn` |
+| `appeal.assign` | `apl_id`, `expected_revision`, `reviewer_ref` | `appeal.assigned` |
+| `appeal.decide` | `apl_id`, `expected_revision`, `decision_code`, `reason_code`, `modified_action?` | `appeal.decided` |
+| `appeal.acknowledge_implementation` | `apl_id`, `enforcement_revision` | `appeal.implemented` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Queries: `appeal.get` (appellant: own, state only; reviewer: assigned, with body), `appeal.list_backlog` (ope/mod, case scope, cursor ≤ 100).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Example:
+```http
+POST /v1/moderation/appeals
+Idempotency-Key: 0190f4c2-1a7e-7b3c-9d2e-6f8a0b1c2d3e
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+{"target_id": "enf_01J9Z5...", "body": "The listing was reported by mistake; photos attached.", "evidence_refs": ["evd_01J9Z6..."]}
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+201 {"apl_id": "apl_01J9Z7...", "state": "received", "revision": 1, "window_ends_at": "2026-12-18T09:00:00Z"}
+```
+Event envelope per CTR-EVT-001. `max_data_class` = PSEUDONYMOUS. Events never carry `body`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-092-04`; scenarios and fixtures to be detailed in Prompt 3.
+## States & transitions
+One event per transition in [PS-092-03](workflow_state_machine.md).
+
+## Validation & errors
+Codes in [PS-092-02](validation_rules.md), plus `APPEALS.TRANSITION_NOT_ALLOWED` (422, non-retryable).
+
+## Authorization
+Capabilities in [PS-092-05](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Scope and retention of idempotency keys per CTR-EVT-001 R03; retry rules in [PS-092-06](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Federation export of appeal events is not supported in MVP (PRIVATE_PERSONAL data, CTR-FED-001 R03).
+
+## Observability & budgets
+Span `appeals.<command>` with `request_id`, `code`, duration.
+
+## Tests
+- `TEST-PS-092-04-01` contract: bodies and events validate against schemas; unknown fields rejected.
+- `TEST-PS-092-04-02` contract: event payloads contain no `body` string (schema forbids it).
+- `TEST-PS-092-04-03` integration: `appeal.submit` twice with the same key → one `apl_`, one event.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command and event has schema, idempotency rule and error list.
+2. No event payload includes appeal text in the test corpus.
+3. Submit and decide meet the latency budget in the load test.
+
+## Assumptions & open decisions
+- ASSUMPTION: `enforcement_revision` in `appeal.acknowledge_implementation` is the revision returned by `mod_enforcement`.
+- D01 (federated protocol), PROVISIONAL default: appeals are not federated in MVP (unapproved).

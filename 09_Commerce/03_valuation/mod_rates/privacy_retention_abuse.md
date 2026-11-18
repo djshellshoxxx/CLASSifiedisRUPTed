@@ -1,35 +1,52 @@
-# PS-075-07 — privacy retention abuse
+# PS-075-07 — privacy, retention and abuse controls
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-075-07. **Owner:** [09_Commerce/03_valuation/mod_rates](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_rates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_rates (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R09), CTR-COM-001 (Privacy), CTR-FED-001 (R02). **Decisions:** D03, D07 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the privacy retention abuse process for rates within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-075-07.R01 | Quotes contain no party identifiers; quote-to-proposal link is by `quote_id` only. | MVP |
+| PS-075-07.R02 | Quote-shopping: a party may request at most 30 quotes per pair per hour (ASSUMPTION); quote requests are served from the current round, not new rounds. | MVP |
+| PS-075-07.R03 | Source operators receive no proposal or party data. | MVP |
+| PS-075-07.R04 | Quote history retained 24 months with claims that reference it (RET-EVD); unreferenced round records 30 days. | MVP |
+| PS-075-07.R05 | Quotes are not federated in MVP (CTR-FED-001 financial evidence deferred). | MVP |
 
-## Requirements to specify
-- [ ] PS-075-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-075-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-075-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Quotes PUBLIC; round records PSEUDONYMOUS (no party); source records PUBLIC.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events carry IDs only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Per PS-075-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Rate-limit breach returns `SYS.RATE_LIMITED`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per PS-075-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-075-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Retention purge idempotent.
+
+## Privacy, retention, abuse
+- Oracle manipulation: divergence and minimum-source rules (PS-075-02).
+- Source–party collusion: source operators are independent and disclosed; disabling is dual-controlled.
+- Quote-shopping: R02 limit and single-round serving.
+
+## Observability & budgets
+Alert on R02 breaches per party pattern (aggregate, K_MIN respected).
+
+## Tests
+- TEST-PS-075-07-01 (lint): quote schema has no party field.
+- TEST-PS-075-07-02 (abuse): 31st quote request in an hour rejected.
+- TEST-PS-075-07-03 (contract): source operator role cannot read proposals.
+- TEST-PS-075-07-04 (integration): retention purge of round records at 30 days.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No party data in quotes.
+2. Abuse controls tested.
+
+## Assumptions & open decisions
+- ASSUMPTION: R02 limit.
+- D03, D07 (PROVISIONAL, unapproved).

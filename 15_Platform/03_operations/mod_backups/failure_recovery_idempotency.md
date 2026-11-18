@@ -1,35 +1,55 @@
-# PS-120-06 — failure recovery idempotency
+# PS-120-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-120-06. **Owner:** [15_Platform/03_operations/mod_backups](SPEC.md). **Implementing module:** 15_Platform/03_operations/mod_backups. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/03_operations/mod_backups (F15.S03.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for backups within 03_operations. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-120-06.R01 | Data is written in 64 MiB chunks, each with SHA-256 recorded in the manifest; a chunk failure retries that chunk only. | MVP |
+| PS-120-06.R02 | Per-chunk timeout 60 s; job timeout 6 h; retry up to 5 times with full-jitter backoff (base 1 s, cap 5 min, ASSUMPTION). | MVP |
+| PS-120-06.R03 | A job resumes from the last verified chunk after restart; it never restarts a completed chunk. | MVP |
+| PS-120-06.R04 | Missed schedules run once when the scheduler returns; no catch-up burst (maximum one missed run queued per scope). | MVP |
+| PS-120-06.R05 | Store unavailability returns `BACKUP.STORE_UNAVAILABLE` (retryable) and keeps the job in `running`. | MVP |
+| PS-120-06.R06 | A partial set is never marked complete; restore of partial data is impossible by state (PS-120-03 R01). | MVP |
 
-## Requirements to specify
-- [ ] PS-120-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-120-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-120-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Chunk record: `{chunk_index, byte_offset, byte_length, sha256}` in the manifest, sorted by `chunk_index`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`backup.run` is idempotent on `bkp_id`; repeats return current status.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+`running` → `failed` on unrecoverable error; retries stay in `running`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| BACKUP.STORE_UNAVAILABLE | true | unavailable / 503 | Destination down; retried. |
+| BACKUP.KEY_UNAVAILABLE | true | unavailable / 503 | KMS unreachable; job waits. |
+| BACKUP.CHUNK_CORRUPT | false | internal / 500 | Chunk hash mismatch after retry budget. |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retries reuse the `sys` principal; no user action required.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-120-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrency: at most one running job per (scope, kind). Backups are server-side; no offline client path. Power loss at any point is recovered by R03.
+
+## Privacy, retention, abuse
+Partial objects are encrypted like complete ones; cleanup per PS-120-03 R05.
+
+## Observability & budgets
+Metrics: `backup_chunk_retries_total`, `backup_job_duration_seconds`. Alert when job duration exceeds 3 h (ASSUMPTION).
+
+## Tests
+- TEST-PS-120-06-01 (fault injection): store fails on chunk 17 of 40; job resumes from 17 without re-writing 1–16.
+- TEST-PS-120-06-02 (kill): process killed at 50% of run; restart resumes; final manifest hash equals uninterrupted run.
+- TEST-PS-120-06-03 (concurrency): two schedulers, one job created.
+- TEST-PS-120-06-04 (unit): KMS outage keeps job `running`, then succeeds after recovery.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Resume from last verified chunk demonstrated (TEST-01, TEST-02).
+2. TEST-PS-120-06-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 64 MiB chunks; 60 s chunk timeout; 6 h job timeout.
+- PROVISIONAL (D07 default).

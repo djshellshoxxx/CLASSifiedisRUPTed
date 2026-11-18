@@ -1,35 +1,65 @@
 # PS-092-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-092-07. **Owner:** [12_Moderation/01_reporting/mod_appeals](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_appeals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_appeals. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R06, R07, R12), CTR-FED-001 (R03), CTR-CAP-001 (R08).
 
-## Purpose and scope
-Define the privacy retention abuse process for appeals within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-092-07.R01 | Appeal `body` is PRIVATE_PERSONAL and is stored only in `apl_appeal`; never in events, logs, analytics or previews. | MVP |
+| PS-092-07.R02 | Appeal data is never federated (CTR-FED-001 R03). | MVP |
+| PS-092-07.R03 | Reporter identity is not stored on appeal rows and is not revealed in any appeal response. | MVP |
+| PS-092-07.R04 | Push or in-app text for appeal outcomes is generic (for example "An update on your appeal is available") (CTR-PRV-001 R10). | MVP |
+| PS-092-07.R05 | Appellant may request deletion of `body` after `closed`; the appeal row keeps IDs, state and decision code. | MVP |
 
-## Requirements to specify
-- [ ] PS-092-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-092-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-092-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention (D07, PROVISIONAL):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Record | Retention | After expiry |
+|---|---|---|
+| `apl_appeal.body` and `evidence_refs` | 12 months after `closed` | body nulled; hash kept |
+| `apl_appeal` IDs, state, decision code | 24 months after `closed` | hard delete unless legal hold |
+| `apl_event` | same as appeal row | redaction keeps envelope, digest replaces payload (CTR-EVT-001 R08) |
+| `aud_` body-read records | per F16 audit policy | not owned here |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Legal holds (CTR-PRV-001 R07) are scoped to `cas_`, not to individual appeals.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+Deletion request → `appeal.body_deleted` event with counts only (CTR-PRV-001 R12).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Deletion does not change `state`. A `withdrawn` appeal's body is deleted at 30 days (ASSUMPTION).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-092-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Deletion requests for open appeals → `APPEALS.TRANSITION_NOT_ALLOWED`.
+
+## Authorization
+Only the appellant or an operator under dual control with a legal-hold purpose may trigger deletion.
+
+## Failure, idempotency, concurrency, offline
+Retention job idempotent by `apl_id` cursor; failures retried next run; deletion propagates to backups per CTR-PRV-001 R06.
+
+## Privacy, retention, abuse
+- Abuse 1 (appeal spam): max 5 open appeals per `acc_` (ASSUMPTION).
+- Abuse 2 (retaliation): reviewer identity hidden from appellant; reporter identity hidden from appellant and reviewer.
+- Abuse 3 (stalling): enforcement stays in force unless a stay is recorded (PS-092-03 R03).
+- Abuse 4 (doxxing via appeal text): body is never shown to the reporter; moderation on body follows F12.S02 policy.
+- Metadata: reviewer and appellant IDs are pseudonymous; no IP addresses in appeal rows.
+
+## Observability & budgets
+Logs contain `apl_id`, `code`, `state` only.
+
+## Tests
+- `TEST-PS-092-07-01` privacy: schema scan finds no reporter identifier and no body in events.
+- `TEST-PS-092-07-02` retention: body nulled at 12 months in simulated clock; row kept to 24 months.
+- `TEST-PS-092-07-03` abuse: sixth open appeal → `APPEALS.DUPLICATE_OPEN` or quota error (code per PS-092-02).
+- `TEST-PS-092-07-04` push: outcome notification contains no appeal text or reason detail.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero PRIVATE_PERSONAL fields outside `apl_appeal.body`.
+2. Deletion completes within 24 h in staging drill (CTR-PRV-001 R06).
+3. Reporter identity absent from all appellant-visible responses.
+
+## Assumptions & open decisions
+- ASSUMPTION: 12-month body retention is a placeholder pending Privacy Lead review (F10).
+- D07 (retention), PROVISIONAL default: minimal per-category defaults with legal-hold exceptions (unapproved).
+- D01 (federated protocol), PROVISIONAL default: no federation of appeals in MVP (unapproved).

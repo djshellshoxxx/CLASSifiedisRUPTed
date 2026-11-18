@@ -1,35 +1,62 @@
 # PS-097-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-097-03. **Owner:** [12_Moderation/02_policy/mod_spam](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_spam. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_spam. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-FED-001 (R04), CTR-CAP-001.
 
-## Purpose and scope
-Define the workflow state machine process for spam within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-097-03.R01 | Only the transitions in the table are reachable. Others → `SPAM.TRANSITION_NOT_ALLOWED`. | MVP |
+| PS-097-03.R02 | A listing or service in `pending_evaluation` is not discoverable publicly (PS-097-06). | MVP |
+| PS-097-03.R03 | `quarantine` holds an item out of public discovery and shows the author a generic "under review" state. | MVP |
+| PS-097-03.R04 | A quarantine without reviewer decision for 7 days transitions to `released` with reason `NO_DECISION` (ASSUMPTION). | MVP |
+| PS-097-03.R05 | Message verdicts never remove a delivered message; they only throttle or block further sends from that sender. | MVP |
 
-## Requirements to specify
-- [ ] PS-097-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-097-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-097-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+States: `pending_evaluation`, `allowed`, `quarantined`, `released`, `rejected`. Stored in `spm_verdict.state`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [PS-097-04](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | `spam.evaluated` (created) | subject valid, model version active | pending_evaluation | feature extraction queued |
+| pending_evaluation | `spam.evaluated` (allow) | decision = allow | allowed | subject visible to discovery |
+| pending_evaluation | `spam.quarantined` | decision = quarantine | quarantined | hidden from discovery; author notified generically |
+| pending_evaluation | `spam.rejected` | decision = reject (high confidence and pattern rule) | rejected | author notified; appeal target |
+| quarantined | `spam.released` | reviewer release with case or review ref | released | visible; verdict kept |
+| quarantined | `spam.rejected` | reviewer reject | rejected | hidden permanently; appeal target |
+| quarantined | `spam.expired` | 7 days, no decision | released | visible; reason `NO_DECISION` |
+| allowed | `spam.quarantined` | later signal (new mod_signals input) | quarantined | as quarantined row |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+`released` and `rejected` are terminal for the verdict; a new evaluation creates a new verdict for a new revision of the subject.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Invalid transitions → `SPAM.TRANSITION_NOT_ALLOWED`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-097-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Automated `sys_` may create verdicts and move `pending_evaluation` to `allowed`, `quarantined` or `rejected` only for `reject` with high confidence and a pattern rule; reviewer actions per PS-097-05.
+
+## Failure, idempotency, concurrency, offline
+Concurrent reviewer and expiry job: revision check decides; loser gets `EVT.REVISION_CONFLICT`.
+
+## Privacy, retention, abuse
+Author notices carry no feature detail and no reason beyond the category (`reason_code` mapped to generic category).
+
+## Observability & budgets
+`spam_transition_total{from,to,decision}`; `spam_quarantine_age_seconds` gauge.
+
+## Tests
+- `TEST-PS-097-03-01` unit: exhaustive state × event matrix.
+- `TEST-PS-097-03-02` integration: quarantined listing absent from discovery query results within 1 index refresh.
+- `TEST-PS-097-03-03` integration: 7-day expiry releases with `NO_DECISION`.
+- `TEST-PS-097-03-04` integration: message verdict does not delete delivered message.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Table is the sole source of transitions.
+2. Quarantined subjects never appear in public discovery in test corpus.
+3. No automated path rejects an item without a registry pattern rule.
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day quarantine window and auto-release on no decision are defaults for Trust&Safety review.
+- D08 (PWA offline writes), PROVISIONAL default: offline listing drafts are evaluated only after relay acknowledgement (unapproved).

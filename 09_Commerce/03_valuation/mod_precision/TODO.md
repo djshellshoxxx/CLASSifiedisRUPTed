@@ -1,10 +1,13 @@
-# TODO
+# TODO — F09.S03.M03 precision
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval).
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
+- [x] Draft all ten process specifications (PS-074-01 to PS-074-10).
+- [x] Define amount grammar, overflow limit and HALF_EVEN conversion formula.
+- [ ] Build golden vector set (≥ 500) with two independent implementations (ASSUMPTION target).
+- [ ] Select arbitrary-precision library with version and license; record ADR (no custom decimal code).
+- [ ] Add float-prohibition lint for commerce packages (CI).
+- [ ] Confirm HALF_EVEN as final rounding mode with F09 (D03 PROVISIONAL).
+- [ ] Record Commerce Lead as owner in planning/CONTRACTS.md (lead action).
 - [ ] Implement (future prompt only).
 - [ ] Verify tests, accessibility, privacy and security (future prompt).

@@ -1,35 +1,54 @@
 # PS-123-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-123-03. **Owner:** [15_Platform/04_configuration/mod_feature](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_feature. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/04_configuration/mod_feature (F15.S04.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the workflow state machine process for feature within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-123-03.R01 | Lifecycle is `draft` → `active` → `deprecated` → `retired`; no other transitions. | MVP |
+| PS-123-03.R02 | Only `active` features can be enabled by PS-124 flags. | MVP |
+| PS-123-03.R03 | `deprecated` features keep existing flag values but refuse new enablement. | MVP |
+| PS-123-03.R04 | `retired` removes the feature from evaluation after its flags are set to off. | MVP |
 
-## Requirements to specify
-- [ ] PS-123-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-123-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-123-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`lifecycle` field. Events: `feature.defined`, `feature.activated`, `feature.deprecated`, `feature.retired` (CTR-EVT-001, aggregate `feature`).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`feature.define`, `feature.activate`, `feature.deprecate`, `feature.retire` (PS-123-04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | define | PS-123-02 passes | draft | emit `feature.defined` |
+| draft | activate | owner module contract test passes; D refs recorded | active | emit `feature.activated` |
+| active | deprecate | no dependent `active` feature requires it | deprecated | emit `feature.deprecated`; flags set off within 24 h |
+| deprecated | retire | 30 days elapsed; all flags off | retired | emit `feature.retired`; slug reserved forever |
+| active | retire | refused (must deprecate first) | — | `FEATURE.DEPENDENCY_UNMET` |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions return `SYS.CONFLICT`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Activate and retire need `feature.administer` with two `ope` approvers (PS-123-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-123-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Transitions idempotent on (`slug`, from, to). Revision check on the feature aggregate.
+
+## Privacy, retention, abuse
+Not applicable.
+
+## Observability & budgets
+Metric: `feature_lifecycle_transitions_total{from,to}`.
+
+## Tests
+- TEST-PS-123-03-01 (unit): transition table; illegal transitions refused.
+- TEST-PS-123-03-02 (integration): deprecation turns flags off within 24 h.
+- TEST-PS-123-03-03 (lint): retired slug cannot be redefined.
+- TEST-PS-123-03-04 (integration): retire of a required feature refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Lifecycle table enforced (TEST-01).
+2. TEST-PS-123-03-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day deprecation window.

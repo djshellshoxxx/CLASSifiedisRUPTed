@@ -1,35 +1,54 @@
 # PS-131-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-131-02. **Owner:** [16_Security/03_assurance/mod_incident](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_incident. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_incident. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-SCH-001
 
-## Purpose and scope
-Define the validation rules process for incident within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-131-02.R01 | Reject `severity` outside SEV1–SEV4. | MVP |
+| PS-131-02.R02 | Reject declaration of SEV1/SEV2 without commander. | MVP |
+| PS-131-02.R03 | Reject `affected_scope` containing any field not in the closed set. | MVP |
+| PS-131-02.R04 | Reject timeline text containing pattern-matched precise coordinates, email addresses or phone numbers (CTR-PRV-001 R03). | MVP |
+| PS-131-02.R05 | Reject status transitions not in the state table. | MVP |
 
-## Requirements to specify
-- [ ] PS-131-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-131-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-131-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Applies to [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applies to `incident.declare`, `incident.update_scope`, `incident.append_timeline`, `incident.change_severity`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation failure writes nothing.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Category | Retryable | message_key | Rule |
+|---|---|---|---|---|
+| INCIDENT.SEVERITY_INVALID | validation (400) | false | err.incident.severity_invalid | R01 |
+| INCIDENT.COMMANDER_REQUIRED | precondition_failed (412) | false | err.incident.commander_required | R02 |
+| INCIDENT.SCOPE_INVALID | validation (400) | false | err.incident.scope_invalid | R03 |
+| INCIDENT.PRECISE_DATA_IN_TEXT | validation (400) | false | err.incident.precise_data_in_text | R04 (no value echoed) |
+| INCIDENT.TRANSITION_INVALID | conflict (409) | false | err.incident.transition_invalid | R05 |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation after authentication; denial of visibility returns `SYS.NOT_FOUND` (CTR-ERR-001 R08).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-131-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deterministic. Offline reporters may queue a report locally (D08), which is validated on arrival.
+
+## Privacy, retention, abuse
+Error responses never echo the offending text; only the field path and rule are returned.
+
+## Observability & budgets
+Counter `incident_validation_fail_total{rule}`.
+
+## Tests
+- TEST-PS-131-02-01: unit, one fixture per rule.
+- TEST-PS-131-02-02: privacy, a fixture containing a coordinate pair is rejected and not echoed.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each rule has failing and passing fixtures.
+2. No rejected text appears in any response or log.
+
+## Assumptions & open decisions
+- ASSUMPTION: regex set for precise data is conservative and reviewed by F10.
+- D05 (geoprivacy): PROVISIONAL (D05 default, unapproved).

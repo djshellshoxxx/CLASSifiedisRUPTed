@@ -1,35 +1,64 @@
 # PS-096-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-096-07. **Owner:** [12_Moderation/02_policy/mod_enforcement](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_enforcement. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_enforcement. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R06, R07, R10, R12), CTR-FED-001 (R07), CTR-CAP-001 (R08).
 
-## Purpose and scope
-Define the privacy retention abuse process for enforcement within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-096-07.R01 | No free-text narrative in this module. Case narrative stays in F12 case records. | MVP |
+| PS-096-07.R02 | Target owners see action type, dates and reason category only; never the applier, approver or case ID. | MVP |
+| PS-096-07.R03 | Enforcement notifications are generic (for example "A listing of yours was hidden. Open the app for details") with no reason detail in push (CTR-PRV-001 R10). | MVP |
+| PS-096-07.R04 | Federation: only tombstones leave the node (CTR-FED-001 R07). | MVP |
+| PS-096-07.R05 | Enforcement on `acc_` targets requires a case grant with purpose `enforcement`; no bulk actions on more than 50 targets per command (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-096-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-096-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-096-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention (D07, PROVISIONAL):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Record | Retention | After expiry |
+|---|---|---|
+| `enf_action` (active, expired, reversed, superseded) | 12 months after terminal state | row kept as IDs and codes only, then hard delete unless legal hold |
+| `enf_event` | same as action | redaction keeps envelope, digest replaces payload |
+| `rejected` pending suspensions | 90 days | hard delete |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Repeat-offender history is not stored here; any such aggregation is a future decision needing a Privacy Lead review (F10).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+Legal holds (CTR-PRV-001 R07) scope to `cas_`, not to individual actions.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Expiry removes effect but keeps the row. Deletion never changes state.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-096-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Bulk-size violations → `ENFORCE.BULK_LIMIT` (validation, 400, non-retryable).
+
+## Authorization
+Only operators with dual control can read `actor_ref` of actions older than 90 days.
+
+## Failure, idempotency, concurrency, offline
+Retention jobs are idempotent by `enf_id` cursor.
+
+## Privacy, retention, abuse
+- Abuse 1 (weaponized enforcement): per-`mod_` rate limit via F12.S03.M03 `mod_rate`; anomaly alert (PS-096-05).
+- Abuse 2 (targeting private individuals): enforcement on a private person requires case grant with purpose and dual control on `suspend_account`.
+- Abuse 3 (appeal evasion): re-applying the same action type to the same target within 30 days requires a new case with new evidence (ASSUMPTION).
+- Metadata: owners cannot learn which moderator acted.
+
+## Observability & budgets
+Logs: `enf_id`, action type, code. No target content or owner identity beyond `acc_` pseudonym.
+
+## Tests
+- `TEST-PS-096-07-01` privacy: owner read omits `actor_ref` and `approver_ref`.
+- `TEST-PS-096-07-02` privacy: push payload for hide contains no reason text.
+- `TEST-PS-096-07-03` abuse: 51-target bulk apply → `ENFORCE.BULK_LIMIT`.
+- `TEST-PS-096-07-04` retention: rejected suspension removed at 90 days.
+- `TEST-PS-096-07-05` federation: attempt to export `enf.applied` with non-tombstone reason refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No free text field exists in any enforcement table or event.
+2. Owner-facing responses contain no moderator identifiers.
+3. Federation export test passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: 12-month retention and bulk limit are placeholders pending F10 review.
+- D07 (retention), PROVISIONAL default: minimal retention with legal-hold exceptions (unapproved).
+- D01 (federated protocol), PROVISIONAL default: tombstone-only enforcement federation (unapproved).

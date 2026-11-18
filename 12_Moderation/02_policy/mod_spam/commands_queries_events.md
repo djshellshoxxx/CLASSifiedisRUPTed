@@ -1,35 +1,63 @@
 # PS-097-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-097-04. **Owner:** [12_Moderation/02_policy/mod_spam](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_spam. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_spam. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-FED-001 (R04).
 
-## Purpose and scope
-Define the commands queries events process for spam within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-097-04.R01 | `spam.evaluate` is internal (`sys_` only), idempotent on (subject_ref, model_version). | MVP |
+| PS-097-04.R02 | Evaluate p95 ≤ 200 ms for listings and services; ≤ 50 ms for message metadata features. | MVP |
+| PS-097-04.R03 | Reviewer commands require `Idempotency-Key` and `expected_revision`. | MVP |
+| PS-097-04.R04 | Events are `spam.<past-tense verb>` (CTR-EVT-001 R10); payloads contain no features, text or scores. | MVP |
 
-## Requirements to specify
-- [ ] PS-097-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-097-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-097-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Body | Event |
+|---|---|---|
+| `spam.evaluate` (sys_) | `subject_type`, `subject_ref`, `author_ref`, `text_ref?` (in-process only), `model_version` | `spam.evaluated`, `spam.quarantined`, `spam.rejected` |
+| `spam.release` (mod_) | `spm_id`, `expected_revision`, `review_ref` | `spam.released` |
+| `spam.reject` (mod_) | `spm_id`, `expected_revision`, `review_ref` | `spam.rejected` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Queries: `spam.get_status` (author: state and generic category only), `spam.list_queue` (mod, case or review scope, cursor ≤ 100, ordered by `created_at` then `spm_id`).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Example:
+```http
+POST /v1/moderation/spam/evaluate   (internal, sys_ credential only)
+{"subject_type": "lst", "subject_ref": "lst_01JA10...", "author_ref": "acc_01JA11...", "model_version": "1.4.0"}
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+202 {"spm_id": "spm_01JA12...", "state": "pending_evaluation", "revision": 1}
+```
+Event payload: `spm_id`, `subject_type`, `subject_ref`, `decision`, `reason_code`, `confidence`, `model_version`. `max_data_class` = PSEUDONYMOUS.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Event per transition in [PS-097-03](workflow_state_machine.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-097-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Codes in [PS-097-02](validation_rules.md).
+
+## Authorization
+Capabilities in [PS-097-05](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Retry policy in [PS-097-06](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Events never include `confidence` for message subjects (prevents probing the classifier through sends).
+
+## Observability & budgets
+Span `spam.<command>` with `request_id`, code, duration, model_version.
+
+## Tests
+- `TEST-PS-097-04-01` contract: schemas validate; events contain no feature or text fields.
+- `TEST-PS-097-04-02` integration: duplicate `spam.evaluate` returns the same verdict.
+- `TEST-PS-097-04-03` negative: `spam.evaluate` from `acc_` credential → `SYS.FORBIDDEN`.
+- `TEST-PS-097-04-04` contract: `msg` events omit `confidence`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each command and event documented with schema, idempotency and errors.
+2. Latency budgets met in load test.
+3. No event leaks classifier internals.
+
+## Assumptions & open decisions
+- ASSUMPTION: `text_ref` is an in-process handle to content inside the evaluating service; it is not transmitted in events.
+- D07 (retention), PROVISIONAL default applies to verdict payload retention (unapproved).

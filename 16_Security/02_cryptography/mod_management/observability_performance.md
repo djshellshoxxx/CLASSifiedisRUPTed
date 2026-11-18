@@ -1,35 +1,52 @@
-# PS-129-08 — observability performance
+# PS-129-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-129-08. **Owner:** [16_Security/02_cryptography/mod_management](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_management. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_management. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-PRV-001
 
-## Purpose and scope
-Define the observability performance process for management within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-129-08.R01 | Expose gauge `crypto_policy_active_total{key_class}`; value must be exactly 1 per class. | MVP |
+| PS-129-08.R02 | Expose `crypto_policy_rotation_age_days{key_class}`; alert at 80% of `rotation_days`. | MVP |
+| PS-129-08.R03 | Read p95 ≤ 50 ms; command p95 ≤ 500 ms (ASSUMPTION). | MVP |
+| PS-129-08.R04 | Logs redact nothing beyond IDs because none are sensitive; key material is never logged (CTR-PRV-001 R08). | MVP |
 
-## Requirements to specify
-- [ ] PS-129-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-129-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-129-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metrics labels: `key_class`, `rule`, `event_type`. No label carries a user identifier.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command emits a trace span with `command_version` and error code.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Dashboards show state counts per status.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Alerts route to Security Lead (F16) on-call.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Metrics readable by `ope` with `read` at global scope.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-129-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+If metrics are unavailable, commands still run; alert on absence of gauge for 5 min.
+
+## Privacy, retention, abuse
+Telemetry retention 30 days (ASSUMPTION).
+
+## Observability & budgets
+| Signal | Target |
+|---|---|
+| read p95 | ≤ 50 ms |
+| command p95 | ≤ 500 ms |
+| activation lag p95 | ≤ 120 s |
+| zero-active alert | ≤ 5 min |
+
+## Tests
+- TEST-PS-129-08-01: integration, gauge equals 1 after activation.
+- TEST-PS-129-08-02: load, read p95 within budget at 200 rps (ASSUMPTION).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each signal in the budget table has a dashboard panel and alert rule.
+2. No log line contains key material in a sample of 10,000 lines.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above.
+- D10 rotation alerts: PROVISIONAL (D10 default, unapproved).

@@ -1,35 +1,54 @@
 # PS-028-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-028-06. **Owner:** [03_Services/01_service_catalog/mod_availability](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_availability. **Parent:** [mod_availability SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for availability within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-028-06.R01 | Two concurrent holds on a capacity-1 window: exactly one succeeds, the other returns `SYS.CONFLICT` with no write. | MVP |
+| PS-028-06.R02 | Hold expiry runs every 60 s; an expired hold releases capacity within 90 s of `hold_expires_at`. | MVP |
+| PS-028-06.R03 | Hold-and-book is never partial: hold release and booking link commit in one transaction. | MVP |
+| PS-028-06.R04 | Offline provider edits are queued (D08) and validated on acknowledgement; conflicting edits return `SYS.CONFLICT` and are not merged silently. | MVP |
+| PS-028-06.R05 | Server time is the authority for hold expiry; client clocks are not trusted. | MVP |
 
-## Requirements to specify
-- [ ] PS-028-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-028-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-028-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record per (actor, command, key, digest). Hold key (`svq_`, `avw_`) unique.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries use same key. Expiry emits `svcavail.hold.expired` once per hold.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery never moves BOOKED to OPEN without a `booking_released` event (PS-028-03 R03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`, `SYS.RATE_LIMITED`. Non-retryable: `SYS.CONFLICT` on revision change (client must re-read), validation codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Expiry timer runs as `sys`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-028-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Client timeout: retry with same key, up to 5 attempts, jittered backoff 1–30 s.
+- Timer missed (process restart): next run catches all expired holds; idempotent.
+- Calendar import partial failure: whole import rolled back (PS-028-02 R07).
+- Offline: pending queue shown with "not yet saved" state; never displayed as bookable.
+
+## Privacy, retention, abuse
+Recovery logs contain window and hold IDs only. Pending queue items encrypted at rest on device (ASSUMPTION).
+
+## Observability & budgets
+Metrics: `svcavail_hold_expiry_lag_seconds` p95 ≤ 90 s; `svcavail_conflict_total`; `svcavail_pending_queue_age_seconds`.
+
+## Tests
+- TEST-PS-028-06-01 (concurrency): 100 parallel holds, capacity 1 → exactly one HELD.
+- TEST-PS-028-06-02 (fault): kill process during hold-and-book → no half state (verified by reconciliation).
+- TEST-PS-028-06-03 (timer): restart 10 min after expiry → all holds released once.
+- TEST-PS-028-06-04 (offline): edit queued while window booked; ack returns conflict; no overwrite.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Double-booking count is zero in the fault suite.
+2. Expiry lag stays within R02 under 1,000 holds.
+3. No offline edit is applied to a BOOKED window.
+
+## Assumptions & open decisions
+- ASSUMPTION: 60 s timer interval; 72 h hold TTL.
+- PROVISIONAL: offline writes pending until server acknowledgement (D08 default, unapproved). See [DECISIONS.md](../../../DECISIONS.md).

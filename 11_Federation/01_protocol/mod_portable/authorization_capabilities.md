@@ -1,35 +1,55 @@
-# PS-083-05 — authorization capabilities
+# PS-083-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-083-05. **Owner:** [11_Federation/01_protocol/mod_portable](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-FED-001 (R01, peer scopes).
 
-## Purpose and scope
-Define the authorization capabilities process for portable within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-083-05.R01 | Only the item owner (`acc_`) may create a bundle for their items (`item.export`, scope self). | MVP |
+| PS-083-05.R02 | Only peers in state `trusted` may import; `restricted` peers may send but not import portable bundles (ASSUMPTION). | MVP |
+| PS-083-05.R03 | Operators cannot create bundles of other users' items, even with `ope` grants (CTR-CAP-001 R06). | MVP |
+| PS-083-05.R04 | Default deny for all undeclared actions. | MVP |
 
-## Requirements to specify
-- [ ] PS-083-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-083-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-083-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capabilities: `item.export`, `evt.import`, `bundle.verify`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+[commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Peer state read from CTR-FED-001 peer lifecycle; authorization does not change state.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.FORBIDDEN` for owner-visible objects; `SYS.NOT_FOUND` otherwise. Quarantined peer → `FED.PEER_NOT_TRUSTED`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Outcome |
+|---|---|---|---|
+| owner | item.export | own items (federate=true) | ALLOW (owner) |
+| owner | item.export | item with federate=false | DENY, PORTABLE.ITEM_NOT_FEDERATED |
+| trusted peer | evt.import | bundle for its audience | ALLOW (peer scope) |
+| quarantined peer | evt.import | any | DENY, FED.PEER_NOT_TRUSTED |
+| ope | item.export | other user's item | DENY, SYS.NOT_FOUND |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-083-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Decision fails closed. Offline clients never create signed bundles.
+
+## Privacy, retention, abuse
+Each export and import writes an `aud_` record (CTR-CAP-001 R08).
+
+## Observability & budgets
+Metric `portable_authz_denies_total{action,reason}`.
+
+## Tests
+- TEST-PS-083-05-01 (matrix): table outcomes.
+- TEST-PS-083-05-02 (peer): quarantined peer import denied.
+- TEST-PS-083-05-03 (operator): ope export of another user's item denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix passes.
+2. Operators cannot export others' items.
+3. Quarantine denies imports immediately.
+
+## Assumptions & open decisions
+- ASSUMPTION: restricted peers cannot import portable bundles.
+- PROVISIONAL (CTR-CAP-001 default, unapproved).

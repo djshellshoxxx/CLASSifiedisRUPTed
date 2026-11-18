@@ -1,35 +1,69 @@
 # PS-057-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-057-05. **Owner:** [07_Identity/03_trust/mod_evidence](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_evidence. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_evidence. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01, R02, R04, R05, R06 privileged grants, R07 dual control, R08 audit, R10 field visibility), CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for evidence within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-057-05.R01 | Evidence actions are evaluated on the owning `acc_` of the subject or issuer `prf_`; `prf_` is never a principal. | MVP |
+| PS-057-05.R02 | Only the subject, the issuer and mod_reputation (service principal `sys_`, summary scope) can read evidence metadata. | MVP |
+| PS-057-05.R03 | Evidence content (≤ 500 cp) readable by subject and issuer only; never by public or service principals. | MVP |
+| PS-057-05.R04 | Moderators read evidence only under a case grant and only metadata (kind, state, digest presence), never content, under dual control if any PRIVATE content is included (CTR-CAP-001 R07). | MVP |
+| PS-057-05.R05 | Counterparty signing (`counterparty_signed`) requires participant relation derived from owning modules at decision time. | MVP |
+| PS-057-05.R06 | Default deny. | MVP |
 
-## Requirements to specify
-- [ ] PS-057-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-057-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-057-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field visibility (CTR-CAP-001 R10):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | public | subject / issuer | sys (reputation) | case (mod_) | never |
+|---|---|---|---|---|---|
+| `kind`, `state`, `issued_at`, `subject_prf_id` | | Y | Y (summary) | Y | |
+| `content`, `content_digest`, `signature` | | Y | | digest presence only | |
+| `issuer_ref` | | Y | Y | Y | |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Action | Actor | Scope | Result |
+|---|---|---|---|
+| `evidence.record` | subject or issuer `acc_` | self / participant | allow |
+| `evidence.supersede` | original issuer | self | allow |
+| `evidence.withdraw` | subject or issuer | self | allow |
+| `evidence.read_summary` | `sys_` reputation | global summary | counts only |
+| `evidence.read_own` | subject or issuer | self | fields per matrix |
+| `evidence.quarantine_decide` | `mod_` | case | allow with case grant |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Denied actions produce no state change; decision record `dec_` stores outcome only (CTR-CAP-001 R13).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | `retryable` | `message_key` |
+|---|---|---|
+| `SYS.NOT_FOUND` | false | `err.sys.not_found` |
+| `SYS.FORBIDDEN` | false | `err.sys.forbidden` |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-057-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Relation rules derived at decision time (CTR-CAP-001 R05). Revocation of keys stops new signatures immediately.
+
+## Failure, idempotency, concurrency, offline
+Re-authorized on each retry. Offline-held signed evidence is not readable beyond the authenticated session.
+
+## Privacy, retention, abuse
+Moderator reads emit `aud_` with `evidence_id`, purpose and decision ID. Reputation service reads counts only.
+
+## Observability & budgets
+`evidence_authz_deny_total{action}`; alert on repeated `read_summary` denials.
+
+## Tests
+- TEST-PS-057-05-01 (unit): matrix per principal × action × field.
+- TEST-PS-057-05-02 (negative): moderator without case grant cannot read content.
+- TEST-PS-057-05-03 (integration): reputation service receives counts without content fields (absent, not null).
+- TEST-PS-057-05-04 (negative): non-participant cannot record `counterparty_signed`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix implemented; default deny verified.
+2. Content never readable by sys or mod without subject/issuer relation or case grant.
+3. Participant relation enforced for counterparty signing.
+4. Audit records for all privileged reads.
+
+## Assumptions & open decisions
+- ASSUMPTION: reputation service principal `sys_` exists with summary scope (F16 to confirm).
+- PROVISIONAL (D10 default, unapproved): key rotation and revocation as stated; user-controlled keys do not change matrix in MVP.

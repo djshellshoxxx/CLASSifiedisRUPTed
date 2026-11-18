@@ -1,35 +1,61 @@
-# PS-057-08 — observability performance
+# PS-057-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-057-08. **Owner:** [07_Identity/03_trust/mod_evidence](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_evidence. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_evidence. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001 (diagnostics), CTR-EVT-001 (lag), CTR-PRV-001 (log classes), CTR-CAP-001 R08.
 
-## Purpose and scope
-Define the observability performance process for evidence within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-057-08.R01 | Each command, verification step and recompute emits counter and latency. | MVP |
+| PS-057-08.R02 | `RecordEvidence` p95 ≤ 300 ms; signature verification p95 ≤ 5 ms; summary query p95 ≤ 100 ms. | MVP |
+| PS-057-08.R03 | Logs contain `evidence_id`, `kind`, code only; never content, digest or signature. | MVP |
+| PS-057-08.R04 | No subject, issuer or digest value as metric label. | MVP |
+| PS-057-08.R05 | Alerts: `DIGEST_MISMATCH` or `SIGNATURE_INVALID` rate > 1% of records over 1 h; quarantine backlog > 100. | MVP |
+| PS-057-08.R06 | Evidence views state "self-attested" or "issuer-signed" in text and assistive labels (WCAG 2.1 AA). | MVP |
 
-## Requirements to specify
-- [ ] PS-057-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-057-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-057-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Metric | Type | Labels |
+|---|---|---|
+| `evidence_cmd_total` | counter | `command`, `result` |
+| `evidence_validation_fail_total` | counter | `code` |
+| `evidence_recompute_lag_seconds` | histogram | none |
+| `evidence_quarantine_open` | gauge | none |
+| `evidence_authz_deny_total` | counter | `action` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Covers all commands in [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+`evidence_transition_total{from,to}` per [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Counters by code only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards for F07 and F16 operators; no per-subject views.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-057-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Device queue depth reported in aggregate.
+
+## Privacy, retention, abuse
+Operational logs 30 days (RET-OPS); metrics 13 months aggregated; audit 12 months (RET-AUD).
+
+## Observability & budgets
+- Availability 99.9% monthly (ASSUMPTION).
+- Load: 20 records/s peak, 500 summary reads/s (ASSUMPTION).
+- Recompute lag p95 ≤ 60 s; hard alert at 15 min.
+
+## Tests
+- TEST-PS-057-08-01 (unit): counters increment once per command.
+- TEST-PS-057-08-02 (privacy scan): no content, digest or signature in logs or metrics.
+- TEST-PS-057-08-03 (load): 20 writes/s and 500 reads/s within budget.
+- TEST-PS-057-08-04 (a11y): "self-attested" labels exposed to assistive tech.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Dashboards and alerts exist for each metric.
+2. Redaction verified.
+3. Budgets met under load.
+4. No subject identifiers in labels.
+
+## Assumptions & open decisions
+- ASSUMPTION: availability and load targets above.
+- PROVISIONAL (D07 default, unapproved): log retention 30 days.

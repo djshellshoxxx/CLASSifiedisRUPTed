@@ -1,35 +1,52 @@
 # PS-096-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-096-09. **Owner:** [12_Moderation/02_policy/mod_enforcement](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_enforcement. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_enforcement. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-FED-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for enforcement within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-096-09.R01 | Every row of the PS-096-03 table has a passing test; every other pair expects `ENFORCE.TRANSITION_NOT_ALLOWED`. | MVP |
+| PS-096-09.R02 | Contract tests validate commands, events and errors against CTR-SCH-001 and CTR-ERR-001 in CI. | MVP |
+| PS-096-09.R03 | Cross-module contract tests with F01 listings, F03 services, F08 messages and F02 cycle renegotiation consumer. | MVP |
 
-## Requirements to specify
-- [ ] PS-096-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-096-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-096-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: listing with active barter cycle (test IDs only); service booking; message thread; account with two moderators (applier, approver); synthetic case. No real personal data.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Test IDs `TEST-PS-096-09-nn`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+All six states and all seven transitions exercised.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative corpus covers every code in PS-096-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Table-driven suite of PS-096-05 matrix.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-096-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection: owner outage, duplicate effect delivery, reverse/expire race.
+
+## Privacy, retention, abuse
+Leakage tests from PS-096-07.
+
+## Observability & budgets
+Load and alert tests from PS-096-08.
+
+## Tests
+- `TEST-PS-096-09-01` unit: transition table exhaustive.
+- `TEST-PS-096-09-02` contract: schemas validate; no free-text fields.
+- `TEST-PS-096-09-03` integration: hide on listing with active cycle → F02 receives renegotiation signal; cycle state unchanged.
+- `TEST-PS-096-09-04` integration: suspend two-person flow end to end.
+- `TEST-PS-096-09-05` property: active actions per target and type never exceed 1.
+- `TEST-PS-096-09-06` e2e (keyboard, screen reader): moderator console apply and approve flows meet WCAG 2.1 AA (ASSUMPTION scope); target owner notice readable.
+- `TEST-PS-096-09-07` federation: tombstone export accepted by peer fixture; non-tombstone refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100 % of transitions and error codes covered in CI.
+2. Cross-module tests pass three consecutive runs.
+3. Accessibility tests pass for both moderator and owner screens.
+
+## Assumptions & open decisions
+- ASSUMPTION: F01, F03, F08 and F02 provide contract stubs before this suite runs.
+- D04 (partial barter execution), PROVISIONAL default applies to renegotiation tests (unapproved).

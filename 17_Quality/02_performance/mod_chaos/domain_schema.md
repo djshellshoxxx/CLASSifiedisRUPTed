@@ -1,35 +1,63 @@
 # PS-138-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-138-01. **Owner:** [17_Quality/02_performance/mod_chaos](SPEC.md). **Implementing module:** 17_Quality/02_performance/mod_chaos. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/02_performance/mod_chaos. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001
 
-## Purpose and scope
-Define the domain schema process for chaos within 02_performance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-138-01.R01 | One `chaos_experiment` record per experiment: hypothesis, fault type, target, blast radius, steady-state metrics, abort conditions, owner. | MVP |
+| PS-138-01.R02 | Fault types are a closed enum (table below); new types require a spec change. | MVP |
+| PS-138-01.R03 | Blast radius is `single_node`, `single_region_staging` or `full_staging`; `production` is not a valid value at MVP. | MVP |
+| PS-138-01.R04 | Every experiment has at least one abort condition with a numeric threshold and a maximum duration ≤ 30 min (ASSUMPTION). | MVP |
+| PS-138-01.R05 | Experiment results record steady-state before, during and after, and the hypothesis verdict. | MVP |
 
-## Requirements to specify
-- [ ] PS-138-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-138-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-138-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "experiment_id": "exp_ (PENDING CTR-ID-001 prefix, proposed cho, class ulid)",
+  "hypothesis": "string <= 500 chars",
+  "fault_type": "relay_outage | db_failover | partition | clock_skew | duplicate_delivery | key_service_unavailable | scheduler_crash | dependency_latency | disk_full",
+  "target": "typed ref of staging component (no production IDs)",
+  "blast_radius": "single_node | single_region_staging | full_staging",
+  "steady_state": [{"metric": "string", "expected": "string", "tolerance": "string"}],
+  "abort_conditions": [{"metric": "string", "threshold": "number", "window_s": "integer"}],
+  "max_duration_s": "integer <= 1800",
+  "verdict": "held | violated | aborted | not_run",
+  "owner": "ope_ or team role",
+  "data_class": "PUBLIC"
+}
+```
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-138-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Experiment records are immutable after `running`; results append.
+
+## Privacy, retention, abuse
+Experiment targets are staging components. No production targets are stored.
+
+## Observability & budgets
+Gauge `chaos_experiments_running` must not exceed 2 across the staging environment (ASSUMPTION).
+
+## Tests
+- TEST-PS-138-01-01: unit, fault type enum closed.
+- TEST-PS-138-01-02: unit, duration cap enforced.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No record has blast radius `production`.
+2. Every record has at least one numeric abort condition.
+
+## Assumptions & open decisions
+- ASSUMPTION: production chaos is out of scope at MVP.
+- PENDING CTR-ID-001: `cho` prefix.
+- D08 (offline behavior under fault): PROVISIONAL (D08 default, unapproved).

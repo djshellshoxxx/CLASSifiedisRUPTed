@@ -1,35 +1,50 @@
-# PS-116-08 — observability performance
+# PS-116-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-116-08. **Owner:** [15_Platform/01_pwa/mod_offline](SPEC.md). **Implementing module:** 15_Platform/01_pwa/mod_offline. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/01_pwa/mod_offline (F15.S01.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for offline within 01_pwa. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-116-08.R01 | Client metrics: `offline_queue_depth{state}`, `offline_replay_latency_ms`, `offline_not_applied_total{code}`, `offline_exhausted_total`. | MVP |
+| PS-116-08.R02 | Performance budgets: enqueue p95 <= 50 ms; list of 500 entries p95 <= 200 ms; app start with 500 entries <= 2.5 s p95 on the reference device (ASSUMPTION). | MVP |
+| PS-116-08.R03 | Telemetry carries no `account_ref`, `local_id`, `payload` or `command_type` with identifiers; `command_type` is allowed as an enum label. | MVP |
+| PS-116-08.R04 | Alert: `offline_not_applied_total` rate > 5% of replays in 1 h (ASSUMPTION). | MVP |
+| PS-116-08.R05 | Local diagnostic export for support contains counts and codes only. | MVP |
 
-## Requirements to specify
-- [ ] PS-116-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-116-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-116-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels are closed enums: `state` (six values), `code` (CTR-ERR-001 registry), `command_type` (module allow-list).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None. Metrics are emitted on transitions defined in PS-116-03.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Telemetry failure never blocks queue operations; dropped metrics increment `offline_telemetry_dropped_total`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Telemetry is written by the client; it is not read by users. Dashboards are read by `ope` with aggregate scope only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-116-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metrics buffer locally up to 200 records and are sent when online; buffer overflow drops the oldest.
+
+## Privacy, retention, abuse
+Aggregates only (CTR-PRV-001 analytics row). Retention RET-OPS for operational counters.
+
+## Observability & budgets
+Budgets in R02. Telemetry payload per batch <= 16 KiB.
+
+## Tests
+- TEST-PS-116-08-01 (unit): label set matches enum; unknown label value rejected.
+- TEST-PS-116-08-02 (performance): 500-entry list and enqueue budgets on reference device profile.
+- TEST-PS-116-08-03 (negative): telemetry batches scanned for identifiers return zero matches.
+- TEST-PS-116-08-04 (offline): buffer overflow drops oldest records and increments dropped counter.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All budgets in R02 measured in CI on the reference profile.
+2. TEST-PS-116-08-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: reference device profile defined by F14 accessibility and F17 performance leads (OPEN).
+- PROVISIONAL (D08 default).

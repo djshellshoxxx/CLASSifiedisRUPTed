@@ -1,35 +1,47 @@
-# PS-087-10 — import export backup rollback
+# PS-087-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-087-10. **Owner:** [11_Federation/02_relay_sync/mod_dedup](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_dedup. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_dedup. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R06), CTR-SCH-001 (R07, R08).
 
-## Purpose and scope
-Define the import export backup rollback process for dedup within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-087-10.R01 | No export of index rows to peers; evidence export only through case process. | MVP |
+| PS-087-10.R02 | Index is rebuildable from the event log within 24 h of loss; no restore may accept events that were already rejected. | MVP |
+| PS-087-10.R03 | Backups of the index are restored only with the event log to the same point in time. | MVP |
 
-## Requirements to specify
-- [ ] PS-087-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-087-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-087-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Rebuild source: committed event log (CTR-EVT-001).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Rebuild runs as `sys_` job; emits no `dedup.*` events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rebuild moves rows from absent to recorded per PS-087-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | When |
+|---|---|
+| DEDUP.REBUILD_INCOMPLETE | rebuild cannot reach horizon start |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Rebuild: Platform Lead approval.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-087-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Rebuild idempotent per key.
+
+## Privacy, retention, abuse
+Rebuild reads event log only through `sys_`.
+
+## Observability & budgets
+Rebuild duration metric; 24 h budget.
+
+## Tests
+- TEST-PS-087-10-01 (rebuild): index rebuilt from log equals original for fixture.
+- TEST-PS-087-10-02 (restore): stale backup restore with log at later point blocked.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Rebuild equals original.
+2. Stale restore blocked.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h rebuild budget.

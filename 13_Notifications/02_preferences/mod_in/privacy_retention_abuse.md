@@ -1,35 +1,56 @@
-# PS-106-07 — privacy retention abuse
+# PS-106-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-106-07. **Owner:** [13_Notifications/02_preferences/mod_in](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_in. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_in. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for in within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-106-07.R01 | Inbox items store `object_ref` and category only; no object text, names or counterparties. | MVP |
+| PS-106-07.R02 | `group_key` is an HMAC; the mapping key is held by F16 and rotated every 90 days (ASSUMPTION). | MVP |
+| PS-106-07.R03 | Item retention is the user's `retention_days` (max 365) and never beyond RET-ACC. | MVP |
+| PS-106-07.R04 | Items from blocked or quarantined accounts are not projected (F12 blocklist reference). | MVP |
 
-## Requirements to specify
-- [ ] PS-106-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-106-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-106-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Class | Retention |
+|---|---|---|
+| inbox_preference | PSEUDONYMOUS | RET-ACC |
+| inbox item (ntf_ projection) | PSEUDONYMOUS | min(retention_days, 365) |
+| group_key | PSEUDONYMOUS (non-reversible) | with item |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No content in events (PS-106-04.R04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Account deletion removes all items within deletion SLA.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+No personal data in error responses.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner only; see authorization_capabilities.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-106-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deletion job idempotent.
+
+## Privacy, retention, abuse
+- Abuse: inbox flooding from many sources; per-source rate limit and per-object dedupe within 24 h.
+- Abuse: harassment by repeated mentions; blocked accounts filtered at projection (R04).
+- Privacy: inbox size leaks activity volume; accepted as residual risk, listed in Privacy Lead review.
+
+## Observability & budgets
+Metrics without account labels.
+
+## Tests
+- TEST-PS-106-07-01 (contract): projected item has no fields beyond schema.
+- TEST-PS-106-07-02 (integration): blocked sender yields no projection.
+- TEST-PS-106-07-03 (integration): deletion removes items within SLA.
+- TEST-PS-106-07-04 (property): HMAC key rotation keeps dedupe within 24 h window only.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema scan passes.
+2. Block filter verified.
+3. Retention verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: 90-day HMAC rotation.
+- D07 PROVISIONAL (D07 default, unapproved).

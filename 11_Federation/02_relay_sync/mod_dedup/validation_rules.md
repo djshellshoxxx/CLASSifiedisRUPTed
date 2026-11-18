@@ -1,35 +1,52 @@
 # PS-087-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-087-02. **Owner:** [11_Federation/02_relay_sync/mod_dedup](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_dedup. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_dedup. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R05, R06, R13), CTR-ERR-001.
 
-## Purpose and scope
-Define the validation rules process for dedup within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-087-02.R01 | An event missing `origin_node` or `event_id` is rejected before dedupe with `FED.ENVELOPE_MALFORMED` (400). | MVP |
+| PS-087-02.R02 | A `payload_digest` that is not 64 lowercase hex is rejected with `FED.ENVELOPE_MALFORMED`. | MVP |
+| PS-087-02.R03 | A duplicate with identical digest returns result `duplicate` and is not reprocessed (CTR-FED-001 R05). | MVP |
+| PS-087-02.R04 | A detected equivocation returns `FED.EQUIVOCATION` (409) and sets peer state to `quarantined`. | MVP |
+| PS-087-02.R05 | An event whose revision is older than the dedupe horizon with no index row is returned `deferred` with `DEDUP.WINDOW_EXCEEDED` (not accepted blindly). | MVP |
 
-## Requirements to specify
-- [ ] PS-087-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-087-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-087-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Applies to fields in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applies to `dedup.check_and_record`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation precedes [workflow_state_machine.md](workflow_state_machine.md) transitions.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP |
+|---|---|---|
+| FED.ENVELOPE_MALFORMED | false | validation / 400 (shared) |
+| FED.EQUIVOCATION | false | conflict / 409 (shared) |
+| DEDUP.WINDOW_EXCEEDED | true | precondition_failed / 412 (deferred for sync) |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Internal call only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-087-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deterministic on input and index state.
+
+## Privacy, retention, abuse
+Errors include code and event ID only.
+
+## Observability & budgets
+Counter `dedup_results_total{result}`.
+
+## Tests
+- TEST-PS-087-02-01 (unit): R01–R05 outcomes.
+- TEST-PS-087-02-02 (equivocation): second distinct digest quarantines peer.
+- TEST-PS-087-02-03 (window): old revision deferred not accepted.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All outcomes tested.
+2. Equivocation triggers quarantine.
+
+## Assumptions & open decisions
+- ASSUMPTION: 12-hour dedupe horizon (see file 07) aligned with 24 h key wait in CTR-FED-001.

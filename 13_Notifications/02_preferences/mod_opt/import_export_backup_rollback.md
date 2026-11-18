@@ -1,35 +1,50 @@
-# PS-107-10 — import export backup rollback
+# PS-107-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-107-10. **Owner:** [13_Notifications/02_preferences/mod_opt](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_opt. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_opt. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-FED-001.
 
-## Purpose and scope
-Define the import export backup rollback process for opt within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-107-10.R01 | Export includes the 12-cell matrix with state, source and changed_at (schema 1.0.0). No address, token or token hash. | MVP |
+| PS-107-10.R02 | Import never sets a cell to `on` for push or email; imported states are set to `off` and the user is asked to re-enable. | MVP |
+| PS-107-10.R03 | Preferences are not federated. | MVP |
+| PS-107-10.R04 | Rollback may only restrict behavior. Rolling back this module must never enable a channel. | MVP |
 
-## Requirements to specify
-- [ ] PS-107-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-107-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-107-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{ "cells": [ { "channel", "category", "state", "source", "changed_at" } ], "schema_version": "1.0.0" }`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`account.export` includes section `notification_preference.export` (self).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Import sets all push/email cells to `off`; inapp/security stay on.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Import errors use OPT codes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export self; import self with explicit re-enable step; rollback operator global with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-107-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export repeatable; import idempotent by digest.
+
+## Privacy, retention, abuse
+Backups hold the matrix; token hashes excluded from backups (purged on expiry, not backed up).
+
+## Observability & budgets
+Export p95 ≤ 500 ms.
+
+## Tests
+- TEST-PS-107-10-01 (contract): export schema validation; no token or address.
+- TEST-PS-107-10-02 (integration): import with `push/activity` = on results in off.
+- TEST-PS-107-10-03 (integration): rollback drill never results in new `on` cells.
+- TEST-PS-107-10-04 (negative): federation import attempt rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export lossless for valid matrix.
+2. Import never enables push or email.
+3. Rollback drill recorded (not yet run).
+
+## Assumptions & open decisions
+- ASSUMPTION: import never enables channels.
+- D07 PROVISIONAL (D07 default, unapproved).

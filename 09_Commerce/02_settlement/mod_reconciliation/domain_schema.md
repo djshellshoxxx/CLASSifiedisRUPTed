@@ -1,35 +1,59 @@
 # PS-072-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-072-01. **Owner:** [09_Commerce/02_settlement/mod_reconciliation](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_reconciliation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_reconciliation (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (claim, adapter record), CTR-ID-001, CTR-PRV-001 (R01, RET-EVD), CTR-SCH-001. **Pending:** `rcn` and `rfd` prefixes (CTR-ID-001). **Decisions:** D04, D06 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the domain schema process for reconciliation within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-072-01.R01 | A run `rcn_` records scope (chains, claim-ID range or time window), start and end time, status and coverage counts. | MVP |
+| PS-072-01.R02 | A finding `rfd_` references one `clm_` and a finding type enum; it carries no amounts or party names. | MVP |
+| PS-072-01.R03 | Run status: `complete`, `partial`, `failed`. `complete` requires coverage 100% of in-scope claims. | MVP |
+| PS-072-01.R04 | Findings are immutable except for status and resolution fields. | MVP |
 
-## Requirements to specify
-- [ ] PS-072-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-072-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-072-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Type / constraint | Class |
+|---|---|---|
+| `run_id` | `rcn_` ULID (PENDING) | PUBLIC |
+| `scope` | object: chains[] (CAIP-2), window_start, window_end | PUBLIC |
+| `status` | enum `complete` \| `partial` \| `failed` | PUBLIC |
+| `coverage` | `{checked, expected, unreachable_chains[]}` integers | PUBLIC |
+| `finding_id` | `rfd_` ULID (PENDING) | PSEUDONYMOUS |
+| `claim_id` | `clm_` | FINANCIAL_EVIDENCE |
+| `finding_type` | enum (PS-072-02) | PUBLIC |
+| `status` (finding) | `open`, `resolved`, `dismissed` | PUBLIC |
+| `resolution` | enum + `case_id` (`cas_`) or null | PUBLIC |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Specified in PS-072-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Finding states per PS-072-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See PS-072-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per PS-072-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-072-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Runs are keyed by scope and window; a re-run with the same key returns the original run.
+
+## Privacy, retention, abuse
+Findings are FINANCIAL_EVIDENCE by reference (claim ID); retained with claim (RET-EVD).
+
+## Observability & budgets
+Gauge: open findings by type.
+
+## Tests
+- TEST-PS-072-01-01 (unit): `complete` with coverage below 100% is rejected.
+- TEST-PS-072-01-02 (lint): finding schema has no amount, party or address field.
+- TEST-PS-072-01-03 (unit): immutable fields rejected on update.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema matches fields above.
+2. Every finding resolves to a claim ID.
+3. Coverage math verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: run key format.
+- D04 (PROVISIONAL default, unapproved).

@@ -1,35 +1,59 @@
 # PS-020-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-01. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_three. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-SCH-001, CTR-EVT-001, CTR-PRV-001. Slot IDs `par_` owned by F02.S01.M02 (PROVISIONAL).
 
-## Purpose and scope
-Define the domain schema process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-020-01.R01 | A three-party cycle has exactly 3 slots, `slot_index` 0..2. | MVP |
+| PS-020-01.R02 | Canonical rotation: the slot with the lowest `participant_ref` is index 0; the order is then fixed. | MVP |
+| PS-020-01.R03 | Slot k's `offer_ref` satisfies slot (k+1 mod 3)'s `wants_ref`. | MVP |
+| PS-020-01.R04 | Each `lst_` in the cycle has status not locked at proposal time (pre-check against mod_lock state). | MVP |
+| PS-020-01.R05 | `version` starts at 1 and increases by 1 per change. | MVP |
 
-## Requirements to specify
-- [ ] PS-020-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "cycle_id": "cyc_<26>",
+  "length": 3,
+  "version": "integer >= 1",
+  "status": "enum(proposed, consented, locked, declined, expired, superseded)",
+  "slots": "[{slot_index: 0..2, par_id: par_<26>, participant_ref: acc_<26>, offer_ref: var_|lst_, wants_ref: string, consent: enum(pending, consented, declined)}]",
+  "feasibility_ref": "ccd_<26>",
+  "value_gap_minor": "string, decimal, >= 0",
+  "expires_at": "timestamp",
+  "schema_version": "1.0.0"
+}
+```
+Classes: `participant_ref` PSEUDONYMOUS; `value_gap_minor` FINANCIAL_EVIDENCE when non-zero; others PUBLIC.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Shapes in PS-020-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Rules in PS-020-02.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Slot-scoped views (PS-020-05).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Version is the concurrency token (PS-020-06).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Pseudonyms only (PS-020-07).
+
+## Observability & budgets
+Row ≤ 3 KB (ASSUMPTION).
+
+## Tests
+- TEST-PS-020-01-01 (unit): rotation yields one canonical sequence for all 3 rotations.
+- TEST-PS-020-01-02 (property): version increments by exactly 1.
+- TEST-PS-020-01-03 (contract): schema validates.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Any input rotation gives the same canonical order.
+2. Length other than 3 cannot be stored.
+3. A cycle containing a locked listing cannot be stored as proposed.
+
+## Assumptions & open decisions
+- PROVISIONAL (D02 default, unapproved): deterministic canonical form.

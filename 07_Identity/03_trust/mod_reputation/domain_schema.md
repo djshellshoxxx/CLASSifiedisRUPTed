@@ -1,35 +1,66 @@
 # PS-058-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-058-01. **Owner:** [07_Identity/03_trust/mod_reputation](SPEC.md). **Implementing module:** 07_Identity/03_trust/mod_reputation. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/03_trust/mod_reputation. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ID-001 (`prf`), CTR-PRV-001 (PSEUDONYMOUS: "reputation counts"), CTR-SCH-001, CTR-COM-001 (finality states consumed by reference), CTR-CAP-001.
 
-## Purpose and scope
-Define the domain schema process for reputation within 03_trust. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-058-01.R01 | One `reputation_profile` row per `prf_`; no account-level or cross-pseudonym aggregate row exists. | MVP |
+| PS-058-01.R02 | Stored inputs are counters and weights only, per category (table below); no counterparty `prf_` list stored beyond the 90-day diversity window (PS-058-07). | MVP |
+| PS-058-01.R03 | Public output is `band` (0–5) plus `status` (`insufficient_data` or `ready`). Raw counters visible to subject only. | MVP |
+| PS-058-01.R04 | Schema `reputation.profile` 1.0.0 registered in CTR-SCH-001. | MVP |
+| PS-058-01.R05 | Reputation is not transferable between `prf_` and cannot be imported (no import path in MVP). | MVP |
+| PS-058-01.R06 | Reputation portability across federated nodes. | Future (D01, D10) |
 
-## Requirements to specify
-- [ ] PS-058-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-058-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-058-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Type | Constraint | Class / visibility |
+|---|---|---|---|
+| `prf_id` | string(30) | prefix `prf`, PK | PSEUDONYMOUS, public |
+| `confirmed_exchanges` | int ≥ 0 | count of exchanges with confirmed finality (F09) | PSEUDONYMOUS, subject |
+| `self_attested_exchanges` | int ≥ 0 | count with only self-attestation | PSEUDONYMOUS, subject |
+| `signed_statements` | int ≥ 0 | count of valid counterparty-signed evidence (mod_evidence summary) | PSEUDONYMOUS, subject |
+| `disputes_lost` / `disputes_won` | int ≥ 0 | from F09 dispute outcomes | PSEUDONYMOUS, subject |
+| `cancellations_by_subject` | int ≥ 0 | | PSEUDONYMOUS, subject |
+| `distinct_counterparties` | int ≥ 0 | window 365 days, see PS-058-07 | PSEUDONYMOUS, subject |
+| `weighted_points` | decimal(10,4) | ≥ 0; recomputed | internal |
+| `band` | int 0–5 | derived | PSEUDONYMOUS, public |
+| `status` | enum | `insufficient_data`, `ready` | PSEUDONYMOUS, public |
+| `revision`, `computed_at` | int, timestamp | | internal |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Schema reference; see [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+`status` derived from thresholds in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Input validation in [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Field visibility in PS-058-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-058-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Recompute idempotent per input event ID; see PS-058-06.
+
+## Privacy, retention, abuse
+Class PSEUDONYMOUS; counts retained RET-ACC while `prf_` exists; purged at retirement + 30 days (PS-058-07).
+
+## Observability & budgets
+Distribution of bands (aggregate only). See PS-058-08.
+
+## Tests
+- TEST-PS-058-01-01 (unit): one row per `prf_`; duplicate insert rejected.
+- TEST-PS-058-01-02 (contract): public projection contains only `prf_id`, `band`, `status`.
+- TEST-PS-058-01-03 (property): counters never negative.
+- TEST-PS-058-01-04 (contract): schema digest registered.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No account-level aggregate exists (schema lint).
+2. Public projection matches R03.
+3. Counters reconcile with source events in nightly check.
+4. Schema registered.
+
+## Assumptions & open decisions
+- ASSUMPTION: 365-day distinct counterparty window.
+- PROVISIONAL (D07 default, unapproved): minimal retention.
+- PROVISIONAL (D10 default, unapproved): no portability in MVP.

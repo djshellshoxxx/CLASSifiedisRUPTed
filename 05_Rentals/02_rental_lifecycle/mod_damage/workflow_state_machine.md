@@ -1,35 +1,62 @@
 # PS-041-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-041-03. **Owner:** [05_Rentals/02_rental_lifecycle/mod_damage](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_damage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/02_rental_lifecycle/mod_damage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-COM-001 (claims, R16 dispute window), CTR-EVT-001 (revision), CTR-CAP-001 (case decisions), CTR-COM-001 cash ceiling.
 
-## Purpose and scope
-Define the workflow state machine process for damage within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+**Decision labels:** D06 PROVISIONAL. Renter response window (72 h) and escalation rules are ASSUMPTION (OPEN, F05).
 
-## Requirements to specify
-- [ ] PS-041-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-041-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-041-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-041-03.R01 | Status set exactly REPORTED, ACKNOWLEDGED, CONTESTED, ESCALATED, DISPUTED, RESOLVED, WITHDRAWN. | MVP |
+| PS-041-03.R02 | Silence is never acceptance. No line is agreed without renter `acknowledge` on that line. | MVP |
+| PS-041-03.R03 | Renter has 72 h per report to act on each line (ASSUMPTION). Expiry → ESCALATED. | MVP |
+| PS-041-03.R04 | A report without baseline (`baseline_present = false`) cannot reach ACKNOWLEDGED by owner-only action; it goes to ESCALATED for case review. | MVP |
+| PS-041-03.R05 | RESOLVED with total ≤ held deposit → `deposit.partial_release` request. Excess above held amount → separate CTR-COM-001 claim by owner; this module does not collect it. | MVP |
+| PS-041-03.R06 | Other transitions → `DAMAGE.INVALID_TRANSITION` (409). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Each event increments `state_version` by 1. Status never updated in place.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | damage.reported | window open; validation passes | REPORTED | Notify renter; start 72 h timer |
+| REPORTED | damage.acknowledged | renter accepts every line | ACKNOWLEDGED | Request deposit partial release |
+| REPORTED | damage.contested | renter rejects ≥ 1 line | CONTESTED | Notify owner; open escalation review |
+| REPORTED, CONTESTED | damage.escalated | 72 h expiry, R04, or unresolved contest | ESCALATED | Case queue (F12) |
+| REPORTED | damage.withdrawn | owner withdraws | WITHDRAWN | Close; notify renter |
+| ESCALATED, CONTESTED | damage.disputed | either party inside CTR-COM-001 R16 window | DISPUTED | Freeze; dispute record (F09) |
+| ACKNOWLEDGED, DISPUTED | damage.resolved | agreement, or `mod` case decision | RESOLVED | Deposit or claim step (R05) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Terminal: RESOLVED, WITHDRAWN. Forbidden pairs return R06.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`DAMAGE.INVALID_TRANSITION` (409), `DAMAGE.ALREADY_RESOLVED` (409). Both non-retryable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-041-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Renter acts on report lines; owner withdraws; `mod` case scope resolves disputes (PS-041-05).
+
+## Failure, idempotency, concurrency, offline
+Revision check on every write. Timer expiry runs as `sys` job, idempotent by `damage_id` and `state_version`.
+
+## Privacy, retention, abuse
+History is FINANCIAL_EVIDENCE (RET-EVD). Repeated owner reports with high contest rate trigger a review alert (ASSUMPTION).
+
+## Observability & budgets
+`damage_transitions_total{from,to}`, `damage_escalations_total{reason}`. Alert: any RESOLVED total above held amount without a separate claim record (must be 0).
+
+## Tests
+- TEST-PS-041-03-01 (state): every table row passes; every other pair returns R06.
+- TEST-PS-041-03-02 (timeout): no acknowledgement for 72 h → ESCALATED, never ACKNOWLEDGED.
+- TEST-PS-041-03-03 (baseline): no-baseline report cannot auto-acknowledge.
+- TEST-PS-041-03-04 (excess): total above deposit yields partial release for held amount plus a claim request for the excess.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No path reaches ACKNOWLEDGED without per-line renter action (TEST-PS-041-03-01).
+2. Silence never results in acceptance (TEST-PS-041-03-02).
+3. Excess above held amount never collected through the platform (TEST-PS-041-03-04).
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h response window; F05 to confirm (OPEN).
+- PROVISIONAL (D06 default, unapproved).

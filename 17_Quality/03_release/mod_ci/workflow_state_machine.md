@@ -1,35 +1,33 @@
 # PS-141-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-141-03. **Owner:** [17_Quality/03_release/mod_ci](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_ci. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/03_release/mod_ci. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for ci within 03_release. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-141-03.R01 | Run states are exactly `queued`, `running`, `passed`, `failed`, `aborted_infra`, `superseded`. | MVP |
+| PS-141-03.R02 | A new push to the same branch supersedes older `queued` or `running` PR runs for that branch within 60 s (ASSUMPTION). | MVP |
+| PS-141-03.R03 | `passed` requires every required check in the pipeline version to be `passed`. | MVP |
+| PS-141-03.R04 | Terminal states are immutable. | MVP |
 
-## Requirements to specify
-- [ ] PS-141-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-141-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-141-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | StartCiRun | pipeline version active; commit exists | queued | emit `ci_run.started` on dispatch |
+| queued | DispatchRun | runner pool matches trigger | running | runner bound as `sys_` |
+| running | RecordJobResult (all jobs) | every required check `passed` | passed | emit `ci_run.completed` |
+| running | RecordJobResult (any required fails) | none | failed | emit `ci_run.completed` |
+| running | Timeout or RunnerLost | infra error | aborted_infra | eligible for one retry (see failure file) |
+| queued or running | SupersedeRun | newer push on branch | superseded | emit `ci_run.completed`, status superseded |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Invalid pairs return `CIPIPE.INVALID_TRANSITION` (422, non-retryable). A `passed` run may not be edited; a changed commit needs a new run.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Failure, idempotency, concurrency, offline
+- Webhook duplicates: the same `(commit_sha, pipeline_key, trigger)` maps to one queued run.
+- Runner lost mid-job: the job is marked `aborted_infra`; no partial artifact digest is published.
+- Offline: no effect; CI requires network to dispatch, and runs are not marked complete from local runners.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-141-03`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: 60-second supersede window is a default; confirm with QA Lead.
+- D08 (offline writes) is out of scope; the offline suite results are read here only.

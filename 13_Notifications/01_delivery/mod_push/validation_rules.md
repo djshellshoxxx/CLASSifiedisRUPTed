@@ -1,35 +1,67 @@
 # PS-104-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-104-02. **Owner:** [13_Notifications/01_delivery/mod_push](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_push. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_push. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the validation rules process for push within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-104-02.R01 | Endpoint must be `https`, port 443, no userinfo, host in the push-service allowlist (ASSUMPTION: maintained in config, not code). Violations are rejected before any outbound request. | MVP |
+| PS-104-02.R02 | `p256dh` and `auth` are validated by decoded length and prefix (0x04 for `p256dh`). | MVP |
+| PS-104-02.R03 | Dispatch payload is a JSON object of at most 256 bytes with only the keys `ntf_id`, `category`, `schema_version`. | MVP |
+| PS-104-02.R04 | `ttl` is an integer 0–2419200 (28 days). Default 3600 for `transactional`, 86400 for `deadline`. | MVP |
+| PS-104-02.R05 | `urgency` is derived from `category` (`security`=high, `deadline`=high, `transactional`=normal, `activity`=low); clients cannot set it. | MVP |
+| PS-104-02.R06 | Unknown `category` is rejected; the registry is owned by mod_opt (F13.S02.M03). | MVP |
 
-## Requirements to specify
-- [ ] PS-104-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-104-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-104-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Validation inputs are the `push_subscription` and dispatch fields in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Field | Rule | Error code | Retryable | message_key |
+|---|---|---|---|---|
+| endpoint | R01 | PUSH.ENDPOINT_HOST_NOT_ALLOWED | false | err.push.endpoint_host_not_allowed |
+| endpoint | length 1–2048, parseable URL | PUSH.ENDPOINT_INVALID | false | err.push.endpoint_invalid |
+| p256dh, auth | R02 | PUSH.KEY_INVALID | false | err.push.key_invalid |
+| account active count | ≤ 10 | PUSH.SUBSCRIPTION_LIMIT | false | err.push.subscription_limit |
+| payload | R03 | PUSH.PAYLOAD_FORBIDDEN_FIELD | false | err.push.payload_forbidden_field |
+| ttl | R04 | PUSH.TTL_OUT_OF_RANGE | false | err.push.ttl_out_of_range |
+| category | R06 | PUSH.CATEGORY_UNKNOWN | false | err.push.category_unknown |
+| device_id | active `dev_` owned by same account | SYS.NOT_FOUND | false | err.sys.not_found |
+| provider response 429/503 | classify | PUSH.PROVIDER_UNAVAILABLE | true | err.push.provider_unavailable |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Validation runs before any write and before any outbound call. Validation failures emit no event.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Not applicable; validation is a guard. See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+- Envelope per CTR-ERR-001. `details[].rule` uses registry enums only.
+- Input values, endpoint URLs and key material are never echoed (CTR-ERR-001 R06, R07).
+- Message keys are rendered by the client catalog (see mod_languages).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-104-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Validation does not grant access. Ownership checks follow [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Validation is deterministic and side-effect free, so retries are safe. Client-side pre-validation is advisory only; the server repeats all checks.
+
+## Privacy, retention, abuse
+Rejected endpoint values are not stored. Logs record the rule enum and a salted hash of the endpoint host, never the full URL.
+
+## Observability & budgets
+Counter per `code` with labels `module=PUSH`. Validation p95 ≤ 5 ms per request.
+
+## Tests
+- TEST-PS-104-02-01 (unit): each rule in the table maps to exactly one code and retryable value.
+- TEST-PS-104-02-02 (property): any `endpoint` with `http://` or non-443 port is rejected.
+- TEST-PS-104-02-03 (unit): dispatch payload containing `"title"` is rejected with `PUSH.PAYLOAD_FORBIDDEN_FIELD`.
+- TEST-PS-104-02-04 (contract): all codes conform to CTR-ERR-001 regex.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100% of table rows have a passing unit test.
+2. No rejected request produces an outbound HTTP call (asserted in integration test).
+3. Error responses contain no input echo (automated check).
+
+## Assumptions & open decisions
+- ASSUMPTION: push-service host allowlist is operator-maintained.
+- Message keys are proposals until mod_languages catalog is approved.
+- No Dxx applies directly; retention of rejected data follows D07 default, PROVISIONAL (D07 default, unapproved).

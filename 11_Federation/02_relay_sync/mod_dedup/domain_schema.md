@@ -1,35 +1,50 @@
 # PS-087-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-087-01. **Owner:** [11_Federation/02_relay_sync/mod_dedup](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_dedup. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_dedup. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (R05, R06), CTR-EVT-001 (R02, R03), CTR-ID-001 (R08).
 
-## Purpose and scope
-Define the domain schema process for dedup within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-087-01.R01 | Dedupe index key is `(origin_node, event_id)` (CTR-FED-001 R05). No other key is used for federated events. | MVP |
+| PS-087-01.R02 | Equivocation key is `(origin_node, aggregate_id, revision)`; a second distinct `event_id` or `payload_digest` under it is equivocation. | MVP |
+| PS-087-01.R03 | Index rows store digests and IDs only, never payload. | MVP |
+| PS-087-01.R04 | Local command idempotency records use CTR-EVT-001 R03 scope (actor, command type, key), retained 7 days. | MVP |
 
-## Requirements to specify
-- [ ] PS-087-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-087-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-087-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Entity | Fields | Constraint |
+|---|---|---|
+| `dedupe_row` | `origin_node` (`nod_`), `event_id` (`evt_`), `aggregate_id`, `revision`, `payload_digest` (sha256), `first_seen_at`, `first_result`, `hit_count` | unique on `(origin_node, event_id)` |
+| `equivocation_record` | `origin_node`, `aggregate_id`, `revision`, two `{event_id, payload_digest}` pairs, `detected_at` | retained as evidence (RET-EVD) |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Internal service principal `sys_` only. No end-user access.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-087-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Check-and-record is a single atomic upsert (PS-087-06). Not an offline component.
+
+## Privacy, retention, abuse
+Rows contain no personal data. Retention in file 07.
+
+## Observability & budgets
+Index size and hit ratio in file 08.
+
+## Tests
+- TEST-PS-087-01-01 (key): same event_id from two origins creates two rows.
+- TEST-PS-087-01-02 (privacy): row schema has no payload field.
+- TEST-PS-087-01-03 (equivocation key): same revision with different event_id detected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Keys match R01–R02.
+2. No payload stored.
+
+## Assumptions & open decisions
+- ASSUMPTION: index retention window (see file 07).

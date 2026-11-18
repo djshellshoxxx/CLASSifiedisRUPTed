@@ -1,35 +1,27 @@
 # PS-141-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-141-09. **Owner:** [17_Quality/03_release/mod_ci](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_ci. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/03_release/mod_ci. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for ci within 03_release. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-141-09.R01 | Every CIPIPE code passes registry lint (CTR-ERR-001 R02). | MVP |
+| PS-141-09.R02 | The required-check list matches the test suites that exist in the repository (no orphan check). | MVP |
+| PS-141-09.R03 | Pipeline definitions validate against the CTR-SCH-001 schema. | MVP |
 
-## Requirements to specify
-- [ ] PS-141-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-141-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-141-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
-
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-141-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Tests
+- TEST-PS-141-09-01 (lint): CIPIPE codes unique; category and retryable fixed; message keys derivable.
+- TEST-PS-141-09-02 (schema): valid and invalid `ci_pipeline` and `ci_run` examples pass or fail as specified.
+- TEST-PS-141-09-03 (negative): fork-PR run cannot read a secret or write a cache (PS-141-07 R02).
+- TEST-PS-141-09-04 (integration): superseded PR run emits `ci_run.completed` with status `superseded`.
+- TEST-PS-141-09-05 (security): planted secret pattern in job output is masked and the job fails with CIPIPE.SECRET_PATTERN_FOUND.
+- TEST-PS-141-09-06 (contract): event types match CTR-EVT-001 regex.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All TEST-PS-141-09-01 to -06 pass in CI.
+2. Every required check maps to one existing suite (R02).
+3. Pipeline definition changes without a second approver are rejected in test.
+
+## Assumptions & open decisions
+- ASSUMPTION: a CI provider-neutral fixture set is used for contract tests.
+- D01 applies only if run records are federated: PROVISIONAL (D01 default, unapproved).

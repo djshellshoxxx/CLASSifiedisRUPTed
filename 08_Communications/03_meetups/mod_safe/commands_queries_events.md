@@ -1,35 +1,62 @@
-# PS-066-04 — commands queries events
+# PS-066-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-066-04. **Owner:** [08_Communications/03_meetups/mod_safe](SPEC.md). **Implementing module:** 08_Communications/03_meetups/mod_safe. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/03_meetups/mod_safe (Platform Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03, R10), CTR-SCH-001, CTR-ERR-001, CTR-ID-001. **Decisions:** D08 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the commands queries events process for safe within 03_meetups. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-066-04.R01 | Every state-changing command carries `expected_revision` and `idempotency_key` (UUID v4 or ULID, ≥ 128 bits). | MVP |
+| PS-066-04.R02 | Command responses return `meetup_plan_id`, `revision` and `status` only. | MVP |
+| PS-066-04.R03 | Events use `meetup_plan.<past-tense-verb>` (CTR-EVT-001 R10). | MVP |
+| PS-066-04.R04 | Event payloads exclude trusted-contact handles and codes; they carry hashes only where needed for audit. | MVP |
 
-## Requirements to specify
-- [ ] PS-066-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-066-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-066-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Schema `meetup_plan` version `1.0.0`, registered per CTR-SCH-001 (`schema_id` = `meetup_plan`). Event schema IDs equal `event_type`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Event(s) | Expected revision | Key scope |
+|---|---|---|---|
+| `meetup.propose` | `meetup_plan.proposed` | null | actor + command + key |
+| `meetup.confirm` | `meetup_plan.confirmed` | required | same |
+| `meetup.cancel` | `meetup_plan.cancelled` | required | same |
+| `meetup.check_in` | `meetup_plan.checked_in` (+ `meetup_plan.both_checked_in`) | required | same |
+| `meetup.check_out` | `meetup_plan.checked_out` | required | same |
+| `meetup.safe_exit` | `meetup_plan.safe_exited` | required | same |
+| `meetup.set_trusted_contact` | `meetup_plan.trusted_contact_set` | required | same |
+| `meetup.get` (query) | none | n/a | n/a |
+| timers (`sys_`) | `meetup_plan.expired`, `meetup_plan.activated` | required | timer ID |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+`max_data_class` = PRIVATE_PERSONAL for all events. `meetup_plan.both_checked_in` is emitted in the same commit as the second check-in.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Events map to PS-066-03 transitions one-to-one, except `both_checked_in`, which is a second event in the same transaction.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Shared codes: `SYS.CONFLICT`, `SYS.NOT_FOUND`, `SYS.REQUEST_MALFORMED`. Module codes per PS-066-02 and `SAFE.INVALID_TRANSITION`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-066-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Command authorization in PS-066-05.
+
+## Failure, idempotency, concurrency, offline
+Same key and same digest → original result. Same key, different digest → `EVT.IDEMPOTENCY_KEY_REUSED`. Offline commands queue per D08; `meetup.safe_exit` is queued with the highest priority in the client outbox.
+
+## Privacy, retention, abuse
+No event is federated. Event subscribers receive `mtp_` IDs and enums.
+
+## Observability & budgets
+Per-command counter by result code. Event envelope logged by ID and type only.
+
+## Tests
+- TEST-PS-066-04-01 (contract): every command response matches the response schema; no extra fields.
+- TEST-PS-066-04-02 (contract): every emitted event validates against CTR-EVT-001 and `meetup_plan` schema.
+- TEST-PS-066-04-03 (unit): replayed `meetup.check_in` with same key returns original revision.
+- TEST-PS-066-04-04 (unit): key reuse with a different digest returns `EVT.IDEMPOTENCY_KEY_REUSED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command and event tables match the implementation (generated test).
+2. No event payload contains a handle, code or venue free text.
+3. All `meetup_plan.*` events have `max_data_class` = PRIVATE_PERSONAL.
+
+## Assumptions & open decisions
+- ASSUMPTION: event schema `meetup_plan` starts at 1.0.0.
+- D08 (PROVISIONAL default, unapproved).

@@ -1,35 +1,70 @@
 # PS-092-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-092-01. **Owner:** [12_Moderation/01_reporting/mod_appeals](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_appeals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_appeals. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-CAP-001, CTR-PRV-001, CTR-SCH-001 (referenced, not redefined).
 
-## Purpose and scope
-Define the domain schema process for appeals within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-092-01.R01 | An appeal `apl_` targets exactly one of: enforcement action `enf_`, spam verdict `spm_`, or report closure decision on `rpt_` within `cas_`. | MVP |
+| PS-092-01.R02 | At most one open appeal per target (partial unique index). | MVP |
+| PS-092-01.R03 | Appeal body ≤ 2 000 characters; attachments only as `evd_` references owned by `mod_evidence`. | MVP |
+| PS-092-01.R04 | Appeal records store the reviewer `mod_` ID and the decision reason code, not reporter identity. | MVP |
+| PS-092-01.R05 | Each state change is an append-only `apl_event` row with `revision` starting at 1. | MVP |
 
-## Requirements to specify
-- [ ] PS-092-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-092-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-092-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```sql
+CREATE TABLE apl_appeal (
+  apl_id         CHAR(30) PRIMARY KEY,          -- apl_ ULID; prefix PENDING CTR-ID-001 registry entry
+  target_type    TEXT NOT NULL CHECK (target_type IN ('enforcement','spam_verdict','report_closure')),
+  target_id      CHAR(30) NOT NULL,             -- enf_ | spm_ | rpt_
+  case_id        CHAR(30) NOT NULL,             -- cas_
+  appellant_ref  CHAR(30) NOT NULL,             -- acc_ of the affected subject
+  state          TEXT NOT NULL,                 -- see PS-092-03
+  revision       INTEGER NOT NULL CHECK (revision >= 1),
+  body           TEXT NULL CHECK (char_length(body) <= 2000),
+  reviewer_ref   CHAR(30) NULL,                 -- mod_ principal
+  decision_code  TEXT NULL,                     -- UPHELD | MODIFIED | REVERSED
+  received_at    TIMESTAMPTZ NOT NULL,
+  window_ends_at TIMESTAMPTZ NOT NULL           -- target notice time + 30 days (ASSUMPTION)
+);
+CREATE UNIQUE INDEX apl_one_open_per_target ON apl_appeal (target_id)
+  WHERE state NOT IN ('closed','withdrawn','ineligible');
+```
+Field classes (CTR-PRV-001): `body` = PRIVATE_PERSONAL; `appellant_ref`, `reviewer_ref`, `target_id`, `decision_code` = PSEUDONYMOUS; `state`, `revision` = PUBLIC. Reporter identifiers are not stored on this table (they live in `rpt_` under F12.S01.M01).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Provenance: `correlation_id` (cor_) links the appeal to the originating enforcement or flag command.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+See [PS-092-04](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See [PS-092-03](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See [PS-092-02](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-092-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+See [PS-092-05](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+See [PS-092-06](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+See [PS-092-07](privacy_retention_abuse.md).
+
+## Observability & budgets
+See [PS-092-08](observability_performance.md).
+
+## Tests
+- `TEST-PS-092-01-01` unit: partial unique index rejects a second open appeal for one target.
+- `TEST-PS-092-01-02` unit: body of 2 001 characters rejected; 2 000 accepted.
+- `TEST-PS-092-01-03` contract: no reporter identifier present on `apl_appeal` (schema scan).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each appeal links to exactly one target and one case.
+2. Body is PRIVATE_PERSONAL and absent from every event payload.
+3. Schema scan finds zero reporter identifiers.
+
+## Assumptions & open decisions
+- ASSUMPTION: `apl_` is a new prefix (ulid class) to be registered in CTR-ID-001, owner F12.
+- D07 (retention), PROVISIONAL default: minimal retention with legal-hold exceptions (unapproved).

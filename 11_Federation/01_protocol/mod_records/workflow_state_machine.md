@@ -1,35 +1,53 @@
 # PS-084-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-084-03. **Owner:** [11_Federation/01_protocol/mod_records](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_records. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_records. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02), CTR-SCH-001 (R10).
 
-## Purpose and scope
-Define the workflow state machine process for records within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-084-03.R01 | Item federate flag: off → on (owner opt-in) → off (owner withdraw). | MVP |
+| PS-084-03.R02 | Withdrawal stops future export immediately and triggers peer-side tombstone only if the item is deleted. | MVP |
+| PS-084-03.R03 | Registry row: proposed → active → deprecated → retired. Retirement requires no live federated items of that type. | MVP |
 
-## Requirements to specify
-- [ ] PS-084-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-084-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-084-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+States in `federate` and registry `status` per [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`records.set_federate` → `record.federate_enabled` / `record.federate_disabled`; `record_type.registered`, `record_type.deprecated`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| off | records.set_federate(true) | PS-084-02 passes | on | item eligible for bundles |
+| on | records.set_federate(false) | none | off | stop queued exports; emit event |
+| proposed | registry.activate | F10 review record (if class raised) | active | none |
+| active | registry.deprecate | replacement type named | deprecated | notify owners |
+| deprecated | registry.retire | no live federated items | retired | none |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`RECORDS.INVALID_TRANSITION` (409).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Item owner: flag changes. Platform Lead: registry changes. Privacy Lead: class review.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-084-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Flag changes idempotent per (item, revision). Offline changes apply only on ack.
+
+## Privacy, retention, abuse
+Transitions carry IDs only.
+
+## Observability & budgets
+Gauges per registry status; count of items federated per type.
+
+## Tests
+- TEST-PS-084-03-01 (state): table rows pass.
+- TEST-PS-084-03-02 (withdrawal): flag off stops bundling in next build.
+- TEST-PS-084-03-03 (retire): retire blocked while live items exist.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Table exhaustive.
+2. Withdrawal effective at next build.
+3. Retirement guard enforced.
+
+## Assumptions & open decisions
+- ASSUMPTION: withdrawal semantics above.

@@ -1,35 +1,57 @@
-# PS-108-05 — authorization capabilities
+# PS-108-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-108-05. **Owner:** [13_Notifications/02_preferences/mod_quiet](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_quiet. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_quiet. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the authorization capabilities process for quiet within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-108-05.R01 | Owner starts, resumes and reads own pause (`quiet_period.create`, `quiet_period.execute`, `quiet_period.read`; scope self). | MVP |
+| PS-108-05.R02 | `sys_` holds and releases notifications under global scope with purpose `notification_gating`, expiry ≤ 72 h. | MVP |
+| PS-108-05.R03 | No other account, operator or moderator can read a pause state. | MVP |
+| PS-108-05.R04 | Foreign IDs return `SYS.NOT_FOUND`. | MVP |
 
-## Requirements to specify
-- [ ] PS-108-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-108-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-108-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Principal | Capability | Scope | Outcome |
+|---|---|---|---|
+| user (owner) | `quiet_period.create` | self | ALLOW (ALLOW_OWNER) |
+| user (other) | `quiet_period.read` | foreign | DENY → SYS.NOT_FOUND |
+| sys | `quiet_period.execute` | global | ALLOW (grant) |
+| sender account | `quiet_period.read` | target | DENY (NO_RELATION; senders learn nothing) |
+| ope | `quiet_period.read` | any | DENY (PRIVATE_PERSONAL, dual control cannot override) |
+| mod | `quiet_period.read` | case | DENY |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Gating decisions write `dec_` records without period contents beyond the `qpd_` ID.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Grant lifecycle only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Standard CTR-CAP-001 denials.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Server-side on every call; the sender-facing path never reveals quiet state (no "user is unavailable" signal).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-108-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Revocation effective next decision; decision cache zero for quiet state.
+
+## Privacy, retention, abuse
+Decision records hold outcome only; RET-AUD 12 months.
+
+## Observability & budgets
+Counter `quiet_decisions_total{outcome}`.
+
+## Tests
+- TEST-PS-108-05-01 (unit): sender account cannot observe quiet state through any API.
+- TEST-PS-108-05-02 (integration): operator read denied.
+- TEST-PS-108-05-03 (unit): expired execute grant denies release with GRANT_EXPIRED.
+- TEST-PS-108-05-04 (contract): federation peer denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix matches tests.
+2. No sender-visible signal.
+3. Decision records have no period content.
+
+## Assumptions & open decisions
+- ASSUMPTION: purpose `notification_gating` shared with mod_hours.
+- D07 PROVISIONAL (D07 default, unapproved).

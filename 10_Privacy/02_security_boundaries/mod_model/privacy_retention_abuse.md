@@ -1,35 +1,49 @@
-# PS-081-07 — privacy retention abuse
+# PS-081-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-081-07. **Owner:** [10_Privacy/02_security_boundaries/mod_model](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_model. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_model. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R03), CTR-FED-001 (R03), CTR-EVT-001 (R06).
 
-## Purpose and scope
-Define the privacy retention abuse process for model within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-081-07.R01 | Model contains no personal data, sample values or real hostnames of users. | MVP |
+| PS-081-07.R02 | Model versions are retained indefinitely for audit (ASSUMPTION). | MVP |
+| PS-081-07.R03 | The model is the input to privacy review; no flow may bypass it in release notes. | MVP |
+| PS-081-07.R04 | Abuse: tampering with approved versions is detected by digest mismatch within 1 CI run. | MVP |
 
-## Requirements to specify
-- [ ] PS-081-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-081-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-081-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Only classes, zone names, IDs and digests.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retirement of a flow does not delete history.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Sample-data rule in PS-081-02.R05.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Model read restricted per PS-081-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-081-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Not applicable beyond PS-081-06.
+
+## Privacy, retention, abuse
+Data class PUBLIC for model structure (internal), PSEUDONYMOUS for asset owner references. Retention: indefinite version history (ASSUMPTION). Abuse controls: digest verification (R04), separation of duties (PS-081-03).
+
+## Observability & budgets
+Alert on digest mismatch. Metric of flows with class PRIVATE_PERSONAL or higher (CTR-PRV-001 ordering).
+
+## Tests
+- TEST-PS-081-07-01 (privacy): scan of fixtures finds no email, phone or coordinate.
+- TEST-PS-081-07-02 (abuse): modified approved version fails digest check.
+- TEST-PS-081-07-03 (retirement): retired flow remains in history.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Privacy scan passes in CI.
+2. Digest tamper detected.
+3. Retirement keeps history.
+
+## Assumptions & open decisions
+- ASSUMPTION: indefinite version retention.
+- PROVISIONAL (D07 default, unapproved): per-category retention with legal-hold exceptions.

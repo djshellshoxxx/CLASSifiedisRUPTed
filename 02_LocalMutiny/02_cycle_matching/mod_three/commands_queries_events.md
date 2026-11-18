@@ -1,35 +1,53 @@
-# PS-020-04 — commands queries events
+# PS-020-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-04. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_three. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-020-04.R01 | Writes carry `idempotency_key` and `expected_version`. | MVP |
+| PS-020-04.R02 | `cycle.propose_three` takes `{feasibility_ref, idempotency_key}`. | MVP |
+| PS-020-04.R03 | `cycle.consent` and `cycle.decline` take `{cycle_id, slot_index, expected_version, idempotency_key}`. | MVP |
+| PS-020-04.R04 | `cycle.get` returns the three slot summaries to participants only. | MVP |
 
-## Requirements to specify
-- [ ] PS-020-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Events of aggregate `cycle`; schema 1.0.0; payload = cycle record.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Caller | Idempotency | Expected version | Errors |
+|---|---|---|---|---|
+| cycle.propose_three | sys_ matcher | feasibility_ref + key | null | CYCTHREE.NOT_FEASIBLE, LENGTH_MISMATCH, LISTING_LOCKED |
+| cycle.consent | slot participant | key | required | SYS.CONFLICT, CYCTHREE.STALE_VERDICT |
+| cycle.decline | slot participant | key | required | SYS.CONFLICT |
+| cycle.get | participant | n/a | n/a | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+PS-020-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+PS-020-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+PS-020-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+PS-020-06.
+
+## Privacy, retention, abuse
+Events show pseudonyms only.
+
+## Observability & budgets
+Consent latency p95 ≤ 300 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-020-04-01 (contract): events validate.
+- TEST-PS-020-04-02 (unit): replay returns original result.
+- TEST-PS-020-04-03 (negative): decline by non-slot denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each command has schema, idempotency and version rule.
+2. `cycle.get` reveals only the three slot summaries.
+3. Revisions contiguous per cycle.
+
+## Assumptions & open decisions
+- ASSUMPTION: 300 ms p95 consent budget.

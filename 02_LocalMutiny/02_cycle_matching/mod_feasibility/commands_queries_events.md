@@ -1,35 +1,56 @@
-# PS-016-04 — commands queries events
+# PS-016-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-016-04. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_feasibility](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_feasibility. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_feasibility. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-ID-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the commands queries events process for feasibility within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-016-04.R01 | `feasibility.evaluate` is internal; it accepts only `snapshot_id` and `parameters_digest`, and its idempotency key is their concatenation. | MVP |
+| PS-016-04.R02 | `feasibility.candidate_get` returns verdict, reason codes and the caller's own slot only. | MVP |
+| PS-016-04.R03 | Event `cycle_candidate.evaluated` has `aggregate_type` `cycle_candidate` and revision 1 (first verdict). | MVP |
+| PS-016-04.R04 | Evaluate returns within the 10 s hard timeout (ASSUMPTION) or returns BUDGET_EXHAUSTED. | MVP |
 
-## Requirements to specify
-- [ ] PS-016-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-016-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-016-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+- `feasibility.evaluate`: `{snapshot_id, parameters_digest, budget_steps?}` (budget may only lower the default).
+- `feasibility.candidate_get`: `{candidate_id}`.
+- Event payload: verdict record (PS-016-01), `max_data_class` = FINANCIAL_EVIDENCE if value present, else LOCATION_COARSE.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Caller | Idempotency | Expected revision | Errors |
+|---|---|---|---|---|
+| feasibility.evaluate | sys_ | snapshot + digest | null (first) | FEASIBLE.SNAPSHOT_TOO_LARGE, FEASIBLE.BUDGET_EXHAUSTED, SYS.UNAVAILABLE |
+| feasibility.candidate_get | participant acc_ | n/a | n/a | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Versioning: schema 1.0.0; algorithm version in every payload. A change to search rules bumps the algorithm MINOR and re-runs are new evaluations.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See PS-016-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See PS-016-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-016-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+See PS-016-05.
+
+## Failure, idempotency, concurrency, offline
+Same-key replays return the original verdict (CTR-EVT-001 R03). Retry policy in PS-016-06.
+
+## Privacy, retention, abuse
+Payload excludes other participants' IDs from candidate_get responses.
+
+## Observability & budgets
+Event lag ≤ 5 s p95 to matching modules (PS-016-08).
+
+## Tests
+- TEST-PS-016-04-01 (contract): event validates against 1.0.0.
+- TEST-PS-016-04-02 (unit): repeated evaluate with same digest emits one event.
+- TEST-PS-016-04-03 (negative): actor calling evaluate directly gets SYS.FORBIDDEN.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each operation has schema, caller, idempotency rule and errors.
+2. `candidate_get` never returns another participant's slot.
+3. Event order per candidate follows revision.
+
+## Assumptions & open decisions
+- PROVISIONAL (D02 default, unapproved).
+- PENDING CTR-EVT-001 subscriber map for F02.S02.M01, M02, M03.

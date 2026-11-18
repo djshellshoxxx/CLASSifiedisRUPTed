@@ -1,35 +1,25 @@
 # PS-143-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-143-02. **Owner:** [17_Quality/03_release/mod_gates](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_gates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/03_release/mod_gates. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the validation rules process for gates within 03_release. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-143-02.R01 | A gate definition that removes a required evidence type from a released gate is rejected unless a Governance Lead approval ID is supplied. | MVP |
+| PS-143-02.R02 | An evidence reference whose `commit_sha` differs from the decision's `commit_sha` is rejected as stale. | MVP |
+| PS-143-02.R03 | A waiver whose `approved_by` equals `requested_by` is rejected. | MVP |
+| PS-143-02.R04 | A waiver lacking `reason_key` or with `expires_at` beyond the limit is rejected. | MVP |
 
-## Requirements to specify
-- [ ] PS-143-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-143-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-143-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Validation and errors
+| Code | Retryable | Category / HTTP | Message key | Privacy-safe diagnostic |
+|---|---|---|---|---|
+| GATES.EVIDENCE_STALE | false | unprocessable_state / 422 | err.gates.evidence_stale | evidence_type and commit mismatch flag |
+| GATES.EVIDENCE_MISSING | false | precondition_failed / 412 | err.gates.evidence_missing | evidence_type |
+| GATES.SELF_APPROVAL_FORBIDDEN | false | forbidden / 403 | err.gates.self_approval_forbidden | none |
+| GATES.WAIVER_TOO_LONG | false | validation / 400 | err.gates.waiver_too_long | limit days |
+| GATES.INVALID_TRANSITION | false | unprocessable_state / 422 | err.gates.invalid_transition | from and event names |
+| SYS.CONFLICT | false | conflict / 409 | err.sys.conflict | revision mismatch |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-143-02`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: 14-day waiver ceiling is provisional; Governance Lead confirms.
+- D07 (retention) does not change validation: PROVISIONAL (D07 default, unapproved).

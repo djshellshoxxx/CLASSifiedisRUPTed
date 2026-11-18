@@ -1,35 +1,33 @@
 # PS-143-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-143-03. **Owner:** [17_Quality/03_release/mod_gates](SPEC.md). **Implementing module:** 17_Quality/03_release/mod_gates. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/03_release/mod_gates. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for gates within 03_release. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-143-03.R01 | Decision states are exactly `evaluating`, `pass`, `blocked`, `waived`. | MVP |
+| PS-143-03.R02 | `pass` requires every required evidence item present, fresh (same commit) and in a passing state. | MVP |
+| PS-143-03.R03 | A `blocked` decision moves to `waived` only through an approved waiver; it never moves to `pass` by re-evaluation alone unless evidence now passes. | MVP |
+| PS-143-03.R04 | Waiver states are exactly `requested`, `granted`, `expired`, `revoked`. | MVP |
 
-## Requirements to specify
-- [ ] PS-143-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-143-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-143-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | EvaluateGates | gate version active | evaluating | none |
+| evaluating | EvaluationComplete | all evidence fresh and passing | pass | emit `gate_decision.recorded` |
+| evaluating | EvaluationComplete | any evidence missing, failing or stale | blocked | emit `gate_decision.recorded` with blocking evidence IDs |
+| blocked | GrantGateWaiver | R03 of PS-143-02 satisfied | waived | emit `gate_waiver.granted` |
+| waived | WaiverExpires | `expires_at` passed | blocked | re-evaluation required |
+| granted waiver | RevokeWaiver | none | revoked | decision → blocked |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Invalid pairs return `GATES.INVALID_TRANSITION` (422). Decisions are immutable once recorded; a new evaluation creates a new decision.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Failure, idempotency, concurrency, offline
+- Evidence arriving after evaluation does not change the recorded decision; a new evaluation is required.
+- Duplicate `EvaluateGates` for the same commit and gate version returns the existing decision.
+- No offline state; evaluation requires online access to evidence records.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-143-03`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: waivers do not carry over to a new commit.
+- D07 (retention) default applies to decisions: PROVISIONAL (D07 default, unapproved).

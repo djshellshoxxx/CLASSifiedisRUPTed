@@ -1,35 +1,54 @@
-# PS-020-05 — authorization capabilities
+# PS-020-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-020-05. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_three](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_three. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_three. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R04, R06, R10), CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for three within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-020-05.R01 | Consent and decline require `cyc.consent` (participant scope on the slot). | MVP |
+| PS-020-05.R02 | Viewing requires `cyc.read` (participant scope). | MVP |
+| PS-020-05.R03 | Proposing requires a sys_ matcher grant (`cyc.propose`). | MVP |
+| PS-020-05.R04 | Other slots show only pseudonym and offer; wants text of other slots is omitted (CTR-CAP-001 R10). | MVP |
 
-## Requirements to specify
-- [ ] PS-020-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-020-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-020-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Grants `grt_` for matcher; decisions `dec_` with reason codes.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+As in PS-020-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Non-participant gets SYS.NOT_FOUND on invisible cycles.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Result |
+|---|---|---|---|
+| slot participant | cyc.consent | own slot, current version | ALLOW |
+| slot participant | cyc.consent | stale version | DENY SYS.CONFLICT |
+| non-participant | cyc.read | cyc_ | DENY SYS.NOT_FOUND |
+| sys_ matcher (grant) | cyc.propose | ccd_ | ALLOW |
+| user | cyc.propose | ccd_ | DENY SYS.FORBIDDEN |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-020-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Revocation at next decision.
+
+## Privacy, retention, abuse
+No wants text in decision records.
+
+## Observability & budgets
+Denials by reason, no IDs.
+
+## Tests
+- TEST-PS-020-05-01 (unit): each row.
+- TEST-PS-020-05-02 (negative): non-participant read denied.
+- TEST-PS-020-05-03 (integration): revoked matcher grant blocks proposals.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All rows covered.
+2. Only slot participants consent, in 100% of fixtures.
+3. Field omission verified for other slots' wants.
+
+## Assumptions & open decisions
+- ASSUMPTION: matcher runs as sys_ with purpose constraint (CTR-CAP-001 R06).

@@ -1,35 +1,52 @@
 # PS-018-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-018-02. **Owner:** [02_LocalMutiny/02_cycle_matching/mod_n](SPEC.md). **Implementing module:** 02_LocalMutiny/02_cycle_matching/mod_n. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/02_cycle_matching/mod_n. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001, CTR-COM-001 (value fields only). Module code `CYCLEN` (PENDING CTR-ERR-001).
 
-## Purpose and scope
-Define the validation rules process for n within 02_cycle_matching. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-018-02.R01 | `max_length` must be 5..8; lower values route to mod_three or mod_four and are refused here. | MVP |
+| PS-018-02.R02 | The snapshot must be sealed and FEASIBLE-sourced (PS-016-03); run on an open snapshot is refused. | MVP |
+| PS-018-02.R03 | `budget_steps` ∈ [10,000, 200,000] (ASSUMPTION); values outside are refused. | MVP |
+| PS-018-02.R04 | `candidate_cap` ∈ [1, 1,000]. | MVP |
+| PS-018-02.R05 | A run is refused if the snapshot exceeds 5,000 edges (FEASIBLE rule reused). | MVP |
 
-## Requirements to specify
-- [ ] PS-018-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-018-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-018-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Parameter defaults: `max_length=8`, `budget_steps=200000`, `candidate_cap=1000` (ASSUMPTION; D02 default).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+| Code | Category (HTTP) | Retryable | Trigger | details[].rule |
+|---|---|---|---|---|
+| CYCLEN.LENGTH_OUT_OF_RANGE | validation (400) | false | max_length outside 5..8 | length_bounds |
+| CYCLEN.ROUTED_ELSEWHERE | validation (400) | false | length 2–4 requested here | routing |
+| CYCLEN.BUDGET_OUT_OF_RANGE | validation (400) | false | budget or cap outside bounds | budget_bounds |
+| CYCLEN.SNAPSHOT_NOT_SEALED | precondition_failed (412) | true | snapshot still open | snapshot_status |
+| CYCLEN.BUDGET_EXHAUSTED | unprocessable_state (422) | false | step budget reached; no output kept | budget_steps |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Messages: `err.cyclen.<code>`; no values echoed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Sys_ matcher only; users cannot request runs.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Same snapshot and parameters always yield the same validation result.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-018-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Errors carry no candidate refs.
+
+## Observability & budgets
+Counts per code.
+
+## Tests
+- TEST-PS-018-02-01 (unit): one fixture per code.
+- TEST-PS-018-02-02 (boundary): max_length 4 refused, 5 accepted, 8 accepted, 9 refused.
+- TEST-PS-018-02-03 (negative): run on open snapshot refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Routing refusal occurs for lengths 2–4 in 100% of runs.
+2. Boundary values match the ranges above.
+3. No candidate content in any error.
+
+## Assumptions & open decisions
+- ASSUMPTION: budget and cap ranges above.
+- PROVISIONAL (D02 default, unapproved).

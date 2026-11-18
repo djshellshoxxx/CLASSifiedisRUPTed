@@ -1,35 +1,24 @@
-# PS-146-06 — failure recovery idempotency
+# PS-146-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-146-06. **Owner:** [18_Governance/01_policy/mod_prohibited](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_prohibited. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 18_Governance/01_policy/mod_prohibited. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for prohibited within 01_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-146-06.R01 | Classification fails closed: no decision on error means the draft cannot be submitted. | MVP |
+| PS-146-06.R02 | Same `(draft_ref, draft_version, region_code)` returns the original decision. | MVP |
+| PS-146-06.R03 | Rule publish is atomic; a classification uses only published versions. | MVP |
 
-## Requirements to specify
-- [ ] PS-146-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-146-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-146-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Failure, idempotency, concurrency, offline
+- **Retry:** `SYS.UNAVAILABLE` retried by the listing service with backoff 1 s, 4 s, 16 s (ASSUMPTION), same key.
+- **Rule changed between draft versions:** the new draft version is classified against the current rules.
+- **Concurrent publishes:** `expected_revision`; loser gets `SYS.CONFLICT`.
+- **Replayed events:** consumers dedupe on `decision_id`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Tests
+- TEST-PS-146-06-01 (negative): rule service down → `SYS.UNAVAILABLE`, draft not submitted.
+- TEST-PS-146-06-02 (integration): duplicate classification request returns original decision.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-146-06`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: backoff values are defaults.
+- D07 default applies: PROVISIONAL (D07 default, unapproved).

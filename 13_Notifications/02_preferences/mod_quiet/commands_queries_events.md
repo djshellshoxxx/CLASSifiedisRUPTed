@@ -1,35 +1,64 @@
-# PS-108-04 — commands queries events
+# PS-108-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-108-04. **Owner:** [13_Notifications/02_preferences/mod_quiet](SPEC.md). **Implementing module:** 13_Notifications/02_preferences/mod_quiet. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/02_preferences/mod_quiet. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for quiet within 02_preferences. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-108-04.R01 | `quiet.start` replaces any active period; uses `expected_revision` and `idempotency_key`. | MVP |
+| PS-108-04.R02 | `quiet.resume` is idempotent. | MVP |
+| PS-108-04.R03 | Events carry IDs, preset enum and absolute times only (no zone, no content). | MVP |
+| PS-108-04.R04 | `quiet.get_status` p95 ≤ 50 ms and returns `ends_at` and remaining seconds. | MVP |
 
-## Requirements to specify
-- [ ] PS-108-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-108-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-108-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+**Commands**
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Command | Actor | Idempotency key | expected_revision | Errors |
+|---|---|---|---|---|
+| `quiet.start` | user (self) | client key | null if none active, else required | QUIET.PRESET_UNKNOWN, QUIET.UNTIL_INVALID, QUIET.DURATION_TOO_LONG, QUIET.ZONE_REQUIRED, SYS.CONFLICT |
+| `quiet.resume` | user (self) | client key | n/a | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+**Queries**: `quiet.get_status` (self).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+**Events**
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+| event_type | aggregate_type | max_data_class |
+|---|---|---|
+| quiet_period.started | quiet_period | PRIVATE_PERSONAL |
+| quiet_period.extended | quiet_period | PRIVATE_PERSONAL |
+| quiet_period.ended | quiet_period | PRIVATE_PERSONAL |
+| notification.quiet_held | notification | PSEUDONYMOUS |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-108-04`; scenarios and fixtures to be detailed in Prompt 3.
+
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
+
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
+
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Replay safe. Start offline queued per D08 PROVISIONAL; server time governs `ends_at`.
+
+## Privacy, retention, abuse
+Events are internal; they are not sent to other accounts or providers.
+
+## Observability & budgets
+Command p95 ≤ 150 ms.
+
+## Tests
+- TEST-PS-108-04-01 (contract): event schemas reject zone and content fields.
+- TEST-PS-108-04-02 (integration): `quiet.start` replay returns same `qpd_id`.
+- TEST-PS-108-04-03 (integration): `quiet.get_status` of another account returns NOT_FOUND.
+- TEST-PS-108-04-04 (contract): `notification.quiet_held` class is PSEUDONYMOUS.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Commands, queries and events match tables.
+2. No content in events.
+3. Replay yields one event set.
+
+## Assumptions & open decisions
+- ASSUMPTION: `quiet.start` replacing semantics.
+- Prefix `qpd_` PENDING CTR-ID-001.

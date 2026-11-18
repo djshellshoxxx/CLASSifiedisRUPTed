@@ -1,35 +1,53 @@
-# PS-084-05 — authorization capabilities
+# PS-084-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-084-05. **Owner:** [11_Federation/01_protocol/mod_records](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_records. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_records. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-FED-001 (R02).
 
-## Purpose and scope
-Define the authorization capabilities process for records within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-084-05.R01 | Only the item owner may set `federate` on their item (`<resource>.consent`, scope self). | MVP |
+| PS-084-05.R02 | Operators cannot set `federate` on another user's item. | MVP |
+| PS-084-05.R03 | Registry changes require Platform Lead; class raises also require Privacy Lead review. | MVP |
+| PS-084-05.R04 | Default deny. | MVP |
 
-## Requirements to specify
-- [ ] PS-084-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-084-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-084-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capabilities: `lst.consent` (example resource), `record_type.register`, `record_type.deprecate`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+[commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+None.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.FORBIDDEN` or `SYS.NOT_FOUND` per CTR-CAP-001 R04/R08 of CTR-ERR.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Outcome |
+|---|---|---|---|
+| owner | lst.consent | own item | ALLOW |
+| non-owner | lst.consent | item | DENY, SYS.NOT_FOUND |
+| ope | lst.consent | other's item | DENY |
+| Platform Lead | record_type.register | registry | ALLOW |
+| Platform Lead alone | raise max_class | registry | DENY, CAP.DUAL_APPROVAL_REQUIRED |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-084-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fails closed. Offline clients have no authority.
+
+## Privacy, retention, abuse
+Owner flag changes produce audit records (CTR-CAP-001 R08).
+
+## Observability & budgets
+`records_authz_denies_total`.
+
+## Tests
+- TEST-PS-084-05-01 (matrix): table outcomes.
+- TEST-PS-084-05-02 (operator): ope cannot flag others' items.
+- TEST-PS-084-05-03 (registry): class raise needs second approver.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix passes.
+2. Class raise dual-approved.
+
+## Assumptions & open decisions
+- PROVISIONAL (CTR-CAP-001 default, unapproved).

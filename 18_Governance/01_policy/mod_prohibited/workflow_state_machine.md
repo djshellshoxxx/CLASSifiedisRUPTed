@@ -1,35 +1,31 @@
 # PS-146-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-146-03. **Owner:** [18_Governance/01_policy/mod_prohibited](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_prohibited. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 18_Governance/01_policy/mod_prohibited. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for prohibited within 01_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-146-03.R01 | Rule states are `proposed`, `published`, `retired`. | MVP |
+| PS-146-03.R02 | Classification outcomes are exactly `permitted`, `restricted`, `prohibited`. | MVP |
+| PS-146-03.R03 | A `prohibited` outcome blocks submission; a `restricted` outcome routes the draft to review and does not publish it. | MVP |
+| PS-146-03.R04 | Classification order: `prohibited` rules are checked first, then `restricted`, then default `permitted`. | MVP |
 
-## Requirements to specify
-- [ ] PS-146-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-146-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-146-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | ProposeProhibitionRule | R01–R04 of PS-146-02 pass | proposed | emit event |
+| proposed | PublishProhibitionRule | approver ≠ proposer; source present | published | emit `prohibition_rule.published` |
+| published | RetireProhibitionRule | replacement or reason key present | retired | emit `prohibition_rule.retired`; past decisions keep version |
+| (draft) | ClassifyListingDraft | rules published for region | prohibited / restricted / permitted | emit `classification.recorded` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Invalid pairs return `PROHIB.INVALID_TRANSITION` (422). Decisions are immutable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Failure, idempotency, concurrency, offline
+- Duplicate classification request for the same draft version returns the same decision.
+- Rule service down: classification fails closed with `SYS.UNAVAILABLE`; the draft is not treated as permitted.
+- Offline clients see a "check pending" state; they cannot submit a classified-restricted draft without an online decision.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-146-03`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Assumptions & open decisions
+- ASSUMPTION: restricted routing goes to F12 review queue, not automatic removal.
+- No additional Dxx applies: PROVISIONAL, none applied.

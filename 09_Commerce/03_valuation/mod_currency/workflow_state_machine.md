@@ -1,35 +1,57 @@
 # PS-073-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-073-03. **Owner:** [09_Commerce/03_valuation/mod_currency](SPEC.md). **Implementing module:** 09_Commerce/03_valuation/mod_currency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/03_valuation/mod_currency (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R02, R06), CTR-EVT-001 (R02). **Decisions:** D03 (PROVISIONAL, unapproved).
 
-## Purpose and scope
-Define the workflow state machine process for currency within 03_valuation. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-073-03.R01 | States: `enabled`, `disabled`, `deprecated`. | MVP |
+| PS-073-03.R02 | `enabled` → `disabled` allowed; `disabled` → `enabled` allowed; any → `deprecated` terminal (no new use). | MVP |
+| PS-073-03.R03 | `deprecated` entries remain resolvable for existing claims forever. | MVP |
+| PS-073-03.R04 | Status changes never alter claim states. | MVP |
 
-## Requirements to specify
-- [ ] PS-073-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-073-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-073-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Transition row: `currency_id`, `version`, `from`, `to`, `actor_ref`, `revision`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`currency.registered`, `currency.status_changed`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| — | `currency.register` | PS-073-02 passes | `enabled` | `currency.registered` |
+| `enabled` | `currency.set_status` (disable) | dual control | `disabled` | warning if open claims |
+| `disabled` | `currency.set_status` (enable) | dual control | `enabled` | event |
+| `enabled`, `disabled` | `currency.set_status` (deprecate) | dual control; 30-day notice | `deprecated` | notice to consumers |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Any other pair returns `SYS.CONFLICT`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`CURR.OPEN_CLAIMS_EXIST` warning (not an error) on disable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-073-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Operator with dual control.
+
+## Failure, idempotency, concurrency, offline
+Concurrent status changes: revision check.
+
+## Privacy, retention, abuse
+Public log.
+
+## Observability & budgets
+Counter of status changes by target state.
+
+## Tests
+- TEST-PS-073-03-01 (unit): table rows pass; deprecated → enabled refused.
+- TEST-PS-073-03-02 (integration): disabling leaves a claim in `CLAIMED` valid.
+- TEST-PS-073-03-03 (integration): deprecated entry still resolves for an old claim.
+- TEST-PS-073-03-04 (negative): status change without dual control refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Table implemented.
+2. No claim state changes from registry changes.
+3. Deprecated entries resolvable.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day deprecation notice.
+- D03 (PROVISIONAL default, unapproved).

@@ -1,6 +1,6 @@
 # F12.S01.M03 — appeals
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role; named person UNASSIGNED). **Parent:** F12.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role). **Parent:** F12.S01.
 
 ## Purpose and business behavior
 Let an affected person contest a moderation outcome (an enforcement action, a spam verdict or a report closure) once, within a fixed window, and have a reviewer who did not make the original decision reach a recorded outcome: upheld, modified or reversed. A reversal triggers the enforcement reversal in `mod_enforcement`. Appeals do not restore content by themselves and do not guarantee an outcome.

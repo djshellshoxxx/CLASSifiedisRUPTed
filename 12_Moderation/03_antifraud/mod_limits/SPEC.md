@@ -1,6 +1,6 @@
 # F12.S03.M04 — limits
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role; named person UNASSIGNED). **Parent:** F12.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role). **Parent:** F12.S03.
 
 ## Purpose and business behavior
 Hold the versioned quota policies that cap how many active items or open commitments one account, or one coarse region cell, may hold at a time: active listings, open barter proposals, open auctions, open rental bookings and open message threads. Owning modules call `limits.check` before creating an item. This module does not store usage counts; it returns allow or deny against the policy in force. Policies change through two-person approval and staged rollout.

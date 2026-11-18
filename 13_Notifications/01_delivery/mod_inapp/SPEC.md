@@ -1,6 +1,6 @@
 # F13.S01.M03 — inapp
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (accountable role; named person UNASSIGNED). **Parent:** F13.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (accountable role). **Parent:** F13.S01.
 
 ## Purpose and business behavior
 Deliver notifications to the in-app inbox of the PWA: create the inbox item from a producer event, apply the recipient's preferences and blocks, sync the list to every device, and track read and dismissed state. Inbox text is rendered on the client from short template keys and labels, so server-side storage holds no message bodies. Delivery is best-effort with explicit states; the inbox never fabricates an unread count when offline.

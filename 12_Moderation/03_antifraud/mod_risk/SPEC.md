@@ -1,6 +1,6 @@
 # F12.S03.M01 — risk
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role; named person UNASSIGNED). **Parent:** F12.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role). **Parent:** F12.S03.
 
 ## Purpose and business behavior
 Assess how risky a specific subject (an account, listing, service, rental, auction or cycle proposal) looks, using signals from `mod_signals`, limit hits and reports, and turn the result into one of four tiers. The tier triggers only holds on public visibility, step-up verification or routing to a human reviewer. Risk never blocks consent, a committed exchange or a payment claim, never moves money, and is never shown to the subject as a number.

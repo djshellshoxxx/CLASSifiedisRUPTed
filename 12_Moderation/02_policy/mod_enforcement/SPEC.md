@@ -1,6 +1,6 @@
 # F12.S02.M01 — enforcement
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role; named person UNASSIGNED). **Parent:** F12.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role). **Parent:** F12.S02.
 
 ## Purpose and business behavior
 Apply, approve, expire, reverse and supersede visibility or account-level actions taken on a case: warning, hiding, unpublishing, removing content, restricting publishing and suspending an account. Every action is tied to a moderation case, has a reason code and an expiry, and is reversible by appeal. Enforcement changes what others can see and do on the platform. It never changes money, escrow-free commitments or the terms of a barter cycle; those are renegotiated by the owning module.

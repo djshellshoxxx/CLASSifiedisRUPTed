@@ -1,6 +1,6 @@
 # F12.S03.M03 — rate
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role; named person UNASSIGNED). **Parent:** F12.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role). **Parent:** F12.S03.
 
 ## Purpose and business behavior
 Throttle how fast any single subject can perform actions that cost the platform or other users: sending messages, creating listings, attempting logins and submitting federated batches. Each decision is allow or limited, with a retry time and no disclosure of counts. This module holds no durable user records. Its job is to slow abuse without making ordinary use fail: authenticated limits are per account, network-level limits apply only to unauthenticated routes, and store outages degrade per class.

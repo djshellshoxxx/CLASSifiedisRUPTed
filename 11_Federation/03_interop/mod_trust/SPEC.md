@@ -1,6 +1,6 @@
 # F11.S03.M01 — trust
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (accountable role; named person UNASSIGNED). **Parent:** F11.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (accountable role). **Parent:** F11.S03.
 
 ## Purpose and business behavior
 Decide and record the trust state of federation peers (`pending`, `trusted`, `restricted`, `quarantined`, `revoked`). The state gates whether a peer's signed events are imported or exported (CTR-FED-001 R01). Trust is an operational control over a peer, not a judgement that its content is true; a `trusted` peer can still send invalid or disputed items, which are rejected or flagged per item.

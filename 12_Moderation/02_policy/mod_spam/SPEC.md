@@ -1,6 +1,6 @@
 # F12.S02.M02 — spam
 
-**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role; named person UNASSIGNED). **Parent:** F12.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (accountable role). **Parent:** F12.S02.
 
 ## Purpose and business behavior
 Classify listings, service posts, private-message send patterns and verified inbound federated items as allowed, quarantined or rejected for spam and low-quality duplication. Listings and services are hidden from public discovery until they have a verdict. Private messages are never read by this module: only metadata (send rate, recipient novelty, link count, prior blocks) is scored, and a flagged sender is throttled rather than having delivered messages removed.

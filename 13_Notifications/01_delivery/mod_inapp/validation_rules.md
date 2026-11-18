@@ -22,6 +22,7 @@ Module prefix `INAPP`.
 | `INAPP.PAYLOAD_TOO_LARGE` | payload_too_large | 413 | false | `params` |
 | `INAPP.PARAM_FORBIDDEN_CLASS` | validation | 400 | false | `params` (producer-facing; logs only) |
 | `INAPP.CURSOR_INVALID` | validation | 400 | false | `cursor` |
+| `INAPP.EXPORT_TOO_LARGE` | validation | 400 | false | `cursor` (> 1 000 items, PS-103-10) |
 | `INAPP.STATE_NOT_ALLOWED` | unprocessable_state | 422 | false | `inbox_state` |
 | `SYS.NOT_FOUND` | not_found | 404 | false | — (returned for another account's `ntf_`) |
 

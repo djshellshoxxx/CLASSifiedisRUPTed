@@ -1,0 +1,4946 @@
+{
+  "checkedAt": "2026-11-18T07:37:56.183Z",
+  "repositoryHead": "c4f733e8f2e13c38844acc84b2401209bedf4e24",
+  "method": "Exact production browser esbuild options from tools/cli/classrup.mjs:182; only write:false and metafile:true added. This is a dependency-closure check, not a deployment.",
+  "inputCount": 201,
+  "affectedToolingInputs": [],
+  "inputs": [
+    "apps/pwa/src/action-queue.ts",
+    "apps/pwa/src/archive-backup.ts",
+    "apps/pwa/src/barter-runtime.ts",
+    "apps/pwa/src/barter.ts",
+    "apps/pwa/src/listing-closure.ts",
+    "apps/pwa/src/listing-editor.ts",
+    "apps/pwa/src/listing-history.ts",
+    "apps/pwa/src/listing-maintenance.ts",
+    "apps/pwa/src/location-preferences.ts",
+    "apps/pwa/src/main.ts",
+    "apps/pwa/src/matching-worker-client.ts",
+    "apps/pwa/src/matching-worker-protocol.ts",
+    "apps/pwa/src/matching-worker.ts",
+    "apps/pwa/src/notification-delivery.ts",
+    "apps/pwa/src/notifications.ts",
+    "apps/pwa/src/peer-search.ts",
+    "apps/pwa/src/vault-session.ts",
+    "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/_arx.js",
+    "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/_poly1305.js",
+    "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/chacha.js",
+    "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/utils.js",
+    "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_md.js",
+    "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_u64.js",
+    "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/hmac.js",
+    "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/pbkdf2.js",
+    "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/scrypt.js",
+    "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/sha2.js",
+    "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/utils.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/index.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/checks.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/coerce.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/compat.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/deep-partial.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/external.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/from-json-schema.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/in-out.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/compile.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-generator.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/visit.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ar.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/az.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/be.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bg.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bn.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ca.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ckb.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/cs.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/da.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/de.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/el.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/eo.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/es.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fa.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fi.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr-CA.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/gu.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/he.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hi.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hr.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hu.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hy.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/id.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/index.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/is.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/it.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ja.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ka.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kh.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/km.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kn.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ko.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/lt.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/mk.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ms.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ne.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nl.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nn.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/no.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ota.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pl.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ps.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt-BR.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ro.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ru.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sk.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sl.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sv.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ta.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tg.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/th.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tk.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tr.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ua.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uk.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ur.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uz.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/vi.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/yo.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-CN.js",
+    "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-TW.js",
+    "packages/bazaar/src/index.ts",
+    "packages/bazaar/src/listings/archive.ts",
+    "packages/bazaar/src/listings/history.ts",
+    "packages/bazaar/src/listings/index.ts",
+    "packages/bazaar/src/listings/lifecycle.ts",
+    "packages/bazaar/src/listings/model.ts",
+    "packages/discovery/src/geoprivacy/coarse/geohash.ts",
+    "packages/discovery/src/geoprivacy/coarse/index.ts",
+    "packages/discovery/src/geoprivacy/location/index.ts",
+    "packages/discovery/src/index.ts",
+    "packages/discovery/src/ranking/fairness/index.ts",
+    "packages/discovery/src/ranking/relevance/index.ts",
+    "packages/discovery/src/ranking/relevance/scoring.ts",
+    "packages/discovery/src/search/filter/index.ts",
+    "packages/discovery/src/search/index.ts",
+    "packages/discovery/src/search/local-options.ts",
+    "packages/federation/src/envelope.ts",
+    "packages/federation/src/index.ts",
+    "packages/i18n/src/index.ts",
+    "packages/i18n/src/internationalization/currencies/index.ts",
+    "packages/i18n/src/internationalization/languages/catalogs.ts",
+    "packages/i18n/src/internationalization/languages/index.ts",
+    "packages/i18n/src/internationalization/languages/validate.ts",
+    "packages/identity/src/identity.ts",
+    "packages/identity/src/index.ts",
+    "packages/kernel/src/browser.ts",
+    "packages/kernel/src/bus/access.ts",
+    "packages/kernel/src/bus/bus.ts",
+    "packages/kernel/src/bus/define.ts",
+    "packages/kernel/src/bus/emit.ts",
+    "packages/kernel/src/bus/ports.ts",
+    "packages/kernel/src/clock/clock.ts",
+    "packages/kernel/src/errors/app-error.ts",
+    "packages/kernel/src/errors/codes.ts",
+    "packages/kernel/src/errors/problem.ts",
+    "packages/kernel/src/errors/result.ts",
+    "packages/kernel/src/events/envelope.ts",
+    "packages/kernel/src/hash/canonical.ts",
+    "packages/kernel/src/ids/uuidv7.ts",
+    "packages/kernel/src/index.ts",
+    "packages/kernel/src/machine/machine.ts",
+    "packages/kernel/src/observability/ip.ts",
+    "packages/kernel/src/observability/logger.ts",
+    "packages/kernel/src/observability/metrics.ts",
+    "packages/kernel/src/observability/readiness.ts",
+    "packages/kernel/src/observability/redact.ts",
+    "packages/kernel/src/outbox/backoff.ts",
+    "packages/kernel/src/outbox/dispatcher.ts",
+    "packages/kernel/src/storage/base64url.ts",
+    "packages/kernel/src/storage/indexeddb.ts",
+    "packages/kernel/src/storage/machines.ts",
+    "packages/kernel/src/storage/maintenance.ts",
+    "packages/kernel/src/storage/memory-driver.ts",
+    "packages/kernel/src/storage/migrations.ts",
+    "packages/kernel/src/storage/repo.ts",
+    "packages/kernel/src/storage/scope.ts",
+    "packages/kernel/src/storage/storage.ts",
+    "packages/kernel/src/storage/tx.ts",
+    "packages/kernel/src/sync/sender.ts",
+    "packages/kernel/src/validation/parse.ts",
+    "packages/kernel/src/validation/schemas.ts",
+    "packages/mutiny/src/cycle_matching/admission.ts",
+    "packages/mutiny/src/cycle_matching/index.ts",
+    "packages/mutiny/src/index.ts",
+    "packages/mutiny/src/trade_proposals/index.ts",
+    "packages/mutiny/src/trade_proposals/repository.ts",
+    "packages/notify/src/delivery/inapp/index.ts",
+    "packages/notify/src/delivery/inapp/routing.ts",
+    "packages/notify/src/index.ts",
+    "packages/notify/src/local.ts",
+    "packages/notify/src/preferences/in/index.ts",
+    "packages/notify/src/preferences/opt/index.ts",
+    "packages/security/src/cryptography/index.ts",
+    "packages/security/src/index.ts",
+    "packages/vault/src/encrypted-storage.ts",
+    "packages/vault/src/index.ts",
+    "packages/vault/src/session-policy.ts",
+    "packages/vault/src/vault.ts"
+  ],
+  "outputs": [
+    {
+      "file": "app.js",
+      "bytes": 718153,
+      "sha256": "449825dd3e4127134f7f6bc4859ef350fb8478f5e1d51339f54ac68b2b2e654d"
+    },
+    {
+      "file": "matching-worker.js",
+      "bytes": 487761,
+      "sha256": "7382cb80a486156d7a00b50550c42eec8549d90993ca126f5451d6dfd2531798"
+    }
+  ],
+  "metafile": {
+    "inputs": {
+      "packages/kernel/src/clock/clock.ts": {
+        "bytes": 1352,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/errors/codes.ts": {
+        "bytes": 1691,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/errors/app-error.ts": {
+        "bytes": 3376,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/codes.ts",
+            "kind": "import-statement",
+            "original": "./codes.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/errors/result.ts": {
+        "bytes": 1058,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/ids/uuidv7.ts": {
+        "bytes": 4756,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/errors/problem.ts": {
+        "bytes": 1219,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/hash/canonical.ts": {
+        "bytes": 2677,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/validation/parse.ts": {
+        "bytes": 2076,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js": {
+        "bytes": 34840,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js",
+            "kind": "import-statement",
+            "original": "./core.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js": {
+        "bytes": 6642,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js": {
+        "bytes": 10871,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js",
+            "kind": "import-statement",
+            "original": "./core.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js": {
+        "bytes": 8267,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js",
+            "kind": "import-statement",
+            "original": "./core.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js",
+            "kind": "import-statement",
+            "original": "./errors.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js": {
+        "bytes": 11818,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js": {
+        "bytes": 19491,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js",
+            "kind": "import-statement",
+            "original": "./core.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js",
+            "kind": "import-statement",
+            "original": "./regexes.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js": {
+        "bytes": 1290,
+        "imports": [],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js": {
+        "bytes": 70,
+        "imports": [],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js": {
+        "bytes": 107291,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js",
+            "kind": "import-statement",
+            "original": "./checks.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js",
+            "kind": "import-statement",
+            "original": "./core.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js",
+            "kind": "import-statement",
+            "original": "./doc.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js",
+            "kind": "import-statement",
+            "original": "./parse.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js",
+            "kind": "import-statement",
+            "original": "./regexes.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js",
+            "kind": "import-statement",
+            "original": "./versions.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js": {
+        "bytes": 12517,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ar.js": {
+        "bytes": 5404,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/az.js": {
+        "bytes": 4703,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/be.js": {
+        "bytes": 6998,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bg.js": {
+        "bytes": 6029,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bn.js": {
+        "bytes": 5757,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ca.js": {
+        "bytes": 4908,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ckb.js": {
+        "bytes": 5948,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/cs.js": {
+        "bytes": 4953,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/da.js": {
+        "bytes": 4987,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/de.js": {
+        "bytes": 4774,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/el.js": {
+        "bytes": 5701,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js": {
+        "bytes": 5302,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/eo.js": {
+        "bytes": 4784,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/es.js": {
+        "bytes": 5591,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fa.js": {
+        "bytes": 5343,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fi.js": {
+        "bytes": 5007,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr.js": {
+        "bytes": 5414,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr-CA.js": {
+        "bytes": 4749,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/gu.js": {
+        "bytes": 5930,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/he.js": {
+        "bytes": 12411,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hi.js": {
+        "bytes": 5940,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hr.js": {
+        "bytes": 5184,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hu.js": {
+        "bytes": 4871,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hy.js": {
+        "bytes": 6720,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/id.js": {
+        "bytes": 4759,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/is.js": {
+        "bytes": 4822,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/it.js": {
+        "bytes": 4775,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ja.js": {
+        "bytes": 5054,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ka.js": {
+        "bytes": 6527,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/km.js": {
+        "bytes": 6509,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kh.js": {
+        "bytes": 111,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/km.js",
+            "kind": "import-statement",
+            "original": "./km.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kn.js": {
+        "bytes": 6512,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ko.js": {
+        "bytes": 5109,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/lt.js": {
+        "bytes": 8223,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/mk.js": {
+        "bytes": 5399,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ms.js": {
+        "bytes": 4674,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ne.js": {
+        "bytes": 5819,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nl.js": {
+        "bytes": 4939,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nn.js": {
+        "bytes": 4678,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/no.js": {
+        "bytes": 4693,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ota.js": {
+        "bytes": 4723,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ps.js": {
+        "bytes": 5123,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pl.js": {
+        "bytes": 5150,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt.js": {
+        "bytes": 7024,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt-BR.js": {
+        "bytes": 7024,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ro.js": {
+        "bytes": 4883,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ru.js": {
+        "bytes": 7095,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sk.js": {
+        "bytes": 4949,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sl.js": {
+        "bytes": 4756,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sv.js": {
+        "bytes": 4841,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ta.js": {
+        "bytes": 6688,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tg.js": {
+        "bytes": 5647,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/th.js": {
+        "bytes": 6563,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tk.js": {
+        "bytes": 4458,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tr.js": {
+        "bytes": 4642,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uk.js": {
+        "bytes": 5665,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ua.js": {
+        "bytes": 111,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uk.js",
+            "kind": "import-statement",
+            "original": "./uk.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ur.js": {
+        "bytes": 5491,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uz.js": {
+        "bytes": 4844,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/vi.js": {
+        "bytes": 4967,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-CN.js": {
+        "bytes": 4622,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-TW.js": {
+        "bytes": 4672,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/yo.js": {
+        "bytes": 4847,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/index.js": {
+        "bytes": 2607,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ar.js",
+            "kind": "import-statement",
+            "original": "./ar.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/az.js",
+            "kind": "import-statement",
+            "original": "./az.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/be.js",
+            "kind": "import-statement",
+            "original": "./be.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bg.js",
+            "kind": "import-statement",
+            "original": "./bg.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bn.js",
+            "kind": "import-statement",
+            "original": "./bn.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ca.js",
+            "kind": "import-statement",
+            "original": "./ca.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ckb.js",
+            "kind": "import-statement",
+            "original": "./ckb.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/cs.js",
+            "kind": "import-statement",
+            "original": "./cs.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/da.js",
+            "kind": "import-statement",
+            "original": "./da.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/de.js",
+            "kind": "import-statement",
+            "original": "./de.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/el.js",
+            "kind": "import-statement",
+            "original": "./el.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js",
+            "kind": "import-statement",
+            "original": "./en.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/eo.js",
+            "kind": "import-statement",
+            "original": "./eo.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/es.js",
+            "kind": "import-statement",
+            "original": "./es.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fa.js",
+            "kind": "import-statement",
+            "original": "./fa.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fi.js",
+            "kind": "import-statement",
+            "original": "./fi.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr.js",
+            "kind": "import-statement",
+            "original": "./fr.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr-CA.js",
+            "kind": "import-statement",
+            "original": "./fr-CA.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/gu.js",
+            "kind": "import-statement",
+            "original": "./gu.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/he.js",
+            "kind": "import-statement",
+            "original": "./he.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hi.js",
+            "kind": "import-statement",
+            "original": "./hi.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hr.js",
+            "kind": "import-statement",
+            "original": "./hr.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hu.js",
+            "kind": "import-statement",
+            "original": "./hu.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hy.js",
+            "kind": "import-statement",
+            "original": "./hy.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/id.js",
+            "kind": "import-statement",
+            "original": "./id.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/is.js",
+            "kind": "import-statement",
+            "original": "./is.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/it.js",
+            "kind": "import-statement",
+            "original": "./it.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ja.js",
+            "kind": "import-statement",
+            "original": "./ja.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ka.js",
+            "kind": "import-statement",
+            "original": "./ka.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kh.js",
+            "kind": "import-statement",
+            "original": "./kh.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/km.js",
+            "kind": "import-statement",
+            "original": "./km.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kn.js",
+            "kind": "import-statement",
+            "original": "./kn.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ko.js",
+            "kind": "import-statement",
+            "original": "./ko.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/lt.js",
+            "kind": "import-statement",
+            "original": "./lt.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/mk.js",
+            "kind": "import-statement",
+            "original": "./mk.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ms.js",
+            "kind": "import-statement",
+            "original": "./ms.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ne.js",
+            "kind": "import-statement",
+            "original": "./ne.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nl.js",
+            "kind": "import-statement",
+            "original": "./nl.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nn.js",
+            "kind": "import-statement",
+            "original": "./nn.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/no.js",
+            "kind": "import-statement",
+            "original": "./no.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ota.js",
+            "kind": "import-statement",
+            "original": "./ota.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ps.js",
+            "kind": "import-statement",
+            "original": "./ps.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pl.js",
+            "kind": "import-statement",
+            "original": "./pl.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt.js",
+            "kind": "import-statement",
+            "original": "./pt.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt-BR.js",
+            "kind": "import-statement",
+            "original": "./pt-BR.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ro.js",
+            "kind": "import-statement",
+            "original": "./ro.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ru.js",
+            "kind": "import-statement",
+            "original": "./ru.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sk.js",
+            "kind": "import-statement",
+            "original": "./sk.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sl.js",
+            "kind": "import-statement",
+            "original": "./sl.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sv.js",
+            "kind": "import-statement",
+            "original": "./sv.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ta.js",
+            "kind": "import-statement",
+            "original": "./ta.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tg.js",
+            "kind": "import-statement",
+            "original": "./tg.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/th.js",
+            "kind": "import-statement",
+            "original": "./th.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tk.js",
+            "kind": "import-statement",
+            "original": "./tk.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tr.js",
+            "kind": "import-statement",
+            "original": "./tr.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ua.js",
+            "kind": "import-statement",
+            "original": "./ua.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uk.js",
+            "kind": "import-statement",
+            "original": "./uk.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ur.js",
+            "kind": "import-statement",
+            "original": "./ur.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uz.js",
+            "kind": "import-statement",
+            "original": "./uz.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/vi.js",
+            "kind": "import-statement",
+            "original": "./vi.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-CN.js",
+            "kind": "import-statement",
+            "original": "./zh-CN.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-TW.js",
+            "kind": "import-statement",
+            "original": "./zh-TW.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/yo.js",
+            "kind": "import-statement",
+            "original": "./yo.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js": {
+        "bytes": 1540,
+        "imports": [],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/compile.js": {
+        "bytes": 92003,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js",
+            "kind": "import-statement",
+            "original": "./core.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js",
+            "kind": "import-statement",
+            "original": "./doc.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js",
+            "kind": "import-statement",
+            "original": "./memoizer.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js",
+            "kind": "import-statement",
+            "original": "./regexes.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js": {
+        "bytes": 28953,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js",
+            "kind": "import-statement",
+            "original": "./checks.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js",
+            "kind": "import-statement",
+            "original": "./registries.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js": {
+        "bytes": 29029,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js",
+            "kind": "import-statement",
+            "original": "./registries.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js": {
+        "bytes": 34985,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js",
+            "kind": "import-statement",
+            "original": "./regexes.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js",
+            "kind": "import-statement",
+            "original": "./to-json-schema.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-generator.js": {
+        "bytes": 3857,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js",
+            "kind": "import-statement",
+            "original": "./json-schema-processors.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js",
+            "kind": "import-statement",
+            "original": "./to-json-schema.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema.js": {
+        "bytes": 11,
+        "imports": [],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js": {
+        "bytes": 690,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js",
+            "kind": "import-statement",
+            "original": "./core.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js",
+            "kind": "import-statement",
+            "original": "./parse.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js",
+            "kind": "import-statement",
+            "original": "./errors.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js",
+            "kind": "import-statement",
+            "original": "./memoizer.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js",
+            "kind": "import-statement",
+            "original": "./checks.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js",
+            "kind": "import-statement",
+            "original": "./versions.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js",
+            "kind": "import-statement",
+            "original": "./regexes.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/index.js",
+            "kind": "import-statement",
+            "original": "../locales/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js",
+            "kind": "import-statement",
+            "original": "./registries.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js",
+            "kind": "import-statement",
+            "original": "./doc.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/compile.js",
+            "kind": "import-statement",
+            "original": "./compile.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js",
+            "kind": "import-statement",
+            "original": "./api.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js",
+            "kind": "import-statement",
+            "original": "./to-json-schema.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js",
+            "kind": "import-statement",
+            "original": "./json-schema-processors.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-generator.js",
+            "kind": "import-statement",
+            "original": "./json-schema-generator.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema.js",
+            "kind": "import-statement",
+            "original": "./json-schema.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/checks.js": {
+        "bytes": 690,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js": {
+        "bytes": 2532,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js": {
+        "bytes": 1057,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js",
+            "kind": "import-statement",
+            "original": "./errors.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js": {
+        "bytes": 53354,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js",
+            "kind": "import-statement",
+            "original": "../core/json-schema-processors.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js",
+            "kind": "import-statement",
+            "original": "../core/regexes.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js",
+            "kind": "import-statement",
+            "original": "../core/to-json-schema.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js",
+            "kind": "import-statement",
+            "original": "../locales/en.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/checks.js",
+            "kind": "import-statement",
+            "original": "./checks.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js",
+            "kind": "import-statement",
+            "original": "./parse.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/compat.js": {
+        "bytes": 1090,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js": {
+        "bytes": 556,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/from-json-schema.js": {
+        "bytes": 38171,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js",
+            "kind": "import-statement",
+            "original": "../core/registries.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/checks.js",
+            "kind": "import-statement",
+            "original": "./checks.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js",
+            "kind": "import-statement",
+            "original": "./iso.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/visit.js": {
+        "bytes": 6643,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "./util.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/deep-partial.js": {
+        "bytes": 543,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/visit.js",
+            "kind": "import-statement",
+            "original": "../core/visit.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/in-out.js": {
+        "bytes": 2190,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js",
+            "kind": "import-statement",
+            "original": "../core/util.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/visit.js",
+            "kind": "import-statement",
+            "original": "../core/visit.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/coerce.js": {
+        "bytes": 550,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/external.js": {
+        "bytes": 1101,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js",
+            "kind": "import-statement",
+            "original": "./schemas.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/checks.js",
+            "kind": "import-statement",
+            "original": "./checks.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js",
+            "kind": "import-statement",
+            "original": "./errors.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js",
+            "kind": "import-statement",
+            "original": "./parse.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/compat.js",
+            "kind": "import-statement",
+            "original": "./compat.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js",
+            "kind": "import-statement",
+            "original": "../core/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js",
+            "kind": "import-statement",
+            "original": "../core/json-schema-processors.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/from-json-schema.js",
+            "kind": "import-statement",
+            "original": "./from-json-schema.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/deep-partial.js",
+            "kind": "import-statement",
+            "original": "./deep-partial.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/in-out.js",
+            "kind": "import-statement",
+            "original": "./in-out.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/index.js",
+            "kind": "import-statement",
+            "original": "../locales/index.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js",
+            "kind": "import-statement",
+            "original": "./iso.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js",
+            "kind": "import-statement",
+            "original": "./iso.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/coerce.js",
+            "kind": "import-statement",
+            "original": "./coerce.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/zod@4.6.7/node_modules/zod/index.js": {
+        "bytes": 422,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/external.js",
+            "kind": "import-statement",
+            "original": "./v4/classic/external.js"
+          },
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/external.js",
+            "kind": "import-statement",
+            "original": "./v4/classic/external.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/validation/schemas.ts": {
+        "bytes": 2512,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/index.js",
+            "kind": "import-statement",
+            "original": "zod"
+          },
+          {
+            "path": "packages/kernel/src/ids/uuidv7.ts",
+            "kind": "import-statement",
+            "original": "../ids/uuidv7.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/events/envelope.ts": {
+        "bytes": 3702,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/machine/machine.ts": {
+        "bytes": 2757,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/observability/ip.ts": {
+        "bytes": 2170,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/observability/redact.ts": {
+        "bytes": 3013,
+        "imports": [
+          {
+            "path": "packages/kernel/src/observability/ip.ts",
+            "kind": "import-statement",
+            "original": "./ip.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/observability/logger.ts": {
+        "bytes": 5005,
+        "imports": [
+          {
+            "path": "packages/kernel/src/observability/redact.ts",
+            "kind": "import-statement",
+            "original": "./redact.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/base64url.ts": {
+        "bytes": 1007,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/repo.ts": {
+        "bytes": 9059,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/base64url.ts",
+            "kind": "import-statement",
+            "original": "./base64url.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/scope.ts": {
+        "bytes": 6123,
+        "imports": [
+          {
+            "path": "packages/kernel/src/storage/repo.ts",
+            "kind": "import-statement",
+            "original": "./repo.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/bus/ports.ts": {
+        "bytes": 7392,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/codes.ts",
+            "kind": "import-statement",
+            "original": "../errors/codes.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/bus/emit.ts": {
+        "bytes": 1161,
+        "imports": [
+          {
+            "path": "packages/kernel/src/events/envelope.ts",
+            "kind": "import-statement",
+            "original": "../events/envelope.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/ports.ts",
+            "kind": "import-statement",
+            "original": "./ports.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/bus/bus.ts": {
+        "bytes": 14271,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          },
+          {
+            "path": "packages/kernel/src/hash/canonical.ts",
+            "kind": "import-statement",
+            "original": "../hash/canonical.ts"
+          },
+          {
+            "path": "packages/kernel/src/ids/uuidv7.ts",
+            "kind": "import-statement",
+            "original": "../ids/uuidv7.ts"
+          },
+          {
+            "path": "packages/kernel/src/observability/logger.ts",
+            "kind": "import-statement",
+            "original": "../observability/logger.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/scope.ts",
+            "kind": "import-statement",
+            "original": "../storage/scope.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/emit.ts",
+            "kind": "import-statement",
+            "original": "./emit.ts"
+          },
+          {
+            "path": "packages/kernel/src/validation/parse.ts",
+            "kind": "import-statement",
+            "original": "../validation/parse.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/ports.ts",
+            "kind": "import-statement",
+            "original": "./ports.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/bus/define.ts": {
+        "bytes": 7203,
+        "imports": [
+          {
+            "path": "packages/kernel/src/events/envelope.ts",
+            "kind": "import-statement",
+            "original": "../events/envelope.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/bus/access.ts": {
+        "bytes": 11440,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/zod@4.6.7/node_modules/zod/index.js",
+            "kind": "import-statement",
+            "original": "zod"
+          },
+          {
+            "path": "packages/kernel/src/clock/clock.ts",
+            "kind": "import-statement",
+            "original": "../clock/clock.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          },
+          {
+            "path": "packages/kernel/src/hash/canonical.ts",
+            "kind": "import-statement",
+            "original": "../hash/canonical.ts"
+          },
+          {
+            "path": "packages/kernel/src/ids/uuidv7.ts",
+            "kind": "import-statement",
+            "original": "../ids/uuidv7.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/base64url.ts",
+            "kind": "import-statement",
+            "original": "../storage/base64url.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/repo.ts",
+            "kind": "import-statement",
+            "original": "../storage/repo.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/scope.ts",
+            "kind": "import-statement",
+            "original": "../storage/scope.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/define.ts",
+            "kind": "import-statement",
+            "original": "./define.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/ports.ts",
+            "kind": "import-statement",
+            "original": "./ports.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/memory-driver.ts": {
+        "bytes": 13694,
+        "imports": [
+          {
+            "path": "packages/kernel/src/hash/canonical.ts",
+            "kind": "import-statement",
+            "original": "../hash/canonical.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/machines.ts": {
+        "bytes": 1499,
+        "imports": [
+          {
+            "path": "packages/kernel/src/machine/machine.ts",
+            "kind": "import-statement",
+            "original": "../machine/machine.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/tx.ts": {
+        "bytes": 23257,
+        "imports": [
+          {
+            "path": "packages/kernel/src/clock/clock.ts",
+            "kind": "import-statement",
+            "original": "../clock/clock.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/base64url.ts",
+            "kind": "import-statement",
+            "original": "./base64url.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/machines.ts",
+            "kind": "import-statement",
+            "original": "./machines.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/storage.ts": {
+        "bytes": 3249,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/memory-driver.ts",
+            "kind": "import-statement",
+            "original": "./memory-driver.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/tx.ts",
+            "kind": "import-statement",
+            "original": "./tx.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/maintenance.ts": {
+        "bytes": 1922,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/migrations.ts": {
+        "bytes": 2024,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/outbox/backoff.ts": {
+        "bytes": 577,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/outbox/dispatcher.ts": {
+        "bytes": 11373,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          },
+          {
+            "path": "packages/kernel/src/observability/logger.ts",
+            "kind": "import-statement",
+            "original": "../observability/logger.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/machines.ts",
+            "kind": "import-statement",
+            "original": "../storage/machines.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/scope.ts",
+            "kind": "import-statement",
+            "original": "../storage/scope.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/emit.ts",
+            "kind": "import-statement",
+            "original": "../bus/emit.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/ports.ts",
+            "kind": "import-statement",
+            "original": "../bus/ports.ts"
+          },
+          {
+            "path": "packages/kernel/src/outbox/backoff.ts",
+            "kind": "import-statement",
+            "original": "./backoff.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/sync/sender.ts": {
+        "bytes": 7731,
+        "imports": [
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "../errors/result.ts"
+          },
+          {
+            "path": "packages/kernel/src/observability/logger.ts",
+            "kind": "import-statement",
+            "original": "../observability/logger.ts"
+          },
+          {
+            "path": "packages/kernel/src/outbox/backoff.ts",
+            "kind": "import-statement",
+            "original": "../outbox/backoff.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/scope.ts",
+            "kind": "import-statement",
+            "original": "../storage/scope.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/observability/metrics.ts": {
+        "bytes": 7837,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/kernel/src/observability/readiness.ts": {
+        "bytes": 1555,
+        "imports": [
+          {
+            "path": "packages/kernel/src/storage/migrations.ts",
+            "kind": "import-statement",
+            "original": "../storage/migrations.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/index.ts": {
+        "bytes": 5235,
+        "imports": [
+          {
+            "path": "packages/kernel/src/clock/clock.ts",
+            "kind": "import-statement",
+            "original": "./clock/clock.ts"
+          },
+          {
+            "path": "packages/kernel/src/ids/uuidv7.ts",
+            "kind": "import-statement",
+            "original": "./ids/uuidv7.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/result.ts",
+            "kind": "import-statement",
+            "original": "./errors/result.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "./errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/codes.ts",
+            "kind": "import-statement",
+            "original": "./errors/codes.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/problem.ts",
+            "kind": "import-statement",
+            "original": "./errors/problem.ts"
+          },
+          {
+            "path": "packages/kernel/src/hash/canonical.ts",
+            "kind": "import-statement",
+            "original": "./hash/canonical.ts"
+          },
+          {
+            "path": "packages/kernel/src/validation/parse.ts",
+            "kind": "import-statement",
+            "original": "./validation/parse.ts"
+          },
+          {
+            "path": "packages/kernel/src/validation/schemas.ts",
+            "kind": "import-statement",
+            "original": "./validation/schemas.ts"
+          },
+          {
+            "path": "packages/kernel/src/events/envelope.ts",
+            "kind": "import-statement",
+            "original": "./events/envelope.ts"
+          },
+          {
+            "path": "packages/kernel/src/machine/machine.ts",
+            "kind": "import-statement",
+            "original": "./machine/machine.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/bus.ts",
+            "kind": "import-statement",
+            "original": "./bus/bus.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/define.ts",
+            "kind": "import-statement",
+            "original": "./bus/define.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/ports.ts",
+            "kind": "import-statement",
+            "original": "./bus/ports.ts"
+          },
+          {
+            "path": "packages/kernel/src/bus/access.ts",
+            "kind": "import-statement",
+            "original": "./bus/access.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/storage.ts",
+            "kind": "import-statement",
+            "original": "./storage/storage.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/tx.ts",
+            "kind": "import-statement",
+            "original": "./storage/tx.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/maintenance.ts",
+            "kind": "import-statement",
+            "original": "./storage/maintenance.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/repo.ts",
+            "kind": "import-statement",
+            "original": "./storage/repo.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/scope.ts",
+            "kind": "import-statement",
+            "original": "./storage/scope.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/migrations.ts",
+            "kind": "import-statement",
+            "original": "./storage/migrations.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/machines.ts",
+            "kind": "import-statement",
+            "original": "./storage/machines.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/memory-driver.ts",
+            "kind": "import-statement",
+            "original": "./storage/memory-driver.ts"
+          },
+          {
+            "path": "packages/kernel/src/outbox/dispatcher.ts",
+            "kind": "import-statement",
+            "original": "./outbox/dispatcher.ts"
+          },
+          {
+            "path": "packages/kernel/src/outbox/backoff.ts",
+            "kind": "import-statement",
+            "original": "./outbox/backoff.ts"
+          },
+          {
+            "path": "packages/kernel/src/sync/sender.ts",
+            "kind": "import-statement",
+            "original": "./sync/sender.ts"
+          },
+          {
+            "path": "packages/kernel/src/observability/logger.ts",
+            "kind": "import-statement",
+            "original": "./observability/logger.ts"
+          },
+          {
+            "path": "packages/kernel/src/observability/redact.ts",
+            "kind": "import-statement",
+            "original": "./observability/redact.ts"
+          },
+          {
+            "path": "packages/kernel/src/observability/ip.ts",
+            "kind": "import-statement",
+            "original": "./observability/ip.ts"
+          },
+          {
+            "path": "packages/kernel/src/observability/metrics.ts",
+            "kind": "import-statement",
+            "original": "./observability/metrics.ts"
+          },
+          {
+            "path": "packages/kernel/src/observability/readiness.ts",
+            "kind": "import-statement",
+            "original": "./observability/readiness.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/bazaar/src/listings/model.ts": {
+        "bytes": 1977,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/bazaar/src/listings/archive.ts": {
+        "bytes": 8435,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/bazaar/src/listings/model.ts",
+            "kind": "import-statement",
+            "original": "./model.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/bazaar/src/listings/lifecycle.ts": {
+        "bytes": 12134,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/bazaar/src/listings/archive.ts",
+            "kind": "import-statement",
+            "original": "./archive.ts"
+          },
+          {
+            "path": "packages/bazaar/src/listings/model.ts",
+            "kind": "import-statement",
+            "original": "./model.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/geoprivacy/coarse/geohash.ts": {
+        "bytes": 4195,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/discovery/src/geoprivacy/coarse/index.ts": {
+        "bytes": 8657,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/discovery/src/geoprivacy/coarse/geohash.ts",
+            "kind": "import-statement",
+            "original": "./geohash.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/ranking/relevance/scoring.ts": {
+        "bytes": 10117,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/search/local-options.ts": {
+        "bytes": 3974,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/discovery/src/geoprivacy/coarse/index.ts",
+            "kind": "import-statement",
+            "original": "../geoprivacy/coarse/index.ts"
+          },
+          {
+            "path": "packages/discovery/src/ranking/relevance/scoring.ts",
+            "kind": "import-statement",
+            "original": "../ranking/relevance/scoring.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/search/index.ts": {
+        "bytes": 9798,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/discovery/src/search/local-options.ts",
+            "kind": "import-statement",
+            "original": "./local-options.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/ranking/relevance/index.ts": {
+        "bytes": 15233,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/discovery/src/ranking/relevance/scoring.ts",
+            "kind": "import-statement",
+            "original": "./scoring.ts"
+          },
+          {
+            "path": "packages/discovery/src/ranking/relevance/scoring.ts",
+            "kind": "import-statement",
+            "original": "./scoring.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/ranking/fairness/index.ts": {
+        "bytes": 11435,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/search/filter/index.ts": {
+        "bytes": 14367,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/discovery/src/geoprivacy/coarse/index.ts",
+            "kind": "import-statement",
+            "original": "../../geoprivacy/coarse/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/geoprivacy/location/index.ts": {
+        "bytes": 9332,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/discovery/src/geoprivacy/coarse/index.ts",
+            "kind": "import-statement",
+            "original": "../coarse/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/discovery/src/index.ts": {
+        "bytes": 1493,
+        "imports": [
+          {
+            "path": "packages/discovery/src/search/index.ts",
+            "kind": "import-statement",
+            "original": "./search/index.ts"
+          },
+          {
+            "path": "packages/discovery/src/ranking/relevance/index.ts",
+            "kind": "import-statement",
+            "original": "./ranking/relevance/index.ts"
+          },
+          {
+            "path": "packages/discovery/src/ranking/fairness/index.ts",
+            "kind": "import-statement",
+            "original": "./ranking/fairness/index.ts"
+          },
+          {
+            "path": "packages/discovery/src/geoprivacy/coarse/index.ts",
+            "kind": "import-statement",
+            "original": "./geoprivacy/coarse/index.ts"
+          },
+          {
+            "path": "packages/discovery/src/search/filter/index.ts",
+            "kind": "import-statement",
+            "original": "./search/filter/index.ts"
+          },
+          {
+            "path": "packages/discovery/src/search/local-options.ts",
+            "kind": "import-statement",
+            "original": "./search/local-options.ts"
+          },
+          {
+            "path": "packages/discovery/src/geoprivacy/location/index.ts",
+            "kind": "import-statement",
+            "original": "./geoprivacy/location/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/bazaar/src/listings/history.ts": {
+        "bytes": 7164,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/bazaar/src/listings/model.ts",
+            "kind": "import-statement",
+            "original": "./model.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/bazaar/src/listings/index.ts": {
+        "bytes": 18869,
+        "imports": [
+          {
+            "path": "packages/bazaar/src/listings/archive.ts",
+            "kind": "import-statement",
+            "original": "./archive.ts"
+          },
+          {
+            "path": "packages/bazaar/src/listings/lifecycle.ts",
+            "kind": "import-statement",
+            "original": "./lifecycle.ts"
+          },
+          {
+            "path": "packages/bazaar/src/listings/archive.ts",
+            "kind": "import-statement",
+            "original": "./archive.ts"
+          },
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/discovery/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/discovery"
+          },
+          {
+            "path": "packages/bazaar/src/listings/model.ts",
+            "kind": "import-statement",
+            "original": "./model.ts"
+          },
+          {
+            "path": "packages/bazaar/src/listings/model.ts",
+            "kind": "import-statement",
+            "original": "./model.ts"
+          },
+          {
+            "path": "packages/bazaar/src/listings/history.ts",
+            "kind": "import-statement",
+            "original": "./history.ts"
+          },
+          {
+            "path": "packages/bazaar/src/listings/history.ts",
+            "kind": "import-statement",
+            "original": "./history.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/bazaar/src/index.ts": {
+        "bytes": 37,
+        "imports": [
+          {
+            "path": "packages/bazaar/src/listings/index.ts",
+            "kind": "import-statement",
+            "original": "./listings/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/storage/indexeddb.ts": {
+        "bytes": 8884,
+        "imports": [
+          {
+            "path": "packages/kernel/src/clock/clock.ts",
+            "kind": "import-statement",
+            "original": "../clock/clock.ts"
+          },
+          {
+            "path": "packages/kernel/src/errors/app-error.ts",
+            "kind": "import-statement",
+            "original": "../errors/app-error.ts"
+          },
+          {
+            "path": "packages/kernel/src/ids/uuidv7.ts",
+            "kind": "import-statement",
+            "original": "../ids/uuidv7.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/base64url.ts",
+            "kind": "import-statement",
+            "original": "./base64url.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/maintenance.ts",
+            "kind": "import-statement",
+            "original": "./maintenance.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/memory-driver.ts",
+            "kind": "import-statement",
+            "original": "./memory-driver.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/storage.ts",
+            "kind": "import-statement",
+            "original": "./storage.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/kernel/src/browser.ts": {
+        "bytes": 390,
+        "imports": [
+          {
+            "path": "packages/kernel/src/storage/indexeddb.ts",
+            "kind": "import-statement",
+            "original": "./storage/indexeddb.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/indexeddb.ts",
+            "kind": "import-statement",
+            "original": "./storage/indexeddb.ts"
+          },
+          {
+            "path": "packages/kernel/src/storage/memory-driver.ts",
+            "kind": "import-statement",
+            "original": "./storage/memory-driver.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/security/src/cryptography/index.ts": {
+        "bytes": 2166,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/security/src/index.ts": {
+        "bytes": 134,
+        "imports": [
+          {
+            "path": "packages/security/src/cryptography/index.ts",
+            "kind": "import-statement",
+            "original": "./cryptography/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/utils.js": {
+        "bytes": 26035,
+        "imports": [],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/hmac.js": {
+        "bytes": 3118,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/utils.js",
+            "kind": "import-statement",
+            "original": "./utils.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/pbkdf2.js": {
+        "bytes": 7644,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/hmac.js",
+            "kind": "import-statement",
+            "original": "./hmac.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/utils.js",
+            "kind": "import-statement",
+            "original": "./utils.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_u64.js": {
+        "bytes": 4794,
+        "imports": [],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_md.js": {
+        "bytes": 9175,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_u64.js",
+            "kind": "import-statement",
+            "original": "./_u64.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/utils.js",
+            "kind": "import-statement",
+            "original": "./utils.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/sha2.js": {
+        "bytes": 18997,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_md.js",
+            "kind": "import-statement",
+            "original": "./_md.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_u64.js",
+            "kind": "import-statement",
+            "original": "./_u64.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/utils.js",
+            "kind": "import-statement",
+            "original": "./utils.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/scrypt.js": {
+        "bytes": 13621,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/pbkdf2.js",
+            "kind": "import-statement",
+            "original": "./pbkdf2.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/sha2.js",
+            "kind": "import-statement",
+            "original": "./sha2.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/utils.js",
+            "kind": "import-statement",
+            "original": "./utils.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/utils.js": {
+        "bytes": 34005,
+        "imports": [],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/_arx.js": {
+        "bytes": 17063,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/utils.js",
+            "kind": "import-statement",
+            "original": "./utils.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/_poly1305.js": {
+        "bytes": 12223,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/utils.js",
+            "kind": "import-statement",
+            "original": "./utils.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/chacha.js": {
+        "bytes": 18422,
+        "imports": [
+          {
+            "path": "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/_arx.js",
+            "kind": "import-statement",
+            "original": "./_arx.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/_poly1305.js",
+            "kind": "import-statement",
+            "original": "./_poly1305.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/utils.js",
+            "kind": "import-statement",
+            "original": "./utils.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/identity/src/identity.ts": {
+        "bytes": 7815,
+        "imports": [
+          {
+            "path": "packages/security/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/security"
+          },
+          {
+            "path": "packages/security/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/security"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/scrypt.js",
+            "kind": "import-statement",
+            "original": "@noble/hashes/scrypt.js"
+          },
+          {
+            "path": "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/chacha.js",
+            "kind": "import-statement",
+            "original": "@noble/ciphers/chacha.js"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/identity/src/index.ts": {
+        "bytes": 271,
+        "imports": [
+          {
+            "path": "packages/identity/src/identity.ts",
+            "kind": "import-statement",
+            "original": "./identity.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/vault/src/encrypted-storage.ts": {
+        "bytes": 12703,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/kernel/src/browser.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel/browser"
+          },
+          {
+            "path": "packages/identity/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/identity"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/federation/src/envelope.ts": {
+        "bytes": 7136,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/security/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/security"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/federation/src/index.ts": {
+        "bytes": 187,
+        "imports": [
+          {
+            "path": "packages/federation/src/envelope.ts",
+            "kind": "import-statement",
+            "original": "./envelope.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/vault/src/session-policy.ts": {
+        "bytes": 4601,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/vault/src/vault.ts": {
+        "bytes": 15043,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/kernel/src/browser.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel/browser"
+          },
+          {
+            "path": "packages/vault/src/encrypted-storage.ts",
+            "kind": "import-statement",
+            "original": "./encrypted-storage.ts"
+          },
+          {
+            "path": "packages/identity/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/identity"
+          },
+          {
+            "path": "packages/federation/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/federation"
+          },
+          {
+            "path": "packages/vault/src/session-policy.ts",
+            "kind": "import-statement",
+            "original": "./session-policy.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/vault/src/index.ts": {
+        "bytes": 269,
+        "imports": [
+          {
+            "path": "packages/vault/src/vault.ts",
+            "kind": "import-statement",
+            "original": "./vault.ts"
+          },
+          {
+            "path": "packages/vault/src/session-policy.ts",
+            "kind": "import-statement",
+            "original": "./session-policy.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/archive-backup.ts": {
+        "bytes": 562,
+        "imports": [
+          {
+            "path": "packages/bazaar/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/bazaar/src/index.ts"
+          },
+          {
+            "path": "packages/vault/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/vault/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/vault-session.ts": {
+        "bytes": 1870,
+        "imports": [
+          {
+            "path": "packages/vault/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/vault/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/peer-search.ts": {
+        "bytes": 1663,
+        "imports": [
+          {
+            "path": "packages/discovery/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/discovery/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/mutiny/src/cycle_matching/index.ts": {
+        "bytes": 9987,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/mutiny/src/trade_proposals/index.ts": {
+        "bytes": 13922,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/federation/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/federation"
+          },
+          {
+            "path": "packages/mutiny/src/cycle_matching/index.ts",
+            "kind": "import-statement",
+            "original": "../cycle_matching/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/mutiny/src/cycle_matching/admission.ts": {
+        "bytes": 9366,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/discovery/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/discovery"
+          },
+          {
+            "path": "packages/federation/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/federation"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/mutiny/src/trade_proposals/repository.ts": {
+        "bytes": 16951,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/federation/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/federation"
+          },
+          {
+            "path": "packages/mutiny/src/cycle_matching/admission.ts",
+            "kind": "import-statement",
+            "original": "../cycle_matching/admission.ts"
+          },
+          {
+            "path": "packages/mutiny/src/trade_proposals/index.ts",
+            "kind": "import-statement",
+            "original": "./index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/mutiny/src/index.ts": {
+        "bytes": 289,
+        "imports": [
+          {
+            "path": "packages/mutiny/src/cycle_matching/index.ts",
+            "kind": "import-statement",
+            "original": "./cycle_matching/index.ts"
+          },
+          {
+            "path": "packages/mutiny/src/trade_proposals/index.ts",
+            "kind": "import-statement",
+            "original": "./trade_proposals/index.ts"
+          },
+          {
+            "path": "packages/mutiny/src/cycle_matching/admission.ts",
+            "kind": "import-statement",
+            "original": "./cycle_matching/admission.ts"
+          },
+          {
+            "path": "packages/mutiny/src/trade_proposals/repository.ts",
+            "kind": "import-statement",
+            "original": "./trade_proposals/repository.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/barter-runtime.ts": {
+        "bytes": 8317,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          },
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          },
+          {
+            "path": "packages/bazaar/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/bazaar/src/index.ts"
+          },
+          {
+            "path": "packages/discovery/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/discovery/src/index.ts"
+          },
+          {
+            "path": "packages/federation/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/federation/src/index.ts"
+          },
+          {
+            "path": "packages/vault/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/vault/src/index.ts"
+          },
+          {
+            "path": "packages/mutiny/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/mutiny/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/matching-worker-protocol.ts": {
+        "bytes": 7855,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          },
+          {
+            "path": "packages/federation/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/federation/src/index.ts"
+          },
+          {
+            "path": "packages/mutiny/src/cycle_matching/admission.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/mutiny/src/cycle_matching/admission.ts"
+          },
+          {
+            "path": "packages/mutiny/src/cycle_matching/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/mutiny/src/cycle_matching/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/matching-worker-client.ts": {
+        "bytes": 3787,
+        "imports": [
+          {
+            "path": "apps/pwa/src/matching-worker-protocol.ts",
+            "kind": "import-statement",
+            "original": "./matching-worker-protocol.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/barter.ts": {
+        "bytes": 20021,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          },
+          {
+            "path": "packages/federation/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/federation/src/index.ts"
+          },
+          {
+            "path": "packages/identity/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/identity/src/index.ts"
+          },
+          {
+            "path": "packages/vault/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/vault/src/index.ts"
+          },
+          {
+            "path": "packages/mutiny/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/mutiny/src/index.ts"
+          },
+          {
+            "path": "apps/pwa/src/matching-worker-client.ts",
+            "kind": "import-statement",
+            "original": "./matching-worker-client.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/notify/src/preferences/opt/index.ts": {
+        "bytes": 26841,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/security/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/security"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/notify/src/preferences/in/index.ts": {
+        "bytes": 20533,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/notify/src/preferences/opt/index.ts",
+            "kind": "import-statement",
+            "original": "../opt/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/notify/src/delivery/inapp/routing.ts": {
+        "bytes": 9252,
+        "imports": [],
+        "format": "esm"
+      },
+      "packages/notify/src/delivery/inapp/index.ts": {
+        "bytes": 22486,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/notify/src/preferences/in/index.ts",
+            "kind": "import-statement",
+            "original": "../../preferences/in/index.ts"
+          },
+          {
+            "path": "packages/notify/src/delivery/inapp/routing.ts",
+            "kind": "import-statement",
+            "original": "./routing.ts"
+          },
+          {
+            "path": "packages/notify/src/delivery/inapp/routing.ts",
+            "kind": "import-statement",
+            "original": "./routing.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/notify/src/local.ts": {
+        "bytes": 2442,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/notify/src/delivery/inapp/index.ts",
+            "kind": "import-statement",
+            "original": "./delivery/inapp/index.ts"
+          },
+          {
+            "path": "packages/notify/src/preferences/in/index.ts",
+            "kind": "import-statement",
+            "original": "./preferences/in/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/notify/src/index.ts": {
+        "bytes": 256,
+        "imports": [
+          {
+            "path": "packages/notify/src/delivery/inapp/index.ts",
+            "kind": "import-statement",
+            "original": "./delivery/inapp/index.ts"
+          },
+          {
+            "path": "packages/notify/src/preferences/in/index.ts",
+            "kind": "import-statement",
+            "original": "./preferences/in/index.ts"
+          },
+          {
+            "path": "packages/notify/src/preferences/opt/index.ts",
+            "kind": "import-statement",
+            "original": "./preferences/opt/index.ts"
+          },
+          {
+            "path": "packages/notify/src/local.ts",
+            "kind": "import-statement",
+            "original": "./local.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/notifications.ts": {
+        "bytes": 7715,
+        "imports": [
+          {
+            "path": "packages/notify/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/notify/src/index.ts"
+          },
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/notification-delivery.ts": {
+        "bytes": 591,
+        "imports": [],
+        "format": "esm"
+      },
+      "apps/pwa/src/action-queue.ts": {
+        "bytes": 798,
+        "imports": [],
+        "format": "esm"
+      },
+      "apps/pwa/src/listing-history.ts": {
+        "bytes": 2661,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          },
+          {
+            "path": "packages/bazaar/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/bazaar/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/listing-closure.ts": {
+        "bytes": 3095,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/listing-maintenance.ts": {
+        "bytes": 4453,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/listing-editor.ts": {
+        "bytes": 6255,
+        "imports": [],
+        "format": "esm"
+      },
+      "apps/pwa/src/location-preferences.ts": {
+        "bytes": 10216,
+        "imports": [
+          {
+            "path": "packages/discovery/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/discovery/src/index.ts"
+          },
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/i18n/src/internationalization/languages/validate.ts": {
+        "bytes": 8481,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/i18n/src/internationalization/languages/catalogs.ts": {
+        "bytes": 2796,
+        "imports": [
+          {
+            "path": "packages/i18n/src/internationalization/languages/validate.ts",
+            "kind": "import-statement",
+            "original": "./validate.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/i18n/src/internationalization/languages/index.ts": {
+        "bytes": 12045,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          },
+          {
+            "path": "packages/i18n/src/internationalization/languages/validate.ts",
+            "kind": "import-statement",
+            "original": "./validate.ts"
+          },
+          {
+            "path": "packages/i18n/src/internationalization/languages/catalogs.ts",
+            "kind": "import-statement",
+            "original": "./catalogs.ts"
+          },
+          {
+            "path": "packages/i18n/src/internationalization/languages/validate.ts",
+            "kind": "import-statement",
+            "original": "./validate.ts"
+          },
+          {
+            "path": "packages/i18n/src/internationalization/languages/catalogs.ts",
+            "kind": "import-statement",
+            "original": "./catalogs.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/i18n/src/internationalization/currencies/index.ts": {
+        "bytes": 17890,
+        "imports": [
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "@classrup/kernel"
+          }
+        ],
+        "format": "esm"
+      },
+      "packages/i18n/src/index.ts": {
+        "bytes": 491,
+        "imports": [
+          {
+            "path": "packages/i18n/src/internationalization/languages/index.ts",
+            "kind": "import-statement",
+            "original": "./internationalization/languages/index.ts"
+          },
+          {
+            "path": "packages/i18n/src/internationalization/currencies/index.ts",
+            "kind": "import-statement",
+            "original": "./internationalization/currencies/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/main.ts": {
+        "bytes": 30475,
+        "imports": [
+          {
+            "path": "apps/pwa/src/archive-backup.ts",
+            "kind": "import-statement",
+            "original": "./archive-backup.ts"
+          },
+          {
+            "path": "apps/pwa/src/vault-session.ts",
+            "kind": "import-statement",
+            "original": "./vault-session.ts"
+          },
+          {
+            "path": "apps/pwa/src/peer-search.ts",
+            "kind": "import-statement",
+            "original": "./peer-search.ts"
+          },
+          {
+            "path": "apps/pwa/src/barter-runtime.ts",
+            "kind": "import-statement",
+            "original": "./barter-runtime.ts"
+          },
+          {
+            "path": "apps/pwa/src/barter.ts",
+            "kind": "import-statement",
+            "original": "./barter.ts"
+          },
+          {
+            "path": "apps/pwa/src/notifications.ts",
+            "kind": "import-statement",
+            "original": "./notifications.ts"
+          },
+          {
+            "path": "apps/pwa/src/notification-delivery.ts",
+            "kind": "import-statement",
+            "original": "./notification-delivery.ts"
+          },
+          {
+            "path": "apps/pwa/src/action-queue.ts",
+            "kind": "import-statement",
+            "original": "./action-queue.ts"
+          },
+          {
+            "path": "apps/pwa/src/listing-history.ts",
+            "kind": "import-statement",
+            "original": "./listing-history.ts"
+          },
+          {
+            "path": "apps/pwa/src/listing-closure.ts",
+            "kind": "import-statement",
+            "original": "./listing-closure.ts"
+          },
+          {
+            "path": "apps/pwa/src/listing-maintenance.ts",
+            "kind": "import-statement",
+            "original": "./listing-maintenance.ts"
+          },
+          {
+            "path": "apps/pwa/src/listing-editor.ts",
+            "kind": "import-statement",
+            "original": "./listing-editor.ts"
+          },
+          {
+            "path": "apps/pwa/src/location-preferences.ts",
+            "kind": "import-statement",
+            "original": "./location-preferences.ts"
+          },
+          {
+            "path": "packages/notify/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/notify/src/index.ts"
+          },
+          {
+            "path": "packages/i18n/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/i18n/src/index.ts"
+          },
+          {
+            "path": "packages/kernel/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/kernel/src/index.ts"
+          },
+          {
+            "path": "packages/vault/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/vault/src/index.ts"
+          },
+          {
+            "path": "packages/federation/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/federation/src/index.ts"
+          },
+          {
+            "path": "packages/bazaar/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/bazaar/src/index.ts"
+          },
+          {
+            "path": "packages/discovery/src/index.ts",
+            "kind": "import-statement",
+            "original": "../../../packages/discovery/src/index.ts"
+          }
+        ],
+        "format": "esm"
+      },
+      "apps/pwa/src/matching-worker.ts": {
+        "bytes": 499,
+        "imports": [
+          {
+            "path": "apps/pwa/src/matching-worker-protocol.ts",
+            "kind": "import-statement",
+            "original": "./matching-worker-protocol.ts"
+          }
+        ],
+        "format": "esm"
+      }
+    },
+    "outputs": {
+      "../../../../tmp/classrupted-audit-unused/app.js": {
+        "imports": [],
+        "exports": [],
+        "entryPoint": "apps/pwa/src/main.ts",
+        "inputs": {
+          "packages/kernel/src/clock/clock.ts": {
+            "bytesInOutput": 122
+          },
+          "packages/kernel/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/kernel/src/errors/codes.ts": {
+            "bytesInOutput": 910
+          },
+          "packages/kernel/src/errors/app-error.ts": {
+            "bytesInOutput": 875
+          },
+          "packages/kernel/src/errors/result.ts": {
+            "bytesInOutput": 72
+          },
+          "packages/kernel/src/ids/uuidv7.ts": {
+            "bytesInOutput": 1150
+          },
+          "packages/kernel/src/hash/canonical.ts": {
+            "bytesInOutput": 1242
+          },
+          "packages/kernel/src/validation/parse.ts": {
+            "bytesInOutput": 903
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/index.js": {
+            "bytesInOutput": 4241
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/external.js": {
+            "bytesInOutput": 4219
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js": {
+            "bytesInOutput": 5750
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js": {
+            "bytesInOutput": 13654
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js": {
+            "bytesInOutput": 1769
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js": {
+            "bytesInOutput": 3112
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js": {
+            "bytesInOutput": 2539
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js": {
+            "bytesInOutput": 6650
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js": {
+            "bytesInOutput": 7116
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js": {
+            "bytesInOutput": 619
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js": {
+            "bytesInOutput": 33
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js": {
+            "bytesInOutput": 37775
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js": {
+            "bytesInOutput": 3322
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/index.js": {
+            "bytesInOutput": 659
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ar.js": {
+            "bytesInOutput": 5980
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/az.js": {
+            "bytesInOutput": 3054
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/be.js": {
+            "bytesInOutput": 7049
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bg.js": {
+            "bytesInOutput": 6543
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bn.js": {
+            "bytesInOutput": 5254
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ca.js": {
+            "bytesInOutput": 2739
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ckb.js": {
+            "bytesInOutput": 6087
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/cs.js": {
+            "bytesInOutput": 3128
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/da.js": {
+            "bytesInOutput": 2696
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/de.js": {
+            "bytesInOutput": 2671
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/el.js": {
+            "bytesInOutput": 6768
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js": {
+            "bytesInOutput": 2684
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/eo.js": {
+            "bytesInOutput": 2685
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/es.js": {
+            "bytesInOutput": 3159
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fa.js": {
+            "bytesInOutput": 5496
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fi.js": {
+            "bytesInOutput": 2884
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr.js": {
+            "bytesInOutput": 3142
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr-CA.js": {
+            "bytesInOutput": 2668
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/gu.js": {
+            "bytesInOutput": 5595
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/he.js": {
+            "bytesInOutput": 9809
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hi.js": {
+            "bytesInOutput": 5731
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hr.js": {
+            "bytesInOutput": 2848
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hu.js": {
+            "bytesInOutput": 2942
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hy.js": {
+            "bytesInOutput": 6604
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/id.js": {
+            "bytesInOutput": 2636
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/is.js": {
+            "bytesInOutput": 2807
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/it.js": {
+            "bytesInOutput": 2622
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ja.js": {
+            "bytesInOutput": 4113
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ka.js": {
+            "bytesInOutput": 6771
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/km.js": {
+            "bytesInOutput": 6905
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kh.js": {
+            "bytesInOutput": 26
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kn.js": {
+            "bytesInOutput": 6296
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ko.js": {
+            "bytesInOutput": 3721
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/lt.js": {
+            "bytesInOutput": 4488
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/mk.js": {
+            "bytesInOutput": 5916
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ms.js": {
+            "bytesInOutput": 2541
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ne.js": {
+            "bytesInOutput": 5435
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nl.js": {
+            "bytesInOutput": 2645
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nn.js": {
+            "bytesInOutput": 2571
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/no.js": {
+            "bytesInOutput": 2588
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ota.js": {
+            "bytesInOutput": 2840
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ps.js": {
+            "bytesInOutput": 4848
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pl.js": {
+            "bytesInOutput": 3305
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt.js": {
+            "bytesInOutput": 4074
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt-BR.js": {
+            "bytesInOutput": 4054
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ro.js": {
+            "bytesInOutput": 2948
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ru.js": {
+            "bytesInOutput": 7347
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sk.js": {
+            "bytesInOutput": 3086
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sl.js": {
+            "bytesInOutput": 2681
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sv.js": {
+            "bytesInOutput": 2746
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ta.js": {
+            "bytesInOutput": 7134
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tg.js": {
+            "bytesInOutput": 6267
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/th.js": {
+            "bytesInOutput": 6992
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tk.js": {
+            "bytesInOutput": 2551
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tr.js": {
+            "bytesInOutput": 2789
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uk.js": {
+            "bytesInOutput": 6780
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ua.js": {
+            "bytesInOutput": 26
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ur.js": {
+            "bytesInOutput": 6246
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uz.js": {
+            "bytesInOutput": 2801
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/vi.js": {
+            "bytesInOutput": 3376
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-CN.js": {
+            "bytesInOutput": 3193
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-TW.js": {
+            "bytesInOutput": 3300
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/yo.js": {
+            "bytesInOutput": 3491
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js": {
+            "bytesInOutput": 749
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/compile.js": {
+            "bytesInOutput": 29518
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js": {
+            "bytesInOutput": 10558
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js": {
+            "bytesInOutput": 8803
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js": {
+            "bytesInOutput": 12122
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-generator.js": {
+            "bytesInOutput": 968
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema.js": {
+            "bytesInOutput": 10
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js": {
+            "bytesInOutput": 23987
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/checks.js": {
+            "bytesInOutput": 481
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js": {
+            "bytesInOutput": 801
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js": {
+            "bytesInOutput": 124
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/compat.js": {
+            "bytesInOutput": 409
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js": {
+            "bytesInOutput": 279
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/from-json-schema.js": {
+            "bytesInOutput": 12189
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/visit.js": {
+            "bytesInOutput": 2085
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/deep-partial.js": {
+            "bytesInOutput": 128
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/in-out.js": {
+            "bytesInOutput": 461
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/coerce.js": {
+            "bytesInOutput": 243
+          },
+          "packages/kernel/src/validation/schemas.ts": {
+            "bytesInOutput": 930
+          },
+          "packages/kernel/src/events/envelope.ts": {
+            "bytesInOutput": 951
+          },
+          "packages/kernel/src/machine/machine.ts": {
+            "bytesInOutput": 1026
+          },
+          "packages/kernel/src/observability/logger.ts": {
+            "bytesInOutput": 86
+          },
+          "packages/kernel/src/storage/base64url.ts": {
+            "bytesInOutput": 487
+          },
+          "packages/kernel/src/storage/repo.ts": {
+            "bytesInOutput": 3219
+          },
+          "packages/kernel/src/storage/scope.ts": {
+            "bytesInOutput": 1765
+          },
+          "packages/kernel/src/bus/ports.ts": {
+            "bytesInOutput": 400
+          },
+          "packages/kernel/src/bus/emit.ts": {
+            "bytesInOutput": 253
+          },
+          "packages/kernel/src/bus/bus.ts": {
+            "bytesInOutput": 5953
+          },
+          "packages/kernel/src/bus/define.ts": {
+            "bytesInOutput": 1461
+          },
+          "packages/kernel/src/bus/access.ts": {
+            "bytesInOutput": 221
+          },
+          "packages/kernel/src/storage/memory-driver.ts": {
+            "bytesInOutput": 6392
+          },
+          "packages/kernel/src/storage/machines.ts": {
+            "bytesInOutput": 766
+          },
+          "packages/kernel/src/storage/tx.ts": {
+            "bytesInOutput": 8706
+          },
+          "packages/kernel/src/storage/storage.ts": {
+            "bytesInOutput": 747
+          },
+          "packages/kernel/src/storage/maintenance.ts": {
+            "bytesInOutput": 318
+          },
+          "packages/kernel/src/outbox/backoff.ts": {
+            "bytesInOutput": 117
+          },
+          "packages/kernel/src/outbox/dispatcher.ts": {
+            "bytesInOutput": 4537
+          },
+          "packages/kernel/src/sync/sender.ts": {
+            "bytesInOutput": 20
+          },
+          "packages/bazaar/src/listings/model.ts": {
+            "bytesInOutput": 1341
+          },
+          "packages/bazaar/src/listings/archive.ts": {
+            "bytesInOutput": 5079
+          },
+          "packages/bazaar/src/listings/lifecycle.ts": {
+            "bytesInOutput": 6493
+          },
+          "packages/bazaar/src/listings/index.ts": {
+            "bytesInOutput": 10701
+          },
+          "packages/discovery/src/geoprivacy/coarse/geohash.ts": {
+            "bytesInOutput": 1494
+          },
+          "packages/discovery/src/geoprivacy/coarse/index.ts": {
+            "bytesInOutput": 2160
+          },
+          "packages/discovery/src/ranking/relevance/scoring.ts": {
+            "bytesInOutput": 3520
+          },
+          "packages/discovery/src/search/local-options.ts": {
+            "bytesInOutput": 1953
+          },
+          "packages/discovery/src/search/index.ts": {
+            "bytesInOutput": 5448
+          },
+          "packages/discovery/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/discovery/src/ranking/relevance/index.ts": {
+            "bytesInOutput": 1162
+          },
+          "packages/discovery/src/ranking/fairness/index.ts": {
+            "bytesInOutput": 1090
+          },
+          "packages/discovery/src/search/filter/index.ts": {
+            "bytesInOutput": 245
+          },
+          "packages/discovery/src/geoprivacy/location/index.ts": {
+            "bytesInOutput": 4526
+          },
+          "packages/bazaar/src/listings/history.ts": {
+            "bytesInOutput": 4101
+          },
+          "packages/bazaar/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/kernel/src/storage/indexeddb.ts": {
+            "bytesInOutput": 2388
+          },
+          "packages/kernel/src/browser.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/security/src/cryptography/index.ts": {
+            "bytesInOutput": 1123
+          },
+          "packages/security/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/identity/src/identity.ts": {
+            "bytesInOutput": 4004
+          },
+          "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/utils.js": {
+            "bytesInOutput": 3172
+          },
+          "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/hmac.js": {
+            "bytesInOutput": 1318
+          },
+          "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/pbkdf2.js": {
+            "bytesInOutput": 1243
+          },
+          "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_u64.js": {
+            "bytesInOutput": 121
+          },
+          "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/_md.js": {
+            "bytesInOutput": 1485
+          },
+          "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/sha2.js": {
+            "bytesInOutput": 1905
+          },
+          "node_modules/.pnpm/@noble+hashes@2.4.0/node_modules/@noble/hashes/scrypt.js": {
+            "bytesInOutput": 2818
+          },
+          "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/utils.js": {
+            "bytesInOutput": 3532
+          },
+          "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/_arx.js": {
+            "bytesInOutput": 1931
+          },
+          "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/_poly1305.js": {
+            "bytesInOutput": 3732
+          },
+          "node_modules/.pnpm/@noble+ciphers@2.4.0/node_modules/@noble/ciphers/chacha.js": {
+            "bytesInOutput": 2247
+          },
+          "packages/identity/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/vault/src/encrypted-storage.ts": {
+            "bytesInOutput": 5661
+          },
+          "packages/federation/src/envelope.ts": {
+            "bytesInOutput": 3741
+          },
+          "packages/federation/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/vault/src/session-policy.ts": {
+            "bytesInOutput": 1547
+          },
+          "packages/vault/src/vault.ts": {
+            "bytesInOutput": 6415
+          },
+          "packages/vault/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "apps/pwa/src/archive-backup.ts": {
+            "bytesInOutput": 157
+          },
+          "apps/pwa/src/vault-session.ts": {
+            "bytesInOutput": 708
+          },
+          "apps/pwa/src/peer-search.ts": {
+            "bytesInOutput": 848
+          },
+          "packages/mutiny/src/cycle_matching/index.ts": {
+            "bytesInOutput": 1201
+          },
+          "packages/mutiny/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/mutiny/src/trade_proposals/index.ts": {
+            "bytesInOutput": 7480
+          },
+          "packages/mutiny/src/cycle_matching/admission.ts": {
+            "bytesInOutput": 4058
+          },
+          "packages/mutiny/src/trade_proposals/repository.ts": {
+            "bytesInOutput": 8621
+          },
+          "apps/pwa/src/barter-runtime.ts": {
+            "bytesInOutput": 4241
+          },
+          "apps/pwa/src/matching-worker-protocol.ts": {
+            "bytesInOutput": 2839
+          },
+          "apps/pwa/src/matching-worker-client.ts": {
+            "bytesInOutput": 1542
+          },
+          "apps/pwa/src/barter.ts": {
+            "bytesInOutput": 12242
+          },
+          "packages/notify/src/delivery/inapp/index.ts": {
+            "bytesInOutput": 11893
+          },
+          "packages/notify/src/preferences/in/index.ts": {
+            "bytesInOutput": 10622
+          },
+          "packages/notify/src/preferences/opt/index.ts": {
+            "bytesInOutput": 2399
+          },
+          "packages/notify/src/delivery/inapp/routing.ts": {
+            "bytesInOutput": 6638
+          },
+          "packages/notify/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/notify/src/local.ts": {
+            "bytesInOutput": 748
+          },
+          "apps/pwa/src/notifications.ts": {
+            "bytesInOutput": 4433
+          },
+          "apps/pwa/src/notification-delivery.ts": {
+            "bytesInOutput": 215
+          },
+          "apps/pwa/src/action-queue.ts": {
+            "bytesInOutput": 201
+          },
+          "apps/pwa/src/listing-history.ts": {
+            "bytesInOutput": 1479
+          },
+          "apps/pwa/src/listing-closure.ts": {
+            "bytesInOutput": 1817
+          },
+          "apps/pwa/src/listing-maintenance.ts": {
+            "bytesInOutput": 1386
+          },
+          "apps/pwa/src/listing-editor.ts": {
+            "bytesInOutput": 3625
+          },
+          "apps/pwa/src/location-preferences.ts": {
+            "bytesInOutput": 5615
+          },
+          "packages/i18n/src/internationalization/languages/validate.ts": {
+            "bytesInOutput": 1545
+          },
+          "packages/i18n/src/internationalization/languages/catalogs.ts": {
+            "bytesInOutput": 1889
+          },
+          "packages/i18n/src/internationalization/languages/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/i18n/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/i18n/src/internationalization/currencies/index.ts": {
+            "bytesInOutput": 3695
+          },
+          "apps/pwa/src/main.ts": {
+            "bytesInOutput": 15916
+          }
+        },
+        "bytes": 718153
+      },
+      "../../../../tmp/classrupted-audit-unused/matching-worker.js": {
+        "imports": [],
+        "exports": [],
+        "entryPoint": "apps/pwa/src/matching-worker.ts",
+        "inputs": {
+          "packages/kernel/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/kernel/src/errors/codes.ts": {
+            "bytesInOutput": 910
+          },
+          "packages/kernel/src/errors/app-error.ts": {
+            "bytesInOutput": 768
+          },
+          "packages/kernel/src/errors/result.ts": {
+            "bytesInOutput": 72
+          },
+          "packages/kernel/src/ids/uuidv7.ts": {
+            "bytesInOutput": 173
+          },
+          "packages/kernel/src/hash/canonical.ts": {
+            "bytesInOutput": 922
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/index.js": {
+            "bytesInOutput": 4236
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/external.js": {
+            "bytesInOutput": 4214
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/index.js": {
+            "bytesInOutput": 5740
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js": {
+            "bytesInOutput": 13642
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/core.js": {
+            "bytesInOutput": 1765
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/errors.js": {
+            "bytesInOutput": 3112
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/parse.js": {
+            "bytesInOutput": 2536
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js": {
+            "bytesInOutput": 6650
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/checks.js": {
+            "bytesInOutput": 7096
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/doc.js": {
+            "bytesInOutput": 619
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/versions.js": {
+            "bytesInOutput": 33
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/schemas.js": {
+            "bytesInOutput": 37660
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/memoizer.js": {
+            "bytesInOutput": 3322
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/index.js": {
+            "bytesInOutput": 659
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ar.js": {
+            "bytesInOutput": 5980
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/az.js": {
+            "bytesInOutput": 3054
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/be.js": {
+            "bytesInOutput": 7049
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bg.js": {
+            "bytesInOutput": 6543
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/bn.js": {
+            "bytesInOutput": 5254
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ca.js": {
+            "bytesInOutput": 2739
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ckb.js": {
+            "bytesInOutput": 6087
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/cs.js": {
+            "bytesInOutput": 3128
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/da.js": {
+            "bytesInOutput": 2696
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/de.js": {
+            "bytesInOutput": 2671
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/el.js": {
+            "bytesInOutput": 6768
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/en.js": {
+            "bytesInOutput": 2684
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/eo.js": {
+            "bytesInOutput": 2685
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/es.js": {
+            "bytesInOutput": 3159
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fa.js": {
+            "bytesInOutput": 5496
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fi.js": {
+            "bytesInOutput": 2884
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr.js": {
+            "bytesInOutput": 3142
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/fr-CA.js": {
+            "bytesInOutput": 2668
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/gu.js": {
+            "bytesInOutput": 5595
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/he.js": {
+            "bytesInOutput": 9809
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hi.js": {
+            "bytesInOutput": 5731
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hr.js": {
+            "bytesInOutput": 2848
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hu.js": {
+            "bytesInOutput": 2942
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/hy.js": {
+            "bytesInOutput": 6604
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/id.js": {
+            "bytesInOutput": 2636
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/is.js": {
+            "bytesInOutput": 2807
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/it.js": {
+            "bytesInOutput": 2622
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ja.js": {
+            "bytesInOutput": 4113
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ka.js": {
+            "bytesInOutput": 6771
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/km.js": {
+            "bytesInOutput": 6905
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kh.js": {
+            "bytesInOutput": 26
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/kn.js": {
+            "bytesInOutput": 6296
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ko.js": {
+            "bytesInOutput": 3721
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/lt.js": {
+            "bytesInOutput": 4488
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/mk.js": {
+            "bytesInOutput": 5916
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ms.js": {
+            "bytesInOutput": 2541
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ne.js": {
+            "bytesInOutput": 5435
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nl.js": {
+            "bytesInOutput": 2645
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/nn.js": {
+            "bytesInOutput": 2571
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/no.js": {
+            "bytesInOutput": 2588
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ota.js": {
+            "bytesInOutput": 2840
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ps.js": {
+            "bytesInOutput": 4848
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pl.js": {
+            "bytesInOutput": 3305
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt.js": {
+            "bytesInOutput": 4074
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/pt-BR.js": {
+            "bytesInOutput": 4054
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ro.js": {
+            "bytesInOutput": 2948
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ru.js": {
+            "bytesInOutput": 7347
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sk.js": {
+            "bytesInOutput": 3086
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sl.js": {
+            "bytesInOutput": 2681
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/sv.js": {
+            "bytesInOutput": 2746
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ta.js": {
+            "bytesInOutput": 7134
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tg.js": {
+            "bytesInOutput": 6267
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/th.js": {
+            "bytesInOutput": 6992
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tk.js": {
+            "bytesInOutput": 2551
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/tr.js": {
+            "bytesInOutput": 2789
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uk.js": {
+            "bytesInOutput": 6780
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ua.js": {
+            "bytesInOutput": 26
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/ur.js": {
+            "bytesInOutput": 6246
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/uz.js": {
+            "bytesInOutput": 2801
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/vi.js": {
+            "bytesInOutput": 3376
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-CN.js": {
+            "bytesInOutput": 3193
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/zh-TW.js": {
+            "bytesInOutput": 3300
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/locales/yo.js": {
+            "bytesInOutput": 3491
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/registries.js": {
+            "bytesInOutput": 749
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/compile.js": {
+            "bytesInOutput": 29410
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/api.js": {
+            "bytesInOutput": 10554
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/to-json-schema.js": {
+            "bytesInOutput": 8798
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-processors.js": {
+            "bytesInOutput": 12075
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema-generator.js": {
+            "bytesInOutput": 967
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/json-schema.js": {
+            "bytesInOutput": 10
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/schemas.js": {
+            "bytesInOutput": 23895
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/checks.js": {
+            "bytesInOutput": 481
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/errors.js": {
+            "bytesInOutput": 801
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/parse.js": {
+            "bytesInOutput": 124
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/compat.js": {
+            "bytesInOutput": 407
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/iso.js": {
+            "bytesInOutput": 279
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/from-json-schema.js": {
+            "bytesInOutput": 12189
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/visit.js": {
+            "bytesInOutput": 2074
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/deep-partial.js": {
+            "bytesInOutput": 128
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/in-out.js": {
+            "bytesInOutput": 460
+          },
+          "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/classic/coerce.js": {
+            "bytesInOutput": 243
+          },
+          "packages/kernel/src/validation/schemas.ts": {
+            "bytesInOutput": 931
+          },
+          "packages/kernel/src/events/envelope.ts": {
+            "bytesInOutput": 393
+          },
+          "packages/kernel/src/machine/machine.ts": {
+            "bytesInOutput": 1026
+          },
+          "packages/kernel/src/storage/base64url.ts": {
+            "bytesInOutput": 62
+          },
+          "packages/kernel/src/storage/repo.ts": {
+            "bytesInOutput": 407
+          },
+          "packages/kernel/src/bus/ports.ts": {
+            "bytesInOutput": 41
+          },
+          "packages/kernel/src/bus/bus.ts": {
+            "bytesInOutput": 19
+          },
+          "packages/kernel/src/bus/access.ts": {
+            "bytesInOutput": 221
+          },
+          "packages/kernel/src/storage/machines.ts": {
+            "bytesInOutput": 766
+          },
+          "packages/kernel/src/storage/tx.ts": {
+            "bytesInOutput": 49
+          },
+          "packages/kernel/src/storage/maintenance.ts": {
+            "bytesInOutput": 36
+          },
+          "packages/kernel/src/sync/sender.ts": {
+            "bytesInOutput": 20
+          },
+          "packages/security/src/cryptography/index.ts": {
+            "bytesInOutput": 1123
+          },
+          "packages/security/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/federation/src/envelope.ts": {
+            "bytesInOutput": 3516
+          },
+          "packages/federation/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/discovery/src/geoprivacy/coarse/geohash.ts": {
+            "bytesInOutput": 91
+          },
+          "packages/discovery/src/geoprivacy/coarse/index.ts": {
+            "bytesInOutput": 225
+          },
+          "packages/discovery/src/ranking/relevance/scoring.ts": {
+            "bytesInOutput": 1318
+          },
+          "packages/discovery/src/search/local-options.ts": {
+            "bytesInOutput": 800
+          },
+          "packages/discovery/src/search/index.ts": {
+            "bytesInOutput": 1425
+          },
+          "packages/discovery/src/index.ts": {
+            "bytesInOutput": 0
+          },
+          "packages/discovery/src/ranking/relevance/index.ts": {
+            "bytesInOutput": 1163
+          },
+          "packages/discovery/src/ranking/fairness/index.ts": {
+            "bytesInOutput": 1090
+          },
+          "packages/discovery/src/search/filter/index.ts": {
+            "bytesInOutput": 245
+          },
+          "packages/discovery/src/geoprivacy/location/index.ts": {
+            "bytesInOutput": 1046
+          },
+          "packages/mutiny/src/cycle_matching/admission.ts": {
+            "bytesInOutput": 4073
+          },
+          "packages/mutiny/src/cycle_matching/index.ts": {
+            "bytesInOutput": 3894
+          },
+          "apps/pwa/src/matching-worker-protocol.ts": {
+            "bytesInOutput": 2650
+          },
+          "apps/pwa/src/matching-worker.ts": {
+            "bytesInOutput": 92
+          }
+        },
+        "bytes": 487761
+      }
+    }
+  }
+}

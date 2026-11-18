@@ -23,6 +23,30 @@
 2. Every MVP scenario has an approved expected outcome.
 3. Contract tests fail the build on any breaking change to a v1 command or event.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
 ## Assumptions & open decisions
 - ASSUMPTION: staging environment with the F15 queue exists before scenario implementation.
 - D08 (offline writes) defines the expected outcomes: PROVISIONAL (D08 default, unapproved).

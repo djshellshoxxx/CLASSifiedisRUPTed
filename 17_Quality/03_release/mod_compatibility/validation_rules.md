@@ -21,6 +21,35 @@
 
 Diagnostics exclude device identifiers and free text from test output (CTR-ERR-001 R06).
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-142-02-01 (unit): a supported row without a result in 14 days blocks publish with COMPAT.ROW_WITHOUT_RESULT.
+- TEST-PS-142-02-02 (unit): a peer_protocol value outside the CTR-FED-001 registry is rejected.
+
+## Acceptance criteria
+1. TEST-PS-142-02-01, TEST-PS-142-02-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: 14-day result age and 90-day deprecation window are defaults to confirm with QA Lead and F15.
 - D01 governs which peer protocol values are valid: PROVISIONAL (D01 default, unapproved).

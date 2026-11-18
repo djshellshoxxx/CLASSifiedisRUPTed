@@ -29,6 +29,35 @@
 | jurisdiction_rule.published | jurisdiction_rule | PUBLIC | rule_key, version, region_code |
 | jurisdiction_rule.withdrawn | jurisdiction_rule | PUBLIC | rule_key, version |
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-145-04-01 (contract): PublishJurisdictionRule is idempotent on (rule_key, version).
+- TEST-PS-145-04-02 (contract): jurisdiction events validate against the CTR-EVT-001 envelope schema.
+
+## Acceptance criteria
+1. TEST-PS-145-04-01, TEST-PS-145-04-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: F01 and mod_prohibited subscribe to published and withdrawn events.
 - D05 default governs region arguments: PROVISIONAL (D05 default, unapproved).

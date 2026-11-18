@@ -1,35 +1,58 @@
 # PS-098-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-098-05. **Owner:** [12_Moderation/03_antifraud/mod_limits](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_limits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_limits. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R02, R03, R06, R07, R08), CTR-PRV-001 (R04, R07).
 
-## Purpose and scope
-Define the authorization capabilities process for limits within 03_antifraud. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-098-05.R01 | Capabilities used: `lim.read`, `lim.create` (draft), `lim.administer` (activate, advance, retire). | MVP |
+| PS-098-05.R02 | `lim.administer` requires `ope_` dual control (two distinct approvers, CTR-CAP-001 R07). | MVP |
+| PS-098-05.R03 | `limits.check` requires a `sys_` principal with `lim.read` for the calling module only. | MVP |
+| PS-098-05.R04 | No `acc_` may read another account's quota decisions. An account may read its own active limit values for its quota keys. | MVP |
+| PS-098-05.R05 | Automated actors cannot draft, activate or advance policies. | MVP |
 
-## Requirements to specify
-- [ ] PS-098-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-098-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-098-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Actor | Action | Resource / scope | Outcome |
+|---|---|---|---|
+| `sys_` (owning module) | `lim.read` (check) | `lim_` active policy | ALLOW for registered calling module |
+| `sys_` (other) | any | any | DENY |
+| `mod_` (grant, purpose `policy_draft`) | `lim.create` | global | ALLOW draft |
+| `ope_` (first approver) | `lim.administer` | `lim_` | ALLOW with second distinct `ope_` |
+| `ope_` single | `lim.administer` | `lim_` | DENY (dual control) |
+| `acc_` | `lim.read` | own quota key values only | ALLOW: `limit_value`, `quota_key`; no decisions |
+| `acc_` | `lim.read` | another account's decisions | DENY `SYS.NOT_FOUND` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Field visibility (CTR-CAP-001 R10): `created_by`, `approved_by` = `case`; `rationale_code` = `case`; `limit_value` = `public`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Grants for `mod_` drafting carry `constraints.purpose` = `policy_draft` and `expires_at` ≤ 72 h.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization does not change state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`LIMITS.APPROVER_CONFLICT` for self-approval; `CAP.SELF_APPROVAL_FORBIDDEN` from the capability layer.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-098-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Zero TTL for `lim.administer` decisions; policy read cache for `lim.read` ≤ 60 s (CTR-CAP-001 R09 for non-sensitive reads).
+
+## Privacy, retention, abuse
+Every decision read by an operator writes `aud_` with decision ID and purpose.
+
+## Observability & budgets
+Metric `limits_authz_denied_total{capability,actor_kind}`.
+
+## Tests
+- `TEST-PS-098-05-01` unit: each matrix row yields its outcome.
+- `TEST-PS-098-05-02` negative: `sys_` of an unregistered module calls check → denied.
+- `TEST-PS-098-05-03` negative: single `ope_` activates → denied.
+- `TEST-PS-098-05-04` negative: `acc_` reads another account's decisions → `SYS.NOT_FOUND`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Dual control enforced for activation and rollout advancement.
+2. No account can read another account's quota state.
+3. Registered-caller list is tested and reviewed.
+
+## Assumptions & open decisions
+- ASSUMPTION: calling-module registry is maintained by F16 (`sys_` principal assignments).
+- D10 (auth and portability), PROVISIONAL default: no recovery path bypasses policy approval (unapproved).

@@ -16,3 +16,33 @@
 `figure`: `metric_key` (enum: `listings_restricted`, `listings_prohibited`, `appeals_received`, `appeals_upheld`, `governance_decisions`), `dimension` (`none` or `region` with coarse code), `value` (integer ≥ 0 or null when suppressed), `suppressed` (boolean), `source_job_id`.
 
 `methodology`: `methodology_version` (semver), `text_hash`, `approved_by` (`acc_`), `effective_from`.
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-148-01-01 (unit): a figure below the threshold with suppressed = false is rejected.
+- TEST-PS-148-01-02 (schema): supersedes must reference a published report.
+
+## Acceptance criteria
+1. TEST-PS-148-01-01, TEST-PS-148-01-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+

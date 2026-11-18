@@ -1,35 +1,55 @@
 # PS-127-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-03. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/01_authz/mod_secrets (F16.S01.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the workflow state machine process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-127-03.R01 | Rotation keeps the previous version `active` until the new version is verified by its owner module, then marks it `revoked` after the overlap window (24 h, ASSUMPTION). | MVP |
+| PS-127-03.R02 | Revocation is immediate for new leases; existing leases end within 60 s (CTR-CAP-001 R09 analog). | MVP |
+| PS-127-03.R03 | `destroyed` is terminal and occurs 30 days after revocation (RET-SEC). | MVP |
+| PS-127-03.R04 | A failed rotation leaves the prior version `active`. | MVP |
 
-## Requirements to specify
-- [ ] PS-127-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`status` field of PS-127-01. Events: `secret.created`, `secret.rotated`, `secret.revoked`, `secret.destroyed` (CTR-EVT-001, aggregate `secret`, no values).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`secret.create`, `secret.rotate`, `secret.revoke`, `secret.destroy`, `lease.issue` (PS-127-04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | create | PS-127-02 passes | active (v1) | emit `secret.created` |
+| active | rotate_start | no other rotation in progress | rotating (new v+1 active, old v rotating) | emit `secret.rotated` |
+| rotating | owner_verified | owner module confirms new version | active (old v → revoked after 24 h) | none |
+| rotating | verify_failed | owner rejects | active (old v) ; new v revoked | emit `secret.revoked` for new v |
+| active or rotating | revoke | ope approval or sys emergency with review | revoked | invalidate leases; emit `secret.revoked` |
+| revoked | destroy_due | 30 days elapsed; no legal hold | destroyed | crypto-shred KMS handle; emit `secret.destroyed` |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Illegal transition: `SYS.CONFLICT`. Lease for revoked secret: `SECRETS.REVOKED` (gone, 410).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Revoke requires two `ope` approvers unless emergency (PS-127-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+One rotation per secret at a time (`SECRETS.ROTATION_IN_PROGRESS`, 409, retryable). Transitions idempotent on (name, version, to).
+
+## Privacy, retention, abuse
+Destruction removes ciphertext handle; verifier hashes purged with it.
+
+## Observability & budgets
+Metric: `secret_state_transitions_total{from,to}`; alert on rotation stuck > 24 h.
+
+## Tests
+- TEST-PS-127-03-01 (unit): transition table.
+- TEST-PS-127-03-02 (integration): failed rotation keeps old version active; service keeps working.
+- TEST-PS-127-03-03 (integration): revoke blocks new leases and ends existing within 60 s.
+- TEST-PS-127-03-04 (lifecycle): destroy after 30 days; crypto-shred verified.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Rotation never leaves zero active versions (TEST-02).
+2. TEST-PS-127-03-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h overlap; 30-day destruction.

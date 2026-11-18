@@ -1,44 +1,41 @@
 # F16.S01.M02 — secrets
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F16.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Security Lead (F16). **Parent:** [F16.S01 authz](../SPEC.md).
 
 ## Purpose and business behavior
-Provide secrets as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Holds the platform's own secrets (service credentials, provider API keys, webhook signing secrets, verifier keys for hashed tokens) and issues short-lived leases to the named modules that need them. Values are write-once from the operator's side, never readable after creation, and never shown in logs or exports. User key material is out of scope (F16.S02.M01).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a platform engineer, I can rotate a provider credential without downtime and with a rollback path.
+- As a security lead, I can revoke a leaked credential and see every lease it produced.
+- As a participant, my data is not exposed if a platform credential leaks, because it is scoped to one module.
 
 ## Scope
-- Required process spec: `secrets_domain_model.md` (not yet authored)
-- Required process spec: `secrets_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `secrets_validation_and_authorization.md` (not yet authored)
-- Required process spec: `secrets_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `secrets_interfaces_and_events.md` (not yet authored)
-- Required process spec: `secrets_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `secrets_acceptance_and_property_tests.md` (not yet authored)
+Platform secret records, rotation, revocation, destruction, short-lived leases and audit. Process specifications: [domain_schema](domain_schema.md), [validation_rules](validation_rules.md), [workflow_state_machine](workflow_state_machine.md), [commands_queries_events](commands_queries_events.md), [authorization_capabilities](authorization_capabilities.md), [failure_recovery_idempotency](failure_recovery_idempotency.md), [privacy_retention_abuse](privacy_retention_abuse.md), [observability_performance](observability_performance.md), [contract_and_acceptance_tests](contract_and_acceptance_tests.md), [import_export_backup_rollback](import_export_backup_rollback.md).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal `secret.create`, `secret.rotate`, `secret.revoke`, `secret.destroy`, `lease.issue`; queries `secret.get_metadata`, `secret.list`. Error codes `SECRETS.*` (module code 7 letters, CTR-ERR-001 R02).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Depends on F15.S02.M03 (storage) and F16.S02.M02 (KMS and key management). Consumed by F07.S01.M02 (sessions), F09.S01.M01 (noncustodial payment provider credentials), F15.S01.M02 (cache), F15.S02.M01 (relays). Contracts: CTR-PRV-001 (SECRET class), CTR-CAP-001 (lease capability).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Canonical owner of record class "platform secret" (metadata and KMS handles). Owner modules own the behavior that uses the secret.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Credential leakage through logs or backups; overbroad leases; slow revocation; rotation outage; insider read of values. Mitigations in PS-127-02, -03, -05, -06 and -07. KMS choice and secret-scanning tool are open.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specs SPEC-DRAFT-COMPLETE; `sec` prefix approved; KMS and scanning tools chosen by F16 with ADR; consumer lists approved.
 
 ## Required process specification inventory
-- [ ] `secrets_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `secrets_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `secrets_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `secrets_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `secrets_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `secrets_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `secrets_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — SPEC-DRAFT-COMPLETE (PS-127-01)
+- [x] `validation_rules.md` — SPEC-DRAFT-COMPLETE (PS-127-02)
+- [x] `workflow_state_machine.md` — SPEC-DRAFT-COMPLETE (PS-127-03)
+- [x] `commands_queries_events.md` — SPEC-DRAFT-COMPLETE (PS-127-04)
+- [x] `authorization_capabilities.md` — SPEC-DRAFT-COMPLETE (PS-127-05)
+- [x] `failure_recovery_idempotency.md` — SPEC-DRAFT-COMPLETE (PS-127-06)
+- [x] `privacy_retention_abuse.md` — SPEC-DRAFT-COMPLETE (PS-127-07)
+- [x] `observability_performance.md` — SPEC-DRAFT-COMPLETE (PS-127-08)
+- [x] `contract_and_acceptance_tests.md` — SPEC-DRAFT-COMPLETE (PS-127-09)
+- [x] `import_export_backup_rollback.md` — SPEC-DRAFT-COMPLETE (PS-127-10)

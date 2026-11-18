@@ -30,6 +30,29 @@ Denied requests return `SYS.FORBIDDEN` (403). Hidden scenario or run IDs return 
 - Grant revocation takes effect at the next decision; the runner re-checks `offtest.run.record` before each `RecordOfflineRun`.
 - Runners are offline-tolerant only in the sense of buffering run records; authorization is always checked online at flush.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-140-05-01 (negative): a runner principal calling ActivateScenario receives SYS.FORBIDDEN.
+- TEST-PS-140-05-02 (negative): a read request for an F15 pending-write record is denied at every scope.
+
+## Acceptance criteria
+1. TEST-PS-140-05-01, TEST-PS-140-05-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: capability names and 90-day grant ceiling are provisional until F16 Security Lead review.
 - D10 (auth and portability) is not affected by this module: PROVISIONAL (D10 default, unapproved).

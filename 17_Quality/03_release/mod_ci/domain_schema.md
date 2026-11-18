@@ -27,3 +27,33 @@
 - `started_at`, `finished_at`: RFC 3339 UTC. `runner_ref`: `sys_` principal ID.
 
 Provenance: `commit_sha` and `pipeline_version` are the only build identifiers used by gates.
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-141-01-01 (schema): ci_run with a commit_sha that is not 40 lowercase hex is rejected.
+- TEST-PS-141-01-02 (unit): job result with an unknown job_key is rejected.
+
+## Acceptance criteria
+1. TEST-PS-141-01-01, TEST-PS-141-01-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+

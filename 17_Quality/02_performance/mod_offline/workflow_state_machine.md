@@ -31,6 +31,29 @@ Invalid pairs return `OFFTEST.INVALID_TRANSITION` (category `unprocessable_state
 - Runner crash while `running`: the timer moves the run to `aborted_infra`; no partial assertion set is published.
 - Runner outbox replays `CompleteRun`: duplicate keys are no-ops (see [failure_recovery](failure_recovery_idempotency.md)).
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-140-03-01 (unit): every row of the transition table passes; other pairs return OFFTEST.INVALID_TRANSITION.
+- TEST-PS-140-03-02 (integration): a run exceeding 30 minutes ends aborted_infra with no published assertions.
+
+## Acceptance criteria
+1. TEST-PS-140-03-01, TEST-PS-140-03-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: 30-minute run timeout is the default; confirm with CI owner.
 - D08 (offline writes) is out of scope for state transitions here; the offline queue states belong to F15.S01.M01: PROVISIONAL (D08 default, unapproved).

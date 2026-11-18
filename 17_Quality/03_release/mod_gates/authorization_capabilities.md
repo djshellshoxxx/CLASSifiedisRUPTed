@@ -25,6 +25,29 @@ Denied: `SYS.FORBIDDEN`. Hidden decisions: `SYS.NOT_FOUND`.
 ## Failure, idempotency, concurrency, offline
 Revocation of a grant takes effect at next decision (CTR-CAP-001 R09). Offline authorization does not apply.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-143-05-01 (negative): an evaluator principal granting a waiver receives SYS.FORBIDDEN.
+- TEST-PS-143-05-02 (negative): removing an evidence type without Governance approval is rejected.
+
+## Acceptance criteria
+1. TEST-PS-143-05-01, TEST-PS-143-05-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: approver roles are UNASSIGNED until F16 and Governance review.
 - D10 (auth and portability) not affected: PROVISIONAL (D10 default, unapproved).

@@ -26,3 +26,33 @@
 - `outcome`: enum `permitted`, `restricted`, `prohibited`.
 - `rule_versions`: array of `{rule_key, version}`.
 - `case_ref`: `cas_` ID or null. `decided_at`.
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-146-01-01 (unit): a rule containing a regular expression is rejected.
+- TEST-PS-146-01-02 (schema): a classification_decision has no free-text field.
+
+## Acceptance criteria
+1. TEST-PS-146-01-01, TEST-PS-146-01-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+

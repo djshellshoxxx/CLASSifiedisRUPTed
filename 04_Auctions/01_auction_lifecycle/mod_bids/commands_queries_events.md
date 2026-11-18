@@ -1,35 +1,62 @@
 # PS-033-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-033-04. **Owner:** [04_Auctions/01_auction_lifecycle/mod_bids](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_bids. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_bids. **Parent:** [mod_bids SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for bids within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-033-04.R01 | `bids.place` carries `idempotency_key` and `expected_auction_revision` (the revision the bidder saw). | MVP |
+| PS-033-04.R02 | Bid history query returns ≤ 100 bids per page, public fields only. | MVP |
+| PS-033-04.R03 | Events are CTR-EVT-001 envelopes with `aggregate_type` = `auction`, `max_data_class` = PUBLIC for `bids.bid.accepted` and `bids.bid.outbid`. | MVP |
+| PS-033-04.R04 | Command body ≤ 4 KB. | MVP |
 
-## Requirements to specify
-- [ ] PS-033-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-033-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-033-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Signature | Idempotency key |
+|---|---|---|
+| `bids.place` | (`auc_`, `amount_minor`, `currency`, `expected_auction_revision`) → `bid_` | (`acc_`, command, key) |
+| `bids.void` | (`bid_`, `cas_` case ID, reason enum, expected_revision) | (actor, command, key) |
+| `bids.list_history` | (`auc_`, cursor) → public bid rows (query) | n/a |
+| `bids.get_own` | (`auc_`) → caller's own bids incl. status (query) | n/a |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Event (`schema_id`) | Visibility |
+|---|---|
+| `bids.bid.accepted` | PUBLIC: auc_, sequence, amount_minor, bidder_view |
+| `bids.bid.outbid` | PUBLIC: auc_, bid_id, new sequence |
+| `bids.bid.rejected` | Private to bidder: auc_, error code |
+| `bids.bid.voided` | Public: auc_, bid_id, reason enum |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Errors: PS-033-02 codes; `SYS.CONFLICT` when `expected_auction_revision` is stale (the bidder must re-read).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Command outcomes map to PS-033-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Schema validation first; unknown fields rejected. `expected_auction_revision` mismatch → `SYS.CONFLICT` with current revision number only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-033-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Per PS-033-05. History query is public; own-bid query is `bid.read` (self).
+
+## Failure, idempotency, concurrency, offline
+Same key and digest → original result. Different digest → `SYS.CONFLICT`. Events at-least-once; dedupe on `event_id`.
+
+## Privacy, retention, abuse
+Public events contain `bidder_view` (`prf_`), never `acc_`. `placed_at` is not in any event payload in MVP.
+
+## Observability & budgets
+`bids.place` p95 ≤ 200 ms; history query p95 ≤ 150 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-033-04-01 (contract): all commands and events validate against CTR-SCH-001.
+- TEST-PS-033-04-02 (contract): public event payloads contain no `acc_` and no timestamp.
+- TEST-PS-033-04-03 (integration): duplicate place returns same `bid_id`.
+- TEST-PS-033-04-04 (integration): stale `expected_auction_revision` returns `SYS.CONFLICT` without writing.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All commands and events registered.
+2. Public-event privacy scan passes on 10,000 sample events.
+3. Replay test passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24-hour idempotency retention.
+- Pseudonymous bidder display (`prf_`) during open auctions is an ASSUMPTION. See [DECISIONS.md](../../../DECISIONS.md) D10 (OPEN; pseudonym rules).

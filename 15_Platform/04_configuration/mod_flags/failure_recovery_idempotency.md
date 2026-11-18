@@ -30,7 +30,7 @@ Not applicable beyond PS-124-03.
 Not applicable at evaluation.
 
 ## Failure, idempotency, concurrency, offline
-Clients use cached values offline for up to 24 h (R09 in PS-124 requirements, see PS-124-07).
+Clients use cached values offline for up to 24 h (PS-124-07 R05).
 
 ## Privacy, retention, abuse
 Salt reset changes bucket assignment; reset is audited.

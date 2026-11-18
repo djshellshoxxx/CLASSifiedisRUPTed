@@ -1,35 +1,63 @@
 # PS-113-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-113-01. **Owner:** [14_Accessibility/02_internationalization/mod_languages](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_languages. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/02_internationalization/mod_languages. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-ERR-001, CTR-PRV-001. This module owns no database entity; the preference field lives on the profile record owned by F07.S02.M02 (mod_profiles).
 
-## Purpose and scope
-Define the domain schema process for languages within 02_internationalization. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-113-01.R01 | Supported UI locales are a closed list in the build: MVP `en` and `de` (ASSUMPTION, product confirmation pending). | MVP |
+| PS-113-01.R02 | `language` profile field holds one BCP 47 tag from the closed list, or null (use browser language). | MVP |
+| PS-113-01.R03 | Catalog file holds one locale's strings, keyed by message key, with `catalog_version` (semver). | MVP |
+| PS-113-01.R04 | Catalog keys match the CTR-ERR-001 `message_key` form (`err.<code>`) or UI key form `ui.<area>.<name>`. | MVP |
+| PS-113-01.R05 | Money, quantity and date values are stored in canonical form (CTR-EVT-001 R12 decimal strings, RFC 3339); localization applies only at display. | MVP |
 
-## Requirements to specify
-- [ ] PS-113-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-113-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-113-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+catalog  (file, one per locale; not a database record)
+{
+  "$id": "urn:classrupt:catalog:1.0.0",
+  "locale": "de",
+  "catalog_version": "1.2.0",
+  "messages": { "err.sys.not_found": "Nicht gefunden.", "ui.listing.unread_count": "{count, plural, one {# ungelesen} other {# ungelesen}}" }
+}
+```
+Constraints: the key set of every locale must equal the `en` key set in CI (parity). Message syntax is ICU MessageFormat (ASSUMPTION). Values contain no HTML and no user content.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Profile field (owner F07): `language`: `"en" | "de" | null`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Catalog states: `bundled`, `active`, `superseded`. See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-113-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+See [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+See [privacy_retention_abuse.md](privacy_retention_abuse.md).
+
+## Observability & budgets
+See [observability_performance.md](observability_performance.md).
+
+## Tests
+- TEST-PS-113-01-01 (contract): key parity across all locales in CI.
+- TEST-PS-113-01-02 (unit): catalog without `catalog_version` is rejected at build.
+- TEST-PS-113-01-03 (property): every `message_key` emitted by CTR-ERR-001 registry exists in `en`.
+- TEST-PS-113-01-04 (unit): decimal money string round-trips unchanged through display formatting.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Parity check fails the build on any missing key.
+2. Catalog schema validated at build time.
+3. Storage fields never contain localized text.
+
+## Assumptions & open decisions
+- ASSUMPTION: MVP locales `en` and `de`.
+- ASSUMPTION: ICU MessageFormat syntax.
+- No Dxx in DECISIONS.md applies; ASSUMPTION L-01 (localization policy) requires lead registration.

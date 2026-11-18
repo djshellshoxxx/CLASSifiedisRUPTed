@@ -16,3 +16,33 @@
 `gate_decision`: `decision_id` (entity ID; prefix PENDING CTR-ID-001), `gate_key`, `gate_version`, `commit_sha` (40 hex), `outcome` enum `pass`, `blocked`, `waived`, `evidence[]` (`{evidence_type, source_id, digest}`), `evaluated_at`, `evaluator_ref` (`sys_`).
 
 `gate_waiver`: `waiver_id`, `decision_id`, `gate_key`, `requested_by` (`acc_`), `approved_by` (`acc_`, must differ), `reason_key`, `granted_at`, `expires_at`, `revoked_at?`.
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-143-01-01 (schema): a waiver without reason_key is rejected.
+- TEST-PS-143-01-02 (unit): an evidence reference stores digest and source ID, never the source body.
+
+## Acceptance criteria
+1. TEST-PS-143-01-01, TEST-PS-143-01-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+

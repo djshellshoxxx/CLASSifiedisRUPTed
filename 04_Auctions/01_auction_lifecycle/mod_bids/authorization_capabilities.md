@@ -1,35 +1,63 @@
 # PS-033-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-033-05. **Owner:** [04_Auctions/01_auction_lifecycle/mod_bids](SPEC.md). **Implementing module:** 04_Auctions/01_auction_lifecycle/mod_bids. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/01_auction_lifecycle/mod_bids. **Parent:** [mod_bids SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ID-001.
 
-## Purpose and scope
-Define the authorization capabilities process for bids within 01_auction_lifecycle. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-033-05.R01 | Any eligible `acc_` except the seller may create a bid (`bid.create`, scope `global` for eligibility, relation check for seller). | MVP |
+| PS-033-05.R02 | Own bids (including status) are readable by the bidder (`bid.read`, scope `self`). | MVP |
+| PS-033-05.R03 | Bidder identity (`acc_`) is never returned to other users; only `prf_` view. | MVP |
+| PS-033-05.R04 | Void (`bid.void`) requires `mod` or `ope` with `case:` scope, purpose `fraud_review`, and dual control for `ope` (CTR-CAP-001 R06, R07). | MVP |
+| PS-033-05.R05 | Seller may read the bidder pseudonyms of its auction (`auc.read`, scope `self`) but not bidder `acc_` before close. | MVP |
 
-## Requirements to specify
-- [ ] PS-033-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-033-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-033-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Action matrix:
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Principal | Action | Resource | Outcome |
+|---|---|---|---|
+| user, eligible bidder | `bid.create` | open auction | ALLOW |
+| user, seller | `bid.create` | own auction | DENY → `SYS.FORBIDDEN` |
+| user, suspended | `bid.create` | any | DENY → `SYS.FORBIDDEN` |
+| user, bidder | `bid.read` | own bid | ALLOW (self) |
+| user, other | `bid.read` | another's bid | DENY → `SYS.NOT_FOUND` |
+| anonymous | `bid.read` | public history | ALLOW (public fields) |
+| mod, case scope | `bid.void` | bid in `cas_` | ALLOW (grant) |
+| ope, one approval | `bid.void` | bid | DENY (dual control) |
+| sys | `bid.create` | any | DENY (no system bidding) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command maps to a row above. Decision records hold outcome and reason code only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Eligibility is re-evaluated per placement. A suspension mid-auction blocks new bids but keeps existing ACCEPTED bids unless voided.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.FORBIDDEN` for visible-but-disallowed; `SYS.NOT_FOUND` otherwise.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-033-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Capability IDs: `bid.create`, `bid.read`, `bid.void`. Seller pseudonym read uses `auc.read`.
+
+## Failure, idempotency, concurrency, offline
+Decision TTL zero for placement and void. Revocation applies at next decision.
+
+## Privacy, retention, abuse
+`acc_` never appears in public responses. Moderator void creates `aud_` record with case ID and reason; no bid content beyond IDs.
+
+## Observability & budgets
+Metric `bids_authz_denials_total{action,code}`. Alert on repeated `SYS.FORBIDDEN` from seller accounts (shill probing).
+
+## Tests
+- TEST-PS-033-05-01 (negative): each matrix row returns stated outcome.
+- TEST-PS-033-05-02 (negative): seller placement returns `SYS.FORBIDDEN`.
+- TEST-PS-033-05-03 (negative): public history response contains no `acc_`.
+- TEST-PS-033-05-04 (integration): void without second approver denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix tests pass with zero unlisted outcomes.
+2. Zero `acc_` identifiers in public schema scan.
+3. Seller-side pseudonym view verified to exclude `acc_` before close.
+
+## Assumptions & open decisions
+- ASSUMPTION: moderator case grants max 72 h (CTR-CAP-001 R06).
+- OPEN: whether seller-side pseudonym visibility is acceptable under D10. See [DECISIONS.md](../../../DECISIONS.md) D10.

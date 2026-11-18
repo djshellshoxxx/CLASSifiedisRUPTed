@@ -5,7 +5,7 @@
 ## Requirements
 | ID | Requirement (measurable) | Priority MVP/Future |
 |---|---|---|
-| PS-124-07.R01 | Subject bucketing uses a pseudonymous `acc_` or `prf_`-free subject key; raw identifiers are never used as bucket input. | MVP |
+| PS-124-07.R01 | Subject bucketing uses a keyed pseudonymous subject key derived from the `acc_` ID; raw identifiers and attributes are never bucket input. | MVP |
 | PS-124-07.R02 | Attribute allow-list: `tenant_id`, `app_version`, `platform`, `locale`, `region_cell` (LOCATION_COARSE, K_MIN applies). Any LOCATION_PRECISE attribute is refused. | MVP |
 | PS-124-07.R03 | Allow-list is versioned and changes require F10 review (CTR-PRV-001 R10 analog). | MVP |
 | PS-124-07.R04 | Flag evaluation logs record flag key, result and source only; attribute values are not logged. | MVP |

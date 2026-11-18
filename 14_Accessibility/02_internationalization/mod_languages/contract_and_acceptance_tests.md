@@ -1,35 +1,50 @@
 # PS-113-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-113-09. **Owner:** [14_Accessibility/02_internationalization/mod_languages](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_languages. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/02_internationalization/mod_languages. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for languages within 02_internationalization. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-113-09.R01 | Contract tests cover every LANG.* code, catalog schema and the catalog GET route. | MVP |
+| PS-113-09.R02 | Language selector is a labeled native select in its own language name ("English", "Deutsch"). | MVP |
+| PS-113-09.R03 | Screen reader reads text in the selected language (`lang` attribute on the element that changes). | MVP |
+| PS-113-09.R04 | Translated UI is checked for text expansion up to 30% without clipping at 320 px width. | MVP |
 
-## Requirements to specify
-- [ ] PS-113-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-113-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-113-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `en`, `de`, a deliberately broken `de`, and a long-string stress set.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract tests on catalog route and consumed `profile.updated`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+All rows of workflow_state_machine.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+One failing fixture per PS-113-02 rule.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Anonymous read and foreign-read fixtures.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-113-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection from PS-113-06.
+
+## Privacy, retention, abuse
+Telemetry scans (PS-113-07).
+
+## Observability & budgets
+Suite ≤ 5 min.
+
+## Tests
+- TEST-PS-113-09-01 (contract): LANG codes and catalog schema.
+- TEST-PS-113-09-02 (e2e): switch to `de`, all visible UI strings from catalog.
+- TEST-PS-113-09-03 (a11y): selector labeled and announced; `lang` attributes verified.
+- TEST-PS-113-09-04 (visual): 320 px and +30% text expansion without clipping.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Contract suite green.
+2. Visual and a11y checks pass for both locales.
+3. Accessibility Lead sign-off pending (future gate).
+
+## Assumptions & open decisions
+- ASSUMPTION: manual screen reader check in both languages.
+- No Dxx blocks test scope.

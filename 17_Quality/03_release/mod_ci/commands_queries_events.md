@@ -32,6 +32,35 @@
 
 Envelope per CTR-EVT-001. `actor_ref` is a `sys_` or `acc_` ID. Events never carry logs or secret matches.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-141-04-01 (contract): duplicate RecordCiJobResult with the same key returns the original result.
+- TEST-PS-141-04-02 (contract): ci_run.completed validates against the CTR-EVT-001 envelope schema.
+
+## Acceptance criteria
+1. TEST-PS-141-04-01, TEST-PS-141-04-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: release gates are the only required subscriber; confirm at contract review.
 - D01 applies only if run records are ever federated: PROVISIONAL (D01 default, unapproved).

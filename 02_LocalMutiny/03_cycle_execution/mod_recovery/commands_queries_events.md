@@ -1,35 +1,54 @@
-# PS-024-04 — commands queries events
+# PS-024-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-024-04. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_recovery](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_recovery. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-ID-001, CTR-COM-001 (R14).
 
-## Purpose and scope
-Define the commands queries events process for recovery within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-024-04.R01 | Writes carry `idempotency_key` and `expected_revision` (recovery revision). | MVP |
+| PS-024-04.R02 | `cycle.attest` takes `{recovery_id, outcome, claim_hash, signature, idempotency_key}`. | MVP |
+| PS-024-04.R03 | `cycle.compensate` is system-only and idempotent per plan step. | MVP |
+| PS-024-04.R04 | `cycle.escalate` takes `{recovery_id, reason_code, case_ref}` and sends only pseudonymous refs. | MVP |
 
-## Requirements to specify
-- [ ] PS-024-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-024-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-024-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Events of aggregate `cycle`; payload = recovery record view. Schema 1.0.0.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Caller | Idempotency | Expected revision | Errors |
+|---|---|---|---|---|
+| cycle.open_recovery | system (dropout event) | cycle + version | null | CYCRECOV.ALREADY_CLOSED |
+| cycle.attest | slot participant | key | required | CYCRECOV.WINDOW_CLOSED, SIGNATURE_INVALID, HASH_MISMATCH, OUTCOME_UNKNOWN, ALREADY_ATTESTED |
+| cycle.compensate | system | plan step key | required | CYCRECOV.ALREADY_CLOSED, SYS.UNAVAILABLE |
+| cycle.escalate | system or participant | key | required | CYCRECOV.ALREADY_CLOSED |
+| cycle.recovery_get | participant or moderator (case) | n/a | n/a | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+PS-024-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+PS-024-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+PS-024-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-024-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+PS-024-06.
+
+## Privacy, retention, abuse
+Events never carry signatures, only digests.
+
+## Observability & budgets
+Attest p95 ≤ 300 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-024-04-01 (contract): events validate.
+- TEST-PS-024-04-02 (unit): replayed attest returns original.
+- TEST-PS-024-04-03 (negative): attest by non-participant denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each command has schema, idempotency and revision rule.
+2. Events carry digests, not signatures.
+3. Escalation payload contains only refs and reason code.
+
+## Assumptions & open decisions
+- ASSUMPTION: 300 ms p95 attest budget.

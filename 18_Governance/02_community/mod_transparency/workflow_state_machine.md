@@ -25,6 +25,29 @@ Invalid pairs return `TRANSP.INVALID_TRANSITION` (422). Publishing an already-pu
 - Duplicate publish: same report ID returns original publish result.
 - Offline: no effect; publication is server-side.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-148-03-01 (unit): every row of the transition table passes; other pairs return TRANSP.INVALID_TRANSITION.
+- TEST-PS-148-03-02 (integration): publishing a draft whose aggregate jobs are incomplete is blocked.
+
+## Acceptance criteria
+1. TEST-PS-148-03-01, TEST-PS-148-03-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: publication deadline is 30 days after period end (ASSUMPTION).
 - No additional Dxx applies: PROVISIONAL, none applied.

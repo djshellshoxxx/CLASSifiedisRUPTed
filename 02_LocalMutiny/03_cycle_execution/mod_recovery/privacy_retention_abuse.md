@@ -1,35 +1,53 @@
-# PS-024-07 — privacy retention abuse
+# PS-024-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-024-07. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_recovery](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_recovery. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R07, R12), CTR-FED-001 (R03), CTR-COM-001 (R16 pattern).
 
-## Purpose and scope
-Define the privacy retention abuse process for recovery within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-024-07.R01 | Recovery records retained RET-EVD (24 months after final state, ASSUMPTION); personal fields redacted after 12 months while hashes remain. | MVP |
+| PS-024-07.R02 | Escalation carries only pseudonymous refs, cycle ID, outcome enums and reason code; no free text. | MVP |
+| PS-024-07.R03 | Recovery records are never federated (CTR-FED-001 R03 for FINANCIAL_EVIDENCE-class content). | MVP |
+| PS-024-07.R04 | Recovery can be opened at most once per cycle version (abuse cap). | MVP |
+| PS-024-07.R05 | Repeated recovery opens against one participant (≥ 3 in 90 days, ASSUMPTION) raise a signal to F12. | MVP |
 
-## Requirements to specify
-- [ ] PS-024-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-024-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-024-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Classes per PS-024-01.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events carry digests only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Terminal state starts RET-EVD clock; legal hold extends per CTR-PRV-001 R07.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+No content in errors.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+PS-024-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-024-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deletion requests follow CTR-PRV-001 R12 completion record.
+
+## Privacy, retention, abuse
+- Threats: false attestations against a counterparty; attestation used as proof of handover; evidence leakage to unrelated parties.
+- Controls: signed statements only, case scope for moderators, redaction schedule, abuse signal.
+- Residual risk: attestations may be false; the platform does not verify them. Recorded for F10 and F12.
+
+## Observability & budgets
+No pseudonyms in metrics.
+
+## Tests
+- TEST-PS-024-07-01 (privacy): escalation payload lint.
+- TEST-PS-024-07-02 (retention): redaction at 12 months in simulated clock.
+- TEST-PS-024-07-03 (abuse): repeated opens trigger signal.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Escalation payload contains no free text (lint).
+2. Redaction schedule met in 100% of simulated runs.
+3. Residual false-attestation risk documented in F10 and F12 reviews.
+
+## Assumptions & open decisions
+- ASSUMPTION: RET-EVD 24 months; redaction at 12 months.
+- PROVISIONAL (D07 default, unapproved).
+- PROVISIONAL (D06 default, unapproved).

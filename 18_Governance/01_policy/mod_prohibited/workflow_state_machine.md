@@ -26,6 +26,29 @@ Invalid pairs return `PROHIB.INVALID_TRANSITION` (422). Decisions are immutable.
 - Rule service down: classification fails closed with `SYS.UNAVAILABLE`; the draft is not treated as permitted.
 - Offline clients see a "check pending" state; they cannot submit a classified-restricted draft without an online decision.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-146-03-01 (unit): a draft matching both prohibited and restricted rules is classified prohibited.
+- TEST-PS-146-03-02 (integration): a restricted outcome routes the draft to the F12 queue, not to publication.
+
+## Acceptance criteria
+1. TEST-PS-146-03-01, TEST-PS-146-03-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: restricted routing goes to F12 review queue, not automatic removal.
 - No additional Dxx applies: PROVISIONAL, none applied.

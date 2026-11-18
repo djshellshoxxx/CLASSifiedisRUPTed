@@ -1,35 +1,65 @@
 # PS-127-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-01. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/01_authz/mod_secrets (F16.S01.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-ID-001 (PENDING registration of prefix `sec`), CTR-SCH-001. **Canonical owner of record class "platform secret":** F16.S01.M02. User key material is owned by F16.S02.M01 (mod_key), not this module.
 
-## Purpose and scope
-Define the domain schema process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-127-01.R01 | Each platform secret has one owner module (full module ID) and one name (`^[a-z][a-z0-9_.]{2,63}$`, unique). | MVP |
+| PS-127-01.R02 | Secret value is stored only as a KMS-wrapped ciphertext handle or as a salted HMAC-SHA-256 verifier. Plaintext is never persisted. | MVP |
+| PS-127-01.R03 | Versions are monotonic integers; at most two versions are `active` at any time (overlap window). | MVP |
+| PS-127-01.R04 | Status is one of `active`, `rotating`, `revoked`, `destroyed`. | MVP |
+| PS-127-01.R05 | Every secret carries `data_class = SECRET` (CTR-PRV-001); SECRET never appears in events (CTR-EVT-001 R11). | MVP |
 
-## Requirements to specify
-- [ ] PS-127-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "secret_name": "dot.separated name, unique",
+  "owner_module": "F-code module ID",
+  "version": "integer >= 1",
+  "status": "active | rotating | revoked | destroyed",
+  "storage": {"kind": "kms_wrapped | hmac_verifier", "kms_key_ref": "opaque handle or null", "ciphertext_ref": "opaque handle or null", "verifier": "base64url HMAC or null"},
+  "created_at": "RFC 3339 UTC ms",
+  "rotate_by": "RFC 3339 UTC ms",
+  "revoked_at": "RFC 3339 UTC ms or null",
+  "destroy_after": "RFC 3339 UTC ms or null",
+  "data_class": "SECRET"
+}
+```
+Constraints: `storage.kind = hmac_verifier` forbids `ciphertext_ref`; `revoked_at` required when `status = revoked`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See PS-127-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See PS-127-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See PS-127-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-127-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Version creation is idempotent on (`secret_name`, `version`, digest of wrapped handle).
+
+## Privacy, retention, abuse
+SECRET class; retention RET-SEC (PS-127-07).
+
+## Observability & budgets
+Metadata only; see PS-127-08.
+
+## Tests
+- TEST-PS-127-01-01 (schema): storage kind constraints enforced.
+- TEST-PS-127-01-02 (lint): no plaintext field name or value pattern in any table export.
+- TEST-PS-127-01-03 (unit): three simultaneously active versions refused.
+- TEST-PS-127-01-04 (lint): `data_class` SECRET absent from event schemas.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema validates fixtures; plaintext fixture fails lint.
+2. TEST-PS-127-01-01 through -04 pass.
+
+## Assumptions & open decisions
+- PENDING: CTR-ID-001 MINOR change for `sec` prefix (F15 review, F16 owner).
+- ASSUMPTION: KMS is a managed service under F16 review; choice OPEN.
+- PROVISIONAL (D10 default): platform secrets are not user keys.

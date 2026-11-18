@@ -25,6 +25,29 @@ Denied: `SYS.FORBIDDEN`. Hidden drafts: `SYS.NOT_FOUND`.
 ## Failure, idempotency, concurrency, offline
 Revocation at next decision. No offline path.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-148-05-01 (negative): a drafter approving their own report receives SYS.FORBIDDEN.
+- TEST-PS-148-05-02 (negative): a case-level read is denied to every principal.
+
+## Acceptance criteria
+1. TEST-PS-148-05-01, TEST-PS-148-05-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: privileged read rules follow CTR-CAP-001 R06 (expiry, purpose); exact values confirmed with F16.
 - D10 not affected: PROVISIONAL (D10 default, unapproved).

@@ -1,35 +1,54 @@
 # PS-127-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-02. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/01_authz/mod_secrets (F16.S01.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the validation rules process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-127-02.R01 | Input containing a plaintext value field on any read, list or event path is refused at schema level. Write path accepts value only in the create or rotate request body over TLS 1.3. | MVP |
+| PS-127-02.R02 | Secret name and owner module must match the owner registry; unknown owner refused. | MVP |
+| PS-127-02.R03 | Rotation requires `rotate_by` at most 365 days in future (ASSUMPTION). | MVP |
+| PS-127-02.R04 | Verifier-type secrets must declare the verifying module; the verifier key ID must be KMS-held. | MVP |
+| PS-127-02.R05 | Secret-scanning hook refuses any commit or artifact containing a value that matches a registered secret verifier (CI). | MVP |
 
-## Requirements to specify
-- [ ] PS-127-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Rules apply to requests in PS-127-04 and to CI scanning.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applied in `secret.create`, `secret.rotate`, `lease.issue`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation failure creates no version.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| SECRETS.DEFINITION_INVALID | false | validation / 400 | R01, R02, R03, R04 |
+| SECRETS.VALUE_IN_LOG_PATH | false | forbidden / 403 | R01 read path |
+| SECRETS.SCAN_HIT | false | unprocessable_state / 422 | R05 (CI) |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation precedes capability check for create; denial still audited.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Validation is deterministic. CI scan is not retried automatically.
+
+## Privacy, retention, abuse
+Errors never echo the value, only the field path (CTR-ERR-001 R06).
+
+## Observability & budgets
+Metric: `secrets_validation_rejections_total{code}`.
+
+## Tests
+- TEST-PS-127-02-01 (unit): each rule pass and fail.
+- TEST-PS-127-02-02 (negative): create with unknown owner refused.
+- TEST-PS-127-02-03 (CI): planted test secret in a commit blocks merge.
+- TEST-PS-127-02-04 (negative): error body does not contain the submitted value.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Plaintext never appears in any non-create response (TEST-01).
+2. TEST-PS-127-02-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 365-day maximum rotation horizon.
+- OPEN (F16): secret-scanning tool choice (MCP `run_secret_scanning` is one option).

@@ -29,6 +29,29 @@ Denied actions return `SYS.FORBIDDEN`. Hidden runs return `SYS.NOT_FOUND`.
 - Revoked runner credential: next `RecordCiJobResult` returns `SYS.FORBIDDEN`; the job is marked `aborted_infra`.
 - Offline is not applicable to runner authorization; no grant is cached beyond the 60 s decision TTL for non-sensitive reads (CTR-CAP-001 R09).
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-141-05-01 (negative): a fork-pool runner requesting a secret scope is denied.
+- TEST-PS-141-05-02 (negative): a maintainer approving their own pipeline change is rejected.
+
+## Acceptance criteria
+1. TEST-PS-141-05-01, TEST-PS-141-05-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: second-approver rule mirrors CTR-CAP-001 R07 pattern; named approver roles are UNASSIGNED until F16 review.
 - D10 (auth and portability) does not change CI authorization: PROVISIONAL (D10 default, unapproved).

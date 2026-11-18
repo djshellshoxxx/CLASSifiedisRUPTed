@@ -26,6 +26,28 @@ Retryable: `SYS.UNAVAILABLE` (503), `SYS.RATE_LIMITED` (429). Non-retryable: `CI
 - TEST-PS-141-06-03 (unit): flaky test shows two attempts with `flake` tag; first attempt stays `failed`.
 - TEST-PS-141-06-04 (concurrency): two definition edits at the same revision; one wins.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Acceptance criteria
+1. the tests above pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: timeout and backoff values are defaults for the reference provider.
 - D07 (retention) affects how long aborted run logs are kept: PROVISIONAL (D07 default, unapproved).

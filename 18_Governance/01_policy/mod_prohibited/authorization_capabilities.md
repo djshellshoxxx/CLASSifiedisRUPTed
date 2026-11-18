@@ -25,6 +25,29 @@ Denied: `SYS.FORBIDDEN`. Non-visible decisions: `SYS.NOT_FOUND`.
 ## Failure, idempotency, concurrency, offline
 Revocation at next decision. No offline authorization path.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-146-05-01 (negative): a listing author reading another author's decision receives SYS.NOT_FOUND.
+- TEST-PS-146-05-02 (negative): a proposer approving their own rule is rejected.
+
+## Acceptance criteria
+1. TEST-PS-146-05-01, TEST-PS-146-05-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: moderator access rules follow F12 review; not defined here.
 - D10 not affected: PROVISIONAL (D10 default, unapproved).

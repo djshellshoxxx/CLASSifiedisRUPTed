@@ -21,6 +21,35 @@
 | PROHIB.INVALID_TRANSITION | false | unprocessable_state / 422 | err.prohib.invalid_transition | from and event names |
 | SYS.UNAVAILABLE | true | unavailable / 503 | err.sys.unavailable | dependency name |
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-146-02-01 (unit): each PROHIB code fires on its fixture.
+- TEST-PS-146-02-02 (unit): a reason key outside the catalogue is rejected.
+
+## Acceptance criteria
+1. TEST-PS-146-02-01, TEST-PS-146-02-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: 200-character field limit is a default.
 - No Dxx governs catalogue validation directly: PROVISIONAL, none applied.

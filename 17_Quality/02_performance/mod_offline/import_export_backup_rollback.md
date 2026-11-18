@@ -20,6 +20,38 @@
 - Run rollback: runs are never deleted to correct a result; a corrected result is a new attempt with a reason code.
 - Schema rollback: forbidden in place (CTR-SCH-001); requires a new contract version.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-140-10-01 (integration): one invalid scenario in an import batch fails the whole batch.
+- TEST-PS-140-10-02 (integration): restore from backup creates no new run records.
+
+## Acceptance criteria
+1. TEST-PS-140-10-01, TEST-PS-140-10-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: run records can be restored from backup without re-sending events.
 - D07 (retention) affects backup expiry: PROVISIONAL (D07 default, unapproved).

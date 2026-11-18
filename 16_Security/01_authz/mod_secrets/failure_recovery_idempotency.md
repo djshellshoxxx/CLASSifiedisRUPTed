@@ -1,35 +1,53 @@
-# PS-127-06 — failure recovery idempotency
+# PS-127-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-06. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/01_authz/mod_secrets (F16.S01.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-127-06.R01 | KMS unavailable: `lease.issue` fails closed with `SECRETS.KMS_UNAVAILABLE` (retryable). Consumers keep using a still-valid lease for up to its remaining TTL; no fallback to plaintext storage. | MVP |
+| PS-127-06.R02 | Consumers cache leases in memory only, refresh at 80% of TTL, and never write leases to disk. | MVP |
+| PS-127-06.R03 | Rotation interrupted by crash resumes or fails back to the prior active version on restart (PS-127-03 R04). | MVP |
+| PS-127-06.R04 | Backup restore of secrets: only KMS-wrapped handles are restored; verifiers are restored; restore never re-creates a revoked version as active. | MVP |
+| PS-127-06.R05 | Lease retry uses full-jitter backoff, base 500 ms, cap 30 s (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-127-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Lease record: lease ID, secret name, version, requester module, issued_at, expires_at (no value).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`lease.issue` is non-idempotent; retries create new leases, bounded by rate limit.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable beyond PS-127-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| SECRETS.KMS_UNAVAILABLE | true | unavailable / 503 | KMS down. |
+| SECRETS.LEASE_EXPIRED | true | unauthenticated / 401 | Lease expired; requester obtains a new lease. |
+| SECRETS.REVOKED | false | gone / 410 | Secret revoked. |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Lease re-issue repeats PS-127-05 checks.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Offline clients never hold secrets (this module is server-side only).
+
+## Privacy, retention, abuse
+Lease retries count toward rate limits; excessive retries alert.
+
+## Observability & budgets
+Metric: `secrets_kms_errors_total`; alert on any KMS error rate > 1% for 5 min.
+
+## Tests
+- TEST-PS-127-06-01 (fault): KMS down; leases fail closed; valid leases keep working until expiry.
+- TEST-PS-127-06-02 (integration): crash during rotation; restart yields single active version set.
+- TEST-PS-127-06-03 (restore): restored revoked version stays revoked.
+- TEST-PS-127-06-04 (unit): no disk write of lease token (filesystem trace).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No plaintext fallback path exists (TEST-01).
+2. TEST-PS-127-06-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 80% refresh threshold; 30 s backoff cap.

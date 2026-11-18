@@ -29,6 +29,29 @@ Diagnostics exclude stack traces, file paths and fixture bodies (CTR-ERR-001 R06
 ## Authorization
 Validation runs after authorization. An unauthorized caller receives `SYS.FORBIDDEN` before any field is checked, so validation never reveals scenario existence.
 
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-140-02-01 (unit): each OFFTEST code fires on its fixture with the category and HTTP status in the table.
+- TEST-PS-140-02-02 (lint): every message key is derivable from its code (CTR-ERR-001 R05).
+
+## Acceptance criteria
+1. TEST-PS-140-02-01, TEST-PS-140-02-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions and open decisions
 - ASSUMPTION: the coordinate and email patterns used by the fixture scanner are maintained with the Privacy Lead.
 - D07 (retention) affects only the retention fields, not validation: PROVISIONAL (D07 default, unapproved).

@@ -30,6 +30,35 @@
 | prohibition_rule.retired | prohibition_rule | PUBLIC | rule_key, version |
 | classification.recorded | classification_decision | PSEUDONYMOUS | decision_id, outcome, case_ref |
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-146-04-01 (contract): ClassifyListingDraft is idempotent on (draft_ref, draft_version, region_code).
+- TEST-PS-146-04-02 (contract): classification events validate against the CTR-EVT-001 envelope schema.
+
+## Acceptance criteria
+1. TEST-PS-146-04-01, TEST-PS-146-04-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: F12 subscribes to `classification.recorded` where outcome is `restricted`.
 - No Dxx applies directly: PROVISIONAL, none applied.

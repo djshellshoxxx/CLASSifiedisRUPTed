@@ -1,35 +1,53 @@
-# PS-127-04 — commands queries events
+# PS-127-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-04. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/01_authz/mod_secrets (F16.S01.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the commands queries events process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-127-04.R01 | `secret.create` returns metadata and version, never the value after creation (CTR-PRV-001 R08). | MVP |
+| PS-127-04.R02 | `lease.issue` returns a short-lived lease token (<= 15 min, ASSUMPTION) bound to requester module and secret name; the token resolves to a value only inside the requester's runtime. | MVP |
+| PS-127-04.R03 | Commands are internal (`sys` and `ope`); no client endpoint. | MVP |
+| PS-127-04.R04 | Every command and lease emits an `aud_` record with secret name, requester and lease ID; no value (CTR-CAP-001 R08). | MVP |
 
-## Requirements to specify
-- [ ] PS-127-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Command | Signature | Idempotency scope | Emits | Errors |
+|---|---|---|---|---|
+| `secret.create` | (name, owner_module, storage kind, value once) | (name, key) | `secret.created` | SECRETS.DEFINITION_INVALID, SYS.CONFLICT |
+| `secret.rotate` | (name, value once, expected_revision) | (name, key) | `secret.rotated` | SECRETS.ROTATION_IN_PROGRESS |
+| `secret.revoke` | (name, reason_code, approvals) | (name) | `secret.revoked` | CAP.DUAL_APPROVAL_REQUIRED |
+| `secret.destroy` | (name, version) | (name, version) | `secret.destroyed` | SYS.CONFLICT |
+| `lease.issue` | (name, requester_module, ttl <= 900 s) | none (new lease each call) | none (aud only) | SECRETS.REVOKED, SECRETS.KMS_UNAVAILABLE |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Query: `secret.get_metadata` (no value), `secret.list` (metadata, page <= 100).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Effects per PS-127-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Per PS-127-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per PS-127-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Lease issuance is not idempotent by design; each lease has its own ID and expiry.
+
+## Privacy, retention, abuse
+Request bodies containing values are not logged; the logger redacts the `value` field by schema.
+
+## Observability & budgets
+`lease.issue` p95 <= 50 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-127-04-01 (contract): command table matches implementation.
+- TEST-PS-127-04-02 (negative): `secret.get_metadata` response contains no value field.
+- TEST-PS-127-04-03 (negative): lease presented by another module refused.
+- TEST-PS-127-04-04 (log scan): create and rotate request bodies produce no log lines containing the value.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No command returns a value after creation (TEST-02).
+2. TEST-PS-127-04-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15-minute lease maximum.

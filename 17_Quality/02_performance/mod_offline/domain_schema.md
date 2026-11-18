@@ -34,3 +34,33 @@ Provenance: each run records `runner_ref` and `build_ref`. No field may hold a d
 
 ## Canonical owner (B-06)
 Pending-write, sync-state and device records for the offline queue: canonical owner `F15.S01.M01` at [15_Platform/01_pwa/mod_offline](../../../15_Platform/01_pwa/mod_offline/SPEC.md) (PS-116-*). This module references those records by full ID only.
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-140-01-01 (unit): offline_scenario with fixture_class other than synthetic is rejected at write.
+- TEST-PS-140-01-02 (property): attempt numbers strictly increase per (build_ref, scenario_key).
+
+## Acceptance criteria
+1. TEST-PS-140-01-01, TEST-PS-140-01-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+

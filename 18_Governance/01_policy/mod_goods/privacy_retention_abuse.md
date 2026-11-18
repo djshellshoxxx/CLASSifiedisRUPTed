@@ -15,6 +15,35 @@
 ## Retention
 Published versions kept indefinitely for audit (ASSUMPTION); proposals rejected are deleted after 90 days (D07 default, PROVISIONAL).
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-144-07-01 (privacy): taxonomy export contains no listing data.
+- TEST-PS-144-07-02 (unit): category use counts below 10 listings are not exposed.
+
+## Acceptance criteria
+1. TEST-PS-144-07-01, TEST-PS-144-07-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: no user-generated category names.
 - D07 default: PROVISIONAL (D07 default, unapproved).

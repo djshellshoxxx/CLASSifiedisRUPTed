@@ -24,6 +24,32 @@ Deletion propagates to exports and caches within 24 h (CTR-PRV-001 ASSUMPTION).
 - Log flooding by a runner: rate-limited to 1,000 records per run (ASSUMPTION).
 - Scenario tampering to pass a gate: versions are immutable and the gate stores the scenario version it read.
 
+## Commands / queries / events
+Not applicable to this process; owned by [commands_queries_events](commands_queries_events.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-140-07-01 (privacy): fixture scan finds no email, coordinate or account ID pattern.
+- TEST-PS-140-07-02 (negative): harness pointed at a non-allowlisted host refuses to run.
+
+## Acceptance criteria
+1. TEST-PS-140-07-01, TEST-PS-140-07-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: no real user data will ever be needed to test offline behavior; if it is, a separate privacy review is required.
 - D07 (retention) default is PROVISIONAL (D07 default, unapproved). See [DECISIONS](../../../DECISIONS.md).

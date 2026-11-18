@@ -32,6 +32,35 @@
 
 Envelope fields follow CTR-EVT-001 exactly. `actor_ref` is a `sys_` or `acc_` ID. Subscribers receive events in `(aggregate_id, revision)` order.
 
+## Data / schema
+Not applicable to this process; owned by [domain_schema](domain_schema.md).
+
+## States & transitions
+Not applicable to this process; owned by [workflow_state_machine](workflow_state_machine.md).
+
+## Validation & errors
+Not applicable to this process; owned by [validation_rules](validation_rules.md).
+
+## Authorization
+Not applicable to this process; owned by [authorization_capabilities](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Not applicable to this process; owned by [failure_recovery_idempotency](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Not applicable to this process; owned by [privacy_retention_abuse](privacy_retention_abuse.md).
+
+## Observability & budgets
+Not applicable to this process; owned by [observability_performance](observability_performance.md).
+
+## Tests
+- TEST-PS-140-04-01 (contract): commands without idempotency_key are rejected; duplicate keys return the original record.
+- TEST-PS-140-04-02 (contract): offline_run.completed validates against the CTR-EVT-001 envelope schema.
+
+## Acceptance criteria
+1. TEST-PS-140-04-01, TEST-PS-140-04-02 pass in CI.
+2. Each requirement in this file maps to at least one test above.
+
 ## Assumptions & open decisions
 - ASSUMPTION: no subscriber outside F17.S03.M02 gates is defined; revisit at contract review.
 - No Dxx decision directly governs this file; D01 applies only if run results are federated: PROVISIONAL (D01 default, unapproved).

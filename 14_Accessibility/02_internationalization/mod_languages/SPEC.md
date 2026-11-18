@@ -1,44 +1,46 @@
 # F14.S02.M01 — languages
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F14.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Accessibility Lead. **Parent:** [F14.S02 internationalization](../SPEC.md).
 
 ## Purpose and business behavior
-Provide languages as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Provide the closed set of UI languages (MVP: English and German, ASSUMPTION), the language preference that drives display, and the message catalogs that render every CTR-ERR-001 `message_key` and UI string. Translation applies to interface copy only. User-entered content (listing text, messages, reviews) is shown as written and is never machine-translated by this module.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant who reads German, I can switch the interface to German and keep my place in a barter cycle.
+- As a participant with a screen reader, I hear each text in the language it is written in.
+- As a participant with a language I cannot use, I see English rather than raw keys.
 
 ## Scope
-- Required process spec: `languages_domain_model.md` (not yet authored)
-- Required process spec: `languages_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `languages_validation_and_authorization.md` (not yet authored)
-- Required process spec: `languages_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `languages_interfaces_and_events.md` (not yet authored)
-- Required process spec: `languages_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `languages_acceptance_and_property_tests.md` (not yet authored)
+- In scope: supported locale list, catalog format and parity, language resolution, catalog delivery, fallback rules, `lang` attributes.
+- Out of scope: currency and money formatting (F14.S02.M02 mod_currencies), profile storage (F07.S02.M02), email template content (F13.S01.M02), search language filter (F06.S01.M03).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+No server write command. Query `GET /locales/{tag}/{catalog_version}.json`. Profile field `language` via F07. See [commands_queries_events.md](commands_queries_events.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: profile (F07.S02.M02). Downstream: search filter (F06.S01.M03) and currencies (F14.S02.M02) use the same tag list; notification email locale (F13.S01.M02). Contracts: CTR-ERR-001, CTR-SCH-001. Edges per DEPENDENCY_MATRIX.md.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns catalog artifacts and the supported-locale list. Owns no user records. Profile `language` field is owned by F07.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Accessibility: wrong `lang` attributes break screen reader pronunciation; raw keys confuse users.
+- Integrity: catalog injection via translation workflow; placeholder mismatches changing meaning.
+- Privacy: language can hint at origin; not used beyond display.
+- Correctness: money or dates re-parsed from localized strings would corrupt values; forbidden.
+- No platform custody of money.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Process specs PS-113-01 to PS-113-10 at SPEC-DRAFT-COMPLETE; MVP locale list confirmed by product (ASSUMPTION); Accessibility Lead review pending.
 
 ## Required process specification inventory
-- [ ] `languages_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `languages_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `languages_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `languages_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `languages_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `languages_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `languages_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-113-01
+- [x] [validation_rules.md](validation_rules.md) — PS-113-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-113-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-113-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-113-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-113-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-113-07
+- [x] [observability_performance.md](observability_performance.md) — PS-113-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-113-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-113-10

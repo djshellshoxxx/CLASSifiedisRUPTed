@@ -1,35 +1,50 @@
-# PS-127-07 — privacy retention abuse
+# PS-127-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-127-07. **Owner:** [16_Security/01_authz/mod_secrets](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_secrets. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/01_authz/mod_secrets (F16.S01.M02). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for secrets within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-127-07.R01 | Secret values are SECRET class: never in events, logs, exports, federation or analytics (CTR-PRV-001 R08). | MVP |
+| PS-127-07.R02 | Backups hold only KMS-wrapped ciphertext or verifiers (CTR-PRV-001 disclosure matrix). | MVP |
+| PS-127-07.R03 | Retention RET-SEC: until revoked or rotated; verifier hashes purged 30 days after revocation. | MVP |
+| PS-127-07.R04 | Secret-to-user mapping is not stored here; this module holds platform secrets only. | MVP |
+| PS-127-07.R05 | Secret values are never displayed in admin UI; UI shows name, version, status and age. | MVP |
 
-## Requirements to specify
-- [ ] PS-127-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-127-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-127-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention class RET-SEC. Audit records RET-AUD (12 months).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Destruction event carries name and version only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retention ends at `destroyed` (PS-127-03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SECRETS.VALUE_IN_LOG_PATH` (PS-127-02).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-127-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-127-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Not applicable.
+
+## Privacy, retention, abuse
+Abuse: stolen lease token. Mitigated by requester binding, 15-minute TTL, in-memory-only storage and anomaly alerts. Insider abuse: dual control on revoke; no value-read path.
+
+## Observability & budgets
+No values in metrics or traces; trace attributes exclude secret names beyond the owner module prefix (ASSUMPTION).
+
+## Tests
+- TEST-PS-127-07-01 (log and event scan): no value fragments in logs, events or traces.
+- TEST-PS-127-07-02 (backup scan): backup objects contain only handles and verifiers.
+- TEST-PS-127-07-03 (retention): verifier purged 30 days after revocation.
+- TEST-PS-127-07-04 (UI): admin screens show no value field (static scan).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero value fragments in sinks (TEST-01).
+2. TEST-PS-127-07-01 through -04 pass.
+
+## Assumptions & open decisions
+- PROVISIONAL (D10 default): platform secrets are separate from user keys.
+- OPEN (F10): retention of audit records for lease events.

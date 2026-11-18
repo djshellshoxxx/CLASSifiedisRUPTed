@@ -1,35 +1,51 @@
-# PS-113-10 — import export backup rollback
+# PS-113-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-113-10. **Owner:** [14_Accessibility/02_internationalization/mod_languages](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_languages. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/02_internationalization/mod_languages. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-FED-001.
 
-## Purpose and scope
-Define the import export backup rollback process for languages within 02_internationalization. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-113-10.R01 | Account export includes the `language` profile field only. | MVP |
+| PS-113-10.R02 | Import accepts `language` only if it passes PS-113-02 rules; otherwise it is set to null and reported. | MVP |
+| PS-113-10.R03 | Catalogs are versioned artifacts, not user data; they are not exported per account. | MVP |
+| PS-113-10.R04 | Rollback: serve previous catalog version; profile values remain valid if the tag is in the restored list, else resolve to null. | MVP |
+| PS-113-10.R05 | Federation does not carry language preferences (no CTR-FED-001 mapping). | MVP |
 
-## Requirements to specify
-- [ ] PS-113-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-113-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-113-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{ "language": "de" | null, "schema_version": "1.0.0" }`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`account.export` includes `profile.language` in the profile section (F07).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback state: catalog `active` pointer moves to previous version.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Import errors: LANG.TAG_UNSUPPORTED.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export self; rollback release sys grant with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-113-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Import idempotent by profile revision.
+
+## Privacy, retention, abuse
+Backups keep the profile field under profile retention.
+
+## Observability & budgets
+Export ≤ 200 ms p95.
+
+## Tests
+- TEST-PS-113-10-01 (contract): export contains only the language field.
+- TEST-PS-113-10-02 (integration): import `fr` yields null and report entry.
+- TEST-PS-113-10-03 (integration): rollback serves previous catalog; invalid tags become null.
+- TEST-PS-113-10-04 (negative): federation mapping absent.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export and import validated.
+2. Rollback drill recorded (not yet run).
+3. No catalog data in user exports.
+
+## Assumptions & open decisions
+- ASSUMPTION: catalogs are not user data.
+- D07 PROVISIONAL (D07 default, unapproved).

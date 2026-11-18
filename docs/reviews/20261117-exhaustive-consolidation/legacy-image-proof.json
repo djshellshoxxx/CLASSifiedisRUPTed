@@ -1,0 +1,38 @@
+{
+  "source": "34a6892cff8b",
+  "fixture": "synthetic existing main image fixtures; no pixel decode claimed",
+  "jpeg": {
+    "bytes": 159,
+    "legacyAccepted": true,
+    "legacyUnchanged": true,
+    "legacyRemainingFindings": {
+      "ok": true,
+      "mime": "image/jpeg",
+      "width": 64,
+      "height": 48,
+      "findings": [
+        {
+          "kind": "thumbnail",
+          "where": "APP0"
+        }
+      ]
+    },
+    "mainAccepted": true,
+    "mainLength": 147,
+    "mainOutputFindings": []
+  },
+  "minimalJpeg": {
+    "legacyAccepted": true,
+    "main": {
+      "ok": false,
+      "reason": "malformed"
+    }
+  },
+  "badPng": {
+    "legacyAccepted": true,
+    "main": {
+      "ok": false,
+      "reason": "malformed"
+    }
+  }
+}

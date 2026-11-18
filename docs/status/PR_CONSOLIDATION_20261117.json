@@ -15,7 +15,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/1",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "docs: Prompt 3 contract foundations and honest specification NO-GO audit"
     },
     {
       "number": 2,
@@ -25,7 +28,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/2",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "docs: client-owned CLASS contracts and specification checkpoints"
     },
     {
       "number": 3,
@@ -35,7 +41,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/3",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Mock-backed ClassRup framework demo (app/)"
     },
     {
       "number": 4,
@@ -45,7 +54,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/4",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "[Draft] ClassRup mock framework: checkpoint from Haiku wave 1"
     },
     {
       "number": 5,
@@ -55,7 +67,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/5",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Mock framework: continuation from PR #4 history with detail-page announcement check"
     },
     {
       "number": 6,
@@ -65,7 +80,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/6",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "docs: update README and TODOs to current planning status"
     },
     {
       "number": 7,
@@ -75,7 +93,10 @@
       "base": "work/classrup-haiku-framework",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/7",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Verify mock demo journeys across Chromium, Firefox and WebKit"
     },
     {
       "number": 8,
@@ -85,7 +106,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8",
       "disposition": "keep_draft",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "open",
+      "github_merged_at": null,
+      "current_title": "Draft: reconcile remaining Stage 3/4 foundation work after alpha consolidation"
     },
     {
       "number": 12,
@@ -94,8 +118,11 @@
       "sha": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/12",
-      "disposition": "consolidate_docs",
-      "disposition_is_feature_completion": false
+      "disposition": "integrated_docs",
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": "2026-11-18T03:04:17Z",
+      "current_title": "docs: source-pin PR #10 alpha CI qualification and next development gate"
     },
     {
       "number": 13,
@@ -104,8 +131,11 @@
       "sha": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/13",
-      "disposition": "consolidate_docs",
-      "disposition_is_feature_completion": false
+      "disposition": "integrated_docs",
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": "2026-11-18T03:04:17Z",
+      "current_title": "docs: add separate ClassRup User and Developer Wiki guides"
     },
     {
       "number": 14,
@@ -114,8 +144,11 @@
       "sha": "1ee040492345e607b431707fd7f08528bbf2db77",
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/14",
-      "disposition": "consolidate_docs",
-      "disposition_is_feature_completion": false
+      "disposition": "integrated_docs",
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": "2026-11-18T03:04:17Z",
+      "current_title": "audit: source-pinned read-only observability boundary review"
     },
     {
       "number": 18,
@@ -125,7 +158,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/18",
       "disposition": "archive_proposal",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "docs: Stage 3 developer-ready specs for services, rentals, accessibility, governance"
     },
     {
       "number": 25,
@@ -134,8 +170,11 @@
       "sha": "566778cdf72399df4696e1d6f6675412813e6d5a",
       "base": "codex/local-alpha-20261109",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/25",
-      "disposition": "consolidate_docs",
-      "disposition_is_feature_completion": false
+      "disposition": "integrated_docs",
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "docs(planning): hard-slices lane \u2014 baseline, subsystem maps and candidate designs (paused)"
     },
     {
       "number": 26,
@@ -145,7 +184,10 @@
       "base": "integration/classrup-completion",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/26",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Discovery: coarse location regions and search filters (unreviewed, parked)"
     },
     {
       "number": 29,
@@ -155,7 +197,10 @@
       "base": "integration/classrup-completion",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/29",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Notifications: channel consent, in-app preferences and inbox (unreviewed, parked)"
     },
     {
       "number": 30,
@@ -165,7 +210,10 @@
       "base": "integration/classrup-completion",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/30",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Governance: goods taxonomy and prohibited items (unreviewed, parked)"
     },
     {
       "number": 31,
@@ -175,7 +223,10 @@
       "base": "integration/classrup-completion",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/31",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Privacy: data classification and metadata minimization (unreviewed, parked)"
     },
     {
       "number": 32,
@@ -185,7 +236,10 @@
       "base": "integration/classrup-completion",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/32",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Moderation: rate limiting, account limits and fraud signals (unreviewed, parked)"
     },
     {
       "number": 33,
@@ -195,7 +249,10 @@
       "base": "integration/classrup-completion",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/33",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "CI: stop duplicate runs and choose OS and browser matrices from the change (not yet run)"
     },
     {
       "number": 34,
@@ -204,8 +261,11 @@
       "sha": "6406a0369098fdb7aa58b5a4e85325560857815f",
       "base": "integration/classrup-completion",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/34",
-      "disposition": "consolidate_docs",
-      "disposition_is_feature_completion": false
+      "disposition": "integrated_docs",
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Handoff record for the 2026-11-11 pause and wave-1 working material"
     },
     {
       "number": 36,
@@ -215,7 +275,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/36",
       "disposition": "archive_proposal",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "docs: Stage 3 planning \u2014 review findings and canonical contracts (WIP)"
     },
     {
       "number": 40,
@@ -225,7 +288,10 @@
       "base": "codex/listing-history-20261116",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/40",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Refresh executed feature inventory and verified continuation status"
     },
     {
       "number": 41,
@@ -235,7 +301,10 @@
       "base": "codex/verified-status-20261116",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/41",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Add owner archive recovery and listing pagination"
     },
     {
       "number": 42,
@@ -245,7 +314,10 @@
       "base": "codex/classrup-features-20261116",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/42",
       "disposition": "superseded",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": null,
+      "current_title": "Complete listing lifecycle, protect vault sessions, and add reviewed location, matching and commerce foundations"
     },
     {
       "number": 43,
@@ -255,7 +327,10 @@
       "base": "main",
       "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/43",
       "disposition": "merged",
-      "disposition_is_feature_completion": false
+      "disposition_is_feature_completion": false,
+      "github_state": "closed",
+      "github_merged_at": "2026-11-18T02:37:08Z",
+      "current_title": "Apply the queued location-save revision fix after the historical stack merge"
     }
   ],
   "validation": {
@@ -304,16 +379,36 @@
     },
     "keyboard_focus_port": {
       "pr": 45,
-      "head": "9fc467d633b5c3ec96d5a4a04b92547bc599a950",
-      "alpha_run_id": 44225235696,
-      "cli_run_id": 44225235689,
-      "hosted_status": "in_progress",
-      "local_browser_status": "blocked before assertions by Chromium process-singleton socket denial; pinned download invalid",
+      "head": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "alpha_run_id": 44227269816,
+      "cli_run_id": 44227269875,
+      "hosted_status": "passed",
+      "local_browser_status": "pinned Firefox157: revised Tab-navigation harness passed 2/2; restoring only original harness reproduced both failures; Chromium launch remains blocked by host socket restriction",
       "viewports": [
         390,
         1280
       ],
-      "focused_cases_discovered": 6
+      "focused_cases_discovered": 6,
+      "linux_node_jobs_passed": 2,
+      "first_attempt": {
+        "head": "9fc467d633b5c3ec96d5a4a04b92547bc599a950",
+        "alpha_run_id": 44225235696,
+        "browser_passed": 64,
+        "browser_failed": 2,
+        "failed_browser": "firefox",
+        "cause": "programmatic focus did not establish verified keyboard navigation modality"
+      },
+      "assertions_weakened": false,
+      "status": "merged",
+      "merged_commit": "03145774e5865fd7eac6ff6c4751a25ce6aa9422",
+      "browser_journeys_passed": 66,
+      "browser_journeys_failed": 0,
+      "browser_engines": [
+        "chromium",
+        "firefox",
+        "webkit"
+      ],
+      "qualified_application_tooling_test_paths_unchanged_by_documentation_merge": true
     }
   },
   "remaining_pr8": {
@@ -333,5 +428,22 @@
   },
   "branches_deleted": [],
   "branches_force_pushed": [],
-  "release_or_deployment": false
+  "release_or_deployment": false,
+  "resolved_original_pr_count": 24,
+  "remaining_original_open_prs": [
+    8
+  ],
+  "documentation_merge": {
+    "pr": 46,
+    "commit": "0a467556436cf2f4ad154fe3694e3d158458b83c",
+    "source": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+    "tree": "1f39cd78173573afc797f20f1c414e9e90ee97df",
+    "alpha_run_id": 44226493644,
+    "chromium_journeys_passed": 21,
+    "cli_run_id": 44226493549,
+    "linux_node_jobs_passed": 2,
+    "status": "merged"
+  },
+  "final_main_before_evidence_update": "03145774e5865fd7eac6ff6c4751a25ce6aa9422",
+  "final_combined_source_tree": "4fe932b5f4bd2fea15654031ef85d9c21367b677"
 }

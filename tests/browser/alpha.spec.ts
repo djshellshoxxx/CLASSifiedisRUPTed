@@ -470,9 +470,10 @@ test('rapid duplicate vault submissions preserve the first active session', asyn
   await expect(page.locator('#listings')).toContainText('Duplicate submission kept this vault');
 });
 
-test('mobile layout stays within viewport and exposes keyboard error feedback', async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await create(page, 'mobile');
+for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+test(`layout at ${viewport.width}px stays within viewport and exposes visible keyboard error feedback`, async ({ page }, testInfo) => {
+  await page.setViewportSize(viewport);
+  await create(page, `keyboard-${viewport.width}`);
   await listing(page, 'Long title for a neighbourhood listing which wraps on a small mobile screen');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const buttons = await page.getByRole('button').all();
@@ -481,13 +482,28 @@ test('mobile layout stays within viewport and exposes keyboard error feedback', 
     const box = await button.boundingBox();
     expect(box?.height).toBeGreaterThanOrEqual(44);
   }
-  await page.screenshot({ path: testInfo.outputPath('mobile390.png'), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath(`layout-${viewport.width}.png`), fullPage: true });
   await page.locator('#backup-password').fill('wrong passphrase for backup');
   await page.getByRole('button', { name: 'Download encrypted backup' }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('#error')).toBeVisible();
-  await expect(page.locator('#error')).toBeFocused();
+  const error = page.locator('#error');
+  await expect(error).toBeVisible();
+  await expect(error).toBeFocused();
+  // Focus must be visibly indicated after a keyboard action, not only moved in the DOM.
+  const focus = await error.evaluate(element => {
+    const style = getComputedStyle(element);
+    const color = document.createElement('canvas').getContext('2d')!;
+    color.fillStyle = style.outlineColor;
+    color.fillRect(0, 0, 1, 1);
+    return { visible: element.matches(':focus-visible'), style: style.outlineStyle,
+      width: Number.parseFloat(style.outlineWidth), alpha: color.getImageData(0, 0, 1, 1).data[3]! };
+  });
+  expect(focus.visible).toBe(true);
+  expect(focus.style).not.toMatch(/^(none|hidden)$/);
+  expect(focus.width).toBeGreaterThanOrEqual(2);
+  expect(focus.alpha).toBeGreaterThan(0);
 });
+}
 
 async function downloadedAction(page: Page, name: string): Promise<Buffer> {
   const pending = page.waitForEvent('download', { timeout: 20000 });

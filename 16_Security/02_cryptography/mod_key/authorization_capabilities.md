@@ -1,35 +1,55 @@
-# PS-128-05 — authorization capabilities
+# PS-128-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-128-05. **Owner:** [16_Security/02_cryptography/mod_key](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_key. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_key (F16.S02.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for key within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-128-05.R01 | Default deny. A key owner (`acc_`, `nod_`, `sys_`) may register, prove, rotate and revoke its own keys. | MVP |
+| PS-128-05.R02 | Public key read is allowed to any authenticated principal and to federation peers for public keys of their own relations. | MVP |
+| PS-128-05.R03 | Revocation on compromise by an admin requires `ope` F16 role and a second approver (CTR-CAP-001 R07). | MVP |
+| PS-128-05.R04 | No principal, including administrators, can read or export a private key; the platform never holds user private keys (PS-128-07). | MVP |
+| PS-128-05.R05 | Key administration is audited (`aud_`) per CTR-CAP-001 R08. | MVP |
 
-## Requirements to specify
-- [ ] PS-128-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-128-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-128-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Capability | Actor | Resource | Verb |
+|---|---|---|---|
+| `key.create` | acc, nod, sys (owner) | key, scope self | create |
+| `key.update` | owner | key, scope self | update |
+| `key.withdraw` | owner | key, scope self | withdraw |
+| `key.read` | any authenticated; peers for relations | key, scope public | read |
+| `key.administer` | ope (F16 role, dual control on compromise revoke) | key, scope global | administer |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command in PS-128-04 maps to one row above.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.FORBIDDEN` for visible key of another owner; `SYS.NOT_FOUND` otherwise.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner identity comes from the authenticated principal, not the request body (CTR-CAP-001 R11).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-128-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Decision cache zero for revoke and administer.
+
+## Privacy, retention, abuse
+Admin reads of key metadata are case-scoped only.
+
+## Observability & budgets
+Metric: `key_authz_denied_total{capability}`.
+
+## Tests
+- TEST-PS-128-05-01 (matrix): each row.
+- TEST-PS-128-05-02 (negative): another owner's revoke refused.
+- TEST-PS-128-05-03 (privileged): single-approver compromise revoke refused.
+- TEST-PS-128-05-04 (negative): no endpoint returns private key material (static route scan).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No private key read path exists (TEST-04).
+2. TEST-PS-128-05-01 through -04 pass.
+
+## Assumptions & open decisions
+- PROVISIONAL (D10 default).

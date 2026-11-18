@@ -1,35 +1,47 @@
 # PS-128-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-128-09. **Owner:** [16_Security/02_cryptography/mod_key](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_key. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_key (F16.S02.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-SCH-001, CTR-CAP-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for key within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-128-09.R01 | Consumers F07.S01.M01, F08.S01.M01, F10.S02.M02, F16.S01.M01 and F16.S02.M03 run contract tests against the key record format. | MVP |
+| PS-128-09.R02 | Test vectors for Ed25519 and X25519 from the chosen library's published test suite are used (version pinned, OPEN). | MVP |
+| PS-128-09.R03 | Synthetic keys in test fixtures; no real user keys. | MVP |
 
-## Requirements to specify
-- [ ] PS-128-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-128-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-128-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `fixtures/keys/<purpose>/<algorithm>/`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Tests use PS-128-04 operations.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Every PS-128-03 transition covered.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Every code in PS-128-02 and PS-128-06 covered.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+PS-128-05 matrix.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-128-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault cases in PS-128-06.
+
+## Privacy, retention, abuse
+Fixture scan.
+
+## Observability & budgets
+Suite <= 15 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-128-09-01 (contract): five consumers pass.
+- TEST-PS-128-09-02 (vector): library vectors pass.
+- TEST-PS-128-09-03 (coverage): transitions and codes.
+- TEST-PS-128-09-04 (lint): fixtures synthetic.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All consumer contracts pass (TEST-01).
+2. TEST-PS-128-09-01 through -04 pass.
+
+## Assumptions & open decisions
+- OPEN (F17): cryptographic test-vector ownership with F16 review (S3-03, S3-04 in audits).

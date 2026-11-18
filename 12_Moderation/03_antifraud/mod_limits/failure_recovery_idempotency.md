@@ -15,7 +15,7 @@
 Active-policy pointer cache: `(quota_key, scope, jurisdiction) → lim_id, version, limit_value, fetched_at`. Cache is non-authoritative.
 
 ## Commands / queries / events
-Check is read-only; decision record written after response (async), with retry until written. Missing `dec_` after 60 s is an alert (`LIMITS.DECISION_LOG_LAG`, internal).
+Check is read-only; decision record written after response (async), with retry until written. A `dec_` still missing after 60 s raises the alert `limits_decision_log_lag` (metric and page, not an API error).
 
 ## States & transitions
 Rollout steps are idempotent: advancing to an already reached step returns the original result.

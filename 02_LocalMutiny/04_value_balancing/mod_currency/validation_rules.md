@@ -1,35 +1,53 @@
 # PS-025-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-025-02. **Owner:** [02_LocalMutiny/04_value_balancing/mod_currency](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_currency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_currency. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (R02, R03, R04, R15), CTR-ERR-001. Module code `CYCCURR` (PENDING CTR-ERR-001). Shared COM codes are reused, not redefined.
 
-## Purpose and scope
-Define the validation rules process for currency within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-025-02.R01 | Consent to a cross-currency cycle requires a quote with `valid_until` later than now; otherwise refused. | MVP |
+| PS-025-02.R02 | Quote hash must match the owner's hash; mismatch refused. | MVP |
+| PS-025-02.R03 | Amount exponent must match the registry exponent for the currency. | MVP |
+| PS-025-02.R04 | Labels must come from the catalog; any label below FINAL containing "paid", "payment received" or "settled" is refused at build time. | MVP |
+| PS-025-02.R05 | Currency must be a registered fiat code or registered CAIP-19 asset; unknown codes refused. | MVP |
 
-## Requirements to specify
-- [ ] PS-025-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-025-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-025-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Rule parameters: quote validity ≤ 15 min (CTR-COM-001 R04); rounding HALF_EVEN (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+| Code | Category (HTTP) | Retryable | Trigger | details[].rule |
+|---|---|---|---|---|
+| CYCCURR.QUOTE_REQUIRED | precondition_failed (412) | true | cross-currency cycle without quote | quote_ref |
+| CYCCURR.QUOTE_STALE | precondition_failed (412) | true | quote past valid_until at consent (also COM.QUOTE_EXPIRED upstream) | quote_validity |
+| CYCCURR.HASH_MISMATCH | validation (400) | false | quote_hash differs from owner | quote_hash |
+| CYCCURR.EXPONENT_MISMATCH | validation (400) | false | amount scale wrong for currency | exponent |
+| CYCCURR.CURRENCY_UNSUPPORTED | validation (400) | false | code not in registry | currency |
+| CYCCURR.LABEL_FORBIDDEN | validation (400) | false | catalog check fails | label_catalog |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Messages: `err.cyccurr.<code>`; no amounts echoed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Pin is system-only; participant reads only their cycle.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Validation uses the quote as stored at pin time; a refresh creates a new binding.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-025-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Errors never echo amounts or quote values.
+
+## Observability & budgets
+Counts per code; no amounts in metrics.
+
+## Tests
+- TEST-PS-025-02-01 (unit): one fixture per code.
+- TEST-PS-025-02-02 (boundary): quote at valid_until passes or fails per specified rule.
+- TEST-PS-025-02-03 (lint): label catalog contains no forbidden term for below-FINAL states.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each code produced only by its trigger.
+2. No cross-currency consent without a valid quote in 100% of runs.
+3. Zero forbidden terms in below-FINAL labels.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15 min validity and HALF_EVEN rounding (CTR-COM-001 defaults, pending F09 review).
+- PROVISIONAL (D03 default, unapproved).

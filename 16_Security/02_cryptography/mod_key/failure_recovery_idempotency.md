@@ -1,35 +1,53 @@
-# PS-128-06 — failure recovery idempotency
+# PS-128-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-128-06. **Owner:** [16_Security/02_cryptography/mod_key](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_key. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_key (F16.S02.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-FED-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for key within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-128-06.R01 | Registration and proof are retry-safe with the same key or challenge; repeats return the stored result. | MVP |
+| PS-128-06.R02 | Lost private key: the owner's key is revoked with reason `recovery` after recovery-proof (F07 recovery flow), and a new key is registered. The platform never re-issues a private key. | MVP |
+| PS-128-06.R03 | Revocation is durable before the API acknowledges it; propagation to federation peers is retried with the same event ID (CTR-FED-001). | MVP |
+| PS-128-06.R04 | Revocation list is served as a signed snapshot; clients with an older snapshot treat the key as valid only until the snapshot age exceeds 24 h (ASSUMPTION). | MVP |
+| PS-128-06.R05 | Restore from backup must not re-activate a revoked key (PS-120 restore path). | MVP |
 
-## Requirements to specify
-- [ ] PS-128-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-128-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-128-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Revocation snapshot: `{"as_of": ms, "revoked": [{"key_id", "revoked_at"}], "digest": "sha256"}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+As PS-128-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+As PS-128-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| KEY.PROOF_INVALID | true | validation / 400 | Bad signature; new challenge required. |
+| KEY.SNAPSHOT_STALE | true | precondition_failed / 412 | Client snapshot older than 24 h. |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Recovery proof is evaluated by F07, not here (CTR-CAP-001 R12).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-128-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Offline key generation is allowed; registration is queued (PS-116). Concurrency: one active key per (owner, purpose) per rotation step.
+
+## Privacy, retention, abuse
+No private material is ever in failure payloads.
+
+## Observability & budgets
+Metric: `key_snapshot_age_seconds` by client version; alert when > 24 h for > 5% of clients.
+
+## Tests
+- TEST-PS-128-06-01 (integration): revocation survives restart before acknowledgment.
+- TEST-PS-128-06-02 (federation): peer receives revocation via retry with same event ID.
+- TEST-PS-128-06-03 (restore): revoked key stays revoked after backup restore.
+- TEST-PS-128-06-04 (unit): snapshot older than 24 h treated as stale.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No revoked key re-activates in any path (TEST-03).
+2. TEST-PS-128-06-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24-hour snapshot freshness.
+- OPEN (D10): user-controlled recovery and rotation procedure.

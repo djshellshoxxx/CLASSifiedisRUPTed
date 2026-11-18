@@ -25,6 +25,7 @@ Module prefix `LIMITS` (6 characters).
 | `LIMITS.TRANSITION_NOT_ALLOWED` | unprocessable_state | 422 | false | `state` |
 | `LIMITS.QUOTA_EXCEEDED` | unprocessable_state | 422 | false | `quota_key` (returned to owner modules, not to end users as raw counts) |
 | `LIMITS.POLICY_UNAVAILABLE` | unavailable | 503 | true | — |
+| `LIMITS.EXPORT_TOO_LARGE` | validation | 400 | false | `cursor` (> 10 000 policies, PS-098-10) |
 
 ## Commands / queries / events
 Check order: quota key, scope, active policy resolution, usage read, comparison.

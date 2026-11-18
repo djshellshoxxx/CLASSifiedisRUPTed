@@ -1,35 +1,67 @@
 # PS-128-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-128-01. **Owner:** [16_Security/02_cryptography/mod_key](SPEC.md). **Implementing module:** 16_Security/02_cryptography/mod_key. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/02_cryptography/mod_key (F16.S02.M01). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ID-001 (prefix `key`, class ulid, owner F16), CTR-SCH-001, CTR-CAP-001, CTR-EVT-001. **Canonical owner of record class "key record (public metadata)":** F16.S02.M01.
 
-## Purpose and scope
-Define the domain schema process for key within 02_cryptography. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-128-01.R01 | A key record stores public key material and metadata only. No private key field exists in any schema of this module. | MVP |
+| PS-128-01.R02 | `fingerprint` = SHA-256 of the raw public key bytes, 64 hex, unique per (`owner_ref`, `purpose`). | MVP |
+| PS-128-01.R03 | `purpose` is a closed enum: `envelope_signing`, `device_auth`, `message_encryption`, `node_identity`. | MVP |
+| PS-128-01.R04 | `algorithm` is a closed enum: `Ed25519` (signing, PROVISIONAL per CTR-EVT-001 R05), `X25519` (encryption, ASSUMPTION). | MVP |
+| PS-128-01.R05 | Each `owner_ref` may hold at most 10 keys in `active` or `rotating` status (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-128-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-128-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-128-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "key_id": "key_ + 26 chars (CTR-ID-001)",
+  "owner_ref": "acc_ | sys_ | nod_ (CTR-CAP-001 principal types; nod_ per CTR-FED-001)",
+  "purpose": "envelope_signing | device_auth | message_encryption | node_identity",
+  "algorithm": "Ed25519 | X25519",
+  "public_key": "base64url, 32 bytes",
+  "fingerprint": "64 hex SHA-256",
+  "status": "pending | active | rotating | revoked | expired",
+  "valid_from": "RFC 3339 UTC ms",
+  "valid_until": "RFC 3339 UTC ms, <= valid_from + 730 days",
+  "revoked_at": "RFC 3339 UTC ms or null",
+  "revocation_reason": "compromise | user_request | superseded | recovery | policy",
+  "schema_version": "1.0.0"
+}
+```
+Constraints: `revoked_at` required when `status = revoked`; `public_key` length 32 bytes after decoding.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See PS-128-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See PS-128-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See PS-128-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-128-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-128-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Registration is idempotent on (`owner_ref`, `fingerprint`, `purpose`).
+
+## Privacy, retention, abuse
+Public key material is linkable across contexts. Pseudonymous `owner_ref` only; never a legal name (CTR-PRV-001 PSEUDONYMOUS). Retention per PS-128-07.
+
+## Observability & budgets
+Key counts per purpose and status; no key material in telemetry.
+
+## Tests
+- TEST-PS-128-01-01 (schema): record with extra field `private_key` rejected.
+- TEST-PS-128-01-02 (unit): fingerprint recomputed from `public_key` matches.
+- TEST-PS-128-01-03 (unit): 11th key for one owner refused.
+- TEST-PS-128-01-04 (property): duplicate fingerprint per (owner, purpose) refused across 100,000 random keys.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema validates fixtures; private-key fixtures refused.
+2. TEST-PS-128-01-01 through -04 pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 730-day maximum key validity.
+- PROVISIONAL (D01 default, unapproved): signed envelopes with explicit key IDs.
+- OPEN (D10): user-controlled key recovery; see PS-128-07.

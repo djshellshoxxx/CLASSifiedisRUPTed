@@ -1,35 +1,54 @@
-# PS-025-05 — authorization capabilities
+# PS-025-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-025-05. **Owner:** [02_LocalMutiny/04_value_balancing/mod_currency](SPEC.md). **Implementing module:** 02_LocalMutiny/04_value_balancing/mod_currency. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/04_value_balancing/mod_currency. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R04, R10, R11), CTR-COM-001 (R11), CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for currency within 04_value_balancing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-025-05.R01 | Pin requires a `sys_` principal of the cycle module with grant `cyc.propose`; users cannot pin. | MVP |
+| PS-025-05.R02 | Terms read requires `cyc.read` with participant scope. | MVP |
+| PS-025-05.R03 | Quote reads by this module use the valuation owner's `sys_` read grant only (CTR-COM-001 R11 adapter rule does not apply here). | MVP |
+| PS-025-05.R04 | Field visibility: other slots' amounts are shown only where the cycle's terms are shared by design (CTR-CAP-001 R10). | MVP |
 
-## Requirements to specify
-- [ ] PS-025-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-025-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-025-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Grants for the cycle module; decisions store reason codes only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Pin: sys_ cycle module. Read: participant.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unauthorised reads return SYS.NOT_FOUND; unauthorised pins return SYS.FORBIDDEN.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Result |
+|---|---|---|---|
+| sys_ cycle module (grant) | cyc.propose (pin) | cyc_ version | ALLOW |
+| user | pin | cyc_ | DENY SYS.FORBIDDEN |
+| slot participant | cyc.read | terms | ALLOW |
+| non-participant | cyc.read | terms | DENY SYS.NOT_FOUND |
+| ope_ | read amounts | any | DENY (privileged access needs case, dual control) |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-025-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Grant revocation takes effect at next decision.
+
+## Privacy, retention, abuse
+Amounts are FINANCIAL_EVIDENCE; access by privileged roles audited (CTR-CAP-001 R08).
+
+## Observability & budgets
+Denials counted without amounts.
+
+## Tests
+- TEST-PS-025-05-01 (unit): each row.
+- TEST-PS-025-05-02 (negative): user cannot pin.
+- TEST-PS-025-05-03 (integration): operator cannot read amounts without case grant.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every row covered.
+2. Zero amount values in operator views without case grant.
+3. Pins by non-system principals refused in 100% of runs.
+
+## Assumptions & open decisions
+- ASSUMPTION: cycle module holds a purpose-bound sys_ grant (CTR-CAP-001 R06).

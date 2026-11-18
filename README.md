@@ -58,7 +58,9 @@ corepack pnpm run test:browser
 
 Trace coverage requires executed passing results; source comments never establish passing coverage. The non-strict report is not a release gate. Browser tests require Playwright's browser installations.
 
+- [PR consolidation review](docs/status/PR_CONSOLIDATION_20261117.md)
 - [Project status](docs/status/PROJECT_STATUS.md) · [Feature status (generated)](docs/status/FEATURE_STATUS.md) · [Branch ledger](docs/status/BRANCH_LEDGER.md) · [Changelog](CHANGELOG.md)
+- [User guide](docs/wiki/User-Guide.md) · [Developer guide](docs/wiki/Developer-Guide.md) · [Wiki source and publication status](docs/wiki/README.md)
 - [Integration plan / evidence](planning/LOCAL_ALPHA_20261109.md)
 - [Barter signed-file walkthrough](docs/BARTER_ALPHA.md)
 - [Vault backup boundaries](packages/vault/README.md) · [Federation boundaries](packages/federation/README.md) · [Bazaar scope](packages/bazaar/ALPHA_SCOPE.md)

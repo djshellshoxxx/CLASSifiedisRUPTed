@@ -1,0 +1,105 @@
+// TEMPORARY reviewer probe - must be deleted before finishing.
+import { describe, expect, it } from 'vitest';
+import { EXPLAIN_KEYS, rerank, type RerankedItem } from './index.ts';
+
+const NOW = Date.parse('2026-11-04T10:00:00Z');
+const DAY = 86_400_000;
+const iso = (ms: number) => new Date(ms).toISOString();
+interface Spec { id: number; author: string; score: number; promoted?: boolean; fresh?: boolean; }
+const cand = (s: Spec) => ({
+  documentId: `d${String(s.id).padStart(4, '0')}`, authorDid: `did:key:z6Mk${s.author}`, score: s.score, promoted: s.promoted ?? false,
+  authorFirstSeenAt: iso(NOW - (s.fresh ? 3 : 200) * DAY), firstSeenAt: iso(NOW - 5 * DAY),
+  components: { text: 0.5, recency: 0.6, distance: 0.4, matchField: 'title' as const, distanceBucket: '5_10' as const, ageDays: 3 },
+});
+const sorted = (specs: Spec[]) => specs.map(cand).sort((a, b) => b.score - a.score || (a.documentId < b.documentId ? -1 : 1));
+const opts = { now: NOW, promotionEnabled: true };
+const run = (list: unknown[], pageSize = 20, windowPosition = 0, o = opts) => { const r = rerank(list, { pageSize, windowPosition }, o); if (!r.ok) throw new Error(r.error.code); return r.value; };
+function allPages(list: unknown[], pageSize = 20, o = opts): RerankedItem[][] {
+  const pages: RerankedItem[][] = []; let pos: number | null = 0;
+  while (pos !== null) { const r = run(list, pageSize, pos, o); pages.push([...r.items]); pos = r.nextWindowPosition; if (pages.length > 400) throw new Error('no progress'); }
+  return pages;
+}
+const keys = (i: RerankedItem) => i.explain.map(e => e.key);
+
+describe('reviewer probes (fairness)', () => {
+  it('PROBE A1: fresh vault (every author first seen < 30 days ago), distinct authors, no promotion: output order vs input order', () => {
+    const list = sorted(Array.from({ length: 30 }, (_, i) => ({ id: i, author: `a${i}`, score: 1 - i * 0.01, fresh: true })));
+    const page = run(list).items;
+    console.log('A1 input  :', list.slice(0, 6).map(c => `${c.documentId}=${c.score}`).join(' '));
+    console.log('A1 output :', page.slice(0, 6).map(c => `${c.documentId}=${c.score}${c.newAuthorSlot ? '(slot)' : ''}`).join(' '));
+    const p2 = run(list, 20, 20).items;
+    console.log('A1 page 2 :', p2.slice(0, 6).map(c => `${c.documentId}=${c.score}${c.newAuthorSlot ? '(slot)' : ''}`).join(' '));
+    console.log('A1 scores descending on page 1?', page.every((c, i) => i === 0 || (page[i - 1] as RerankedItem).score >= c.score));
+  });
+
+  it('PROBE A2: only the top two results are from new authors, the rest are established authors', () => {
+    const list = sorted([
+      { id: 1, author: 'n1', score: 0.99, fresh: true }, { id: 2, author: 'n2', score: 0.98, fresh: true },
+      ...Array.from({ length: 25 }, (_, i) => ({ id: 10 + i, author: `o${i}`, score: 0.9 - i * 0.01 })),
+    ]);
+    const page = run(list).items;
+    console.log('A2 input  :', list.slice(0, 5).map(c => `${c.documentId}=${c.score}`).join(' '));
+    console.log('A2 output :', page.slice(0, 5).map(c => `${c.documentId}=${c.score}${c.newAuthorSlot ? '(slot)' : ''}`).join(' '));
+  });
+
+  it('PROBE A3: two new-author items separated by an established item, all above their slot positions', () => {
+    const list = sorted([
+      { id: 1, author: 'o1', score: 0.99 }, { id: 2, author: 'n1', score: 0.98, fresh: true }, { id: 3, author: 'o2', score: 0.97 },
+      { id: 4, author: 'n2', score: 0.96, fresh: true }, { id: 5, author: 'o3', score: 0.95 },
+      ...Array.from({ length: 25 }, (_, i) => ({ id: 10 + i, author: `p${i}`, score: 0.9 - i * 0.01 })),
+    ]);
+    const page = run(list).items;
+    console.log('A3 input  :', list.slice(0, 6).map(c => `${c.documentId}=${c.score}`).join(' '));
+    console.log('A3 output :', page.slice(0, 6).map(c => `${c.documentId}=${c.score}${c.newAuthorSlot ? '(slot)' : ''}`).join(' '));
+  });
+
+  it('PROBE B1: page size 4 with promoted candidates: share of promoted input items and labels', () => {
+    const specs = Array.from({ length: 12 }, (_, i) => ({ id: i, author: `a${i}`, score: 1 - i * 0.01, promoted: i < 8 }));
+    const list = sorted(specs);
+    const promotedIds = new Set(list.filter(c => c.promoted).map(c => c.documentId));
+    for (const pageSize of [1, 2, 3, 4, 5]) {
+      const page = run(list, pageSize).items;
+      const fromPromotedInput = page.filter(i => promotedIds.has(i.documentId));
+      console.log(`B1 pageSize=${pageSize}: items=${page.length} promotedInputItemsOnPage=${fromPromotedInput.length} cap=${Math.floor(pageSize * 0.2)} labelled=${page.filter(i => i.promoted).length} withPromotedKey=${page.filter(i => keys(i).includes(EXPLAIN_KEYS.promoted)).length}`);
+    }
+  });
+
+  it('PROBE B2: across all pages of size 1..4, how many promoted input items are returned without the promoted flag/key', () => {
+    const specs = Array.from({ length: 40 }, (_, i) => ({ id: i, author: `a${i}`, score: 1 - i * 0.01, promoted: i % 2 === 0 }));
+    const list = sorted(specs);
+    const promotedIds = new Set(list.filter(c => c.promoted).map(c => c.documentId));
+    for (const pageSize of [1, 2, 3, 4]) {
+      const all = allPages(list, pageSize).flat();
+      const unl = all.filter(i => promotedIds.has(i.documentId) && (!i.promoted || !keys(i).includes(EXPLAIN_KEYS.promoted)));
+      console.log(`B2 pageSize=${pageSize}: returned=${all.length} promotedInput=${promotedIds.size} returnedUnlabelled=${unl.length}`);
+    }
+  });
+
+  it('PROBE C1: author cap relaxes with only_seller while other sellers still have (promoted) results waiting', () => {
+    const list = sorted([
+      ...Array.from({ length: 30 }, (_, i) => ({ id: i, author: 'prolific', score: 1 - i * 0.001 })),
+      ...Array.from({ length: 40 }, (_, i) => ({ id: 100 + i, author: `other${i}`, score: 0.9 - i * 0.001, promoted: true })),
+    ]);
+    const r = run(list);
+    const byAuthor = new Map<string, number>();
+    for (const i of r.items) byAuthor.set(i.authorDid, (byAuthor.get(i.authorDid) ?? 0) + 1);
+    console.log('C1 page size:', r.items.length, 'prolific items:', byAuthor.get('did:key:z6Mkprolific'), 'only_seller flagged:', r.items.filter(i => i.onlySeller).length, 'promoted:', r.items.filter(i => i.promoted).length, 'stats:', JSON.stringify(r.stats));
+  });
+
+  it('PROBE D1: both reserved slots can go to one new author', () => {
+    const list = sorted([
+      ...Array.from({ length: 21 }, (_, i) => ({ id: i, author: `o${i}`, score: 1 - i * 0.001 })),
+      { id: 100, author: 'n1', score: 0.6, fresh: true }, { id: 101, author: 'n1', score: 0.59, fresh: true }, { id: 102, author: 'n2', score: 0.58, fresh: true },
+    ]);
+    const page = run(list).items;
+    console.log('D1 slots:', page.map((c, i) => (c.newAuthorSlot ? `${i}:${c.documentId}:${c.authorDid}` : '')).filter(Boolean).join(' '));
+  });
+
+  it('PROBE E1: non-array / null inputs', () => {
+    const tryIt = (f: () => unknown) => { try { return JSON.stringify(f()); } catch (e) { return `THROWS ${(e as Error).constructor.name}: ${(e as Error).message}`; } };
+    console.log('E1 candidates=null   :', tryIt(() => rerank(null as never, {}, opts)));
+    console.log('E1 pageParams=null   :', tryIt(() => rerank([], null as never, opts)));
+    console.log('E1 options=undefined :', tryIt(() => rerank([], {}, undefined as never)));
+    expect(true).toBe(true);
+  });
+});

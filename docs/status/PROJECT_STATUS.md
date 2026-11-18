@@ -1,5 +1,15 @@
 # Project status
 
+## November 17, 2026 PR consolidation
+
+The runnable main now includes [PR #43](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/43), merged as `2b3193148029a4af64e8f3fe68373b6ca55620f9`. Consecutive queued location saves use the revision committed by the preceding save while preserving each submitted edit.
+
+The complete [25-PR consolidation review](PR_CONSOLIDATION_20261117.md) records source ancestry, content-equivalent integrations, preserved historical proposals, current wiki guides and the remaining draft. PR #8's later partial runtime fails independent qualification and remains separate. PR #45 preserves visible keyboard-focus coverage from the old mock framework; its GitHub checks record qualification of that test-only addition.
+
+The #43 runtime passed **632/632 domain/integration tests** locally, TypeScript, dependency boundaries and strict specification validation (148/148 modules, zero errors/warnings). [Exact-source Alpha CI](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43981540981) passed **63 browser journeys**; [CLI CI](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/43981539765) passed all six Windows/macOS/Linux Node 22/24 jobs. The documentation merge preserves that runtime tree. Details and source digests are in the [validation record](PR_CONSOLIDATION_20261117.json).
+
+This remains an incomplete development alpha. The dated implementation records below describe their own snapshots; consolidation does not close the existing security matrix, manual accessibility, target-device or whole-release gates.
+
 ## November 16, 2026 second parallel implementation wave
 
 PR #42 now also includes encrypted coarse-location preferences, cancellable

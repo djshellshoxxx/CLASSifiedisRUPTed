@@ -1,35 +1,52 @@
-# PS-055-07 — privacy retention abuse
+# PS-055-07 — privacy, retention and abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-07. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-055-07.R01 | Bundle contents obey CTR-PRV-001 R11: owner's own data at its classes; counterparty PRIVATE_PERSONAL redacted; LOCATION_PRECISE excluded by default. | MVP |
+| PS-055-07.R02 | Region in bundle is the registered cell only (LOCATION_COARSE). Cell not published below K_MIN is exported as the owner's own value only. | MVP |
+| PS-055-07.R03 | Bundles are encrypted at rest with per-bundle keys; key destroyed at deletion. | MVP |
+| PS-055-07.R04 | Import preview shows counts and field names only, never values. | MVP |
+| PS-055-07.R05 | Abuse: export ≤ 3 per 24 h; import stage ≤ 5 per 24 h; repeated invalid uploads from one session lock stage for 1 h (ASSUMPTION). | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+## Data / schema
+Classes: bundle body PRIVATE_PERSONAL; subject_token PSEUDONYMOUS; signature PUBLIC-within-bundle.
 
-## Requirements to specify
-- [ ] PS-055-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Events carry no bundle content.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Retention bound to states in [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Rate limits return `SYS.RATE_LIMITED` (429).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Only owner reads bundle contents.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Not applicable beyond PS-055-06.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+| Data | Class | Retention |
+|---|---|---|
+| bundle file | PRIVATE_PERSONAL | until download, expiry (7 d) or 24 h after generation, whichever first (RET-EPH) |
+| bnd_/imj_ metadata | PSEUDONYMOUS | 12 months (RET-AUD) |
+| staged import bytes | PRIVATE_PERSONAL | 24 h then deleted (RET-EPH) |
+Threat: bundle exfiltration in transit (TLS only, download token), replay of old bundle (expiry + digest-applied check), forged bundle from another user (signature check).
+
+## Observability & budgets
+Logs: IDs and codes only.
+
+## Tests
+TEST-PS-055-14 (exported body vs class rules), TEST-PS-055-15 (LOCATION_PRECISE absent unless requested), TEST-PS-055-16 (rate limits), TEST-PS-055-17 (log scan).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero LOCATION_PRECISE values in default export fixtures.
+2. Preview contains no field values.
+
+## Assumptions & open decisions
+- ASSUMPTION: rate limits above.
+- PROVISIONAL (D05 default, unapproved): coarse region in export.
+- PROVISIONAL (D07 default, unapproved): retention above.

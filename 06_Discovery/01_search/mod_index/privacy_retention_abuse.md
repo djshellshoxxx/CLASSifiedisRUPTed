@@ -1,35 +1,52 @@
-# PS-045-07 — privacy retention abuse
+# PS-045-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-045-07. **Owner:** [06_Discovery/01_search/mod_index](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_index. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_index. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R03, R04, R06, R09), CTR-FED-001 (R02, R03), CTR-ERR-001 (R06); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for index within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** Field allowlist and cell-only location are PROVISIONAL (D05 default, unapproved). Retention is PROVISIONAL (D07 default, unapproved).
 
-## Requirements to specify
-- [ ] PS-045-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-045-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-045-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-07.R01 | Index documents contain no field above LOCATION_COARSE; CI check `PRV.UNCLASSIFIED_FIELD` fails on any new field. | MVP |
+| PS-045-07.R02 | Deletion or withdrawal propagates to index copies within 24 h (CTR-PRV-001 R06, ASSUMPTION); target 60 s for query exclusion (PS-045-03 R04). | MVP |
+| PS-045-07.R03 | Federated listings are indexed only when `federate` = true and class is PUBLIC (CTR-FED-001 R02). | Future |
+| PS-045-07.R04 | Index tokens must not contain full home addresses or phone numbers; a regex-based redaction rejects tokens matching phone (E.164-like) and postal-address patterns (ASSUMPTION). | MVP |
+| PS-045-07.R05 | Index docs are removed on legal hold release or deletion, whichever is later, with no retention beyond RET-ACC. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Retention class per field: index doc = same class as the source listing (`RET-ACC` for listings; ASSUMPTION). `removed` docs purged 24 h. DLQ entries RET-OPS.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Redaction runs inside `index.apply_event` before persistence (PS-045-04).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Deletion event moves doc to `removed` (PS-045-03). Purge is a separate background job with its own audit record.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Redaction rejection counts as dropped field (PS-045-02 R07), not an error to the publisher.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-045-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Only `sys_` consumer reads source events; no user can query raw index docs (PS-045-05).
+
+## Failure, idempotency, concurrency, offline
+If purge fails, doc stays `removed` (not query-visible) and purge retries hourly; purge failure raises a privacy alert.
+
+## Privacy, retention, abuse
+Abuse controls: spam listings flood the index; ranking-independent rate limit on `index.apply_event` per seller `lst_` source (≤ 20 new listings per 24 h per owner, ASSUMPTION, enforced upstream by F12 rate module). Token stuffing capped at 64 tokens per doc (PS-045-01). Backups: index is excluded from backups (rebuildable), so deletions need no backup replay.
+
+## Observability & budgets
+Count of redacted tokens and dropped fields per day (aggregate only, K_MIN = 5). No title or token content in logs (CTR-PRV-001 R09).
+
+## Tests
+- TEST-PS-045-07-01 (unit): field classification check fails on added unclassified field.
+- TEST-PS-045-07-02 (integration): withdraw then query → doc absent; purge job removes row within 24 h fixture clock.
+- TEST-PS-045-07-03 (abuse): 1 000 spam listings with phone numbers in title are rejected or redacted.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Static field audit shows zero fields above LOCATION_COARSE.
+2. Deletion fixture: zero residual rows after purge job run.
+3. Redaction test suite passes with zero false negatives on the fixture set (ASSUMPTION: 200 fixtures).
+
+## Assumptions & open decisions
+- ASSUMPTION: privacy and abuse controls are design-level, not security-audited.
+- D05 PROVISIONAL, D07 PROVISIONAL (see header).

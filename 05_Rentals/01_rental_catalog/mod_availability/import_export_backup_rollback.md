@@ -1,35 +1,51 @@
 # PS-039-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-039-10. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/01_rental_catalog/mod_availability. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-FED-001
 
-## Purpose and scope
-Define the import export backup rollback process for availability within 01_rental_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-039-10.R01 | Owner export: own item calendars (dates, block_type, own rental_id references). Renter export: own hold and booking dates for items rented. | MVP |
+| PS-039-10.R02 | Bulk owner calendar import (CSV or iCalendar) is Future; MVP has no import. Imported rows would be validated by PS-039-02. | Future |
+| PS-039-10.R03 | Backups include AvailabilityBlock with exclusion constraint intact; restore re-validates the constraint before serving. | MVP |
+| PS-039-10.R04 | Rollback of a schema version never drops RELEASED history. | MVP |
+| PS-039-10.R05 | Restore drill quarterly: RPO <= 24 h, RTO <= 4 h (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-039-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-039-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-039-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export JSON schema_version 1; iCalendar export Future with same class rules.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`availability.export_generated` emitted with counts only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`AVAIL.EXPORT_SCOPE` if a request spans another owner's items.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner and renter exports via own sessions; restore requires operator dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-039-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent per request ID. Restore blocked while lifecycle replays run.
+
+## Privacy, retention, abuse
+Exports follow PS-039-07 retention; renter export redacts owner identity beyond display name.
+
+## Observability & budgets
+Export p95 <= 30 s for 10 MB.
+
+## Tests
+- TEST-PS-039-10-01 (export): owner export excludes other owners' items.
+- TEST-PS-039-10-02 (restore): exclusion constraint present and validated after restore.
+- TEST-PS-039-10-03 (rollback): schema rollback keeps RELEASED rows.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export scope tests pass.
+2. Restore validates no overlaps.
+3. Rollback preserves history.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO 24 h and RTO 4 h.
+- PROVISIONAL (D07 default, unapproved): backup retention per class.
+- PROVISIONAL (D01 default, unapproved): no federated calendar import in MVP.

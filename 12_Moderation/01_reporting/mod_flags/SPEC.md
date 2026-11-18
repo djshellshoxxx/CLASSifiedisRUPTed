@@ -1,44 +1,44 @@
 # F12.S01.M01 — flags
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F12.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead. **Parent:** F12.S01.
 
 ## Purpose and business behavior
-Provide flags as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Intake for user reports about listings, services, auctions, rentals, messages, threads, attachments and profiles. Accepts a reason from a fixed taxonomy, de-duplicates repeat reports, weights reports by reporter standing, and queues them for triage. Flags raise review priority only. They never hide content or sanction anyone. Those decisions belong to mod_enforcement.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a reporter, I pick a reason, add up to 500 characters, and see only that my report was received and later closed.
+- As a moderator, I triage a queue that shows reason, target type and weight without seeing content or the reporter.
+- As a target owner, I learn an outcome category without learning who reported me.
 
 ## Scope
-- Required process spec: `flags_domain_model.md` (not yet authored)
-- Required process spec: `flags_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `flags_validation_and_authorization.md` (not yet authored)
-- Required process spec: `flags_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `flags_interfaces_and_events.md` (not yet authored)
-- Required process spec: `flags_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `flags_acceptance_and_property_tests.md` (not yet authored)
+Ten process specs, all SPEC-DRAFT-COMPLETE: PS-094-01 to PS-094-10 (see inventory below).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+- Commands: `report.submit`, `report.withdraw`, `report.triage`, `report.link_case`.
+- Queries: `report.status`, `report.triage_queue`, `report.list_by_case`.
+- Events (aggregate `report`): `report.submitted`, `report.withdrawn`, `report.triaged`, `report.linked_to_case`, `report.closed_invalid`, `report.closed`, `report.threshold_reached`.
+- Identifier `rpt_` (opaque, owner F12, CTR-ID-001).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F12.S01.M02 evidence (`mev_` references), F07 accounts, F16 capabilities, F12.S02.M03 abuse (restriction flag), F12.S03.M03 rate and F12.S03.M04 limits (quotas). Downstream: F12.S02.M01 enforcement (case outcomes), F12.S01.M03 appeals. Feature flags (F15.S04.M02) are a separate record class and are not reports.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns: `rpt_` records, dedupe keys, triage state, weight. Canonical owner of report records (B-06, PROVISIONAL, unapproved). Does not own: evidence snapshots (F12.S01.M02), case records (`cas_`, F12 case management), target content (domain modules).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Brigading and retaliatory reports; reporter exposure through timing or leaked fields; doxxing carried in report text; over-triage of high-harm categories; reports as a DoS vector on the triage queue. Reports are signals, not facts. No platform custody of money; no payment or delivery assurance.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Ten process specs have passed their approval gates (Privacy Lead F10, Security Lead F16, Trust&Safety sign-off); test IDs pass in a later implementation phase.
 
 ## Required process specification inventory
-- [ ] `flags_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `flags_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `flags_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `flags_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `flags_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `flags_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `flags_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-094-01
+- [x] [validation_rules.md](validation_rules.md) — PS-094-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-094-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-094-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-094-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-094-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-094-07
+- [x] [observability_performance.md](observability_performance.md) — PS-094-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-094-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-094-10

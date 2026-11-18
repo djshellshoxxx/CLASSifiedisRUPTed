@@ -1,35 +1,54 @@
-# PS-133-08 — observability performance
+# PS-133-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-133-08. **Owner:** [16_Security/03_assurance/mod_threats](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_threats. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_threats. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the observability performance process for threats within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-133-08.R01 | Register dashboard shows counts by status, framework and area, refreshed at least hourly | MVP |
+| PS-133-08.R02 | Overdue reviews and unverified controls are reported per area; both targets 0 | MVP |
+| PS-133-08.R03 | Logs contain THR-IDs, codes and actor roles only; description and rationale text excluded | MVP |
+| PS-133-08.R04 | Register read p95 <= 300 ms and write p95 <= 300 ms at 500 threats | MVP |
 
-## Requirements to specify
-- [ ] PS-133-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-133-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-133-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric records: `{area_path, status, framework, count, at}`. No free-text fields.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Emits `threats.ReviewOverdue` daily per overdue threat (deduplicated per threat_id per day).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Metric emission failure is logged as THREATS.METRIC_UNAVAILABLE (retryable); register writes are not blocked.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards: Security Lead, Privacy Lead, auditor. Area owners see their own area counts only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-133-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metric export idempotent per hour bucket. Dashboard stale-data banner when last refresh > 2 h.
+
+## Privacy, retention, abuse
+Metrics contain no restricted fields. Log lines pass redaction filter listing banned keys: description, detail_ref, rationale.
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| overdue reviews | 0 |
+| controls unverified > 30 days | 0 |
+| read/write p95 | <= 300 ms |
+| mean time identified to assessed | <= 10 business days (ASSUMPTION) |
+
+## Tests
+- TEST-PS-133-08-01 (unit): metric record contains only permitted keys (schema test).
+- TEST-PS-133-08-02 (integration): threat with review_due passed produces one ReviewOverdue per day.
+- TEST-PS-133-08-03 (unit): log line for AcceptResidual contains no rationale text.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Dashboard matches register counts in fixture run (100% match).
+2. No description or rationale text in logs for sampled 1,000 lines.
+3. Latency targets measured on fixture with 500 threats.
+
+## Assumptions & open decisions
+- ASSUMPTION: 500-threat scale is an upper bound for MVP.
+- No D-number directly applies; retention of logs follows D07 PROVISIONAL.

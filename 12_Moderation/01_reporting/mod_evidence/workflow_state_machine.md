@@ -1,35 +1,54 @@
 # PS-093-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-093-03. **Owner:** [12_Moderation/01_reporting/mod_evidence](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_evidence. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_evidence (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-CAP-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the workflow state machine process for evidence within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-093-03.R01 | Every transition below is the only permitted path; others → `SYS.UNPROCESSABLE_STATE`. | MVP |
+| PS-093-03.R02 | Each transition emits one event or one `aud_` record (CTR-CAP-001 R08). | MVP |
+| PS-093-03.R03 | `captured` items are read-only except through `redacted`, `expired` and hold transitions. | MVP |
+| PS-093-03.R04 | A legal hold blocks `expired` → `purged` until released (CTR-PRV-001 R07). | MVP |
 
-## Requirements to specify
-- [ ] PS-093-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-093-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-093-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | capture.requested | report open; caller is reporter or `sys_` | capturing | staging object created, TTL 15 min |
+| capturing | capture.completed | PS-093-02 checks 1–7 pass | captured | `evidence.captured`; `aud_` |
+| capturing | capture.failed | validation error (not scanner outage) | rejected | staging deleted; error returned |
+| capturing | scanner.unavailable | timeout | capturing | retry per PS-093-06; no content visible |
+| capturing | staging.ttl_elapsed | no completion | rejected | staging purged; reason `EVD.CAPTURE_EXPIRED` |
+| captured | redact.requested | mod with case grant; reason valid | redacted | `evidence.redacted`; content purged in 24 h |
+| captured, redacted | retention.elapsed | no hold | expired | content purge scheduled |
+| captured, redacted | hold.applied | ope dual approval; end date set | captured or redacted (held) | `evidence.legal_hold_applied` |
+| expired | purge.completed | content gone from replicas and caches | purged | `evidence.purged`; metadata tombstone kept |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Terminal: `rejected`, `purged`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Illegal transitions return `SYS.UNPROCESSABLE_STATE`; stale writes return `EVT.REVISION_CONFLICT`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Transition authority per PS-093-05. System transitions (`scanner.*`, `*.elapsed`, `purge.completed`) are performed by `sys_` only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Each transition is keyed by (`evidence_id`, `revision`). Two redactions race: second gets `EVT.REVISION_CONFLICT`. Offline reporters never trigger `captured` directly; they queue (PS-093-06).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-093-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Staging objects and rejected payloads are never retained beyond 15 min (RET-EPH). A rejected item leaves no content, only a `rejected` tombstone with reason code.
+
+## Observability & budgets
+Gauge `evidence_items{redaction_state}`; transition latency p95 ≤ 100 ms excluding scan (ASSUMPTION).
+
+## Tests
+- TEST-PS-093-03-01 (property): random event sequences never reach an undefined state.
+- TEST-PS-093-03-02 (integration): hold blocks purge; release at end date allows purge within 24 h.
+- TEST-PS-093-03-03 (concurrency): two concurrent redactions → one success, one `EVT.REVISION_CONFLICT`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Transition table is exhaustive: every (state, event) pair is either listed or returns `SYS.UNPROCESSABLE_STATE`.
+2. No path from `rejected` or `purged` back to a readable state.
+
+## Assumptions & open decisions
+- ASSUMPTION: staging TTL 15 min; retention elapsed triggers purge, not deletion of metadata.
+- PROVISIONAL (D07 default, unapproved): legal-hold exceptions only.

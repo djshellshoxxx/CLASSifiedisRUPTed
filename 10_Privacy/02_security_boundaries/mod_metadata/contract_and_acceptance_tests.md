@@ -1,35 +1,50 @@
 # PS-080-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-080-09. **Owner:** [10_Privacy/02_security_boundaries/mod_metadata](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_metadata. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_metadata (Privacy Lead, F10; QA Lead, F17). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (TEST-CTR-PRV-001-03, -09, -10), CTR-EVT-001 (R06), CTR-ERR-001, CTR-FED-001 (R12).
 
-## Purpose and scope
-Define the contract and acceptance tests process for metadata within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-080-09.R01 | Corpus of ≥ 50 synthetic images (JPEG, PNG, WebP) with known GPS, device, author and thumbnail tags. | MVP |
+| PS-080-09.R02 | Every `META.*` code has a contract test for category, status and retryable value. | MVP |
+| PS-080-09.R03 | Egress filter tests cover all seven surfaces in PS-080-01 R01. | MVP |
+| PS-080-09.R04 | Log scan test uses seeded fixture coordinates and IP addresses. | MVP |
+| PS-080-09.R05 | No real photographs; all corpus files synthetic. | MVP |
 
-## Requirements to specify
-- [ ] PS-080-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-080-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-080-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Corpus manifest lists each file's injected tags and expected removal counts.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Drive sanitise and egress through the module interface.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Scenarios cover PS-080-03 transitions.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative corpus: disguised MIME, truncated file, PDF, oversized file.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Tests for sys sanitiser, owner, operator and egress path.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-080-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection: sanitiser crash, policy store down, duplicate upload.
+
+## Privacy, retention, abuse
+Corpus stored in test repository only; no production data.
+
+## Observability & budgets
+Suite ≤ 10 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-080-09-01 (property/corpus): zero residual GPS, device or author tags across corpus.
+- TEST-PS-080-09-02 (contract): all META.* codes registered.
+- TEST-PS-080-09-03 (integration): push preview and federation batch contain no attachment metadata.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-080-09-01 to -03 pass in CI.
+2. Corpus manifest matches expected counts.
+3. Log scan passes.
+
+## Assumptions & open decisions
+- PENDING: sanitiser library evaluation (Prompt 3 research).
+- PROVISIONAL (D05 default) for location-adjacent fixtures.

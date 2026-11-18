@@ -1,35 +1,56 @@
 # PS-030-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-030-09. **Owner:** [03_Services/02_service_booking/mod_disputes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_disputes. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-COM-001, CTR-EVT-001, CTR-SCH-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for disputes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-030-09.R01 | Consumer contract with F09.S02.M02 canonical dispute API: fixtures for open, add_evidence, respond, withdraw and refusal codes. | MVP |
+| PS-030-09.R02 | Consumer contract with F03.S02.M02 milestones: subject state fixtures for eligibility and window. | MVP |
+| PS-030-09.R03 | Producer contract for `service_dispute.link_opened` and `service_dispute.link_refused` per CTR-SCH-001. | MVP |
+| PS-030-09.R04 | Claim-state contract: `DISPUTED` transition fixture per CTR-COM-001 R05 and R16; label catalog test per R15. | MVP |
+| PS-030-09.R05 | Negative tests for every code in [validation_rules.md](validation_rules.md). | MVP |
+| PS-030-09.R06 | E2E: client opens dispute on submitted milestone; provider responds within 7 days; F09 decides; link and claim states consistent. | MVP |
+| PS-030-09.R07 | A11y: reason selector and note field keyboard-operable, labels announced, error summary focusable. | MVP |
+| PS-030-09.R08 | Offline e2e: draft kept; open refused offline with a clear message key. | MVP |
 
-## Requirements to specify
-- [ ] PS-030-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-030-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-030-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures synthetic only; one fixture per schema version and migration path (CTR-SCH-001 R09).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract matrix rows per command and event in [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Invariant tests: no local transition outside the table in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Assert `code`, `retryable`, `message_key`, and no input echo (CTR-ERR-001 R05–R07).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Allow/deny per row of [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-030-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Contract tests for replay and unknown-outcome paths in [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+No production data; fixtures use synthetic `acc_` IDs.
+
+## Observability & budgets
+Contract suite ≤ 10 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-030-09-01 contract: F09 dispute API fixtures.
+- TEST-PS-030-09-02 contract: claim `DISPUTED` transition within window.
+- TEST-PS-030-09-03 e2e: R06 flow.
+- TEST-PS-030-09-04 a11y: R07 checks.
+- TEST-PS-030-09-05 offline: R08 flow.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each command, event and error code has at least one passing test.
+2. E2E flow R06 passes with consistent link and claim states.
+3. No label contains "paid", "payment received" or "settled" below FINAL.
+
+## Assumptions & open decisions
+- ASSUMPTION: contract suite CI budget 10 min.
+- Dependency: F09.S02.M02 fixtures PENDING (owner confirmation of canonical record).
+- Payment checklist applies.

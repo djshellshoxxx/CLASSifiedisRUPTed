@@ -1,35 +1,54 @@
 # PS-101-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-101-10. **Owner:** [12_Moderation/03_antifraud/mod_signals](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_signals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_signals (Trust&Safety Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R07, R08), CTR-PRV-001 (R06, R07, R11), CTR-EVT-001 (R08), CTR-FED-001 (deferred).
 
-## Purpose and scope
-Define the import export backup rollback process for signals within 03_antifraud. Do not assume implementation or successful external settlement.
+**Decision labels:** Backup and retention interaction is PROVISIONAL (D07 default, unapproved). Federated import and export: deferred (D01, PROVISIONAL, unapproved).
 
-## Requirements to specify
-- [ ] PS-101-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-101-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-101-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-101-10.R01 | No federated import of signals in MVP. Any import is rejected with `SIGNAL.FORBIDDEN_FIELD` until D01 and CTR-FED-001 apply. | Future |
+| PS-101-10.R02 | Subject portability export excludes raw signals. Appeal decision reasons include signal type and bucket only. | MVP |
+| PS-101-10.R03 | Audit export of aggregates (global scope, K_MIN = 5) is allowed for Trust&Safety Lead only. | MVP |
+| PS-101-10.R04 | Backups are encrypted and include signal records; restore replays expiry and redaction events before serving reads. | MVP |
+| PS-101-10.R05 | Rollback never deletes signal or audit records. Bad producers are disabled by flag; bad signals are neutralized by suppression events. | MVP |
+| PS-101-10.R06 | Scoring weights are versioned configuration; rollback restores the previous version and records the change in an `aud_` record. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Export package (aggregate only): `schema_version`, `period`, `signal_type`, `count`, `k_threshold`, `generated_at`. No `subject_ref`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Admin export runs as an audited `sys_` job; each export emits `aud_` with purpose and decision ID.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Restore sets records to the state implied by replayed events (PS-101-03). Rollback emits events; it does not rewrite records.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Restore fails with `SYS.CONFLICT` if replayed revisions have gaps (CTR-EVT-001 R02; `EVT.REVISION_GAP` on replicas).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-101-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Export requires `sgn_aggregate.read` with `global` scope and purpose constraint (PS-101-05).
+
+## Failure, idempotency, concurrency, offline
+Restore is idempotent: replaying the same backup twice yields identical projections. Offline: not applicable.
+
+## Privacy, retention, abuse
+Backup expiry follows backup schedule; restore never resurrects REDACTED subject linkage (CTR-PRV-001 R06). Export contains no PSEUDONYMOUS identifiers.
+
+## Observability and budgets
+Restore duration and replay count recorded. Target: restore of 30 days of signals within 60 minutes (ASSUMPTION).
+
+## Tests
+- TEST-PS-101-25 (integration): restore a backup, replay deletions, confirm no `acc_` linkage for deleted subjects.
+- TEST-PS-101-26 (integration): aggregate export contains no `subject_ref` and no cell below 5.
+- TEST-PS-101-27 (integration): disabling a producer flag leaves existing records unchanged.
+- TEST-PS-101-28 (property): replay twice gives identical projection checksum.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Restore drill passes with the documented procedure.
+2. Export tests show no PSEUDONYMOUS identifiers.
+3. Rollback drill: weight rollback recorded in `aud_`; no record deleted.
+
+## Assumptions & open decisions
+- ASSUMPTION: backup tooling supports per-table restore.
+- D07 (PROVISIONAL, unapproved). D01 (PROVISIONAL, unapproved) for future federation.

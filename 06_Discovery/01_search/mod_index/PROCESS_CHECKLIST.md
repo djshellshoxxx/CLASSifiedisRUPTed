@@ -1,61 +1,44 @@
-# Process inventory and integration checklist
+# Process checklist — F06.S01.M01 index
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-
-## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
-- [ ] Complete Prompt 3 specification-quality review before implementation.
+- [x] [domain_schema.md](domain_schema.md) — PS-045-01 written
+  - [ ] Confirm `idx_` prefix (PENDING CTR-ID-001)
+  - [ ] F10 confirms field allowlist has no class above LOCATION_COARSE
+  - [ ] Static check fails on any unclassified index field
+- [x] [validation_rules.md](validation_rules.md) — PS-045-02 written
+  - [ ] Fixtures for V1–V7 pass and fail as specified
+  - [ ] Bidi and NFC title fixtures added to corpus
+  - [ ] K_MIN boundary (4 and 5 items) tested
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-045-03 written
+  - [ ] Transition table has one test per row
+  - [ ] Order-independence property test (10^4 runs)
+  - [ ] Suppress-then-withdraw integration case
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-045-04 written
+  - [ ] Command registry entries in CTR-SCH-001 (PENDING)
+  - [ ] Duplicate apply returns original result
+  - [ ] `index.doc.changed` payload size and class test
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-045-05 written
+  - [ ] Capability names approved by F16
+  - [ ] Dual-control rebuild test
+  - [ ] Direct write by `mod_` denied and logged
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-045-06 written
+  - [ ] 50-revision gap dead-letters with INDEX.REVISION_GAP
+  - [ ] Shadow rebuild verified before alias swap
+  - [ ] Chaos test: consumer killed mid-rebuild
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-045-07 written
+  - [ ] Phone and address token redaction fixtures
+  - [ ] Withdraw then purge within 24 h fixture
+  - [ ] Spam listing flood test
+- [x] [observability_performance.md](observability_performance.md) — PS-045-08 written
+  - [ ] Metric labels exclude listing_id
+  - [ ] Log sample has no titles or tokens
+  - [ ] Load test at 1 000 events/s
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-045-09 written
+  - [ ] Golden fixtures for each MAJOR version
+  - [ ] E2E withdraw-to-absent under 60 s
+  - [ ] Offline read-only behavior test
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-045-10 written
+  - [ ] Export fixtures contain no index keys
+  - [ ] Restore rebuild count equals source count
+  - [ ] Rollback resurrects no deleted listing

@@ -1,35 +1,60 @@
 # PS-101-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-101-08. **Owner:** [12_Moderation/03_antifraud/mod_signals](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_signals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_signals (Trust&Safety Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R09 logs), CTR-ERR-001 (R10 server logs), CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for signals within 03_antifraud. Do not assume implementation or successful external settlement.
+**Decision labels:** Throughput and latency budgets are ASSUMPTION, PROVISIONAL (D07 default, unapproved; F15 to validate).
 
-## Requirements to specify
-- [ ] PS-101-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-101-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-101-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-101-08.R01 | Emit counters `sig_recorded_total{signal_type}`, `sig_rejected_total{code}`, `sig_expired_total`, `sig_suppressed_total{reason_code}`. | MVP |
+| PS-101-08.R02 | Emit gauges `sig_dlq_depth` and `sig_expiry_lag_seconds`. | MVP |
+| PS-101-08.R03 | Logs carry `signal_id`, `signal_type`, `code` and timing only. `subject_ref` is logged only as a keyed digest. | MVP |
+| PS-101-08.R04 | No per-subject dashboard exists. Dashboards show aggregates only. | MVP |
+| PS-101-08.R05 | Traces carry `correlation_id` (CTR-EVT-001 R09), never payload values. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Metric labels are closed sets: `signal_type` (registry values), `code` (PS-101-02 table), `reason_code` (three values). Unknown labels are bucketed as `other`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command and event increments one counter (PS-101-04).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Expiry lag measured as `now − expires_at` for records in ACTIVE state.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Rejected-input rate is the primary validation health metric.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-101-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Dashboards are visible to `sys_` operators and Trust&Safety Lead only; no subject-level view.
+
+## Failure, idempotency, concurrency, offline
+Metric emission failure must not block ingest. Offline: not applicable.
+
+## Privacy, retention, abuse
+Metric and log retention 30 days (RET-OPS). Keyed digests use a rotated key (ASSUMPTION: 90-day rotation).
+
+## Observability and budgets
+| Budget | Target | Status |
+|---|---|---|
+| `sgn.create` server p95 | ≤ 150 ms | ASSUMPTION |
+| `sgn.create` server p99 | ≤ 500 ms | ASSUMPTION |
+| Sustained ingest per node | ≥ 1,000 signals/s | ASSUMPTION |
+| Expiry lag | ≤ 1 hour | PS-101-03 R03 |
+| `sgn_aggregate.read` p95 | ≤ 300 ms | ASSUMPTION |
+
+Alerts: rejection rate > 2% over 15 minutes; suppression share > 10% of day's signals (possible mis-tuning); DLQ depth > 100 for 15 minutes.
+
+## Tests
+- TEST-PS-101-22 (integration): counters increment once per command, including duplicates' dedupe hit counter.
+- TEST-PS-101-23 (negative): log scan of a 10,000-signal run finds no raw `subject_ref`, IP or coordinate.
+- TEST-PS-101-24 (load): sustained 1,000 signals/s for 10 minutes meets p95 budget.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All metrics listed exist with labels from closed sets.
+2. Log scan clean in CI.
+3. Load test meets budgets or the budget is revised by F15 review.
+
+## Assumptions & open decisions
+- ASSUMPTION: metrics backend retains aggregates only.
+- D07 (PROVISIONAL, unapproved). D08 offline: not applicable.

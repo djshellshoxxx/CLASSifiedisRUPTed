@@ -1,35 +1,57 @@
-# PS-022-04 — commands queries events
+# PS-022-04 — Commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-022-04. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_dropouts](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_dropouts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_dropouts. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for dropouts within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-022-04.R01 | Every command carries `expected_revision`, `idempotency_key` (UUIDv7) and declared `event_type`. | MVP |
+| PS-022-04.R02 | `cyc.withdraw` server p95 ≤ 300 ms. | MVP |
+| PS-022-04.R03 | Queries return the case to the cycle's participants only, with resolution and per-party booleans. | MVP |
+| PS-022-04.R04 | Schemas version 1.0.0 (CTR-SCH-001). | MVP |
 
-## Requirements to specify
-- [ ] PS-022-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-022-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-022-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Command example: `{"cycle_id":"cyc_...","proposal_version":2,"reason_code":"WITHDREW","idempotency_key":"...","expected_revision":null}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Name | Signature | Idempotency | Errors | Emits |
+|---|---|---|---|---|
+| `cyc.withdraw` | `withdraw(cycle_id, proposal_version, reason_code, idempotency_key)` | per party and version | CYC_DROPOUT.NOT_ELIGIBLE | `cycle.dropout_detected` |
+| `cyc.dropout.report` | `report(cycle_id, proposal_version, party_id, reason_code, idempotency_key)` | merged per key | CYC_DROPOUT.WINDOW_OPEN | `cycle.dropout_detected` |
+| `cyc.dropout.resolve` | `resolve(dropout_id, path, successor_version?, expected_revision)` | per dropout_id and path | SUCCESSOR_MISSING, LOCKS_ACTIVE | `cycle.resolved_again`, `cycle.cancelled`, `cycle.partially_resolved` |
+| `cyc.dropout.get` | `get(dropout_id)` | n/a | SYS.NOT_FOUND | none |
+| system timer | `escalate(dropout_id)` | per dropout_id | n/a | `cycle.escalated` |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Consumers: mod_lock (`cycle.dropout_detected`), F02.S02 (`cycle.resolved_again`), mod_recovery (`cycle.escalated`).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See [validation_rules.md](validation_rules.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-022-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Duplicate keys replay the original response. Stale `expected_revision` → `SYS.CONFLICT`. Commands are not queued offline in MVP; the UI shows "withdrawal not sent" until acknowledged (D08).
+
+## Privacy, retention, abuse
+Events use `max_data_class` PSEUDONYMOUS; no reason text in payloads.
+
+## Observability & budgets
+Command counts per code; event lag p95 ≤ 5 s.
+
+## Tests
+- TEST-PS-022-04-01 (contract): examples validate against 1.0.0 schemas.
+- TEST-PS-022-04-02 (integration): duplicate withdraw returns original response.
+- TEST-PS-022-04-03 (contract): consumers ignore unknown `event_type` values.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command in the table is implemented with the declared signature.
+2. Replays return identical bodies.
+3. Consumer contract tests pass for mod_lock and mod_recovery.
+
+## Assumptions & open decisions
+- ASSUMPTION: `cyc.dropout.*` sub-verbs of `cyc.withdraw` family; CTR-CAP-001 vocabulary change is MINOR.
+- [DECISIONS.md](../../../DECISIONS.md) D08 — PROVISIONAL (D08 default, unapproved): no offline queue for withdrawals in MVP.

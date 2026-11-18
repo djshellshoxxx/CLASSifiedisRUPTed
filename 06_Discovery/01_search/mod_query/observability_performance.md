@@ -1,35 +1,50 @@
-# PS-046-08 — observability performance
+# PS-046-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-046-08. **Owner:** [06_Discovery/01_search/mod_query](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_query. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_query. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the observability performance process for query within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** Budgets are ASSUMPTION (F15 to validate).
 
-## Requirements to specify
-- [ ] PS-046-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-046-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-046-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-046-08.R01 | `discovery.search` p95 ≤ 150 ms server-side; p99 ≤ 400 ms. | MVP |
+| PS-046-08.R02 | Metrics: `query_latency_ms`, `query_zero_result_ratio`, `query_error_total{code}`, `query_rate_limited_total`. | MVP |
+| PS-046-08.R03 | Labels never include text, cursor or principal ID. | MVP |
+| PS-046-08.R04 | Zero-result rate alert when > 40% over 30 min for a cell with ≥ 5 queries (ASSUMPTION). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Metric labels: `code`, `state`, `principal_type`, `region_cell` only where cell count ≥ K_MIN in the window.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Trace spans per state in PS-046-03; `correlation_id` (`cor_`) generated per request.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Latency split per state for diagnosis.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Error counters keyed by code only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-046-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Dashboards readable by Platform Lead roles; cell-level dashboards require K_MIN.
+
+## Failure, idempotency, concurrency, offline
+Telemetry loss does not block search; buffer ≤ 10 MB, drop oldest.
+
+## Privacy, retention, abuse
+Metrics retained 30 days (RET-OPS). Zero-result queries are not logged with text.
+
+## Observability & budgets
+p95 150 ms, p99 400 ms, error budget 0.5% over 30 days (ASSUMPTION).
+
+## Tests
+- TEST-PS-046-08-01 (load): 500 req/s holds p95 ≤ 150 ms on reference profile.
+- TEST-PS-046-08-02 (unit): metric label allowlist rejects text label.
+- TEST-PS-046-08-03 (integration): zero-result alert fires with injected data.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Four metrics exposed with documented labels.
+2. Load test passes budgets at reference profile (PENDING F15 profile).
+3. Log sample of 10 000 search lines has no text or cursor.
+
+## Assumptions & open decisions
+- ASSUMPTION: reference profile undefined (PENDING F15).

@@ -1,35 +1,56 @@
-# PS-070-08 — observability performance
+# PS-070-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-070-08. **Owner:** [09_Commerce/02_settlement/mod_disputes](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_disputes (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R09), CTR-ERR-001 (R10), CTR-CAP-001 (R08). **Decisions:** D04 (PROVISIONAL default, unapproved).
 
-## Purpose and scope
-Define the observability performance process for disputes within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-070-08.R01 | Metrics per command: count, error count by code, p50/p95/p99 latency. | MVP |
+| PS-070-08.R02 | Gauge of disputes by status; histogram of `OPEN` → `RESOLVED` duration. | MVP |
+| PS-070-08.R03 | Alert when escalation lag exceeds 30 min (PS-070-06). | MVP |
+| PS-070-08.R04 | Alert when disputes raised per 100 claims exceeds 5% over 24 h (ASSUMPTION; possible abuse or product fault). | MVP |
+| PS-070-08.R05 | Logs and traces carry `dispute_id` and `claim_id` only; never `statement` or evidence content. | MVP |
 
-## Requirements to specify
-- [ ] PS-070-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-070-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-070-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels: `command`, `code`, `status`, `reason_code`. No `acc_` label values.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No additional events. Metrics derived from `dispute.*` events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error codes as enums only (CTR-ERR-001 R10).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards: `ope_` read-only role; aggregated counts only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-070-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metrics pipeline failure never blocks commands. Client telemetry excludes dispute text.
+
+## Privacy, retention, abuse
+Logs 30 days (RET-OPS); traces 7 days (ASSUMPTION). Aggregates keep no identifiers.
+
+## Observability & budgets
+| Budget | Target |
+|---|---|
+| `dispute.raise` p95 | ≤ 300 ms |
+| `dispute.get` p95 | ≤ 150 ms |
+| Escalation lag p95 | ≤ 5 min after due |
+| Metrics ingestion lag | ≤ 60 s |
+
+## Tests
+- TEST-PS-070-08-01 (integration): latency histograms per command.
+- TEST-PS-070-08-02 (negative): log and metric label scan finds no `statement` text.
+- TEST-PS-070-08-03 (integration): alert fires when escalation lag exceeds 30 min in drill.
+- TEST-PS-070-08-04 (load): 100 raises per second for 10 min meets budget.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets measured in staging before release (later phase).
+2. Canary scan clean across logs, traces, metrics.
+3. Alert runbook entries exist for R03 and R04 (later phase).
+
+## Assumptions & open decisions
+- ASSUMPTION: 5% raise-rate alert threshold; calibrate after pilot data.
+- D04 (PROVISIONAL default, unapproved).

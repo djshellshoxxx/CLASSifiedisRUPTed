@@ -1,35 +1,47 @@
-# PS-055-06 — failure recovery idempotency
+# PS-055-06 — failure, recovery and idempotency
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-06. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-055-06.R01 | Import apply is atomic: profile creation, `imj_` state and outbox row commit together, or none does. | MVP |
+| PS-055-06.R02 | Export generation writes the file to a temp location, then renames on success. Partial files are never downloadable. | MVP |
+| PS-055-06.R03 | Storage failure during export: state stays absent; client receives `SYS.UNAVAILABLE` (retryable). | MVP |
+| PS-055-06.R04 | Two concurrent applies of the same `imj_`: one applies, the other returns `SYS.CONFLICT`. | MVP |
+| PS-055-06.R05 | Schema upgrade on import: a bundle with an older MINOR is upcast on read; original bytes stored (CTR-SCH-001 R07). | MVP |
 
-## Purpose and scope
-Define the failure recovery idempotency process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+## Data / schema
+Temp export path not addressable by clients. Outbox row per apply (profile-created event).
 
-## Requirements to specify
-- [ ] PS-055-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Export and apply responses are replay-safe per PS-055-04.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Failure outcomes per [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+`SYS.UNAVAILABLE` on storage; `SYS.CONFLICT` on concurrent apply.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Authorization checked before storage writes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+- Crash mid-export: temp file swept after 1 h; no `bnd_` row without file.
+- Crash mid-apply: transaction rolled back; retry safe.
+- Offline: user can prepare a file locally but cannot apply offline (R05 of PS-055-04).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Temp files encrypted at rest and swept after 1 h.
+
+## Observability & budgets
+`portable_partial_files_swept_total` should trend to zero.
+
+## Tests
+TEST-PS-055-11 (fault injection during export), TEST-PS-055-12 (apply crash), TEST-PS-055-13 (concurrent apply).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Fault-injection shows no downloadable partial file.
+2. Crash during apply leaves zero profiles and `imj_` in `staged`.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1 h temp sweep.

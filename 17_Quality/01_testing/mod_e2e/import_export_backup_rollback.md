@@ -1,35 +1,49 @@
-# PS-134-10 — import export backup rollback
+# PS-134-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-134-10. **Owner:** [17_Quality/01_testing/mod_e2e](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_e2e. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_e2e. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-ID-001.
 
-## Purpose and scope
-Define the import export backup rollback process for e2e within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-134-10.R01 | FixtureSet exported as versioned JSON; re-import yields identical content_hash | MVP |
+| PS-134-10.R02 | Fixture rollback to prior version completes in <= 5 min and reverts scenarios that reference the version | MVP |
+| PS-134-10.R03 | Run records exported without artifacts; artifacts never exported outside CI | MVP |
+| PS-134-10.R04 | Scenario registry backed up nightly; restore tested quarterly | MVP |
 
-## Requirements to specify
-- [ ] PS-134-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-134-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-134-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{schema_v: 1, fixture_set_id, version, content_hash, personas[], scenarios_ref[]}`. Import checks hash before accepting.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`e2e.ExportFixtureSet(id, version)` read; `e2e.ImportFixtureSet(file)` write, idempotent by hash; rollback via import of prior version.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Fixture version: current -> superseded on import of newer version; prior version remains retrievable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`E2E.FIXTURE_HASH_MISMATCH` (non-retryable), `E2E.IMPORT_INVALID` (non-retryable; row numbers only).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Import and rollback: QA Lead. Export: QA Lead and CI identity.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-134-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Import of same file is a no-op. Rollback refused while runs reference the fixture set in `running` state.
+
+## Privacy, retention, abuse
+Exports contain synthetic personas only; the PII linter runs on every import (PS-134-07).
+
+## Observability & budgets
+Import p95 <= 10 s for 200 personas (ASSUMPTION); rollback <= 5 min.
+
+## Tests
+- TEST-PS-134-10-01 (unit): export then import yields identical content_hash.
+- TEST-PS-134-10-02 (integration): rollback reverts scenario references; prior run records unchanged.
+- TEST-PS-134-10-03 (unit): import with altered persona fails hash check.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round-trip hash equality for all fixture sets in use.
+2. Rollback drill recorded before first release gate use (future).
+3. No artifact in any export.
+
+## Assumptions & open decisions
+- ASSUMPTION: fixture sets are small (under 1 MB each).
+- D07 PROVISIONAL (D07 default, unapproved): fixture versions retained for 1 year.

@@ -1,35 +1,63 @@
-# PS-070-04 — commands queries events
+# PS-070-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-070-04. **Owner:** [09_Commerce/02_settlement/mod_disputes](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_disputes (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (`clm.dispute`, `case.resolve`, R13), CTR-EVT-001 (R02, R03, R13), CTR-ERR-001, CTR-SCH-001, CTR-CAP-001 (R06, R07). **Decisions:** D04 (PROVISIONAL default, unapproved).
 
-## Purpose and scope
-Define the commands queries events process for disputes within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-070-04.R01 | Every state-changing command requires `idempotency_key` and `expected_state_version` on the claim and on the dispute. | MVP |
+| PS-070-04.R02 | Raise, respond and withdraw are each one atomic write across dispute row and claim transition. | MVP |
+| PS-070-04.R03 | `dispute.get` returns `statement` only to the two claim parties and the case moderator. | MVP |
+| PS-070-04.R04 | Event payloads reference IDs and enums; `statement` is never in an event payload. | MVP |
 
-## Requirements to specify
-- [ ] PS-070-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-070-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-070-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Commands:
+- `dispute.raise(claim_id, expected_claim_state_version, reason_code, statement?, evidence_ids?) -> dispute_id, state_version`
+- `dispute.respond(dispute_id, expected_state_version, statement?, evidence_ids?) -> state_version`
+- `dispute.withdraw(dispute_id, expected_state_version) -> state_version`
+- `case.resolve(case_id, dispute_id, outcome)` (outcome: `restore_prior` | `reverse`; `mod_` with case grant)
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Queries: `dispute.get(dispute_id)`, `dispute.list(claim_id)` (participants only; max 20 per page).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Command | Event(s) | Idempotency scope | Version | Error codes |
+|---|---|---|---|---|
+| `dispute.raise` | `dispute.raised`, `clm.disputed` | (actor, command, key) | v1 | PS-070-02 table |
+| `dispute.respond` | `dispute.responded` | (actor, command, key) | v1 | `DISPUTE.RESPONSE_WINDOW_CLOSED`, `SYS.CONFLICT` |
+| `dispute.withdraw` | `dispute.withdrawn`, `clm.*` restore event | (actor, command, key) | v1 | `SYS.CONFLICT`, `COM.INVALID_TRANSITION` |
+| `case.resolve` | `dispute.resolved`, `clm.dispute_resolved` | (actor, command, key) | v1 | `SYS.FORBIDDEN`, `SYS.PRECONDITION_FAILED` (dual control, R07) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Escalation is an internal `sys_` command `dispute.escalate` emitting `dispute.escalated`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Per PS-070-03; the command table above is the only write path.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-070-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Shared codes from CTR-ERR-001 and module codes from PS-070-02. `COM.*` codes from CTR-COM-001 appear unchanged.
+
+## Authorization
+Capability IDs: `dispute.raise`, `dispute.respond`, `dispute.withdraw`, `dispute.read`, `dispute.escalate`, `case.resolve` (PS-070-05).
+
+## Failure, idempotency, concurrency, offline
+Same key and same digest returns the original result (CTR-EVT-001 R03). Retry of `dispute.raise` after timeout returns the same `dispute_id`.
+
+## Privacy, retention, abuse
+Events omit `statement` (R04). Redaction replaces payload with digest (CTR-EVT-001 R08).
+
+## Observability & budgets
+Latency budget: `dispute.raise` p95 ≤ 300 ms server time; `dispute.get` p95 ≤ 150 ms.
+
+## Tests
+- TEST-PS-070-04-01 (contract): all command and event fixtures validate against CTR-SCH-001 `1.0.0`.
+- TEST-PS-070-04-02 (integration): retried `dispute.raise` returns the same `dispute_id` and emits no second `clm.disputed`.
+- TEST-PS-070-04-03 (contract): event payload canary scan finds no `statement` text.
+- TEST-PS-070-04-04 (integration): `case.resolve` by one `ope_` alone is refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command in the table has a passing contract test.
+2. Replay and conflict behaviour matches CTR-EVT-001 R02/R03.
+3. No event carries free text.
+
+## Assumptions & open decisions
+- ASSUMPTION: `dispute.escalate` is internal only (no client command).
+- D04 (PROVISIONAL default, unapproved).

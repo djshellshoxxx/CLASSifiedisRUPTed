@@ -1,35 +1,51 @@
 # PS-125-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-125-09. **Owner:** [15_Platform/04_configuration/mod_tenants](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_tenants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [mod_tenants](SPEC.md) (Platform Lead; test ownership QA Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for tenants within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-125-09.R01 | Every `TEN.*` code has at least one test that triggers it and asserts its retryable flag and category. | MVP |
+| PS-125-09.R02 | Every event in PS-125-04 validates against CTR-EVT-001 in a contract test. | MVP |
+| PS-125-09.R03 | Every row in the PS-125-05 matrix has an executable test. | MVP |
+| PS-125-09.R04 | Cross-tenant isolation tests run on every release gate. | MVP |
 
-## Requirements to specify
-- [ ] PS-125-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-125-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-125-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: two tenants (A, B), one ope pair, one mod principal with no grant, one suspended admin, one account under legal hold. Fixtures use synthetic IDs only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract tests call commands in [PS-125-04](commands_queries_events.md) through the public API only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Lifecycle tests cover every row of [PS-125-03](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative tests cover every code in [PS-125-02](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix tests cover [PS-125-05](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-125-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault-injection and concurrency tests cover [PS-125-06](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Log-capture and rate-limit tests cover [PS-125-07](privacy_retention_abuse.md).
+
+## Observability & budgets
+Performance tests cover [PS-125-08](observability_performance.md).
+
+## Tests
+- TEST-PS-125-09-01 (contract): event and command schemas validate; schema drift fails CI.
+- TEST-PS-125-09-02 (e2e): create → activate → update config → suspend → resume → offboard → delete, with audit trail.
+- TEST-PS-125-09-03 (negative, cross-tenant): admin of A reads, updates, suspends and exports B; all return NOT_FOUND or FORBIDDEN.
+- TEST-PS-125-09-04 (offline): client with queued tenant config edit receives EVT.REVISION_CONFLICT after suspension.
+- TEST-PS-125-09-05 (a11y): tenant admin settings form has labelled fields and error text linked to inputs (Accessibility Lead checklist).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100% of codes and matrix rows covered by tests.
+2. Cross-tenant test suite passes with zero leaks.
+3. Contract tests pass against CTR-EVT-001 and CTR-SCH-001 versions pinned in the release.
+
+## Assumptions & open decisions
+- ASSUMPTION: test fixtures use synthetic data only.
+- PROVISIONAL (D08 default, unapproved): offline edit scenario uses local pending queue until relay acknowledgement.

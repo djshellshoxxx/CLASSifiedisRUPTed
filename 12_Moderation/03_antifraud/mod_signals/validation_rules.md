@@ -1,35 +1,65 @@
 # PS-101-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-101-02. **Owner:** [12_Moderation/03_antifraud/mod_signals](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_signals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_signals (Trust&Safety Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001 (R04 timestamp range), CTR-PRV-001 (R04 threshold), CTR-ID-001.
 
-## Purpose and scope
-Define the validation rules process for signals within 03_antifraud. Do not assume implementation or successful external settlement.
+**Decision labels:** K_MIN = 5 and report weight caps are PROVISIONAL (D07 default, unapproved).
 
-## Requirements to specify
-- [ ] PS-101-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-101-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-101-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-101-02.R01 | `signal_type` must be a registry value. Unknown → `SIGNAL.TYPE_UNKNOWN`. | MVP |
+| PS-101-02.R02 | `value` is an integer 0–100 inclusive. Decimals and strings rejected: `SIGNAL.VALUE_OUT_OF_RANGE`. | MVP |
+| PS-101-02.R03 | `window_end > window_start`, span ≤ 7 days, both hour-aligned, `window_end` ≤ now + 5 min. Else `SIGNAL.WINDOW_INVALID`. | MVP |
+| PS-101-02.R04 | Payload ≤ 2 KiB; only allowlisted keys; any key matching IP, device, coordinate or free-text classes → `SIGNAL.FORBIDDEN_FIELD`. | MVP |
+| PS-101-02.R05 | `subject_ref` must resolve to an active `acc_`. Missing or deleted → `SYS.NOT_FOUND` (identical to nonexistent). | MVP |
+| PS-101-02.R06 | `source_event_ref` must match `evt_[0-9A-HJKMNP-TV-Z]{26}`. | MVP |
+| PS-101-02.R07 | `sgn.update` (suppress) requires `reason_code` ∈ {`fp_confirmed`, `appeal_upheld`, `data_error`}. Free text → `SIGNAL.REASON_INVALID`. | MVP |
+| PS-101-02.R08 | Aggregates with fewer than 5 distinct subjects are withheld from output, not rejected at ingest. | MVP |
+| PS-101-02.R09 | Validation runs server-side only. Producer-side checks are advisory. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Input validation uses the JSON Schema of PS-101-01 (`signal.recorded` payload, CTR-SCH-001). Constraints: `value` minimum 0, maximum 100, `type` integer; `additionalProperties: false`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Applies to `sgn.create` and `sgn.update` (PS-101-04).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Validation failure leaves no record and emits no event.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | Retryable | Category / HTTP | Message key | When |
+|---|---|---|---|---|
+| SIGNAL.TYPE_UNKNOWN | false | validation / 400 | err.signal.type_unknown | R01 |
+| SIGNAL.VALUE_OUT_OF_RANGE | false | validation / 400 | err.signal.value_out_of_range | R02 |
+| SIGNAL.WINDOW_INVALID | false | validation / 400 | err.signal.window_invalid | R03 |
+| SIGNAL.FORBIDDEN_FIELD | false | validation / 400 | err.signal.forbidden_field | R04 (diagnostic: field path only) |
+| SIGNAL.REASON_INVALID | false | validation / 400 | err.signal.reason_invalid | R07 |
+| SYS.NOT_FOUND | false | not_found / 404 | err.sys.not_found | R05 |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-101-02`; scenarios and fixtures to be detailed in Prompt 3.
+Diagnostics: field path and rule enum only. Input values never echoed (CTR-ERR-001 R07).
+
+## Authorization
+Validation runs after the capability check (PS-101-05). Unauthorized callers receive the same error as for an unknown ID.
+
+## Failure, idempotency, concurrency, offline
+Duplicate (`source_event_ref`, `signal_type`) returns the original `sgn_` ID with no new event (not an error). Details: PS-101-06.
+
+## Privacy, retention, abuse
+Forbidden-field check is the primary control against accidental collection of personal data (PS-101-07).
+
+## Observability and budgets
+Rejects counted by code (PS-101-08). Validation p95 ≤ 5 ms.
+
+## Tests
+- TEST-PS-101-03 (unit): each code in the table is raised for its single violation.
+- TEST-PS-101-04 (negative): payload with `ip_address` returns `SIGNAL.FORBIDDEN_FIELD`; body contains no input value.
+- TEST-PS-101-08 (property): aggregates with 1–4 subjects are never returned.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every code in the table has a registry entry in CTR-ERR-001 with matching retryable flag.
+2. Negative fixtures for R01–R07 pass in CI.
+3. No error response echoes an input value.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5-minute clock skew matches CTR-EVT-001 R04 client tolerance.
+- D07 thresholds (PROVISIONAL, unapproved). D05 geoprivacy: no coordinate is accepted, so no D05 decision is needed here.

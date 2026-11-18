@@ -1,35 +1,56 @@
-# PS-137-06 — failure recovery idempotency
+# PS-137-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-06. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_unit. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for unit within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-137-06.R01 | A CI runner crash mid-suite leaves no partial coverage row; re-run produces one row per (run_id, module_path) | MVP |
+| PS-137-06.R02 | Manifest writes use `revision` compare-and-set; conflicting write returns UNIT.REVISION_CONFLICT with no change | MVP |
+| PS-137-06.R03 | Unit suite timeout per module is 10 min; timed-out run is recorded as failed, not skipped | MVP |
+| PS-137-06.R04 | Flaky test (fails then passes on retry) is flagged in the run report; automatic retry count is 0 for unit tests | MVP |
 
-## Requirements to specify
-- [ ] PS-137-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Recovery uses `run_id`, `revision` and `ci_commit` from PS-137-01. No additional tables.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry-safe commands per PS-137-04 idempotency keys. Events on failure: `unit.RunFailed` (run_id, module_path, reason code).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| running | runner crash | none | failed | discard partial coverage |
+| running | timeout 10 min | none | failed | emit unit.RunFailed (UNIT.SUITE_TIMEOUT) |
+| failed | re-run | same commit | running | new attempt number |
+| running | all pass | none | passed | write coverage once |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`UNIT.SUITE_TIMEOUT` (retryable: yes, once), `UNIT.REVISION_CONFLICT` (retryable: after re-read), `UNIT.RUNNER_LOST` (retryable: yes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Recovery actions run as CI service identity only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Retry policy: CI re-run allowed up to 2 times per commit; no in-process retry for unit tests.
+- Concurrency: two CI runs on the same commit produce one coverage row (unique key).
+- Offline: not applicable; unit runs are local and deterministic, but manifest writes need the central store.
+
+## Privacy, retention, abuse
+Failure events contain codes and IDs only; crash dumps with fixture data are redacted before upload (PS-137-07).
+
+## Observability & budgets
+Failure rate per module per week; alert at > 5% failed runs for 3 consecutive days (ASSUMPTION).
+
+## Tests
+- TEST-PS-137-06-01 (integration): kill runner at 50% of suite; zero coverage rows written.
+- TEST-PS-137-06-02 (unit): two MapTest calls with stale revision; one succeeds, one returns REVISION_CONFLICT.
+- TEST-PS-137-06-03 (integration): suite exceeding 10 min marked failed with SUITE_TIMEOUT.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Crash and timeout tests pass without partial rows.
+2. Concurrent-write test produces exactly one winner.
+3. No unit test uses automatic retry; flaky flag present in report.
+
+## Assumptions & open decisions
+- ASSUMPTION: 10-minute module suite timeout is adequate for the expected unit suite size.
+- D08 is not applicable here (no offline client writes); noted to avoid confusion.

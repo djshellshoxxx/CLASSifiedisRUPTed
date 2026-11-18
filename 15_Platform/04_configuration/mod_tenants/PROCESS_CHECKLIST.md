@@ -1,61 +1,20 @@
-# Process inventory and integration checklist
+# Process inventory and integration checklist — mod_tenants
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Owner: [module](SPEC.md) (Platform Lead). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
+- [x] [domain_schema.md](domain_schema.md) — PS-125-01: tenant_id, slug, status, admin_ref and region_cells classed against CTR-PRV-001.
+- [x] [validation_rules.md](validation_rules.md) — PS-125-02: slug pattern, reserved names, config allowlist, TEN.* codes.
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-125-03: provisioning saga and offboarding terminal state.
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-125-04: command signatures, idempotency scope, tenant.* events.
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-125-05: owner rule for admin; dual control for suspend and offboard.
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-125-06: slug uniqueness by constraint; suspension within 60 s.
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-125-07: RET-ACC, legal hold, slug enumeration limits.
+- [x] [observability_performance.md](observability_performance.md) — PS-125-08: tenant metrics, p95 budgets, log redaction of admin_ref.
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-125-09: TEST-PS-125-nn cases.
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-125-10: export manifest, re-keyed import, config rollback.
 
-## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
-- [ ] Complete Prompt 3 specification-quality review before implementation.
+## Module-specific integration gates
+- [ ] Cross-check `tenant.*` event types against CTR-EVT-001 subscriber map.
+- [ ] Cross-check `federation_mode` values against CTR-FED-001 peer scopes.
+- [ ] Cross-check region_cells against the CTR-PRV-001 region cell set.
+- [ ] Confirm the TEN.* code registry is added to CTR-ERR-001 catalogue.

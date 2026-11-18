@@ -1,35 +1,67 @@
-# PS-117-04 — commands queries events
+# PS-117-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-117-04. **Owner:** [15_Platform/02_backend/mod_api](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_api. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_api. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-SCH-001, CTR-ERR-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for api within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-117-04.R01 | All HTTP routes are under `/v1/`. A MAJOR bump creates `/v2/`; both run in parallel for ≥ 6 months (ASSUMPTION). | MVP |
+| PS-117-04.R02 | Reads are idempotent and cacheable only when `Cache-Control: private` is set. | MVP |
+| PS-117-04.R03 | List endpoints use keyset pagination, `limit` ≤ 100 (default 25), opaque signed cursor. | MVP |
+| PS-117-04.R04 | Every state-changing route declares its command type and its schema ID (CTR-SCH-001). | MVP |
 
-## Requirements to specify
-- [ ] PS-117-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-117-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-117-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Routes (v1):
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+| Method | Path | Idempotency | Typical errors |
+|---|---|---|---|
+| POST | `/v1/commands/{command_type}` | required | 400, 401, 403, 409, 412, 422, 429, 503 |
+| GET | `/v1/{resource}/{entity_id}` | n/a | 401, 403 (visible only), 404 |
+| GET | `/v1/{resource}?cursor=&limit=` | n/a | 400, 401 |
+| GET | `/v1/version` | n/a | 200 only |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Example request/response:
+```
+POST /v1/commands/listing.publish
+Idempotency-Key: 01J9ZQ8K3V2M4X7B
+{"type":"listing.publish","data":{"listing_id":"lst_01J9ZQ8K3V2M4X7BTQ5R0N6P1A"}}
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+202 Accepted
+{"data":{"request_id":"req_01J9ZQ8K3V2M4X7BTQ5R0N6P1A"},"status":"succeeded"}
+```
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Commands / queries / events
+- Dispatch: `command_type` maps to exactly one owning-module handler through the platform registry. Unknown type → `API.UNKNOWN_COMMAND` (400, rule `unknown_type`).
+- Events: api emits `api_version.deprecated` and `api_version.sunset` only (PS-117-01). Domain events are emitted by owning modules.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-117-04`; scenarios and fixtures to be detailed in Prompt 3.
+## States & transitions
+Operator version commands: `api_version.deprecate`, `api_version.sunset` (ope, see PS-117-05). Lifecycle per PS-117-01.
+
+## Validation & errors
+Validation per PS-117-02. Handler errors pass through unchanged when they conform to CTR-ERR-001; non-conforming handler errors become `SYS.INTERNAL` (500 not in category table, mapped to `internal` category, HTTP 500) with no detail.
+
+## Authorization
+Dispatch checks that the route's declared capability (PS-117-05) exists before calling the handler. The handler performs the object-level decision.
+
+## Failure, idempotency, concurrency, offline
+Revision-based concurrency: updates send `If-Match: <revision>`; mismatch → 409 `API.REVISION_CONFLICT` (retryable false; client must reread). Offline replay uses the original idempotency key.
+
+## Privacy, retention, abuse
+Response bodies contain only fields the actor may read (CTR-CAP-001 R10). Cursors encode no PII: keyset values use IDs and revisions.
+
+## Observability & budgets
+Route label set is fixed (`route_template`, never raw path). p95 read ≤ 150 ms, command acknowledgment ≤ 300 ms, excluding downstream waits above 2 s (ASSUMPTION).
+
+## Tests
+- TEST-PS-117-04-01 (contract): responses conform to CTR-ERR-001 envelope for every error row.
+- TEST-PS-117-04-02 (contract): route table matches the published OpenAPI document (generated, diffed in CI).
+- TEST-PS-117-04-03 (integration): cursor tampering returns `API.CURSOR_INVALID` (400).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every route in the table exists with the listed idempotency rule.
+2. OpenAPI diff with the previous MINOR shows no removed field (CTR-SCH-001 R03).
+3. Unknown command returns 400 with no handler invoked.
+
+## Assumptions & open decisions
+- ASSUMPTION: 202 for asynchronous commands; 200 for synchronous.
+- D01 (PROVISIONAL default: versioned signed envelopes with explicit opt-in; unapproved): federation traffic uses CTR-FED-001 routes, not this API.

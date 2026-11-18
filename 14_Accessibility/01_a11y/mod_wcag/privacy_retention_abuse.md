@@ -1,35 +1,45 @@
-# PS-111-07 — privacy retention abuse
+# PS-111-07 — privacy, retention and abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_wcag. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-111-07. **Owner:** [14_Accessibility/01_a11y/mod_wcag](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_wcag. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-111-07.R01 | Test evidence uses synthetic listings and accounts only; no real user screenshots. | MVP |
+| PS-111-07.R02 | Evidence artifacts are stored by digest in a restricted QA store; no public access. | MVP |
+| PS-111-07.R03 | Findings never quote user-entered text. | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for wcag within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+PUBLIC records; evidence artifacts are QA-internal.
 
-## Requirements to specify
-- [ ] PS-111-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-111-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-111-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+None beyond PS-111-04.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Screenshot scan in CI rejects images containing non-synthetic data (tool PENDING research).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Evidence store read: QA and Accessibility roles.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Not applicable.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-111-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Evidence retained 24 months (ASSUMPTION) then deleted; records kept indefinitely as PUBLIC. Abuse: fabricated evidence is detectable by digest mismatch against CI artifact logs.
+
+## Observability & budgets
+Not applicable.
+
+## Tests
+- TEST-PS-111-07-01 static: evidence fixtures contain only synthetic data.
+- TEST-PS-111-07-02 integration: evidence digest mismatch rejects record.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No real user data in any evidence artifact in the test corpus.
+2. Digest mismatch is refused in 100% of tests.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24-month evidence retention.
+- D07 (retention): PROVISIONAL (D07 default, unapproved).

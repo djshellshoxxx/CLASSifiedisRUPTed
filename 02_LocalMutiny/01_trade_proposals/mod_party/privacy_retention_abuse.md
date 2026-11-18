@@ -1,35 +1,48 @@
-# PS-014-07 — privacy retention abuse
+# PS-014-07 — privacy, retention and abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-EVT-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-014-07. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-014-07.R01 | `acc_id` is PRIVATE_PERSONAL and never leaves the owner/system boundary. | MVP |
+| PS-014-07.R02 | Counterparties see `prf_ref` and `region_cell_id` only, and only while the cycle is open (CTR-PRV-001 disclosure conditions). | MVP |
+| PS-014-07.R03 | A party may hold ≤ 20 open slots across all cycles (Sybil and block-spam limit, ASSUMPTION). | MVP |
+| PS-014-07.R04 | Invitations per `acc_`: ≤ 10 per 24 h (ASSUMPTION). | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for party within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Retention: slots kept while cycle open plus 90 days after close (D07 PROVISIONAL). `region_cell_id` removed from counterparties on close (CTR-PRV-001 R06).
 
-## Requirements to specify
-- [ ] PS-014-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-014-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-014-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Deletion events carry IDs and counts only (CTR-PRV-001 R12).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Closure of the cycle ends counterparty visibility; the slot itself is retained for audit under the retention class.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Rate-limit responses use `PARTY.RATE_LIMITED` (retryable after window). Diagnostics contain no counts per identity.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Owner export includes own slots; counterparty slots redacted to `prf_ref` and status (CTR-PRV-001 R11).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Retention sweep idempotent per `par_id`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-014-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Sybil controls: cap on open slots (R03), invitation rate (R04), and removal path via F12 case. Coarse region only: no inference from slot timing is stored. Block lists are F12 concerns; this module enforces the outcome.
+
+## Observability & budgets
+Rate-limit hit counts per rule. No per-identity labels.
+
+## Tests
+- TEST-PS-014-07-01 (abuse): 21st open slot refused.
+- TEST-PS-014-07-02 (privacy): closed cycle hides `region_cell_id` from counterparties.
+- TEST-PS-014-07-03 (integration): account closure removes owner-visible slots' `acc_id` link after retention.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero `acc_id` in federation, analytics and log fixtures.
+2. Retention purge matches class table for 100% of fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: 20 open slots and 10 invites per day are initial values.
+- D05 PROVISIONAL (Dxx default, unapproved): coarse regions only; per-meetup precision is out of scope.
+- D07 PROVISIONAL (Dxx default, unapproved): minimal per-category retention.

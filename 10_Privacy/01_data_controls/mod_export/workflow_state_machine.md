@@ -1,35 +1,57 @@
 # PS-078-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-078-03. **Owner:** [10_Privacy/01_data_controls/mod_export](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_export. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_export (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02), CTR-PRV-001 (lifecycle `active`→`expired`→`purged`), CTR-CAP-001 (R08).
 
-## Purpose and scope
-Define the workflow state machine process for export within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-078-03.R01 | States exactly: `requested`, `generating`, `ready`, `downloaded`, `expired`, `failed`. | MVP |
+| PS-078-03.R02 | `generating` → `failed` after 3 attempts (ASSUMPTION); failed exports never become ready. | MVP |
+| PS-078-03.R03 | `ready` → `expired` at `ready_at` + 7 days; `downloaded` → `expired` at first download + 24 h, whichever comes first. | MVP |
+| PS-078-03.R04 | A package is downloadable only in `ready`. The first complete download moves it to `downloaded`. In `downloaded`, only range requests that resume an interrupted first download are accepted, with the same token, until expiry (PS-078-06 R03). | MVP |
+| PS-078-03.R05 | Every transition emits one event with `aggregate_revision + 1`. | MVP |
 
-## Requirements to specify
-- [ ] PS-078-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-078-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-078-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+State on `data_subject_request.state`. Generation progress in `export_job` (`attempt`, `lease_until`, `last_error_code`), no content.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events: `export.requested`, `export.generating`, `export.ready`, `export.downloaded`, `export.expired`, `export.failed`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | request | PS-078-02 pass | requested | Row created |
+| requested | worker lease acquired | quota ok | generating | Lease 15 min |
+| generating | package verified | manifest hashes match | ready | Notify subject (generic text) |
+| generating | error | attempts < 3 | generating | Backoff |
+| generating | error | attempts = 3 | failed | Ops alert; subject notified |
+| ready | first download | token valid | downloaded | Token hash consumed |
+| ready or downloaded | expiry | time reached | expired | Package deleted (PS-078-07) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions → `EXPORT.INVALID_TRANSITION` (409). Download in `expired` → `EXPORT.PACKAGE_EXPIRED` (410).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner only. Worker is `sys_`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-078-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Lease prevents duplicate generation. Crash during generation → lease expiry → retry from scratch (no partial package served).
+
+## Privacy, retention, abuse
+Notifications carry no content and no scope detail.
+
+## Observability & budgets
+`export_state_total{state}`; `export_generation_seconds` p95 ≤ 15 min for accounts ≤ 1 GB (ASSUMPTION).
+
+## Tests
+- TEST-PS-078-03-01 (property): no sequence reaches `ready` from `failed`.
+- TEST-PS-078-03-02 (integration): expiry at 7 days and at 24 h after first download, both verified with a clock fixture.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Transition table fully covered by tests.
+2. A package is never served before `ready`.
+3. Expiry deletes package bytes within 1 h of expiry time (ASSUMPTION).
+
+## Assumptions & open decisions
+- ASSUMPTION: 3 generation attempts, 15 min lease, 7-day and 24 h windows.
+- PROVISIONAL (D07 default): minimal retention for generated packages.

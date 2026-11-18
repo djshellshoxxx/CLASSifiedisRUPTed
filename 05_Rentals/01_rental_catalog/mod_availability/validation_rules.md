@@ -1,35 +1,59 @@
 # PS-039-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-039-02. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/01_rental_catalog/mod_availability. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-ID-001
 
-## Purpose and scope
-Define the validation rules process for availability within 01_rental_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-039-02.R01 | Reject `end_date <= start_date` with `AVAIL.INVALID_RANGE` (400). | MVP |
+| PS-039-02.R02 | Reject span > 365 days with `AVAIL.SPAN_TOO_LONG` (400). | MVP |
+| PS-039-02.R03 | Reject start dates more than 730 days ahead or before today in the item timezone with `AVAIL.DATE_OUT_OF_WINDOW` (400). | MVP |
+| PS-039-02.R04 | Reject overlap with an unreleased block with `AVAIL.CONFLICT` (409). Message lists the nearest free interval, not the blocking block's identity. | MVP |
+| PS-039-02.R05 | Reject `OWNER_BLOCK` or `MAINTENANCE` that would overlap BOOKED or IN_USE with `AVAIL.BOOKED_PROTECTED` (409). | MVP |
+| PS-039-02.R06 | Reject a second hold extension with `AVAIL.HOLD_EXTENSION_LIMIT` (409). | MVP |
 
-## Requirements to specify
-- [ ] PS-039-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-039-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-039-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Dates are ISO 8601 `YYYY-MM-DD`. Timezone must be a valid IANA name. Unknown fields rejected.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Validation runs before the exclusion constraint is attempted, so users get a specific code, not a raw DB error.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation reads current block states only; transitions are in PS-039-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Message key | Diagnostic |
+|---|---|---|---|
+| AVAIL.INVALID_RANGE | false | avail.err.range | end <= start |
+| AVAIL.SPAN_TOO_LONG | false | avail.err.span | span > 365 |
+| AVAIL.DATE_OUT_OF_WINDOW | false | avail.err.window | outside window |
+| AVAIL.CONFLICT | false | avail.err.conflict | overlap; show next free dates |
+| AVAIL.BOOKED_PROTECTED | false | avail.err.protected | owner block on booked dates |
+| AVAIL.HOLD_EXTENSION_LIMIT | false | avail.err.hold_limit | second extension |
+| AVAIL.TIMEZONE_INVALID | false | avail.err.timezone | not IANA |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation runs after capability checks (PS-039-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-039-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Validation is pure. Conflict detection is re-run inside the write transaction.
+
+## Privacy, retention, abuse
+Diagnostics never include `rental_id` or renter identity.
+
+## Observability & budgets
+Count each code per minute. Validation p95 <= 2 ms.
+
+## Tests
+- TEST-PS-039-02-01 (unit): one fixture per code.
+- TEST-PS-039-02-02 (property): spans of 1..366 days accepted only up to 365.
+- TEST-PS-039-02-03 (negative): owner block over a BOOKED day returns BOOKED_PROTECTED.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each code has a fixture and a message key.
+2. Conflict message never reveals the blocking renter.
+3. Timezone validation rejects non-IANA strings.
+
+## Assumptions & open decisions
+- ASSUMPTION: 730-day booking horizon.
+- PROVISIONAL (D05 default, unapproved): timezone is an item attribute, not a renter attribute.

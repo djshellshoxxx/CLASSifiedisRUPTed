@@ -1,35 +1,49 @@
-# PS-077-10 — import export backup rollback
+# PS-077-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-077-10. **Owner:** [10_Privacy/01_data_controls/mod_delete](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_delete. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_delete (Privacy Lead, F10; backup owner F15.S03.M02 mod_backups). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06 backup replay, R07 holds), CTR-FED-001 (R07 tombstones), CTR-SCH-001 (R08 migration of signed records).
 
-## Purpose and scope
-Define the import export backup rollback process for delete within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-077-10.R01 | Deletion requests and completion records are included in data exports as metadata only (dates and counts), never as deleted content. | MVP |
+| PS-077-10.R02 | Backups taken before a deletion are restored only after replay of that deletion ledger (PS-077-06 R04). | MVP |
+| PS-077-10.R03 | Rollback of a deployment that changes deletion logic cannot resurrect deleted targets; migration is forward-only for `deletion_replay`. | MVP |
+| PS-077-10.R04 | Imports of federated data cannot re-introduce a target with a tombstone (CTR-FED-001 R07 `FED.TOMBSTONE_ON_ARRIVAL`). | MVP |
+| PS-077-10.R05 | No import path for `dsr_` records exists; requests are created only by the subject through the API. | MVP |
 
-## Requirements to specify
-- [ ] PS-077-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-077-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-077-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export entry for requests: `{"dsr_id", "scope", "state", "requested_at", "executed_at", "counts"}`. Replay ledger in PS-077-06.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No import command. Backup restore emits `deletion.replayed` with counts.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore: `restoring` → `replaying_deletions` → `serving`. Serving blocked until replay completes.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Restore with missing ledger → `DEL.LEDGER_MISSING` (422, not retryable; operator must choose older snapshot).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Restore is an operator action with dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-077-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Replay is idempotent on (target ID, store class). Interrupted replay resumes from ledger.
+
+## Privacy, retention, abuse
+Backups encrypted; deleted targets excluded from analytics restores (CTR-PRV-001 disclosure matrix).
+
+## Observability & budgets
+`del_replay_pending_targets` gauge; replay completes ≤ 1 h for 1 M targets (ASSUMPTION).
+
+## Tests
+- TEST-PS-077-10-01 (integration): export contains no deleted content.
+- TEST-PS-077-10-02 (rollback): deployment rollback followed by restore does not serve deleted target.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-077-10-02 passes with a backup taken before deletion.
+2. Export contains dates and counts only for deletion records.
+3. No endpoint accepts `dsr_` import (static route check).
+
+## Assumptions & open decisions
+- ASSUMPTION: replay throughput target above.
+- PROVISIONAL (D07 default): backup retention per schedule with replay on restore.

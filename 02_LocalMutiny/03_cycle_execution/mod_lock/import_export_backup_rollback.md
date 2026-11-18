@@ -1,35 +1,49 @@
-# PS-023-10 — import export backup rollback
+# PS-023-10 — Import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-023-10. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_lock](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_lock. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_lock. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-FED-001.
 
-## Purpose and scope
-Define the import export backup rollback process for lock within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-023-10.R01 | Export: a participant's own lock rows for their cycles (item ID, fence, state, expiry). No other party's owner ID. | MVP |
+| PS-023-10.R02 | Locks are never imported from federated peers; reservations are local to the instance that holds the item (FUTURE review under CTR-FED-001). | MVP |
+| PS-023-10.R03 | Restore: HELD locks whose `expires_at` has passed are set EXPIRED before serving; no HELD lock survives restore without a live cycle. | MVP |
+| PS-023-10.R04 | Rollback keeps 1.0.0 rows readable. | MVP |
 
-## Requirements to specify
-- [ ] PS-023-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-023-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-023-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export JSON mirrors `item_lock` minus other parties' `owner_party_id`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`cyc.lock.export` (`self`, idempotent by export ID).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore reconciliation: HELD with expired TTL → EXPIRED; HELD with missing cycle → RELEASED (reason `restore_orphan`).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Import returns `SYS.FORBIDDEN`. Restore inconsistency: `CYC_LOCK.RESTORE_INCONSISTENT` (non-retryable), quarantined.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export by `self`; restore by dual-control operator.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-023-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+RPO 15 min, RTO 4 h (ASSUMPTION). Restore re-computes the unique-index invariant before accepting traffic.
+
+## Privacy, retention, abuse
+Exports encrypted, 7-day expiry (ASSUMPTION).
+
+## Observability & budgets
+Restore reconciliation duration ≤ 5 min for 1 million lock rows (ASSUMPTION).
+
+## Tests
+- TEST-PS-023-10-01 (integration): export excludes other owners.
+- TEST-PS-023-10-02 (restore): expired HELD becomes EXPIRED after restore.
+- TEST-PS-023-10-03 (rollback): 1.0.0 readable after rollback drill.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export contains no other party's owner IDs.
+2. Restore drill: zero HELD locks without live cycle.
+3. Rollback drill: zero data loss.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO/RTO and reconciliation budget.
+- [DECISIONS.md](../../../DECISIONS.md) D07 — PROVISIONAL (D07 default, unapproved).

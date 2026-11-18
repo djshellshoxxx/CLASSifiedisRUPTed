@@ -1,61 +1,44 @@
-# Process inventory and integration checklist
+# Process checklist — F06.S02.M01 coarse
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-
-## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
-- [ ] Complete Prompt 3 specification-quality review before implementation.
+- [x] [domain_schema.md](domain_schema.md) — PS-047-01 written
+  - [ ] Cell code regex fixtures pass and fail as specified
+  - [ ] Registry schema has no count field
+  - [ ] Parent depth and cycle checks in fixtures
+- [x] [validation_rules.md](validation_rules.md) — PS-047-02 written
+  - [ ] Retire of a merge target is blocked
+  - [ ] Label key missing from catalog fixture
+  - [ ] Concurrent proposals: one conflict response
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-047-03 written
+  - [ ] Boundary tests at 4, 5 and 6 items
+  - [ ] Publication change visible in search within 5 min
+  - [ ] Retired cells never return results
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-047-04 written
+  - [ ] Duplicate approve with same key returns original
+  - [ ] Stale registry_version returns COARSE.CONFLICT
+  - [ ] Event payload has no numeric count
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-047-05 written
+  - [ ] Single approver rejected
+  - [ ] Justification readable only by ope_ and F10
+  - [ ] No API returns per-cell counts
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-047-06 written
+  - [ ] Recompute killed mid-run leaves flags unchanged
+  - [ ] Fail-closed after 60 min without recompute
+  - [ ] No reader sees mixed registry versions
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-047-07 written
+  - [ ] K_MIN enforced across API, events, logs, dashboards
+  - [ ] Differencing simulation within F10 tolerance
+  - [ ] Justification purge at 24 months verified
+- [x] [observability_performance.md](observability_performance.md) — PS-047-08 written
+  - [ ] Metric labels contain no counts
+  - [ ] Recompute p95 ≤ 60 s at 100 000 items
+  - [ ] Alert at 15 min stale recompute
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-047-09 written
+  - [ ] Golden registry fixtures
+  - [ ] Approve→recompute→visible E2E under 5 min
+  - [ ] Cell picker names unique (F14)
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-047-10 written
+  - [ ] Bundle digest round trip
+  - [ ] Tampered bundle rejected
+  - [ ] Rollback restores flags within one window

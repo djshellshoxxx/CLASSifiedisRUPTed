@@ -1,35 +1,56 @@
 # PS-030-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-030-08. **Owner:** [03_Services/02_service_booking/mod_disputes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_disputes. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for disputes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-030-08.R01 | Metrics: `service_dispute_open_total{reason_code,result}`, `service_dispute_links{link_state}` (gauge), `service_dispute_reconcile_total{outcome}`, `service_dispute_window_remaining_seconds` histogram. | MVP |
+| PS-030-08.R02 | `dispute.create` p95 ≤ 1 s end-to-end including F09 call (ASSUMPTION). | MVP |
+| PS-030-08.R03 | Reconciliation job: each `requested` link examined within 5 min of its `next_check_at`. | MVP |
+| PS-030-08.R04 | Logs: request ID, link ID hash, enum codes, latency. No note, amount or party identifiers in clear. | MVP |
+| PS-030-08.R05 | Alerts: any `DISPUTE.UNRESOLVED`; any link `requested` > 60 s; claim `DISPUTED` transition rate > 3× 7-day mean (ASSUMPTION). | MVP |
+| PS-030-08.R06 | Dashboards aggregate by reason_code and state; suppress cells with < 5 events (CTR-PRV-001 R04 analogue). | MVP |
+| PS-030-08.R07 | Traces never contain evidence digests. | MVP |
 
-## Requirements to specify
-- [ ] PS-030-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-030-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-030-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels are closed enums: `reason_code`, `link_state`, `result`, `outcome`. No free text.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command emits one latency sample and result counter. Event append failure increments `service_dispute_event_append_failed_total` and alerts.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Gauge recomputed on each local transition ([workflow_state_machine.md](workflow_state_machine.md)).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Counters keyed by CTR-ERR-001 codes only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards require `global` operator read with purpose (CTR-CAP-001 R06); no per-party drill-down.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-030-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metrics are best-effort. Offline client-side timing is not sent (drafts are local).
+
+## Privacy, retention, abuse
+Telemetry retention 30 days (ASSUMPTION). Dispute counts per party are not exported.
+
+## Observability & budgets
+| Budget | Target |
+|---|---|
+| Open p95 | ≤ 1 s |
+| Reconcile lag | ≤ 5 min |
+| Telemetry overhead | ≤ 2% CPU (ASSUMPTION) |
+
+## Tests
+- TEST-PS-030-08-01 unit: metric label sets are enum-closed.
+- TEST-PS-030-08-02 log scan: no note or amount text in logs.
+- TEST-PS-030-08-03 integration: alert fires on injected `DISPUTE.UNRESOLVED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All metrics use closed label sets.
+2. Log scan passes with zero clear-text party identifiers.
+3. Dashboard cells < 5 events are suppressed in test data.
+
+## Assumptions & open decisions
+- ASSUMPTION: latency and alert thresholds listed above.
+- Payment checklist applies: amounts never appear in metric labels.

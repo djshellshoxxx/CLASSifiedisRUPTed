@@ -1,35 +1,65 @@
-# PS-118-07 — privacy retention abuse
+# PS-118-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-118-07. **Owner:** [15_Platform/02_backend/mod_relays](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_relays. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_relays. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R03, R06, R09), CTR-FED-001 (R02, R03, R08, R11, R12), CTR-EVT-001 (R06, R11).
 
-## Purpose and scope
-Define the privacy retention abuse process for relays within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-118-07.R01 | Relay never stores PRIVATE_PERSONAL, LOCATION_PRECISE or SECRET plaintext. Those classes are never federated (CTR-FED-001 R03). | MVP |
+| PS-118-07.R02 | Private message payloads reach relay only as ciphertext (ASSUMPTION; PENDING CTR for private-message encryption, not yet written). | MVP |
+| PS-118-07.R03 | Relay logs contain node IDs, event IDs, codes and counts. No IP addresses except keyed hashes (CTR-PRV-001 R09). | MVP |
+| PS-118-07.R04 | Per-peer limits: ≤ 600 events/min and ≤ 10 MiB/h (CTR-FED-001 R11). | MVP |
+| PS-118-07.R05 | Outbound random delay 0–60 s (CTR-FED-001 R12). | MVP |
 
-## Requirements to specify
-- [ ] PS-118-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-118-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-118-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metadata visible to relay per queue item: origin node, target peer, event ID, size, timestamps. Relay does not store `actor_ref` in cleartext: CTR-FED-001 pseudonymizes it per audience before export.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond PS-118-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retention purge on EXPIRED, REJECTED or peer revocation (PS-118-03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Class check: any envelope whose `max_data_class` is PRIVATE_PERSONAL or higher is rejected with `RELAY.CLASS_NOT_FEDERABLE` (422, unprocessable_state).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Peers see only their own queue items; operators see aggregate metadata.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-118-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge is idempotent and runs on schedule and on revocation.
+
+## Privacy, retention, abuse
+| Data | Retention | Basis |
+|---|---|---|
+| queued envelope bytes | ≤ 7 days | PS-118-01 |
+| terminal digests and codes | 30 days | ASSUMPTION |
+| access and error logs | 14 days | ASSUMPTION |
+
+Threats and controls:
+
+| Threat | Control |
+|---|---|
+| Graph deanonymization from metadata | node-level IDs only; relay batches mixed across audiences; timing jitter R05 (partial mitigation) |
+| Sybil relays or peers | peer admission by operator with dual control (PS-118-05) |
+| Malicious peer floods queue | per-peer rate limits R04, queue cap |
+| Replay of old batch | expiry check, dedupe by (origin, event) |
+| Timing correlation | random delay R05; cover traffic deferred to Future |
+
+## Observability & budgets
+No payload content in telemetry; CI canary test on relay logs.
+
+## Tests
+- TEST-PS-118-07-01 (security): PRIVATE_PERSONAL-classed envelope rejected.
+- TEST-PS-118-07-02 (integration): peer exceeding 600 events/min receives FED.RATE_LIMITED with retry-after.
+- TEST-PS-118-07-03 (privacy): log canary scan finds no payload or IP.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero plaintext sensitive payloads in relay storage (schema and dump scan).
+2. Rate limits enforced at the stated values (load test).
+3. Privacy Lead (F10) signs off metadata inventory before release.
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day and 30-day retention; ciphertext-only private payloads.
+- D05 PROVISIONAL (default: coarse public regions, precision user-initiated; unapproved): relay carries no location fields.
+- D07 PROVISIONAL (default: minimal per-category retention with legal-hold exceptions; unapproved).

@@ -1,35 +1,53 @@
 # PS-029-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-029-06. **Owner:** [03_Services/01_service_catalog/mod_skills](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_skills. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_skills. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ID-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for skills within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-029-06.R01 | Every write is idempotent on (actor, command, idempotency_key) with a 24 h replay window (ASSUMPTION). | MVP |
+| PS-029-06.R02 | Concurrent attach of the same code on one listing: exactly one row survives; loser receives `SKILLS.DUPLICATE_ATTACHMENT`. | MVP |
+| PS-029-06.R03 | Listing edits use `expected_revision`; mismatch → `EVT.REVISION_CONFLICT`, no write. | MVP |
+| PS-029-06.R04 | A relay timeout (> 5 s, ASSUMPTION) is treated as unknown outcome; client retries with the same key. | MVP |
+| PS-029-06.R05 | Partial failure: row insert and event append share one transaction; no event without row, no row without event. | MVP |
+| PS-029-06.R06 | Retries are safe for `skill.search`; no retry budget is consumed on read paths. | MVP |
+| PS-029-06.R07 | Expiry job resumes from last processed row ID after crash; re-run produces no duplicate events. | MVP |
 
-## Requirements to specify
-- [ ] PS-029-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-029-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-029-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record: `(actor_ref, command, idempotency_key, request_digest, result_ref, created_at)`, kept 24 h, then removed. Digest is SHA-256 of JCS of the request body.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry semantics per command in [commands_queries_events.md](commands_queries_events.md). Retryable codes are fixed in the CTR-ERR-001 registry.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery never skips a transition. A crash mid-transition is rolled back; retry re-evaluates guards in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Non-retryable: `SKILLS.LIMIT_EXCEEDED`, `SKILLS.TAXONOMY_UNKNOWN`. Retryable: `SYS.UNAVAILABLE` (retryable true; backoff 1 s, 2 s, 4 s, max 3 attempts, jitter ±20%).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Replayed requests re-check capability only if the original result is not returned from the idempotency store. Replays of a revoked principal's writes are refused.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-029-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Offline attach is queued locally until relay acknowledgment (D08 PROVISIONAL). On reconnect, queued commands are sent in creation order with their original keys. Server rejections keep the local row as `pending_sync` with the error code shown to the user; no silent drop. Unknown schema MAJOR stays pending with "client upgrade required" (CTR-SCH-001 R06).
+
+## Privacy, retention, abuse
+Idempotency records hold digests, not bodies. Queued offline data on devices is cleared on sign-out (ASSUMPTION).
+
+## Observability & budgets
+Metrics: replay hits, conflicts, retries per command. Alert when conflicts exceed 2% of writes over 15 minutes (ASSUMPTION).
+
+## Tests
+- TEST-PS-029-06-01 integration: 50 concurrent attaches of one code produce one row.
+- TEST-PS-029-06-02 integration: crash injected between row insert and event append leaves no orphan.
+- TEST-PS-029-06-03 offline: queued attach replayed after reconnect exactly once.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Duplicate and replay cases produce zero extra events.
+2. No row exists without a matching event after any injected fault.
+3. Offline queue survives app restart and is never silently dropped.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h idempotency window; 5 s timeout; 3 retries.
+- D08 (offline writes) PROVISIONAL.
+- No payment or receipt checklist applies.

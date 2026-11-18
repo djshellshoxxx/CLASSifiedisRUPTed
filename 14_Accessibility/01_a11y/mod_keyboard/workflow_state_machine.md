@@ -1,35 +1,62 @@
 # PS-109-03 — workflow state machine
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_keyboard. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-109-03. **Owner:** [14_Accessibility/01_a11y/mod_keyboard](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_keyboard. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-109-03.R01 | A binding is in exactly one state: `default`, `set` or `reset_pending`. | MVP |
+| PS-109-03.R02 | A focus trap is `inactive` or `active`; closing a dialog returns focus to `focus_return_target` in 100% of catalog entries. | MVP |
+| PS-109-03.R03 | Every account-scope transition emits one `keyboard_binding.changed` event after server commit. | MVP |
 
-## Purpose and scope
-Define the workflow state machine process for keyboard within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+State is held in the `kbb_` record (`provenance`, `revision`). Focus trap state is in-memory per document.
 
-## Requirements to specify
-- [ ] PS-109-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-109-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-109-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Transitions driven by [PS-109-04](commands_queries_events.md) commands and by sync results from [PS-116](../../../15_Platform/01_pwa/mod_offline/workflow_state_machine.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Binding:
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| default | set (valid, no conflict) | revision check passes (first write) | set | revision=1; event on account scope |
+| set | set (valid) | expected_revision = stored | set | revision+1; event |
+| set | reset | action exists | default | record deleted; event with change=reset |
+| set | sync_conflict | server revision > local | set | server value wins; local notice shown |
+| any | set (rejected) | validation fails | unchanged | error returned; no write |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Focus trap:
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| inactive | dialog_open | dialog has ≥1 focusable element | active | focus moves to first focusable |
+| active | Tab / Shift+Tab | — | active | focus wraps inside dialog |
+| active | Escape | escape_action = close | inactive | focus returns to focus_return_target |
+| active | dialog_close | target missing | inactive | focus goes to first focusable in document order, never body |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions return the errors in [PS-109-02](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Only the owning `acc_` may trigger account-scope transitions.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-109-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+See [PS-109-06](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Transition events carry action_id and revision only.
+
+## Observability & budgets
+Transition counters per state pair. Focus restore ≤ 100 ms p95 (ASSUMPTION).
+
+## Tests
+- TEST-PS-109-03-01 unit: every row of both tables is covered.
+- TEST-PS-109-03-02 integration: sync_conflict keeps server value and shows notice.
+- TEST-PS-109-03-03 e2e: open and close each catalog dialog by keyboard; focus returns correctly.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Transition tables are exhaustive: no (state, event) pair is undefined.
+2. Focus returns to the opener in 100% of catalog dialogs under test.
+3. Each committed account-scope transition emits exactly one event.
+
+## Assumptions & open decisions
+- ASSUMPTION: server-wins conflict policy for account-scope bindings; no merge.
+- No Dxx decision directly affects this state machine.

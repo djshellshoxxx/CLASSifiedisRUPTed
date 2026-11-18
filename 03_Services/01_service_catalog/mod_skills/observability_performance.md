@@ -1,35 +1,58 @@
 # PS-029-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-029-08. **Owner:** [03_Services/01_service_catalog/mod_skills](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_skills. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_skills. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for skills within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-029-08.R01 | Emit metrics `skills_attach_total{result}`, `skills_detach_total{reason}`, `skills_pending_rows` (gauge), `skills_search_latency_ms` (histogram). | MVP |
+| PS-029-08.R02 | Attach p95 ≤ 300 ms server-side at 2,000 active listings per code (ASSUMPTION). | MVP |
+| PS-029-08.R03 | Search p95 ≤ 250 ms for queries of ≤ 5 codes returning ≤ 50 rows (ASSUMPTION). | MVP |
+| PS-029-08.R04 | Logs use pseudonymous IDs only and error codes; no label text, no proficiency values (CTR-PRV-001 R09). | MVP |
+| PS-029-08.R05 | Traces carry `request_id` and command name; no request body capture. | MVP |
+| PS-029-08.R06 | Alert when `skills_pending_rows` grows > 500 per day or when the 30-day expiry job lags > 24 h. | MVP |
+| PS-029-08.R07 | Dashboards show counts by status and code family, never individual listings. | MVP |
 
-## Requirements to specify
-- [ ] PS-029-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-029-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-029-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels are closed enums: `result` ∈ {ok, limit, taxonomy_unknown, duplicate, conflict, forbidden, error}. No free-text labels.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command emits one latency sample and one result counter. Event emission failure increments `skills_event_append_failed_total` and alerts.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Gauge recomputed on each transition in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Validation error counters use CTR-ERR-001 codes only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards require operator read scope `global` with purpose (CTR-CAP-001 R06). Per-listing drill-down is not provided.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-029-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metrics are best-effort; loss does not block writes. Offline client metrics are batched and sent only after relay acknowledgment (D08 PROVISIONAL).
+
+## Privacy, retention, abuse
+Telemetry retention 30 days (ASSUMPTION). Aggregates below 5 events are suppressed in dashboards to avoid singling out a listing (CTR-PRV-001 R04 analogue).
+
+## Observability & budgets
+| Budget | Target |
+|---|---|
+| Attach p95 | ≤ 300 ms |
+| Search p95 | ≤ 250 ms |
+| Expiry job | ≤ 5 min per 10,000 rows |
+| Telemetry overhead | ≤ 2% CPU (ASSUMPTION) |
+
+## Tests
+- TEST-PS-029-08-01 unit: each metric increments with correct labels.
+- TEST-PS-029-08-02 log-scan: no label text in captured logs during integration run.
+- TEST-PS-029-08-03 load: search p95 target at 2,000 listings per code.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All four metric families exist and use closed label enums.
+2. Log-scan test passes with zero label or proficiency leaks.
+3. Alert rules R06 are configured before release (future gate).
+
+## Assumptions & open decisions
+- ASSUMPTION: latency budgets as listed.
+- ASSUMPTION: aggregate suppression threshold of 5.
+- No payment or receipt checklist applies.

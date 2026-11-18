@@ -1,35 +1,51 @@
-# PS-077-07 — privacy retention abuse
+# PS-077-07 — privacy, retention and abuse controls
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-077-07. **Owner:** [10_Privacy/01_data_controls/mod_delete](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_delete. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_delete (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (classes, RET-AUD, RET-EVD, RET-LEGAL), CTR-EVT-001 (R08 redaction), CTR-COM-001 (R05, RET-EVD redaction).
 
-## Purpose and scope
-Define the privacy retention abuse process for delete within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-077-07.R01 | Deletion removes or redacts all PRIVATE_PERSONAL and LOCATION_PRECISE data of the subject within 24 h across primary store, replicas, caches, search indexes and exports (CTR-PRV-001). | MVP |
+| PS-077-07.R02 | Event payloads referencing deleted content are redacted: envelope kept, payload replaced by digest (CTR-EVT-001 R08). | MVP |
+| PS-077-07.R03 | Commerce evidence (CTR-COM-001 claims) is never deleted by this module; personal fields are redacted per RET-EVD and hashes are kept. | MVP |
+| PS-077-07.R04 | Deletion does not recall copies already seen by counterparties; the UI states this before confirmation. | MVP |
+| PS-077-07.R05 | Rate limit: ≤ 3 deletion requests per subject per 24 h (ASSUMPTION); exceeded → `SYS.RATE_LIMITED` (429). | MVP |
+| PS-077-07.R06 | Content under an active moderation case (`cas_`) is held, not deleted, to prevent evidence destruction. | MVP |
 
-## Requirements to specify
-- [ ] PS-077-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-077-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-077-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data classes of deleted targets are read from the field registry (CTR-SCH-001 R01); no class is hard-coded here.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No additional commands. Redaction is emitted as `record.deleted` with `redacted: true`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Held targets remain in `held` until the hold is released (PS-077-03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SYS.RATE_LIMITED` is retryable after `retry_after_ms`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Moderation holds are applied by F12 (`mod_flags` and case flow) with dual control; this module only honours them.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-077-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Redaction is idempotent on digest replacement.
+
+## Privacy, retention, abuse
+Retention: request rows RET-AUD; redacted event envelopes RET-AUD; deleted data RET-EPH on purge. Abuse: a bad actor deleting evidence during a dispute is blocked by R03 and R06. A stolen session cannot delete an account without reauthentication (PS-077-02 R04).
+
+## Observability & budgets
+Alert on any `PRECISE` class value found in logs after deletion (CTR-PRV-001 zero tolerance).
+
+## Tests
+- TEST-PS-077-07-01 (privacy): after account deletion, fixture PRIVATE_PERSONAL values absent from search index, exports and logs.
+- TEST-PS-077-07-02 (abuse): deletion of a target under `cas_` returns held state.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Propagation within 24 h in seeded environment (TEST-PS-077-07-01).
+2. Commerce claim records retain hashes and amounts after deletion (negative fixture).
+3. Rate limit enforced at 4th request in 24 h.
+
+## Assumptions & open decisions
+- PROVISIONAL (D07 default): minimal retention with legal-hold exceptions.
+- PROVISIONAL (D05 default): precise location disclosures expire and are purged on deletion.
+- OPEN (R07): RET-EVD period and redaction timing require jurisdiction review.

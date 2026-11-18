@@ -1,35 +1,53 @@
 # PS-055-03 — workflow state machine
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-03. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-055-03.R01 | Export states: generated, downloaded, expired, deleted. Import states: staged, applied, rejected. | MVP |
+| PS-055-03.R02 | Import applies only from `staged`, and only once per (bundle_digest, target node). | MVP |
+| PS-055-03.R03 | Export is single-download: the first successful download moves to `downloaded` and deletes the file. | MVP |
+| PS-055-03.R04 | Every transition emits one CTR-EVT-001 event with `revision` + 1. | MVP |
 
-## Purpose and scope
-Define the workflow state machine process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+## Data / schema
+State on `bnd_` and `imj_` rows.
 
-## Requirements to specify
-- [ ] PS-055-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Transitions via [commands_queries_events](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | export.generate | owner step-up; ≤ 3 exports per 24 h | generated | Bundle file written encrypted; `portable_bundle.generated`. |
+| generated | download | link unexpired (15 min); first download | downloaded | File deleted after response confirmed; `portable_bundle.downloaded`. |
+| generated | timer | now > expires_at | expired | File deleted; `portable_bundle.expired`. |
+| downloaded | timer | 7 d after generation | deleted | Metadata only kept. |
+| (none) | import.stage | validation passes (PS-055-02) | staged | `portable_import.staged`. |
+| staged | import.apply | owner session; digest not previously applied | applied | Create `prf_` with imported fields; `portable_import.applied`. |
+| staged | import.apply | validation fails or digest applied | rejected | `portable_import.rejected` with code. |
+| staged | timer | 24 h without apply | rejected | Bundle deleted. |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Guard failures map to codes in [validation_rules](validation_rules.md). Invalid transitions: `SYS.CONFLICT` (409).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Owner only (see [authorization_capabilities](authorization_capabilities.md)).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Apply is one transaction: profile creation and `imj_` state change commit together.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Deleted bundle files are overwritten at storage layer where supported; otherwise crypto-erased with per-bundle key destruction (ASSUMPTION).
+
+## Observability & budgets
+`portable_transitions_total{type,to}`.
+
+## Tests
+TEST-PS-055-05 (table rows), TEST-PS-055-06 (double apply returns ALREADY_APPLIED, one profile).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each row has a passing test.
+2. A second download attempt returns 410.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15 min link, 24 h staging, 7 d expiry.

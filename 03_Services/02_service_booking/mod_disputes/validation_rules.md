@@ -1,35 +1,64 @@
 # PS-030-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-030-02. **Owner:** [03_Services/02_service_booking/mod_disputes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_disputes. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-COM-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the validation rules process for disputes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-030-02.R01 | Eligibility is checked server-side before calling F09. Client checks are advisory. | MVP |
+| PS-030-02.R02 | Subject must be in an eligible state (see [workflow_state_machine.md](workflow_state_machine.md)); else `DISPUTE.SUBJECT_NOT_ELIGIBLE`. | MVP |
+| PS-030-02.R03 | `now ≤ window_ends_at`; else `DISPUTE.WINDOW_CLOSED` (retryable false). | MVP |
+| PS-030-02.R04 | One open link per subject: duplicate → `DISPUTE.DUPLICATE_OPEN` and return the existing `dispute_ref`. | MVP |
+| PS-030-02.R05 | `reason_code` ∈ closed enum; unknown value → `DISPUTE.REASON_INVALID`. | MVP |
+| PS-030-02.R06 | `OTHER` without note, or note > 500 scalars → `DISPUTE.NOTE_INVALID`. | MVP |
+| PS-030-02.R07 | `requested_minor` must match `^(0|[1-9][0-9]{0,38})$`, be ≥ 1 and ≤ subject amount; else `DISPUTE.AMOUNT_INVALID`. | MVP |
+| PS-030-02.R08 | Currency mismatch with subject → `DISPUTE.CURRENCY_MISMATCH`. | MVP |
+| PS-030-02.R09 | Evidence > 10 digests per party, or malformed digest → `DISPUTE.EVIDENCE_LIMIT`. | MVP |
+| PS-030-02.R10 | Actor not a participant → `SYS.NOT_FOUND` (CTR-ERR-001 R08). | MVP |
 
-## Requirements to specify
-- [ ] PS-030-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-030-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-030-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Inputs per [domain_schema.md](domain_schema.md). Rule outputs use `details[].rule` closed enum (`eligibility`, `window`, `duplicate`, `enum`, `note_length`, `amount_range`, `currency`, `evidence_count`). Input values never echoed.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Validation applies to `dispute.create` before F09 call; see [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation is a guard for `requested` → `opened` only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | message_key |
+|---|---|---|
+| DISPUTE.SUBJECT_NOT_ELIGIBLE | false | err.dispute.subject_not_eligible |
+| DISPUTE.WINDOW_CLOSED | false | err.dispute.window_closed |
+| DISPUTE.DUPLICATE_OPEN | false | err.dispute.duplicate_open |
+| DISPUTE.REASON_INVALID | false | err.dispute.reason_invalid |
+| DISPUTE.NOTE_INVALID | false | err.dispute.note_invalid |
+| DISPUTE.AMOUNT_INVALID | false | err.dispute.amount_invalid |
+| DISPUTE.CURRENCY_MISMATCH | false | err.dispute.currency_mismatch |
+| DISPUTE.EVIDENCE_LIMIT | false | err.dispute.evidence_limit |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation runs after the participant check in [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-030-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Validation is deterministic given subject state and clock. Clock skew > 5 s is rejected for window checks (ASSUMPTION; server clock authoritative).
+
+## Privacy, retention, abuse
+Notes are validated for length only; content is not scanned here. Rejected notes are not stored.
+
+## Observability & budgets
+Counter per rule; validation p95 ≤ 10 ms excluding F09 call (ASSUMPTION).
+
+## Tests
+- TEST-PS-030-02-01 unit: one case per code, including window boundary at exactly `window_ends_at`.
+- TEST-PS-030-02-02 property: amounts 0, 1, subject, subject+1, 39-digit values.
+- TEST-PS-030-02-03 negative: non-participant receives `SYS.NOT_FOUND`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each rule R01–R10 maps to one code or pass.
+2. No error body contains note text or amounts.
+3. Window check uses server time only.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5 s clock-skew tolerance for window checks.
+- Payment checklist applies: amount and currency rules follow CTR-COM-001 R02–R03.

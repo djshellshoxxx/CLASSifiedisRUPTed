@@ -1,35 +1,54 @@
-# PS-048-07 — privacy retention abuse
+# PS-048-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-048-07. **Owner:** [06_Discovery/02_geoprivacy/mod_location](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_location. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_location. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R03, R05, R06, R09, R11), CTR-FED-001 (R03); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for location within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** D05 PROVISIONAL (client-side resolution, cell-only storage). D07 PROVISIONAL (coordinates 0-day retention in MVP).
 
-## Requirements to specify
-- [ ] PS-048-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-048-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-048-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-048-07.R01 | Precise coordinates are LOCATION_PRECISE: never stored, never logged, never federated, never in public payloads (CTR-PRV-001 R03). | MVP |
+| PS-048-07.R02 | Stored data is one LOCATION_COARSE cell per account. | MVP |
+| PS-048-07.R03 | Device permission is requested only from an explicit user action; no background location. | MVP |
+| PS-048-07.R04 | Location spoofing: resolved cells from fixes with accuracy > 25 km or impossible speed between consecutive set events (> 900 km/h, ASSUMPTION) are flagged for review, not rejected silently. | MVP |
+| PS-048-07.R05 | Account deletion clears cell within 24 h (CTR-PRV-001 R06). | MVP |
+| PS-048-07.R06 | Federation of stored cells: Future; only with K_MIN rule (CTR-PRV-001). | Future |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Retention: cell RET-ACC; consent records RET-AUD; coordinates RET-LOC set to 0 days (no storage). Client cache RET-EPH.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+No coordinates in any command or event.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Flagged cell (spoofing review) state added: `flagged` (Future detail).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Spoof checks produce `LOCATION.FLAGGED_FOR_REVIEW` internal code, not shown to user.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-048-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Review access via F12 case scope only.
+
+## Failure, idempotency, concurrency, offline
+Spoof check uses only cell codes and timestamps.
+
+## Privacy, retention, abuse
+Threats: trilateration by repeated set operations (limited by picker budget and cell granularity; see mod_proximity); GPS spoofing; stalkers using location change timing; metadata leakage in HTTP headers (client sends no coordinates in headers, URLs or query strings); third-party analytics SDK receiving location (forbidden by policy).
+
+## Observability & budgets
+Aggregate count of flagged sets per day, K_MIN applied.
+
+## Tests
+- TEST-PS-048-07-01 (static): forbidden keys in all payload schemas.
+- TEST-PS-048-07-02 (client): no coordinate in URL, headers or body across a full resolve-and-set flow.
+- TEST-PS-048-07-03 (abuse): 1 000 spoofed fixes trigger flag rate threshold.
+- TEST-PS-048-07-04 (retention): deletion clears cell within 24 h.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero coordinate fields in server schemas (static check).
+2. Network capture shows zero coordinates.
+3. Flagging thresholds defined and reviewed by F10.
+
+## Assumptions & open decisions
+- ASSUMPTION: 900 km/h spoof threshold.
+- D05 and D07 PROVISIONAL.

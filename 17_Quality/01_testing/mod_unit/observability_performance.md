@@ -1,35 +1,55 @@
-# PS-137-08 — observability performance
+# PS-137-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-08. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_unit. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the observability performance process for unit within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-137-08.R01 | Unit suite wall-clock time per module reported on every run; p95 <= 5 min for full repository unit suite (ASSUMPTION) | MVP |
+| PS-137-08.R02 | Per-test flake rate published; any test with flake rate > 1% over 100 runs is flagged | MVP |
+| PS-137-08.R03 | Gate reports count of TEST-PS-IDs unmapped (target 0) and quarantined share (target <= 5%) | MVP |
+| PS-137-08.R04 | Metrics exported without fixture values or file contents | MVP |
 
-## Requirements to specify
-- [ ] PS-137-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metrics record: `{run_id, module_path, duration_ms, tests_total, tests_failed, tests_quarantined, flaky_ids[], at}`. Flaky IDs are TEST-IDs only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Emits `unit.CoverageRecorded` (PS-137-04) and `unit.RunReport`. No query surface beyond CI dashboard.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Missing metric fields fail the report step with UNIT.REPORT_INCOMPLETE (retryable: yes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards readable by engineering roles; raw run logs readable by module developers and QA Lead only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Report step is idempotent per run_id. If the metrics store is unavailable, the CI run still gates on test results and queues the report for retry (max 24 h).
+
+## Privacy, retention, abuse
+Metrics contain no personal data (see PS-137-07). Log redaction applied before storage.
+
+## Observability & budgets
+| Metric | Target | Source |
+|---|---|---|
+| unit suite p95 wall time | <= 5 min | CI runner |
+| flaky tests (>1%) | 0 in gate | run report |
+| unmapped TEST-IDs | 0 | manifest check |
+| quarantined share | <= 5% | manifest |
+Targets are ASSUMPTION until baseline measured.
+
+## Tests
+- TEST-PS-137-08-01 (unit): report generator fails when `tests_total` missing.
+- TEST-PS-137-08-02 (integration): synthetic run with one planted flaky test produces flaky_ids entry.
+- TEST-PS-137-08-03 (unit): exported metrics contain no string matching fixture-value patterns.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets table filled with measured baselines within first two sprints of use (future).
+2. Flaky detection reproduces planted case in test.
+3. Report never contains file contents.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5-minute unit suite target; to revisit with mod_load baselines.
+- No D-number directly applies; retention of run logs follows D07 PROVISIONAL.

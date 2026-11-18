@@ -1,35 +1,57 @@
 # PS-137-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-03. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_unit. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001.
 
-## Purpose and scope
-Define the workflow state machine process for unit within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-137-03.R01 | Every TestManifestEntry is in exactly one of unmapped, mapped, quarantined, retired at all times | MVP |
+| PS-137-03.R02 | Only the transitions in the table below are permitted; any other transition is rejected with UNIT.ILLEGAL_TRANSITION | MVP |
+| PS-137-03.R03 | Quarantined tests expire after 14 days; expiry without renewal moves the test to mapped with gate failure | MVP |
+| PS-137-03.R04 | Retired TEST-IDs are never reused; a re-added test gets a new revision, not a new ID | MVP |
 
-## Requirements to specify
-- [ ] PS-137-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Uses `TestManifestEntry.status` and `revision` from PS-137-01. Transition log entries: `{test_id, from, to, revision, actor_role, at}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions are triggered by `unit.MapTest`, `unit.QuarantineTest`, `unit.ApproveQuarantine`, `unit.RetireTest` and by the scheduled expiry job (PS-137-04).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| unmapped | MapTest | file exists, >=1 req_id | mapped | emit unit.TestMapped |
+| mapped | QuarantineTest | reason valid, requester != approver pending | quarantined (pending approval) | record request |
+| quarantined | ApproveQuarantine | approver role differs from requester | quarantined (approved) | emit unit.TestQuarantined |
+| quarantined | expiry (14 d) | no renewal | mapped | gate fails; emit unit.QuarantineExpired |
+| quarantined | fix merged (CI pass) | test passes 3 consecutive runs | mapped | close quarantine |
+| mapped | RetireTest | owning SPEC requirement removed | retired | keep row, no delete |
+| retired | MapTest (same ID) | ID reserved | rejected | UNIT.TEST_ID_RETIRED |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Illegal transitions return UNIT.ILLEGAL_TRANSITION (non-retryable). Guard failures return the code from PS-137-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Approval transition needs a role other than requester (PS-137-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Transitions are applied under `revision` compare-and-set; loser gets UNIT.REVISION_CONFLICT (retryable after re-read). Expiry job is idempotent: running it twice has no extra effect.
+
+## Privacy, retention, abuse
+Transition log contains roles and IDs only, no test output.
+
+## Observability & budgets
+Gauge of entries per status per module; alert when quarantined share > 5% of active tests for 7 days (PROVISIONAL, see D07 for log retention).
+
+## Tests
+- TEST-PS-137-03-01 (unit): each row of the table as a single test case.
+- TEST-PS-137-03-02 (property): random transition sequences never reach retired then mapped for the same ID.
+- TEST-PS-137-03-03 (integration): 14-day expiry moves test to mapped after clock advance in fixture.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Table has no missing from/event combinations in permitted set; all others rejected.
+2. Expiry with clock fixed at +14 d produces gate failure, not silent pass.
+3. Retired ID re-use attempt returns UNIT.TEST_ID_RETIRED in 100% of cases.
+
+## Assumptions & open decisions
+- ASSUMPTION: "3 consecutive passing runs" is the recovery criterion for a quarantined test.
+- Quarantine approval policy is PROVISIONAL pending QA Lead decision; no D-number assigned.

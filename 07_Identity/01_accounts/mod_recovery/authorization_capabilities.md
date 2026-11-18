@@ -1,35 +1,54 @@
-# PS-053-05 — authorization capabilities
+# PS-053-05 — authorization and capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_recovery. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-053-05. **Owner:** [07_Identity/01_accounts/mod_recovery](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-053-05.R01 | Default deny (CTR-CAP-001 R01). Capabilities used: `recovery_request.create`, `recovery_request.attest`, `recovery_request.withdraw`, `recovery_request.execute`, `recovery_method.create`, `recovery_method.delete`, `recovery_method.read`. | MVP |
+| PS-053-05.R02 | Proof-bound token scoped to one `rec_` and one method; expires with `expires_at`. Not usable for any other resource. | MVP |
+| PS-053-05.R03 | Support operators (`ope_`) hold no recovery capability on credentials. They may read case metadata only (CTR-CAP-001 R12). | MVP |
+| PS-053-05.R04 | Enrolment and revocation of methods require step-up session (≤ 5 min). | MVP |
+| PS-053-05.R05 | Moderator read of `rec_` requires `case:<cas_>` grant, purpose, expiry ≤ 72 h. | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for recovery within 01_accounts. Do not assume implementation or successful external settlement.
+## Data / schema
+Relation rules: `self` for owner (derived from `acc_` at decision time, CTR-CAP-001 R05). No stored grant for owner access.
 
-## Requirements to specify
-- [ ] PS-053-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-053-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-053-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Capability per command: start → `recovery_request.create` (anonymous, rate-limited, generic result); submit_proof → `recovery_request.attest` (proof token); complete → `recovery_request.execute` (owner session); cancel → `recovery_request.withdraw` (owner session or proof); enroll → `recovery_method.create`; revoke → `recovery_method.delete`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable beyond the transitions in [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Denied actions return `SYS.NOT_FOUND` when the requester cannot see the resource, `SYS.FORBIDDEN` otherwise (CTR-CAP-001 action matrix).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization matrix
+| Actor | Action | Resource | Outcome |
+|---|---|---|---|
+| anonymous | recovery_request.create | account hint | ALLOW, generic response |
+| requester with proof | recovery_request.attest | own rec_ | ALLOW if state = requested |
+| owner session | recovery_request.withdraw | own rec_ | ALLOW |
+| owner, step-up | recovery_method.create / delete | own rmt_ | ALLOW |
+| ope_ (support) | any credential action | any | DENY (R03) |
+| mod_ with case grant | recovery_request.read | rec_ in cas_ | ALLOW, metadata only, audited |
+| sys_ scheduler | recovery_request.execute (expiry only) | rec_ | ALLOW |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Authorization decisions are not cached for writes (CTR-CAP-001 R09).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-053-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Every privileged read emits an `aud_` record without content (CTR-CAP-001 R08).
+
+## Observability & budgets
+`recovery_denied_total{reason}`; alert on any `ope_` attempt to read `otp_hmac` or `secret_hash`.
+
+## Tests
+TEST-PS-053-09 (matrix rows as parameterized tests), TEST-PS-053-10 (proof token reused on another `rec_` is denied).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every matrix row has a passing test.
+2. No support principal can obtain credential material in any test.
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h maximum grant expiry (CTR-CAP-001 R06).
+- PROVISIONAL (D10 default, unapproved).

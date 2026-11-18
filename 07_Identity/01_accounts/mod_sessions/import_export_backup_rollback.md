@@ -1,35 +1,46 @@
-# PS-054-10 — import export backup rollback
+# PS-054-10 — import, export, backup and rollback
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_sessions. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-054-10. **Owner:** [07_Identity/01_accounts/mod_sessions](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_sessions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-054-10.R01 | Sessions and token digests are never exported or included in portability bundles. Owner export lists session metadata for the last 90 days (device label, dates, end reason). | MVP |
+| PS-054-10.R02 | Sessions are never imported from another node or restored into a different account. | MVP |
+| PS-054-10.R03 | Restore from backup marks all sessions with `absolute_expires_at` in the past as expired and rebuilds the revocation list before serving. | MVP |
+| PS-054-10.R04 | Restore replays every revocation issued after the backup snapshot before serving (CTR-PRV-001 R06 BT-04 pattern). | MVP |
+| PS-054-10.R05 | Rollback of a session-format change keeps dual-read of old digest format for 24 h. | MVP |
 
-## Purpose and scope
-Define the import export backup rollback process for sessions within 01_accounts. Do not assume implementation or successful external settlement.
+## Data / schema
+Digest format versioned by prefix (`v1:` SHA-256). Keyed-hash key identifier stored with each network digest.
 
-## Requirements to specify
-- [ ] PS-054-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-054-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-054-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Export is an owner query; emits `session.exported` without content.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Restore re-evaluates timers per [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Import attempt returns `SYS.FORBIDDEN`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Export requires owner step-up.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Restore is idempotent by snapshot ID; partial restore is not served.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-054-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Export file deleted 24 h after download.
+
+## Observability & budgets
+Restore report counts: expired on restore, revocations replayed.
+
+## Tests
+TEST-PS-054-21 (export contents), TEST-PS-054-22 (restore replays revocation), TEST-PS-054-23 (dual-read during format rollback).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export fixture has no token digest.
+2. Revoked session is not valid after restore.
+
+## Assumptions & open decisions
+- ASSUMPTION: 90-day export window; 24 h dual-read.
+- PROVISIONAL (D07 default, unapproved).

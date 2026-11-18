@@ -1,35 +1,58 @@
 # PS-077-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-077-03. **Owner:** [10_Privacy/01_data_controls/mod_delete](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_delete. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_delete (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06–R08, R12), CTR-EVT-001 (R02, R08), CTR-FED-001 (R07).
 
-## Purpose and scope
-Define the workflow state machine process for delete within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-077-03.R01 | Exactly the states `requested`, `cooling_off`, `executing`, `held`, `completed`, `cancelled`, `failed`. `held` and `completed` may coexist per target via completion counts; the request is terminal only when all targets reach `completed`, `held` or `failed`. | MVP |
+| PS-077-03.R02 | `cancelled` reachable only from `cooling_off` and only before `cooling_off_until`. | MVP |
+| PS-077-03.R03 | `executing` → `failed` after 3 retry rounds across 24 h (ASSUMPTION) with `deletion.failed` event and operator alert. | MVP |
+| PS-077-03.R04 | Legal hold on any target moves that target to `held`; other targets continue. | MVP |
+| PS-077-03.R05 | Every transition appends one event with `aggregate_revision + 1` (CTR-EVT-001 R02). | MVP |
 
-## Requirements to specify
-- [ ] PS-077-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-077-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-077-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+State stored on `data_subject_request.state` (PS-077-01). Per-target progress stored in a child table `dsr_target` (`target_id`, `store_class`, `state`, `attempts`, `last_attempt_at`); no content.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions are triggered by PS-077-04 commands and by the `sys_` executor. Event names: `deletion.requested`, `deletion.cancelled`, `deletion.held`, `deletion.completed`, `deletion.failed`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | request accepted | PS-077-02 pass | requested | Row created; `cooling_off_until` set for account scope |
+| requested | window opens | scope is non-account | executing | Executor enqueued |
+| requested | window opens | scope is account | cooling_off | Notify subject (generic text) |
+| cooling_off | cancel | now < cooling_off_until | cancelled | Terminal; no data touched |
+| cooling_off | window elapses | not cancelled | executing | Executor enqueued |
+| executing | all stores confirmed | no hold | completed | Completion record written; `record.deleted` |
+| executing | hold matched | CTR-PRV-001 R07 scope valid | held | Target frozen; remaining targets continue |
+| executing | retries exhausted | R03 | failed | Operator alert; completion lists failures |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions return `DEL.INVALID_TRANSITION` (409, not retryable). Cancel after window returns `DEL.CANCEL_WINDOW_CLOSED` (409).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Cancel: subject only (`self`). Executor: `sys_` principal scoped to deletion execution. No `ope_` principal may move a request to `cancelled`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-077-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Transitions use optimistic concurrency on `aggregate_revision`; mismatch → `EVT.REVISION_CONFLICT`. Executor retries use exponential backoff 1 s base, 10 min cap (ASSUMPTION). A `failed` request can be resumed only by an operator with a new `dsr_` linked to it.
+
+## Privacy, retention, abuse
+Events carry IDs and counts only (CTR-PRV-001 R12). Held targets are not disclosed to counterparties.
+
+## Observability & budgets
+`del_state_total{state}`; `del_propagation_lag_seconds` p95 ≤ 86400 (CTR-PRV-001 metric).
+
+## Tests
+- TEST-PS-077-03-01 (property): random event sequences never reach a state outside the table.
+- TEST-PS-077-03-02 (integration): hold on one of three targets leaves the other two `completed`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every row in the transition table has a test.
+2. No path from `completed` or `failed` back to `executing` exists (TEST-PS-077-03-01).
+3. Cancel succeeds only inside the window (TEST-PS-077-03-02 variant).
+
+## Assumptions & open decisions
+- ASSUMPTION: 72 h cooling-off, 3 retry rounds in 24 h.
+- PROVISIONAL (D07 default): hold-driven partial completion.

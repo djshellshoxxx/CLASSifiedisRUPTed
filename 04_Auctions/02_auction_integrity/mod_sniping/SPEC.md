@@ -1,44 +1,43 @@
 # F04.S02.M02 — sniping
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F04.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead. **Parent:** F04.S02.
 
 ## Purpose and business behavior
-Provide sniping as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Record and classify when each auction bid arrives relative to the auction's close, using server time only. The classification (NORMAL, LATE, SNIPE, UNCLASSIFIED) gives mod_close and mod_fraud one shared, authoritative timing fact. A snipe bid is not a violation by itself. This module never rejects, extends or penalizes a bid; it only records timing and exposes counts.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a bidder, I see whether my bid was received before close, with a clear message if it was not.
+- As a seller, I see aggregate last-window bid counts for my auction, never individual bidder timing.
+- As a moderator, I can read timing detail for a case I am assigned to.
 
 ## Scope
-- Required process spec: `sniping_domain_model.md` (not yet authored)
-- Required process spec: `sniping_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `sniping_validation_and_authorization.md` (not yet authored)
-- Required process spec: `sniping_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `sniping_interfaces_and_events.md` (not yet authored)
-- Required process spec: `sniping_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `sniping_acceptance_and_property_tests.md` (not yet authored)
+- Timing classification for bids on auctions in 04_Auctions.
+- Thresholds: SNIPE within 10 s of close, LATE within 120 s (PROVISIONAL).
+- Out of scope: close and extension rules (01_auction_lifecycle/mod_close), fraud cases (mod_fraud), bid acceptance (mod_bids), payments (F09).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Command `sniping.timing.record`; queries `sniping.auction.timing_summary`; events `sniping.bid_classified`, `sniping.bid_rejected_after_close`, `sniping.clock_degraded`, `sniping.clock_restored`; errors `SNIPE.*`; capabilities `sniping.record`, `sniping.read_own`, `sniping.read_summary`, `sniping.read_detail`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: mod_close (close_at), mod_bids (bid events), F07 pseudonymous accounts, F16 capabilities, F15 time source and event envelope. Downstream: mod_fraud (aggregate counts as CO_BID_CLUSTER feature), seller summary UI, F12 detail reads. Boundary to confirm: 02_auction_integrity/mod_anti may overlap on timing controls; this module owns classification only.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns BidTimingEvent and clock-health stream. Does not own close times, bids or accounts.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Clock drift causes misclassification at the close boundary. Offline bids could be used to claim an early time if the client were trusted; they are not. Visible timing reveals bidder behavior and can link pseudonymous accounts. Sellers could infer bidders from small counts; k >= 5 suppression applies. Classification could be read as penalizing legitimate late bidders, so it stays advisory. Pseudonyms do not guarantee anonymity.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+PS-038-01 to PS-038-10 SPEC-DRAFT-COMPLETE; boundary fixtures defined; boundary with mod_anti resolved; privacy review scheduled (not claimed as done).
 
 ## Required process specification inventory
-- [ ] `sniping_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sniping_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-038-01
+- [x] [validation_rules.md](validation_rules.md) — PS-038-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-038-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-038-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-038-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-038-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-038-07
+- [x] [observability_performance.md](observability_performance.md) — PS-038-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-038-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-038-10

@@ -1,35 +1,52 @@
-# PS-055-05 — authorization capabilities
+# PS-055-05 — authorization and capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-05. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-055-05.R01 | Capabilities: `bundle.create` (export), `bundle.read` (download), `bundle.execute` (import apply), `bundle.delete` (cancel import). Default deny. | MVP |
+| PS-055-05.R02 | Export and import require owner session with step-up ≤ 5 min. | MVP |
+| PS-055-05.R03 | Download token bound to one `bnd_` and one requester session; single use. | MVP |
+| PS-055-05.R04 | Import applies only into the authenticated owner's profile space; a bundle cannot target another `acc_`. | MVP |
+| PS-055-05.R05 | Operators cannot export or import on a user's behalf (CTR-CAP-001 R12). | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+## Data / schema
+Owner relation derived from `acc_`; no stored grant.
 
-## Requirements to specify
-- [ ] PS-055-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Capability per command: generate → `bundle.create`; download → `bundle.read`; apply → `bundle.execute`; cancel → `bundle.delete`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable beyond [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Cross-account access returns `SYS.NOT_FOUND`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization matrix
+| Actor | Action | Resource | Outcome |
+|---|---|---|---|
+| owner, step-up | bundle.create | own profile | ALLOW |
+| owner session | bundle.read | own bnd_ with valid token | ALLOW once |
+| other user | bundle.read | bnd_ of another | DENY, NOT_FOUND |
+| owner session | bundle.execute | own imj_ | ALLOW |
+| ope_ or mod_ | any | any | DENY (R05) |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Download token expiry ends access at 15 min regardless of file state.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Each export and import emits an `aud_` record with IDs and counts only (CTR-CAP-001 R08).
+
+## Observability & budgets
+`portable_denied_total{reason}`.
+
+## Tests
+TEST-PS-055-09 (matrix rows), TEST-PS-055-10 (download token reuse denied).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix rows pass.
+2. No support path produces a bundle.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15 min download token.
+- PROVISIONAL (D10 default, unapproved).

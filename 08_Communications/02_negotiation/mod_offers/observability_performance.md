@@ -1,35 +1,53 @@
 # PS-063-08 — observability performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_offers. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R09), CTR-ERR-001 (R10), CTR-EVT-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-063-08. **Owner:** [08_Communications/02_negotiation/mod_offers](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-063-08.R01 | `ofr.create`, `ofr.counter`, `ofr.accept` p95 ≤ 300 ms (ASSUMPTION). | MVP |
+| PS-063-08.R02 | `ofr.list` p95 ≤ 150 ms for 50 items. | MVP |
+| PS-063-08.R03 | Expiry job lag ≤ 60 s from `expires_at` to `offer.expired`. | MVP |
+| PS-063-08.R04 | Logs never contain amounts, currency codes or terms digests. | MVP |
+| PS-063-08.R05 | Money validation p95 ≤ 5 ms. | MVP |
 
-## Purpose and scope
-Define the observability performance process for offers within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Metrics: `offers_command_total{cmd,outcome}`, `offers_command_latency_ms{cmd}`, `offers_expiry_lag_seconds`, `offers_validation_reject_total{code}`, `offers_queue_rejected_total{reason}`.
 
-## Requirements to specify
-- [ ] PS-063-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-063-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-063-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Event lag p95 ≤ 2 s.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Dashboards from [PS-063-03](workflow_state_machine.md) transitions.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Codes only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Denial counters per [PS-063-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Alert on any accept committed after expiry.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-063-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Metrics unlabelled by party or amount. Retention RET-OPS 30 days.
+
+## Observability & budgets
+| Budget | Target |
+|---|---|
+| offer command p95 | ≤ 300 ms |
+| list p95 | ≤ 150 ms |
+| expiry lag | ≤ 60 s |
+| accept after expiry | 0 |
+
+## Tests
+- TEST-PS-063-08-01 (performance): load test; budgets met.
+- TEST-PS-063-08-02 (logs): fixture amount and digest absent from logs.
+- TEST-PS-063-08-03 (expiry): job lag measured ≤ 60 s under load.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets met (TEST-PS-063-08-01, -03).
+2. Log redaction passes (TEST-PS-063-08-02).
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets are targets.
+- D03 (mixed currency valuation): PROVISIONAL (D03 default, unapproved).

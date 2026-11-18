@@ -1,35 +1,55 @@
-# PS-109-05 — authorization capabilities
+# PS-109-05 — authorization and capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_keyboard. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-109-05. **Owner:** [14_Accessibility/01_a11y/mod_keyboard](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_keyboard. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-109-05.R01 | Account-scope binding actions are allowed only for the owning `acc_` (scope `self`). | MVP |
+| PS-109-05.R02 | Component focus contracts are readable by any principal (PUBLIC). | MVP |
+| PS-109-05.R03 | No operator, moderator or system principal may read or write another account's bindings. | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for keyboard within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Capability IDs: `keyboard_binding.read`, `keyboard_binding.update`, `keyboard_binding.reset`, `keyboard_contract.read`.
 
-## Requirements to specify
-- [ ] PS-109-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-109-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-109-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Maps to [PS-109-04](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Unauthorized and unreadable records return `SYS.NOT_FOUND` (CTR-ERR-001 R08).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+| Actor | Action | Resource | Decision |
+|---|---|---|---|
+| acc_ (owner) | keyboard_binding.read, update, reset | own kbb_ | ALLOW |
+| acc_ (other) | any binding action | kbb_ of another account | DENY (NOT_FOUND) |
+| ope_ / mod_ / sys_ | keyboard_binding.* | any account binding | DENY (default deny, CTR-CAP-001 R01) |
+| any | keyboard_contract.read | catalog | ALLOW (PUBLIC) |
+| any | device-scope binding | local store | no server check |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Field visibility: binding fields are owner-only; contract fields are public.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-109-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Authorization is evaluated at commit time, not at enqueue time, for queued account-scope changes ([PS-116](../../../15_Platform/01_pwa/mod_offline/authorization_capabilities.md)).
+
+## Privacy, retention, abuse
+No operator read path exists for bindings; support cannot view a user's shortcut set.
+
+## Observability & budgets
+Denied decisions counted by reason code; no principal IDs in client logs.
+
+## Tests
+- TEST-PS-109-05-01 unit: decision table rows each produce the stated outcome.
+- TEST-PS-109-05-02 integration: other-account read returns NOT_FOUND, same body as nonexistent ID.
+- TEST-PS-109-05-03 negative: operator token cannot list bindings.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Default deny holds for every principal type not listed as ALLOW.
+2. Cross-account access responses are indistinguishable from nonexistent-ID responses.
+3. No operator endpoint exposes bindings.
+
+## Assumptions & open decisions
+- ASSUMPTION: device-scope bindings are never transmitted; this is enforced by client code and tested, not by server authorization.
+- No Dxx decision directly affects authorization.

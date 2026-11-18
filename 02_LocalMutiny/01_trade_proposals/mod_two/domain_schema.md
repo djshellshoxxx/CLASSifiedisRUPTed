@@ -1,35 +1,56 @@
 # PS-015-01 — domain schema
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_two. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001 (`cyc` prefix, registered: barter cycle proposal), CTR-EVT-001, CTR-SCH-001, CTR-PRV-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-015-01. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_two](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_two. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-015-01.R01 | `cyc_` is canonical here (B-06): owner F02.S01.M01. Size 2 (direct two-party barter) and sizes 3–6 (matched cycles) share one aggregate. | MVP |
+| PS-015-01.R02 | `size` equals the number of `par_` slots; 2 ≤ size ≤ 6 (ASSUMPTION; D02 governs any increase). | MVP |
+| PS-015-01.R03 | A cycle references slots and offers by full ID only; it stores no offer lines. | MVP |
+| PS-015-01.R04 | `origin` is `direct` (size 2 proposal) or `matched:cdc_<id>` (promoted candidate from F02.S02.M03). | MVP |
+| PS-015-01.R05 | Cycle record holds no location, no account IDs and no free text. Max data class: PSEUDONYMOUS. | MVP |
 
-## Purpose and scope
-Define the domain schema process for two within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+```json
+{ "cyc_id": "cyc_<26>", "size": 2, "origin": "direct|matched",
+  "candidate_ref": "cdc_<26>|null",
+  "par_ids": ["par_<26>", "par_<26>"],
+  "status": "draft|proposed|fully_accepted|confirming|locked|declined|withdrawn|expired|closed",
+  "expires_at": "RFC3339", "fully_accepted_at": "RFC3339|null", "confirm_until": "RFC3339|null",
+  "feasibility_ref": "fsb_<26>|null", "revision": 1, "schema_version": "1.0.0" }
+```
+`cdc_` prefix is owned by F02.S02.M03 and PENDING CTR-ID-001 registration. `fsb_` owned by F02.S02.M05, PENDING registration.
 
-## Requirements to specify
-- [ ] PS-015-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-015-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-015-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Defined in PS-015-04. Ordering by `revision` (CTR-EVT-001 R02).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+PS-015-03 defines all transitions. `status` is the only mutable field besides timestamps and `feasibility_ref`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+PS-015-02 (`TWO.*`).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+PS-015-05. Cycle metadata is visible to participants only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Creation of a cycle and its slot references is atomic (PS-015-06).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-015-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Max data class PSEUDONYMOUS; retention in PS-015-07.
+
+## Observability & budgets
+Counts by size and status; no IDs as labels.
+
+## Tests
+- TEST-PS-015-01-01 (unit): size equals slot count; size 1 and 7 refused.
+- TEST-PS-015-01-02 (unit): schema rejects any offer-line field on the cycle.
+- TEST-PS-015-01-03 (privacy): cycle serialization has no account or free text fields.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema fixtures pass for sizes 2–6; sizes 1 and 7 rejected.
+2. Zero unclassified fields (CI).
+
+## Assumptions & open decisions
+- ASSUMPTION: 2–6 in MVP.
+- D02 PROVISIONAL (Dxx default, unapproved): bounded deterministic search for matched cycles; size cap is an input to that search.

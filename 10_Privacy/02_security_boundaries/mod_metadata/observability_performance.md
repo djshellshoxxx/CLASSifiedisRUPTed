@@ -1,35 +1,49 @@
-# PS-080-08 — observability performance
+# PS-080-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-080-08. **Owner:** [10_Privacy/02_security_boundaries/mod_metadata](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_metadata. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_metadata (Privacy Lead, F10; platform via F15). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R09 redaction tests; zero-tolerance alerts), CTR-ERR-001 (R10), CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for metadata within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-080-08.R01 | Metrics: `meta_fields_removed_total{category}`, `meta_strip_failures_total`, `meta_fail_closed_total`, `meta_egress_dropped_total{surface}`, `meta_sanitize_seconds` (histogram). | MVP |
+| PS-080-08.R02 | Labels: category and surface enums only. | MVP |
+| PS-080-08.R03 | Alert on any residual GPS or author tag in clean output (zero tolerance). | MVP |
+| PS-080-08.R04 | Alert when fail-closed rate > 0.1% of outbound payloads over 15 min. | MVP |
+| PS-080-08.R05 | Log redaction scanner runs on application, proxy and analytics logs (CTR-PRV-001 BT-08). | MVP |
 
-## Requirements to specify
-- [ ] PS-080-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-080-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-080-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Label allowlists in policy config.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Label validation at emit.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards for Privacy and Security leads; no per-user views.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-080-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metric failure never blocks sanitisation or egress.
+
+## Privacy, retention, abuse
+Logs RET-OPS.
+
+## Observability & budgets
+Egress filter ≤ 2 ms p95; sanitise ≤ 2 s p95 for 10 MiB; availability of egress filter 99.9% monthly (ASSUMPTION).
+
+## Tests
+- TEST-PS-080-08-01 (unit): label allowlist.
+- TEST-PS-080-08-02 (alert): injected residual tag fires R03 alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics present in staging.
+2. Alert tests pass.
+3. Budgets measured on corpus.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above.
+- PROVISIONAL (D07 default): log retention.

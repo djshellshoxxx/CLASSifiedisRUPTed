@@ -1,35 +1,56 @@
-# PS-126-08 — observability performance
+# PS-126-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-126-08. **Owner:** [16_Security/01_authz/mod_authorization](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_authorization. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [mod_authorization](SPEC.md) (Security Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R09), CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the observability performance process for authorization within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-126-08.R01 | `authz.decide` p95 ≤ 5 ms and p99 ≤ 20 ms at 2,000 decisions/s on the reference fixture (ASSUMPTION). | MVP |
+| PS-126-08.R02 | Revocation propagation lag p95 ≤ 60 s for online clients. | MVP |
+| PS-126-08.R03 | Logs contain decision ID, reason code, policy version, module and timing; never request or object content. | MVP |
+| PS-126-08.R04 | Metrics labels use bounded enums only. | MVP |
 
-## Requirements to specify
-- [ ] PS-126-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-126-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-126-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric label sets: `outcome` (ALLOW, DENY), `reason_code` (CTR-CAP-001 enum), `command`, `principal_kind`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Metrics for `authz.decide` and `grant.*` in [PS-126-04](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Lag metric measured from `grant.revoked` commit to first DENY observed by a synthetic probe.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`authz_validation_failures_total{code}`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards require `ope` with purpose `operations`; no principal labels visible.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-126-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metric emission must not block decisions; drop metrics when buffer is full, never drop decisions.
+
+## Privacy, retention, abuse
+No subject IDs in metric labels. Traces sample 1% (ASSUMPTION).
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| `authz_decisions_total{outcome,reason_code}` | — |
+| `authz_decision_latency_ms` | p95 ≤ 5 |
+| `authz_unavailable_total` | alert on > 0 for 1 min |
+| `authz_revocation_lag_seconds` | p95 ≤ 60 |
+
+Alerts: privileged reads outside an active case; co-approval pair above threshold; revocation lag > 60 s; DENY-rate spike per principal.
+
+## Tests
+- TEST-PS-126-08-01 (performance): 2,000 decisions/s, p95 ≤ 5 ms, p99 ≤ 20 ms.
+- TEST-PS-126-08-02 (observability): log capture contains no object content.
+- TEST-PS-126-08-03 (alert): injected privileged read outside case raises alert within 60 s.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Latency targets met on the reference fixture.
+2. Revocation probe sees DENY within 60 s in 99% of runs.
+3. No label set contains a subject or object ID.
+
+## Assumptions & open decisions
+- ASSUMPTION: throughput target and alert thresholds.
+- PROVISIONAL (D07 default, unapproved): telemetry retention per RET-OPS.

@@ -1,35 +1,62 @@
-# PS-023-05 — authorization capabilities
+# PS-023-05 — Authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-023-05. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_lock](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_lock. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_lock. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for lock within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-023-05.R01 | Lock acquisition is performed only by the system principal `sys_` triggered by a `cycle.consented` event; no participant can request a lock directly. | MVP |
+| PS-023-05.R02 | Participants read the lock state of their own cycle through `cyc.lock.get` (`participant` scope); `item_id` visible, `fence` visible, owner IDs of other parties hidden. | MVP |
+| PS-023-05.R03 | Release, extend and consume require `sys_` with scope `cycle` and capability `cyc.execute`. | MVP |
+| PS-023-05.R04 | Operators can force-release only via a `case:` privileged grant with purpose and `expires_at` ≤ 72 h, dual control (CTR-CAP-001 R06, R07). | MVP |
+| PS-023-05.R05 | Lock operations on items from a suspended listing are denied with `SYS.FORBIDDEN` (listing state owned by F01). | MVP |
 
-## Requirements to specify
-- [ ] PS-023-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-023-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-023-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Inputs: principal ID, cycle membership (derived), listing state from F01 by reference.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Authorization before idempotency lookup.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Membership and listing-state changes are re-evaluated per decision (CTR-CAP-001 R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Condition | Code | Class / HTTP |
+|---|---|---|
+| Participant tries acquire | SYS.FORBIDDEN | forbidden / 403 |
+| Non-participant read | SYS.NOT_FOUND | not_found / 404 |
+| Operator force-release without grant | SYS.FORBIDDEN | forbidden / 403 |
+| Suspended listing item | SYS.FORBIDDEN | forbidden / 403 |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor × action | Scope | Capability | Result |
+|---|---|---|---|
+| sys_ (consent handler) × acquire | cycle | cyc.execute | ALLOW |
+| participant × acquire | cycle | cyc.execute | DENY SYS.FORBIDDEN |
+| participant × read own cycle | cycle | cyc.read | ALLOW (fields limited) |
+| non-participant × read | — | — | DENY SYS.NOT_FOUND |
+| ope_ × force release | case | privileged | ALLOW only with dual-control grant |
+| sys_ × acquire, listing suspended | item | cyc.execute | DENY SYS.FORBIDDEN |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-023-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Policy store down → fail closed (`SYS.UNAVAILABLE`). Offline clients never hold locks.
+
+## Privacy, retention, abuse
+No PRIVATE_PERSONAL or LOCATION data read. Force-release grants audited.
+
+## Observability & budgets
+Audit `aud_` for every privileged action and every denial.
+
+## Tests
+- TEST-PS-023-05-01 (matrix): each row above.
+- TEST-PS-023-05-02 (negative): participant cannot call acquire by any API path (CTR-CAP-001 TEST-03).
+- TEST-PS-023-05-03 (privileged): force release without dual approval → `CAP.DUAL_APPROVAL_REQUIRED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix outcomes and codes match.
+2. No user-facing route reaches acquire.
+3. Privileged force-release leaves an `aud_` record.
+
+## Assumptions & open decisions
+- ASSUMPTION: listing suspension state is provided by F01 as a readable flag.
+- [DECISIONS.md](../../../DECISIONS.md) D10 — PROVISIONAL (D10 default, unapproved): not applicable beyond identity; no key use here.

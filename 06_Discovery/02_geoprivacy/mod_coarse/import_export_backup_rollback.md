@@ -1,35 +1,51 @@
-# PS-047-10 — import export backup rollback
+# PS-047-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-047-10. **Owner:** [06_Discovery/02_geoprivacy/mod_coarse](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_coarse. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_coarse. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R02, R07, R08), CTR-PRV-001 (R11); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the import export backup rollback process for coarse within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** Registry import governed by D05 PROVISIONAL (unapproved).
 
-## Requirements to specify
-- [ ] PS-047-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-047-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-047-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-10.R01 | Registry versions are exported as signed JSON bundles with SHA-256 digest. | MVP |
+| PS-047-10.R02 | Import of a registry bundle requires digest match and dual approval; partial import is rejected. | MVP |
+| PS-047-10.R03 | Rollback reactivates the prior registry version; publication flags recomputed within one window. | MVP |
+| PS-047-10.R04 | User data export excludes registry and publication flags (not personal). | MVP |
+| PS-047-10.R05 | Backups include registry versions (RET-AUD); recompute state is rebuilt after restore. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Bundle: `registry_version`, `cells[]`, `digest`, `created_at`. Migrations pure and idempotent (CTR-SCH-001 R07).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+`cell.propose` via bundle import is not allowed; bundle import uses `registry.import` (ope_ dual).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Import: `received → verified → approved → active | rejected`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Digest mismatch → `COARSE.REGISTRY_INVALID`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-047-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Dual `ope_` approval (PS-047-05).
+
+## Failure, idempotency, concurrency, offline
+Import idempotent by digest.
+
+## Privacy, retention, abuse
+Bundles contain no counts and no justifications.
+
+## Observability & budgets
+Metric `coarse_rollbacks_total`; alert on rollback.
+
+## Tests
+- TEST-PS-047-10-01 (integration): export → import round trip equals digest.
+- TEST-PS-047-10-02 (integration): tampered bundle rejected.
+- TEST-PS-047-10-03 (integration): rollback restores flags within one window.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round-trip digest equality.
+2. Tampered bundle rejected with specified code.
+3. Rollback verified.
+
+## Assumptions & open decisions
+- D05 PROVISIONAL.

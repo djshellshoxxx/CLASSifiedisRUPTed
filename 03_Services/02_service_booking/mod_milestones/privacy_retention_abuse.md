@@ -1,35 +1,53 @@
 # PS-031-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-031-07. **Owner:** [03_Services/02_service_booking/mod_milestones](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_milestones. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_milestones. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-FED-001, CTR-COM-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for milestones within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-031-07.R01 | No location fields; service location is referenced through the booking only (CTR-PRV-001 R03). | MVP |
+| PS-031-07.R02 | Milestones and amounts are not federated in MVP (CTR-FED-001 R02, R03). | MVP |
+| PS-031-07.R03 | Acceptance text classed PRIVATE_PERSONAL; never in events, logs or search. | MVP |
+| PS-031-07.R04 | Plan manipulation abuse: > 3 `plan_set` calls per booking per day → `MILESTON.RATE_LIMITED` (ASSUMPTION). | MVP |
+| PS-031-07.R05 | Milestone fraud signals (e.g. repeated auto-accept on one counterparty) go to F12 by full ID; this module applies no sanctions. | MVP |
+| PS-031-07.R06 | Erasure: milestone rows retained while a claim is non-terminal or a dispute is open (CTR-PRV-001 R07); otherwise acceptance text removed and IDs tombstoned. | MVP |
+| PS-031-07.R07 | Evidence digests are retained as digests; media stays in evidence stores (F12/F09). | MVP |
 
-## Requirements to specify
-- [ ] PS-031-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-031-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-031-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Classes: `acceptance_text` PRIVATE_PERSONAL; `amount_minor` FINANCIAL_EVIDENCE; `state`, `order_index` PSEUDONYMOUS; digests PSEUDONYMOUS. Retention: 90 days after terminal state unless claim or dispute open (ASSUMPTION; D07 PROVISIONAL).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Event payloads exclude acceptance text and `amount_minor` may appear only inside F09-bound events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Tombstoning does not change `state`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`MILESTON.RATE_LIMITED` (retryable true, retry-after).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Read only by participants ([authorization_capabilities.md](authorization_capabilities.md)).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-031-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Tombstoning idempotent per milestone ID.
+
+## Privacy, retention, abuse
+Threats: pressure via plan changes, fake submissions, leakage of work details through acceptance text, graph linking between provider and client through repeated bookings. Controls: R03, R04, R05, R06.
+
+## Observability & budgets
+Logs: IDs hashed, enum codes, no text. Rate-limit counter per booking.
+
+## Tests
+- TEST-PS-031-07-01 unit: `plan_set` rate limit at 4th call.
+- TEST-PS-031-07-02 privacy: log scan finds no acceptance text.
+- TEST-PS-031-07-03 integration: erasure keeps rows with open claim; tombstones otherwise.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No event or log includes acceptance text.
+2. Federation of milestones impossible in MVP.
+3. Erasure matches R06 in both branches.
+
+## Assumptions & open decisions
+- ASSUMPTION: 90-day retention after terminal state; 3 `plan_set` per day.
+- D07 PROVISIONAL.
+- Payment checklist applies: amount visibility participant-only.

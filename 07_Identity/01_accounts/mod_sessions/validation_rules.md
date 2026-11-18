@@ -1,35 +1,54 @@
 # PS-054-02 — validation rules
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_sessions. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-054-02. **Owner:** [07_Identity/01_accounts/mod_sessions](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_sessions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-054-02.R01 | Bearer access token: 43 base64url chars (256 bits), prefixed `sat_`. Refresh token: 43 chars, prefixed `srt_`. Other shapes rejected before any lookup. | MVP |
+| PS-054-02.R02 | User-agent string truncated to 256 octets before parsing; unknown families map to `other`. | MVP |
+| PS-054-02.R03 | Step-up password or second factor accepted only within the proof window of 5 min. | MVP |
+| PS-054-02.R04 | Login and refresh bodies ≤ 4 KiB; unknown fields rejected. | MVP |
+| PS-054-02.R05 | Token comparison is constant-time on the digest. | MVP |
 
-## Purpose and scope
-Define the validation rules process for sessions within 01_accounts. Do not assume implementation or successful external settlement.
+## Data / schema
+Validation order: size, format prefix, digest lookup, state. Unknown-token responses take the same time band as expired-token responses (± 20 ms).
 
-## Requirements to specify
-- [ ] PS-054-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-054-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-054-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Codes below apply to [commands_queries_events](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+State checks per [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| MOD_SESSIONS.TOKEN_MALFORMED | false | unauthenticated / 401 | Bad prefix, length or charset. |
+| MOD_SESSIONS.TOKEN_INVALID | false | unauthenticated / 401 | Unknown digest. |
+| MOD_SESSIONS.SESSION_EXPIRED | true (after re-login) | unauthenticated / 401 | Idle or absolute timeout. |
+| MOD_SESSIONS.TOKEN_REUSED | false | unauthenticated / 401 | Refresh token reuse outside grace; family revoked. |
+| MOD_SESSIONS.STEP_UP_REQUIRED | true (after step-up) | forbidden / 403 | Sensitive action without step-up ≤ 5 min. |
+| SYS.REQUEST_MALFORMED | false | validation / 400 | Schema failure (R04). |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+User message keys: `session.expired.body`, `session.stepup.body`. Diagnostics carry `ses_` ID and code only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation happens before authorization; malformed tokens never reach the store.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-054-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Validation is stateless and retry-safe.
+
+## Privacy, retention, abuse
+Rejected tokens are not logged; only a count per code and a truncated digest prefix (4 hex) for abuse correlation.
+
+## Observability & budgets
+`session_validation_rejections_total{code}`. Validation p95 ≤ 2 ms.
+
+## Tests
+TEST-PS-054-03 (malformed table), TEST-PS-054-04 (timing band for unknown vs expired tokens).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each code produced by a test.
+2. Timing test: unknown and expired token responses within ± 20 ms over 1 000 samples.
+
+## Assumptions & open decisions
+- ASSUMPTION: 256-bit token size; 5 min step-up window.

@@ -1,44 +1,54 @@
 # F09.S02.M02 — disputes
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F09.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead. **Parent:** F09.S02.
 
 ## Purpose and business behavior
-Provide disputes as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Let either party to a payment or settlement claim contest it: raise a dispute inside a 14-day window, receive one response, and escalate silence or disagreement to a moderation case. A dispute changes claim state through CTR-COM-001 commands only. It never moves money and never implies that a payment did or did not happen; resolution outcomes are `restore_prior` or `reverse`.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a payer whose counterparty claims a payment I did not receive, I can dispute the claim with a reason code and evidence within 14 days.
+- As a payee, I can respond to a dispute, attach my evidence, and see the due date.
+- As a moderator with a case grant, I can read the dispute statement and evidence for one case and record an outcome, with a second approver where private evidence is opened.
 
 ## Scope
-- Required process spec: `disputes_domain_model.md` (not yet authored)
-- Required process spec: `disputes_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `disputes_validation_and_authorization.md` (not yet authored)
-- Required process spec: `disputes_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `disputes_interfaces_and_events.md` (not yet authored)
-- Required process spec: `disputes_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `disputes_acceptance_and_property_tests.md` (not yet authored)
+- Process specifications PS-070-01 to PS-070-10.
+- In scope: `dsp_` dispute records, raise/respond/withdraw, auto-escalation, case resolution hand-off, redaction.
+- Out of scope: claim creation and attestation (PS-071), external verification (PS-072), moderation case workflow (F12), service-booking disputes (PS-030, consumes `dsp_` by ID).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `dispute.raise`, `dispute.respond`, `dispute.withdraw`, `case.resolve`; queries `dispute.get`, `dispute.list`. Signatures in PS-070-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+- Upstream: claims and states (CTR-COM-001, PS-071); identity and participant relation (CTR-CAP-001).
+- Downstream: moderation cases (`cas_`, F12); notifications (generic text); evidence records (`evd_`, PS-071).
+- Reference by full ID only.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `dispute` records and their transition log. Does not own claims, evidence items, or moderation cases.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Retaliatory or frivolous disputes used as leverage.
+- Harassment or personal data inside free-text statements.
+- Dispute status read as proof of fraud or non-payment; states must not imply real-world outcomes.
+- Timer failures leaving claims stuck in `DISPUTED`.
+- Moderator overreach into cases they are not assigned.
+No platform custody of money. Pseudonyms do not guarantee anonymity.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specs at SPEC-DRAFT-COMPLETE; implementation and tests in later phases; privacy and security review pending.
+
+## Pending canonical contract items
+- None for this module; `dsp` prefix is registered in CTR-ID-001.
+- PENDING CTR-COM-001 confirmation: `dispute.withdraw` restoring prior claim state is not explicit in CTR-COM-001 command table (only `clm.dispute` and `case.resolve` appear).
 
 ## Required process specification inventory
-- [ ] `disputes_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `disputes_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `disputes_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `disputes_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `disputes_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `disputes_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `disputes_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-070-01
+- [x] [validation_rules.md](validation_rules.md) — PS-070-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-070-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-070-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-070-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-070-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-070-07
+- [x] [observability_performance.md](observability_performance.md) — PS-070-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-070-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-070-10

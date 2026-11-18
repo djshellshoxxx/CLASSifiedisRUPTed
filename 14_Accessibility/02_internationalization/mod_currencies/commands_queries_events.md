@@ -1,35 +1,49 @@
-# PS-112-04 — commands queries events
+# PS-112-04 — commands, queries and events
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/02_internationalization/mod_currencies. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-112-04. **Owner:** [14_Accessibility/02_internationalization/mod_currencies](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_currencies. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-112-04.R01 | `cur.catalog.publish` requires `idempotency_key` and the expected digest of the draft. | MVP |
+| PS-112-04.R02 | `cur.catalog.get` returns the current version in ≤ 100 ms p95 (CDN-cacheable). | MVP |
+| PS-112-04.R03 | Formatting is a pure client function with no network call. | MVP |
 
-## Purpose and scope
-Define the commands queries events process for currencies within 02_internationalization. Do not assume implementation or successful external settlement.
+## Data / schema
+Command `cur.catalog.publish` v1.0.0: `{idempotency_key, catalog_version, digest, entries[]}`.
+Query `cur.catalog.get` v1.0.0: `{version?}` → `{catalog_version, digest, entries[]}`.
+Format function (client): `format(amount_minor: string, code: string, locale: string) → string`.
 
-## Requirements to specify
-- [ ] PS-112-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-112-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-112-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Event `currency_catalog.published` (aggregate `cur`, PUBLIC): `{catalog_version, digest}`.
+Errors per [PS-112-02](validation_rules.md); `SYS.NOT_FOUND` for unknown version.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Per [PS-112-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Validation before idempotency lookup.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Per [PS-112-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Idempotency scope per CTR-EVT-001 R03. Publish with same digest returns original result.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-112-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Payloads contain codes and digests only.
+
+## Observability & budgets
+Latency and error counters; see [PS-112-08](observability_performance.md).
+
+## Tests
+- TEST-PS-112-04-01 contract: schemas validate.
+- TEST-PS-112-04-02 integration: duplicate publish, one event.
+- TEST-PS-112-04-03 unit: format is pure (same input, same output, no I/O).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command has schema, errors and idempotency scope.
+2. Format function performs no network or storage access (test asserts).
+
+## Assumptions & open decisions
+- ASSUMPTION: catalog has at most 400 entries.
+- No Dxx decision directly affects the interface.

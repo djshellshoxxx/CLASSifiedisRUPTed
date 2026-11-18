@@ -1,35 +1,59 @@
 # PS-061-09 — contract and acceptance tests
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_threads. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001, CTR-PRV-001, CTR-ID-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-061-09. **Owner:** [08_Communications/01_messaging/mod_threads](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_threads. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-061-09.R01 | Contract tests run in CI on every change to `thread.v1`, `message.v1`, `attachment.v1`. | MVP |
+| PS-061-09.R02 | Each requirement ID in PS-061-01 to PS-061-08 maps to ≥ 1 test ID in this file's matrix. | MVP |
+| PS-061-09.R03 | Accessibility: new incoming message is announced through a polite live region; no focus steal (WCAG 2.1 AA, Accessibility Lead). | MVP |
+| PS-061-09.R04 | Offline/reconnect: queued sends flush in order; no duplicates (PS-061-06). | MVP |
 
-## Purpose and scope
-Define the contract and acceptance tests process for threads within 01_messaging. Do not assume implementation or successful external settlement.
+## Data / schema
+Test fixtures: `fixtures/threads/` with valid and invalid thread, message and attachment JSON, one EXIF-with-GPS JPEG, one PNG declared as JPEG, one 10 MiB + 1 byte file.
 
-## Requirements to specify
-- [ ] PS-061-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-061-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-061-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Contract test harness replays each command in [PS-061-04](commands_queries_events.md) against the schema registry.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Matrix below covers transitions in [PS-061-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Error-code coverage: every code in [PS-061-02](validation_rules.md) is asserted at least once.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Authorization matrix tests are in [PS-061-05](authorization_capabilities.md) (TEST-PS-061-05-01..04).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Fault injection: kill server between event append and response; network drop mid-upload.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-061-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Privacy assertions: TEST-PS-061-07-01..05.
+
+## Observability & budgets
+Performance tests: TEST-PS-061-08-01..03.
+
+## Tests
+Test matrix (ID → type → PS requirement):
+
+| Test ID | Type | Covers |
+|---|---|---|
+| TEST-PS-061-09-01 | contract | PS-061-04 command shapes |
+| TEST-PS-061-09-02 | unit | PS-061-02 error codes |
+| TEST-PS-061-09-03 | integration | PS-061-03 transition table |
+| TEST-PS-061-09-04 | integration | PS-061-06 idempotent send |
+| TEST-PS-061-09-05 | property | revision monotonic, no gaps |
+| TEST-PS-061-09-06 | e2e | two accounts: open, send, attach, archive, read |
+| TEST-PS-061-09-07 | e2e | dispute lock blocks send by both parties |
+| TEST-PS-061-09-08 | a11y | live-region announce, keyboard-only send, 200% zoom |
+| TEST-PS-061-09-09 | offline | 200 queued sends flush in order |
+| TEST-PS-061-09-10 | negative | guessed IDs, cross-thread attachment reuse |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All TEST-PS-061-09-01..10 and the test IDs cited in PS-061-01..08 pass in CI.
+2. Every requirement row in PS-061-01..08 has a test ID (checked by script in CI).
+3. Accessibility checks pass with zero critical violations.
+
+## Assumptions & open decisions
+- ASSUMPTION: test fixtures are synthetic; no real user content.
+- Test execution is future-phase work; this file specifies only.

@@ -1,35 +1,48 @@
-# PS-111-04 — commands queries events
+# PS-111-04 — commands, queries and events
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_wcag. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-111-04. **Owner:** [14_Accessibility/01_a11y/mod_wcag](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_wcag. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-111-04.R01 | `wcag.record.submit` is idempotent on (screen_id, app_version, evidence set digest). | MVP |
+| PS-111-04.R02 | `wcag.finding.transition` requires `expected_revision`. | MVP |
+| PS-111-04.R03 | Events validate against v1.0.0 registry entries. | MVP |
 
-## Purpose and scope
-Define the commands queries events process for wcag within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Command `wcag.record.submit` v1.0.0: `{idempotency_key, screen_id, app_version, criteria[50]}`.
+Command `wcag.finding.transition` v1.0.0: `{idempotency_key, finding_id, to_status, expected_revision, accepted_until?}`.
+Query `wcag.gate.get` v1.0.0: `{app_version}` → `{blockers_open, majors_open, accepted_risk_count, passes: bool}`.
 
-## Requirements to specify
-- [ ] PS-111-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-111-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-111-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Events: `conformance_record.submitted` `{record_id, screen_id, app_version}`; `accessibility_finding.transitioned` `{finding_id, from, to, revision}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Per [PS-111-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Per [PS-111-02](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Per [PS-111-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Idempotency scope per CTR-EVT-001 R03. CI retries use the same key.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-111-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Payloads contain criteria IDs, digests and status only.
+
+## Observability & budgets
+Gate query p95 ≤ 200 ms.
+
+## Tests
+- TEST-PS-111-04-01 contract: payloads validate.
+- TEST-PS-111-04-02 integration: duplicate submit returns original record.
+- TEST-PS-111-04-03 integration: stale revision transition refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Duplicate submissions produce one record.
+2. Gate query reflects open blockers within one submit cycle.
+
+## Assumptions & open decisions
+- ASSUMPTION: gate query is computed on read.
+- No Dxx decision directly affects the interface.

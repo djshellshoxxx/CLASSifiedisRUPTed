@@ -1,35 +1,52 @@
-# PS-054-04 — commands queries events
+# PS-054-04 — commands, queries and events
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_sessions. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-SCH-001, CTR-ERR-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-054-04. **Owner:** [07_Identity/01_accounts/mod_sessions](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_sessions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-054-04.R01 | State-changing commands require `Idempotency-Key`. A `session.create` replay with the same key returns `SYS.CONFLICT` and never re-issues secrets. | MVP |
+| PS-054-04.R02 | Event payloads: IDs, enums, counts. No token, IP, UA string or device label. | MVP |
+| PS-054-04.R03 | Commands are online-only and excluded from the D08 offline queue. | MVP |
 
-## Purpose and scope
-Define the commands queries events process for sessions within 01_accounts. Do not assume implementation or successful external settlement.
+## Data / schema
+Command body example (`session.create`): `{"method": "password | passkey", "proof": "opaque", "device_hint": {"ua_family": "string"}}`.
 
-## Requirements to specify
-- [ ] PS-054-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-054-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-054-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+| Command | Route | Result | Errors |
+|---|---|---|---|
+| session.create | POST /v1/sessions | 201 {access_token, refresh_token, expires_at} | TOKEN_INVALID, SYS.RATE_LIMITED |
+| session.refresh | POST /v1/sessions/refresh | 200 new pair | TOKEN_REUSED, SESSION_EXPIRED |
+| session.revoke | DELETE /v1/sessions/{ses_id} | 204 | STEP_UP_REQUIRED (other session) |
+| session.revoke_others | POST /v1/sessions/revoke-others | 200 {revoked_count} | STEP_UP_REQUIRED |
+| session.step_up | POST /v1/sessions/step-up | 200 {step_up_at} | SYS.UNAUTHENTICATED |
+| session.list | GET /v1/sessions | 200 own list, paged | none |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Events (`aggregate_type` = `session`): `session.created`, `session.rotated`, `session.revoked`, `session.expired`, `session.family_revoked`, `session.step_up_completed`. `max_data_class` = PSEUDONYMOUS.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Event per transition in [workflow_state_machine](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Codes per [validation_rules](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per command in [authorization_capabilities](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-054-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Idempotency scope (acc_, command, key) for 7 days (CTR-EVT-001 R03). Refresh is not idempotent by key; it relies on the grace window.
+
+## Privacy, retention, abuse
+Session list shows device label to owner only.
+
+## Observability & budgets
+`session_commands_total{command,code}`; create p95 ≤ 200 ms excluding password hashing.
+
+## Tests
+TEST-PS-054-07 (contract per route), TEST-PS-054-08 (session.create replay returns one session).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each route validates against its schema fixture.
+2. Replay test creates exactly one session.
+
+## Assumptions & open decisions
+- ASSUMPTION: rate limit 10 creates per account per 10 min.

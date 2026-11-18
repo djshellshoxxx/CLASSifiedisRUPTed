@@ -1,35 +1,58 @@
 # PS-125-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-125-05. **Owner:** [15_Platform/04_configuration/mod_tenants](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_tenants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [mod_tenants](SPEC.md) (Platform Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the authorization capabilities process for tenants within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-125-05.R01 | Default deny for every `tenant.*` action (CTR-CAP-001 R01). | MVP |
+| PS-125-05.R02 | Tenant admin rights derive from the owner rule (`admin_ref` equals the actor), not from a stored grant. | MVP |
+| PS-125-05.R03 | Suspend, resume and delete require two distinct `ope` approvers; the requester cannot approve (CAP.SELF_APPROVAL_FORBIDDEN). | MVP |
+| PS-125-05.R04 | A tenant admin cannot read or change another tenant; cross-tenant IDs return `SYS.NOT_FOUND`. | MVP |
+| PS-125-05.R05 | Config field visibility is `owner` and `case` only; `never` for internal flags. | MVP |
 
-## Requirements to specify
-- [ ] PS-125-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-125-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-125-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capabilities used: `tenant.read`, `tenant.create`, `tenant.update`, `tenant.suspend`, `tenant.resume`, `tenant.offboard`, `tenant.list`. Decision records follow CTR-CAP-001.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Mapping: create → `tenant.create`; update_config → `tenant.update`; suspend/resume → `tenant.administer`; offboard → `tenant.update` (requester) plus `tenant.administer` (completion); list → `tenant.read` with global scope.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Actor | Action | Resource | Outcome | Code |
+|---|---|---|---|---|
+| anonymous | tenant.read | active tenant | ALLOW (PUBLIC fields) | none |
+| acc_ (admin_ref) | tenant.update | own tenant | ALLOW (owner rule) | none |
+| acc_ (other) | tenant.update | tenant | DENY | SYS.NOT_FOUND |
+| ope (single approval) | tenant.suspend | tenant | DENY | CAP.DUAL_APPROVAL_REQUIRED |
+| ope (requester = approver) | tenant.suspend | tenant | DENY | CAP.SELF_APPROVAL_FORBIDDEN |
+| ope (two approvals, global scope, purpose set) | tenant.suspend | tenant | ALLOW | none |
+| ope | tenant.list | node | ALLOW with purpose; DENY otherwise | SYS.FORBIDDEN |
+| mod / fpr | any tenant.* | any | DENY | SYS.FORBIDDEN |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Field visibility: `slug`, `display_name`, `status`, `federation_mode` = public; `config` = owner; `admin_ref` = owner and ope with purpose; `region_cells` = owner and ope.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-125-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Authorization decisions fail closed (`SYS.UNAVAILABLE`, retryable). Offline clients never decide authorization (CTR-CAP-001).
+
+## Privacy, retention, abuse
+Operator reads of `admin_ref` are logged to `aud_` records (RET-AUD). Repeated DENY from one principal raises a CAP alert (BT-01).
+
+## Observability & budgets
+`authz_decisions_total{resource=tenant,outcome}`. Decision latency p95 ≤ 5 ms (ASSUMPTION, shared budget).
+
+## Tests
+- TEST-PS-125-05-01 (matrix): every row in the table produces the stated outcome and code.
+- TEST-PS-125-05-02 (negative): guessed `ten_` IDs from another admin return identical NOT_FOUND bodies.
+- TEST-PS-125-05-03 (privileged): self-approved suspend is rejected and no event is emitted.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No tenant action is allowed without a rule in the table.
+2. Admin cannot escalate to suspend or delete through any path.
+3. All privileged decisions produce a decision record with no config content.
+
+## Assumptions & open decisions
+- ASSUMPTION: tenant admin is identified by `admin_ref`; a change of admin requires an `ope` dual-approved update.
+- PROVISIONAL (D10 default, unapproved): operator access to admin accounts does not include credential access (CTR-CAP-001 R12).

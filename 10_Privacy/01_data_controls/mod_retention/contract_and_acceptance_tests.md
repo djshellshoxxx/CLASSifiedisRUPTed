@@ -1,35 +1,50 @@
 # PS-079-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-079-09. **Owner:** [10_Privacy/01_data_controls/mod_retention](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_retention. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_retention (Privacy Lead, F10; QA Lead, F17). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (TEST-CTR-PRV-001-06, -07, -08), CTR-SCH-001 (R09 golden migration fixtures), CTR-CAP-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for retention within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-079-09.R01 | Every `RETAIN.*` code has a contract test for category, status and retryable value. | MVP |
+| PS-079-09.R02 | Policy migration golden fixtures for each supported lengthen and shorten path (CTR-SCH-001 R09). | MVP |
+| PS-079-09.R03 | Hold overlap test: hold on `cas_` A does not block purge of unrelated records of same type. | MVP |
+| PS-079-09.R04 | Auto-release test at `ends_at` using a controlled clock. | MVP |
+| PS-079-09.R05 | Synthetic fixtures only. | MVP |
 
-## Requirements to specify
-- [ ] PS-079-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-079-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-079-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures: `policies[]`, `records[]` with created dates and holds, `expected_purged[]`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Drive PS-079-04 through API.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Scenarios cover PS-079-03 table.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative fixtures per PS-079-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Tests for F10 approver, case operator, sys sweeper and subject.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-079-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection: sweep crash, hold applied mid-sweep, store timeout.
+
+## Privacy, retention, abuse
+Fixtures purged after run.
+
+## Observability & budgets
+Suite ≤ 15 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-079-09-01 (contract): RETAIN.* codes registered.
+- TEST-PS-079-09-02 (property): random hold and expiry schedules never purge a held record.
+- TEST-PS-079-09-03 (e2e): full lifecycle active → expired → purged with one hold and one auto-release.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-079-09-01 to -03 pass in CI.
+2. Hold overlap test (R03) passes.
+3. Migration golden fixtures pass for all paths.
+
+## Assumptions & open decisions
+- PENDING: fixture generator (F17).
+- PROVISIONAL (D07 default).

@@ -1,35 +1,52 @@
 # PS-062-08 — observability performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_consent. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R09 logs), CTR-ERR-001 (R10), CTR-EVT-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-062-08. **Owner:** [08_Communications/02_negotiation/mod_consent](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-062-08.R01 | `cns.give` server commit p95 ≤ 300 ms, p99 ≤ 800 ms (ASSUMPTION). | MVP |
+| PS-062-08.R02 | `cns.status` p95 ≤ 100 ms. | MVP |
+| PS-062-08.R03 | Logs contain consent ID, proposal ID, codes and timings only; never terms digest, amounts or party IDs beyond pseudonymous refs. | MVP |
+| PS-062-08.R04 | Lock-versus-withdraw conflicts are counted per day and alerted at > 0 committed-after-lock events. | MVP |
 
-## Purpose and scope
-Define the observability performance process for consent within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Metrics: `consent_command_total{cmd,outcome}`, `consent_command_latency_ms{cmd}`, `consent_stale_total`, `consent_lock_conflict_total`, `consent_queue_rejected_total{reason}`.
 
-## Requirements to specify
-- [ ] PS-062-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-062-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-062-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Event lag `consent_event_lag_ms` p95 ≤ 2 s to subscribers (F02, F13).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Dashboard shows counts per state from [PS-062-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Rejections counted by code, not by party.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Denial counters per [PS-062-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Alert on stale-rejection rate > 5% of queued consents per day (ASSUMPTION).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-062-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Traces carry opaque IDs. Retention RET-OPS 30 days.
+
+## Observability & budgets
+| Budget | Target |
+|---|---|
+| cns.give p95 | ≤ 300 ms |
+| cns.status p95 | ≤ 100 ms |
+| Committed-after-lock events | 0 |
+| Stale-queued rejection | ≤ 5%/day (monitor) |
+
+## Tests
+- TEST-PS-062-08-01 (performance): load at 2× expected peak; budgets met.
+- TEST-PS-062-08-02 (logs): fixture terms digest and amount never appear in logs.
+- TEST-PS-062-08-03 (alert): synthetic committed-after-lock event fires alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets met (TEST-PS-062-08-01).
+2. Log redaction verified (TEST-PS-062-08-02).
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets are targets, not measured.
+- D08 (PWA offline writes): PROVISIONAL (D08 default, unapproved); queue metrics depend on it.

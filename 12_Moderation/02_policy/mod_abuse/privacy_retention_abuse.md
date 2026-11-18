@@ -1,35 +1,55 @@
-# PS-095-07 — privacy retention abuse
+# PS-095-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-095-07. **Owner:** [12_Moderation/02_policy/mod_abuse](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_abuse. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_abuse (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-FED-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for abuse within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-095-07.R01 | Scanning runs in-process on content the platform already stores; no third-party ML or text service without a recorded privacy impact assessment (ASSUMPTION). | MVP |
+| PS-095-07.R02 | Matched text is never stored; `match_digest` is HMAC-SHA-256 with a per-environment key held in KMS. | MVP |
+| PS-095-07.R03 | Findings and rules are never federated (CTR-FED-001 R03 on PRIVATE_PERSONAL sources). | MVP |
+| PS-095-07.R04 | Each rule has a disparate-impact review record (dialect, language, reclaimed terms) before approval. | MVP |
 
-## Requirements to specify
-- [ ] PS-095-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-095-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-095-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data classes and retention
+| Item | Class | Retention |
+|---|---|---|
+| finding metadata | PSEUDONYMOUS | RET-AUD 12 months after linked case closes |
+| match_digest | SECRET (keyed) | with finding; purged with it |
+| dismissed findings | PSEUDONYMOUS | purged after 90 days |
+| reporter misuse counters | PSEUDONYMOUS | rolling 30 days |
+| rule registry | PUBLIC (IDs and category) | lifetime; text confidential |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Threats and controls
+| Threat | Control |
+|---|---|
+| Harassment-by-report using scanner results | Findings are proposals; no visibility change (PS-095-03 R02). |
+| Rule probing via error text | Uniform errors; no pattern echo (PS-095-02). |
+| Digest reversal via dictionary attack | Keyed HMAC; key rotation annually. |
+| Biased lexicon over-flags a community | Disparate-impact review; precision monitoring per rule. |
+| Subject learns rule and evades | Subject sees category only. |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Abuse controls
+Reporter misuse detection feeds PS-094 restrictions with two-step approval. Scanner principal cannot read text.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Privacy-driven refusals use `SYS.FORBIDDEN` or `SYS.NOT_FOUND`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Key rotation re-keys digests lazily on review; old digests expire with findings.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-095-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Observability & budgets
+Zero tolerance: matched text or digest in logs (alert). Metrics carry category only.
+
+## Tests
+- TEST-PS-095-07-01 (privacy): fixture text absent from DB rows other than the source, logs and events.
+- TEST-PS-095-07-02 (bias): rule with known dialect false positives blocked at approval without review record.
+- TEST-PS-095-07-03 (retention): dismissed findings purged at 90 days.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No matched text in any store outside source content.
+2. Every approved rule has a disparate-impact record.
+
+## Assumptions & open decisions
+- ASSUMPTION: no external ML service without PIA.
+- PROVISIONAL (D07 default, unapproved): retention classes above.
+- PROVISIONAL (D01 default, unapproved): any cross-node sharing of findings uses signed events; none in MVP.

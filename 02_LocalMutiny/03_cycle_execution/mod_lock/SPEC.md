@@ -1,44 +1,47 @@
-# F02.S03.M02 — lock
+# F02.S03.M02 — mod_lock (item reservation for consented cycles)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Marketplace Lead (accountable role). **Parent:** [F02.S03 cycle_execution](../SPEC.md).
 
 ## Purpose and business behavior
-Provide lock as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Reserve every offered item of a consented cycle version so the same item cannot appear in two open cycles at once. A lock is a reservation with an expiry, not a transfer: it does not show that any item changed hands. Locks are acquired only after all parties have consented (mod_consent) and are released or consumed when the cycle ends.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant in a consented cycle, my offered items are reserved so another cycle cannot take them while we exchange.
+- As a participant, if the cycle fails, my items are released automatically and I see the release time.
+- As an operator, I can see contention and expiry rates without item-to-cycle mapping.
 
 ## Scope
-- Required process spec: `lock_domain_model.md` (not yet authored)
-- Required process spec: `lock_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `lock_validation_and_authorization.md` (not yet authored)
-- Required process spec: `lock_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `lock_interfaces_and_events.md` (not yet authored)
-- Required process spec: `lock_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `lock_acceptance_and_property_tests.md` (not yet authored)
+Process specs (all MVP):
+- domain_schema, validation_rules, workflow_state_machine, commands_queries_events, authorization_capabilities, failure_recovery_idempotency, privacy_retention_abuse, observability_performance, contract_and_acceptance_tests, import_export_backup_rollback.
+
+Out of scope: availability counts (F01.S03.M01), consent (mod_consent), dropout handling (mod_dropouts), compensation (mod_recovery).
+
+## Canonical ownership (B-06)
+Lock records (`item_lock`) are owned by this module. Item availability counts are owned by **F01.S03.M01 mod_availability** and referenced by full ID. No duplicate slug is owned here.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `cyc.execute.lock`, `cyc.execute.release`, `cyc.execute.extend`; query `cyc.lock.get`; events `item.locked`, `item.lock_failed`, `item.lock_released`, `item.lock_expired`, `item.lock_extended`, `item.lock_consumed`. See [commands_queries_events.md](commands_queries_events.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: mod_consent (`cycle.consented`), F02.S02 snapshot items, F01.S03.M01 (availability), CTR-CAP-001. Downstream: F01.S03.M01 (availability), mod_dropouts (release), mod_recovery (orphan cases), F13 notifications. Contract tests for F01 and mod_dropouts.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `item_lock` rows. Listing and item data remain with F01; claims and money with F09 (CTR-COM-001).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Reservation spam to block others' items; inventory probing via lock errors; double-held items under race; stranded locks after crash; contention as popularity signal. No platform custody of money; locks do not move money.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+PS-023-01..10 approved; race and orphan-sweep tests pass; F01 consumer contract signed; privacy review of error uniformity complete.
 
 ## Required process specification inventory
-- [ ] `lock_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `lock_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `lock_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `lock_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `lock_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `lock_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `lock_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-023-01
+- [x] [validation_rules.md](validation_rules.md) — PS-023-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-023-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-023-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-023-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-023-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-023-07
+- [x] [observability_performance.md](observability_performance.md) — PS-023-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-023-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-023-10

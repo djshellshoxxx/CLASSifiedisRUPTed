@@ -1,44 +1,52 @@
 # F12.S03.M02 — signals
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F12.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead (F12). **Parent:** F12.S03.
 
 ## Purpose and business behavior
-Provide signals as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Produce typed, expiring, privacy-minimized abuse-risk signals from upstream modules: listing velocity, message velocity, report density, authentication bursts and bid patterns. Serve them as per-case inputs to moderation and as k-anonymous aggregates to scoring and rate limiting. A signal records a behaviour pattern. It is not a finding of wrongdoing and never triggers a sanction alone.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I can appeal a restriction and learn which signal type and bucket contributed, without seeing raw data.
+- As a moderator, I can read signals for a case under a time-limited, purpose-bound grant and suppress signals that were wrong.
+- As an operator, I can disable a noisy producer without deleting any record.
 
 ## Scope
-- Required process spec: `signals_domain_model.md` (not yet authored)
-- Required process spec: `signals_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `signals_validation_and_authorization.md` (not yet authored)
-- Required process spec: `signals_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `signals_interfaces_and_events.md` (not yet authored)
-- Required process spec: `signals_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `signals_acceptance_and_property_tests.md` (not yet authored)
+- PS-101-01 `domain_schema.md`
+- PS-101-02 `validation_rules.md`
+- PS-101-03 `workflow_state_machine.md`
+- PS-101-04 `commands_queries_events.md`
+- PS-101-05 `authorization_capabilities.md`
+- PS-101-06 `failure_recovery_idempotency.md`
+- PS-101-07 `privacy_retention_abuse.md`
+- PS-101-08 `observability_performance.md`
+- PS-101-09 `contract_and_acceptance_tests.md`
+- PS-101-10 `import_export_backup_rollback.md`
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `sgn.create`, `sgn.update`. Queries `sgn.list_by_subject`, `sgn_aggregate.read`. Events `signal.recorded`, `signal.suppressed`, `signal.expired`, `signal.redacted`. Errors `SIGNAL.*` (CTR-ERR-001). Details: PS-101-04.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F10.S02.M03 `10_Privacy/02_security_boundaries/mod_metadata` (metadata minimization); F15.S03.M01 `15_Platform/03_operations/mod_observability` (telemetry source).
+Downstream: F04.S02.M01 `04_Auctions/02_auction_integrity/mod_anti`; F07.S03.M01 `07_Identity/03_trust/mod_evidence`; F12.S02.M02 `12_Moderation/02_policy/mod_spam`; F12.S03.M01 `12_Moderation/03_antifraud/mod_risk`; F12.S03.M03 `12_Moderation/03_antifraud/mod_rate`.
+Consumers reference `sgn_` IDs and aggregate outputs by full ID only.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Canonical owner of the signal record class (`sgn_`). Does not own accounts (F07.S01.M01), reports and cases (F12.S01), grants (F16.S01.M01) or the consent record class (F10.S01.M01). Export and deletion follow CTR-PRV-001 retention and legal-hold rules.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Signals encode behaviour and can deanonymize a pseudonymous account when combined with timing or graph data. False positives harm honest users, for example on launch days. Coordinated false reports can frame targets. A compromised producer can poison scoring. Scoring feedback loops can amplify early errors. Mitigations: derived features only, K_MIN = 5 aggregation, per-reporter caps, no sanction on signals alone, appeal path, revision-checked suppression. Pseudonyms do not guarantee anonymity.
 
 ## Completion criteria
 All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
 
 ## Required process specification inventory
-- [ ] `signals_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `signals_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `signals_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `signals_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `signals_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `signals_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `signals_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-101-01 — SPEC-DRAFT-COMPLETE
+- [x] [validation_rules.md](validation_rules.md) — PS-101-02 — SPEC-DRAFT-COMPLETE
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-101-03 — SPEC-DRAFT-COMPLETE
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-101-04 — SPEC-DRAFT-COMPLETE
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-101-05 — SPEC-DRAFT-COMPLETE
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-101-06 — SPEC-DRAFT-COMPLETE
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-101-07 — SPEC-DRAFT-COMPLETE
+- [x] [observability_performance.md](observability_performance.md) — PS-101-08 — SPEC-DRAFT-COMPLETE
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-101-09 — SPEC-DRAFT-COMPLETE
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-101-10 — SPEC-DRAFT-COMPLETE

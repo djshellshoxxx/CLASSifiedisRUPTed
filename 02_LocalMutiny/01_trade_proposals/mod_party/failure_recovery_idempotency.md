@@ -1,35 +1,48 @@
-# PS-014-06 — failure recovery idempotency
+# PS-014-06 — failure, recovery and idempotency
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-014-06. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-014-06.R01 | Cycle creation with N invitations is atomic: all slots or none. | MVP |
+| PS-014-06.R02 | Replays of invite and accept return the original result for 7 days (CTR-EVT-001 R03). | MVP |
+| PS-014-06.R03 | Retries only for retryable codes (PARTY.REGION_BELOW_THRESHOLD), max 3, backoff 1 s/2 s/4 s. | MVP |
+| PS-014-06.R04 | Invitation delivery failure does not create a slot; the invite command fails and is retryable by key. | MVP |
 
-## Purpose and scope
-Define the failure recovery idempotency process for party within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Uses `par_id`, `cyc_id`, `idempotency_key`, `expected_revision`. No extra tables.
 
-## Requirements to specify
-- [ ] PS-014-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-014-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-014-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Server timeout 2 s per command; client 5 s. Timeout after commit: replay the key.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Crash before commit: no slot. Crash after commit: replay returns the slot.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Retryable only: `PARTY.REGION_BELOW_THRESHOLD`. All others need client change or are terminal.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Replay re-authorizes; a removed slot cannot accept on replay.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Accept vs decline vs expiry on one slot: slot row lock; loser gets `PARTY.ALREADY_RESOLVED`. Accept while cycle is being locked: lock order is cycle then slots; deadlock avoided by fixed order.
+Offline: accept is never queued as an offline draft (it needs a fresh decision); decline and withdraw may queue (D08 PROVISIONAL) with the same key.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-014-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Queued declines store `par_id` and key only.
+
+## Observability & budgets
+Metrics: replay count, conflicts per code. Alert on conflict rate above 2% for 15 minutes.
+
+## Tests
+- TEST-PS-014-06-01 (integration): fault after second of three invites → zero slots visible.
+- TEST-PS-014-06-02 (concurrency): accept vs expiry race, 100 iterations, one outcome each.
+- TEST-PS-014-06-03 (offline): queued decline replays once after reconnect.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No partial cycle is visible in 10,000 injected failures.
+2. Zero duplicate `party.accepted` events.
+
+## Assumptions & open decisions
+- ASSUMPTION: accept is online-only for MVP.
+- D08 PROVISIONAL (Dxx default, unapproved): local queue until acknowledgment, decline and withdraw only.

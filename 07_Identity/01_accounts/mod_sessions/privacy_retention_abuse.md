@@ -1,35 +1,52 @@
-# PS-054-07 — privacy retention abuse
+# PS-054-07 — privacy, retention and abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_sessions. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-054-07. **Owner:** [07_Identity/01_accounts/mod_sessions](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_sessions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-054-07.R01 | Device label and network digest visible to owner only. Never in logs, events or analytics. | MVP |
+| PS-054-07.R02 | Keyed-hash key for network context rotated every 90 days; old digests are not re-keyed (they expire with the session). | MVP |
+| PS-054-07.R03 | Session creation limit 10 per account per 10 min; failed proof limit 5 per account per 15 min, then 15 min lock (ASSUMPTION). | MVP |
+| PS-054-07.R04 | New-device login triggers notice to all verified contacts with generic text and a "this was not me" link that revokes the session. | MVP |
+| PS-054-07.R05 | Credential-stuffing signals (many accounts, one network digest) feed F12 signals; they do not reveal account existence. | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for sessions within 01_accounts. Do not assume implementation or successful external settlement.
+## Data / schema
+Classes: tokens SECRET; device label PRIVATE_PERSONAL; network digest PSEUDONYMOUS; end_reason PSEUDONYMOUS.
 
-## Requirements to specify
-- [ ] PS-054-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-054-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-054-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Notice template key `session.new_device` with `ses_` ID only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+The "this was not me" path is `revoked` with `end_reason = revoked_by_user` and a family revoke; see [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Limit breaches return `SYS.RATE_LIMITED` (429) with `Retry-After`, identical for known and unknown accounts.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Support cannot read device or network data (PS-054-05.R04).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Not applicable beyond PS-054-06.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-054-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+| Data | Class | Retention |
+|---|---|---|
+| session row (ended) | PSEUDONYMOUS | 30 days (RET-OPS) |
+| token digests | SECRET | purged 30 days after end (RET-SEC) |
+| device label | PRIVATE_PERSONAL | 30 days after end (RET-OPS) |
+| end events | PSEUDONYMOUS | 12 months (RET-AUD) |
+Abuse controls: rate limits above, lock on repeated failures, F12 signal feed.
+
+## Observability & budgets
+Logs: `ses_` ID, code, truncated digest prefix. Never token, device label or full digest.
+
+## Tests
+TEST-PS-054-15 (log scan), TEST-PS-054-16 (rate and lock thresholds), TEST-PS-054-17 (new-device notice and one-click revoke).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero token or device-label occurrences in logs and events.
+2. Lock and rate thresholds enforced identically for known and unknown accounts.
+
+## Assumptions & open decisions
+- ASSUMPTION: limits above.
+- PROVISIONAL (D07 default, unapproved): retention above.

@@ -1,35 +1,61 @@
-# PS-134-04 — commands queries events
+# PS-134-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-134-04. **Owner:** [17_Quality/01_testing/mod_e2e](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_e2e. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_e2e. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for e2e within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-134-04.R01 | RegisterScenario and RecordResult are idempotent by key; replay within 24 h returns stored response | MVP |
+| PS-134-04.R02 | RunScenario is idempotent by (test_id, commit, device); duplicate request returns existing run_id | MVP |
+| PS-134-04.R03 | Commands versioned v1 per CTR-SCH-001 | MVP |
+| PS-134-04.R04 | Query ListByFlow returns <= 100 rows per page | MVP |
 
-## Requirements to specify
-- [ ] PS-134-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-134-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-134-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Event example:
+```json
+{"event":"e2e.RunCompleted","v":1,"run_id":"<ulid>","test_id":"TEST-PS-134-03-02","result":"errored","first_failed_step":null,"commit":"<sha40>","idempotency_key":"<ulid>"}
+```
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Name | Signature | Idempotency key | Errors |
+|---|---|---|---|
+| e2e.RegisterScenario | (scenario fields) | test_id + content_hash | SCENARIO_INCOMPLETE, FLOW_UNKNOWN, FIXTURE_NOT_SYNTHETIC |
+| e2e.RunScenario | (test_id, commit, device, environment) | test_id + commit + device | ILLEGAL_TRANSITION, DURATION_EXCEEDED |
+| e2e.RecordResult | (run_id, result, first_failed_step, artifact_refs) | run_id + result | ILLEGAL_TRANSITION, SCHEMA_INVALID |
+| e2e.QuarantineScenario | (test_id, reason, tracking_note) | test_id + reason hash | ILLEGAL_TRANSITION, UNAUTHORIZED |
+| Query ListByFlow | (flow, page) | none | none |
+| Query GetRun | (run_id) | none | NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Events: `e2e.ScenarioRegistered`, `e2e.RunCompleted`, `e2e.ScenarioQuarantined`. Envelope per CTR-EVT-001.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Per PS-134-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Codes per PS-134-02 with `E2E.` prefix. Retryability per CTR-ERR-001.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-134-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Per PS-134-05.
+
+## Failure, idempotency, concurrency, offline
+Event delivery at-least-once; consumers dedupe on idempotency_key. RecordResult after `finished_at` returns ILLEGAL_TRANSITION.
+
+## Privacy, retention, abuse
+Payloads carry IDs and codes only; no step text or artifact content.
+
+## Observability & budgets
+Command p95 <= 200 ms (ASSUMPTION). RunCompleted lag to dashboard <= 60 s.
+
+## Tests
+- TEST-PS-134-04-01 (unit): RunScenario duplicate key returns same run_id.
+- TEST-PS-134-04-02 (contract): RunCompleted validates against CTR-EVT-001 envelope.
+- TEST-PS-134-04-03 (unit): RecordResult after finish rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Commands and queries implemented exactly as listed.
+2. Replay tests pass for every state-changing command.
+3. No event carries step text or artifact content.
+
+## Assumptions & open decisions
+- CTR-ID-001 ID format OPEN; ULID shown as placeholder.
+- CTR-EVT-001 DRAFT; field names local until approved.

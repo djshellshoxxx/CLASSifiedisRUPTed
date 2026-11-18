@@ -1,35 +1,66 @@
 # PS-102-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-102-04. **Owner:** [13_Notifications/01_delivery/mod_email](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_email. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_email (Platform Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for email within 01_delivery. Do not assume implementation or successful external settlement.
+**Decision labels:** Webhook signature scheme is PROVISIONAL (D10 default, unapproved).
 
-## Requirements to specify
-- [ ] PS-102-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-102-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-102-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-102-04.R01 | Commands: `eml.bind`, `eml.verify`, `eml.remove`, `eml.send`, `eml.webhook_ingest`. Query: `eml.status` (self only). | MVP |
+| PS-102-04.R02 | Every state-changing command carries `idempotency_key` (CTR-EVT-001 R03). | MVP |
+| PS-102-04.R03 | `eml.webhook_ingest` accepts only HMAC-SHA-256-signed bodies; unsigned or mismatched → `SYS.UNAUTHORIZED`. | MVP |
+| PS-102-04.R04 | `eml.status` returns state, bounce_state and masked address (first character and domain TLD only). | MVP |
+| PS-102-04.R05 | Events: `email_address.bound`, `email_address.verified`, `email_address.removed`, `email_delivery.sent`, `email_delivery.bounced`, `email_delivery.suppressed`, `email_delivery.expired`. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Command envelope per CTR-EVT-001. Event payloads carry `email_id`, `account_ref`, `ntf_ref` (where applicable), `template_id`, `status`. Never the address, token or body.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Example request:
+```json
+{"command_type":"eml.bind","idempotency_key":"k_01J...","payload":{"address":"<client-supplied>","purpose":"account_security"}}
+```
+The address field is accepted once, is never echoed, and is redacted from logs at ingest.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+| Name | Caller | Idempotency key | Revision | Errors |
+|---|---|---|---|---|
+| `eml.bind` | `acc_` (self) | (acc, normalized address) | n/a | EMAIL.ADDRESS_INVALID, EMAIL.ADDRESS_DISPOSABLE, EMAIL.RATE_LIMITED |
+| `eml.verify` | `acc_` (self) | (acc, token hash) | required | EMAIL.VERIFICATION_EXPIRED, EMAIL.VERIFICATION_USED |
+| `eml.remove` | `acc_` (self) or deletion job | (acc, email_id) | required | SYS.NOT_FOUND |
+| `eml.send` | `sys_` | (ntf_id, channel, template_version) | n/a | EMAIL.TEMPLATE_UNKNOWN, EMAIL.HEADER_INVALID, EMAIL.LINK_NOT_ALLOWED |
+| `eml.webhook_ingest` | `sys_` (provider) | (provider_message_id, event_type, provider_event_id) | n/a | SYS.UNAUTHORIZED |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Versioning: template additions are MINOR; changing a variable's data class is MAJOR (CTR-SCH-001 R10).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-102-04`; scenarios and fixtures to be detailed in Prompt 3.
+## States & transitions
+Event-to-transition mapping: PS-102-03.
+
+## Validation & errors
+PS-102-02 table and CTR-ERR-001 envelope.
+
+## Authorization
+Capability IDs and scopes: PS-102-05.
+
+## Failure, idempotency, concurrency, offline
+Duplicate key with same digest returns original; different digest → `EVT.IDEMPOTENCY_KEY_REUSED`. Details: PS-102-06.
+
+## Privacy, retention, abuse
+No event carries PRIVATE_PERSONAL data. `max_data_class` is PSEUDONYMOUS for all `email_*` events.
+
+## Observability and budgets
+Counts per command and result (PS-102-08).
+
+## Tests
+- TEST-PS-102-09 (contract): `email_delivery.sent` 1.0.0 golden fixture validates; payload has no address field.
+- TEST-PS-102-10 (negative): webhook with bad HMAC rejected; no state change.
+- TEST-PS-102-11 (integration): `eml.status` masking shows no more than first character and TLD.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command has golden request examples and error rows.
+2. Event schemas registered in CTR-SCH-001.
+3. No event or response contains the full address.
+
+## Assumptions & open decisions
+- ASSUMPTION: provider supports HMAC-signed webhooks; if not, mTLS allowlist applies.
+- D10 (PROVISIONAL, unapproved).

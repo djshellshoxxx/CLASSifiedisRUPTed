@@ -1,35 +1,64 @@
-# PS-137-04 — commands queries events
+# PS-137-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-04. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_unit. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for unit within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-137-04.R01 | Every state-changing command carries an idempotency key and returns the same result on replay within 24 h | MVP |
+| PS-137-04.R02 | Commands and events are versioned (`v1`); breaking change requires a new version per CTR-SCH-001 | MVP |
+| PS-137-04.R03 | `unit.CheckManifest` performs no writes and completes in <= 30 s for 5,000 IDs | MVP |
+| PS-137-04.R04 | Queries return at most 200 rows per page | MVP |
 
-## Requirements to specify
-- [ ] PS-137-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Command payloads reference PS-137-01 fields. Event payload example:
+```json
+{"event":"unit.TestMapped","v":1,"test_id":"TEST-PS-137-01-01","module_path":"17_Quality/01_testing/mod_unit","revision":3,"idempotency_key":"<ulid>"}
+```
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Name | Signature | Idempotency key | Version | Errors |
+|---|---|---|---|---|
+| unit.MapTest | (test_id, test_file, req_ids[]) | test_id + file content hash | v1 | TEST_ID_INVALID, TEST_FILE_MISSING, REQ_UNMAPPED |
+| unit.RecordCoverage | (run_id, module_path, line_pct, branch_pct, ci_commit) | run_id + module_path | v1 | COVERAGE_OUT_OF_RANGE |
+| unit.QuarantineTest | (test_id, reason, tracking_note) | test_id + reason hash | v1 | QUARANTINE_REASON_INVALID, ILLEGAL_TRANSITION |
+| unit.ApproveQuarantine | (test_id, approver) | test_id + approval id | v1 | ILLEGAL_TRANSITION, UNAUTHORIZED |
+| unit.RetireTest | (test_id) | test_id | v1 | TEST_ID_RETIRED |
+| unit.CheckManifest | (commit) | none (read-only) | v1 | SCHEMA_INVALID |
+| Query GetTestForId | (test_id) | n/a | v1 | TEST_NOT_FOUND |
+| Query ListUnmapped | (module_path, page) | n/a | v1 | none |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Events: `unit.TestMapped`, `unit.CoverageRecorded`, `unit.TestQuarantined`, `unit.QuarantineExpired`, `unit.TestRetired`. Envelope per CTR-EVT-001.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Command effects follow PS-137-03. Read-only queries have no transitions.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Codes are prefixed `UNIT.`; see PS-137-02 for table. Each error carries `retryable` per CTR-ERR-001.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Command-level checks in PS-137-05. Queries open to all engineering roles.
+
+## Failure, idempotency, concurrency, offline
+Duplicate command with same key returns stored response, no second event. Event delivery is at-least-once; consumers dedupe on `idempotency_key`.
+
+## Privacy, retention, abuse
+Payloads contain identifiers and hashes only. `reason` is free text limited to 500 chars and is scanned by the PS-137-07 redaction rule.
+
+## Observability & budgets
+Per-command latency p95 <= 300 ms (ASSUMPTION); event lag to consumers <= 60 s.
+
+## Tests
+- TEST-PS-137-04-01 (unit): replay of `unit.MapTest` with same key returns identical response, zero new events.
+- TEST-PS-137-04-02 (contract): `unit.TestMapped` payload validates against CTR-EVT-001 envelope schema.
+- TEST-PS-137-04-03 (integration): `unit.CheckManifest` on dirty tree writes nothing (row count unchanged).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All commands in table implemented as specified; no extra commands exposed.
+2. Replay test passes for 100% of state-changing commands.
+3. Event schemas versioned and validated in CI.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h idempotency window is sufficient for CI retries.
+- CTR-ID-001 ID format OPEN; ULID shown as placeholder.
+- CTR-EVT-001 is DRAFT; field names here are local until that contract is approved.

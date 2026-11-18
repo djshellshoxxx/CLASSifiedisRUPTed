@@ -1,35 +1,51 @@
 # PS-038-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-10. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_sniping. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-FED-001
 
-## Purpose and scope
-Define the import export backup rollback process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-038-10.R01 | Subject export includes the requester's own timing rows (class, acceptance, server_received_at) and excludes other bidders' rows. | MVP |
+| PS-038-10.R02 | No import path in MVP. Inbound federated timing records are rejected per CTR-FED-001. | MVP |
+| PS-038-10.R03 | Backups include BidTimingEvent and aggregates; restore replays deletions before serving. | MVP |
+| PS-038-10.R04 | Classifier rollback: prior threshold set reactivated; recorded classes are not recomputed unless an explicit migration runs. | MVP |
+| PS-038-10.R05 | Restore drill quarterly with RPO <= 24 h, RTO <= 4 h (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-038-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export JSON schema_version 1, PSEUDONYMOUS class.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export emits `sniping.export_generated` with counts only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Threshold set states: ACTIVE, PRIOR, RETIRED.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SNIPE.EXPORT_SCOPE` when a request spans other bidders.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export by account holder; restore by operator with dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent per request ID. Restore blocked during reclassification jobs.
+
+## Privacy, retention, abuse
+Backups follow PS-038-07 retention. Export omits clock-health internals.
+
+## Observability & budgets
+Export p95 <= 30 s for 10 MB.
+
+## Tests
+- TEST-PS-038-10-01 (export): only requester rows present.
+- TEST-PS-038-10-02 (restore): deletion replayed before serving.
+- TEST-PS-038-10-03 (rollback): threshold rollback leaves recorded classes unchanged.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export excludes other bidders.
+2. Restore drill meets RPO and RTO.
+3. Rollback does not silently reclassify.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO 24 h and RTO 4 h.
+- PROVISIONAL (D01 default, unapproved): no federated timing import.
+- PROVISIONAL (D07 default, unapproved): backup retention per class.

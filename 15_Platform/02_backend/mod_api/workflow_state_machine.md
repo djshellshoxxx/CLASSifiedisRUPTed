@@ -1,35 +1,63 @@
 # PS-117-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-117-03. **Owner:** [15_Platform/02_backend/mod_api](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_api. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_api. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001 (R03, R09), CTR-ID-001 (R01).
 
-## Purpose and scope
-Define the workflow state machine process for api within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-117-03.R01 | Each state-changing request passes through the states below; no state is skipped. | MVP |
+| PS-117-03.R02 | An idempotency row reaches a terminal state (`succeeded` or `failed_final`) or is released within 60 s (ASSUMPTION) of its last heartbeat. | MVP |
+| PS-117-03.R03 | A replayed request with identical digest returns the stored response byte-for-byte. | MVP |
 
-## Requirements to specify
-- [ ] PS-117-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-117-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-117-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Request state is held in memory per request; durable state is the `api_idempotency.status` column (PS-117-01).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Not applicable beyond PS-117-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Request lifecycle:
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| RECEIVED | authenticate | valid session (F07 `ses_`) | AUTHENTICATED | none |
+| RECEIVED | authenticate fails | — | REJECTED_401 | error response |
+| AUTHENTICATED | validate | PS-117-02 passes | VALIDATED | none |
+| VALIDATED | idempotency lookup | no row | IN_PROGRESS | insert row (`in_progress`) |
+| IN_PROGRESS | key found, same digest, `succeeded` | — | REPLAYED | return stored response |
+| IN_PROGRESS | key found, different digest | — | REJECTED_409 | `API.IDEMPOTENCY_KEY_REUSED` |
+| IN_PROGRESS | key found, status `in_progress` | age < 60 s | REJECTED_409 | `API.REQUEST_IN_PROGRESS`, retryable |
+| IN_PROGRESS | command committed | downstream ack | SUCCEEDED | update row to `succeeded`, store response |
+| IN_PROGRESS | downstream rejects with final code | — | FAILED_FINAL | store error, status `failed_final` |
+| IN_PROGRESS | downstream timeout | age ≥ 60 s | RECONCILING | reconciliation job |
+| RECONCILING | event found under correlation ID | — | SUCCEEDED | store response |
+| RECONCILING | no event | — | RELEASED | delete row; client may retry with same key |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Transition errors use codes from PS-117-02 or PS-117-06. `REJECTED_409` and `RELEASED` are the only paths that permit a client retry with the same key.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-117-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Transitions are performed by the api `sys_` principal. Authorization of the command itself is evaluated by the owning module (PS-117-05).
+
+## Failure, idempotency, concurrency, offline
+Row insert is the linearization point for a key. Two concurrent first requests: one inserts, the other observes `in_progress` (409). Reconciliation uses the CTR-EVT-001 `correlation_id` to find the committed event.
+
+## Privacy, retention, abuse
+State rows hold no content. Reconciliation logs carry `request_id` and state only.
+
+## Observability & budgets
+Counter `api_request_transitions_total{to}`. Alert if RECONCILING count > 0 for > 5 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-117-03-01 (unit): every row of the table, including forbidden transitions.
+- TEST-PS-117-03-02 (integration): kill process after commit, before response; replay returns stored result.
+- TEST-PS-117-03-03 (property): N concurrent identical requests produce exactly one committed effect.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Table is exhaustive; any unlisted transition raises an internal error and is counted.
+2. Replay response bytes equal original bytes (SHA-256 compare).
+3. No key remains `in_progress` longer than 60 s + reconciliation interval (5 min) in the chaos test.
+
+## Assumptions & open decisions
+- ASSUMPTION: 60 s stale-lock threshold.
+- D04 (PROVISIONAL default: explicit per-party attestations and compensating recovery; unapproved): not applied here; api does not decide business completion.

@@ -1,35 +1,52 @@
 # PS-039-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-039-07. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/01_rental_catalog/mod_availability. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001
 
-## Purpose and scope
-Define the privacy retention abuse process for availability within 01_rental_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-039-07.R01 | Public calendar reveals FREE or BUSY only. Booking reason and renter identity are never public. | MVP |
+| PS-039-07.R02 | `item_timezone` is LOCATION_COARSE. Precise pickup address is never stored in this module (CTR-PRV-001 R03). | MVP |
+| PS-039-07.R03 | Retention: BOOKED, IN_USE and RELEASED history 2 years (ASSUMPTION, dispute support); expired TENTATIVE rows 30 days; owner blocks 2 years. PROVISIONAL (D07). | MVP |
+| PS-039-07.R04 | Holds per renter: maximum 3 active; maximum 5 hold creations per item per renter per 24 h. | MVP |
+| PS-039-07.R05 | Availability history is not federated (D01 default). | MVP |
 
-## Requirements to specify
-- [ ] PS-039-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-039-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-039-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Classes: `rental_id` PSEUDONYMOUS; `item_timezone` LOCATION_COARSE; dates PUBLIC for FREE/BUSY.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events exclude renter identity.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Expiry deletes TENTATIVE rows; RELEASED rows archived after 2 years.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`AVAIL.HOLD_LIMIT` (429) when renter exceeds PR04 limits.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Account deletion nulls `rental_id` owner reference on history and keeps date ranges.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-039-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Retention job idempotent by date.
+
+## Privacy, retention, abuse
+Hold-squatting: 15-minute expiry and per-renter cap. Scraping: anonymous reads rate-limited. Inference: BUSY ranges could reveal bookings; accepted residual risk, documented. Pseudonyms do not guarantee anonymity.
+
+## Observability & budgets
+Count holds per renter bucket; alert on hold-squatting pattern (many holds, few confirms).
+
+## Tests
+- TEST-PS-039-07-01 (lint): public schema excludes rental_id and reason.
+- TEST-PS-039-07-02 (abuse): fourth active hold rejected with AVAIL.HOLD_LIMIT.
+- TEST-PS-039-07-03 (retention): expired TENTATIVE deleted at 30 days.
+- TEST-PS-039-07-04 (deletion): account deletion keeps date ranges, nulls owner reference.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No public response contains renter identity.
+2. Hold caps enforced.
+3. Retention schedule matches table.
+
+## Assumptions & open decisions
+- ASSUMPTION: accepted residual risk that BUSY ranges reveal bookings.
+- PROVISIONAL (D07 default, unapproved): retention periods above.
+- PROVISIONAL (D05 default, unapproved): coarse timezone only.

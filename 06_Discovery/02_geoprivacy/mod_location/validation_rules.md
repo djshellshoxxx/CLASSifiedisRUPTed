@@ -1,35 +1,59 @@
 # PS-048-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-048-02. **Owner:** [06_Discovery/02_geoprivacy/mod_location](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_location. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_location. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R02, R06, R07), CTR-PRV-001 (R03), CTR-CAP-001 (R04).
 
-## Purpose and scope
-Define the validation rules process for location within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** Accuracy threshold ASSUMPTION; D05 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-048-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-048-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-048-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-048-02.R01 | Reject `region_cell` not in active registry version as `LOCATION.UNKNOWN_CELL`. | MVP |
+| PS-048-02.R02 | Client resolution rejects latitude outside [-90, 90] or longitude outside [-180, 180] or non-finite values as `LOCATION.INVALID_COORDINATES` (client-side). | MVP |
+| PS-048-02.R03 | Client resolution refuses fixes with accuracy radius > 25 km (ASSUMPTION) as `LOCATION.ACCURACY_TOO_LOW`; user chooses cell from picker instead. | MVP |
+| PS-048-02.R04 | Fix outside every active cell → `LOCATION.OUTSIDE_SUPPORTED_AREA`. | MVP |
+| PS-048-02.R05 | Any request body field named `lat`, `lon`, `latitude`, `longitude`, `accuracy` or `address` → `LOCATION.PRECISE_NOT_ALLOWED` and request rejected. | MVP |
+| PS-048-02.R06 | `location.cell.set` without consent record for `source = device_resolved` → `LOCATION.CONSENT_REQUIRED`. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+| Rule | Where | Code | Retryable |
+|---|---|---|---|
+| V1 | server: cell | LOCATION.UNKNOWN_CELL | false |
+| V2 | client: coordinates | LOCATION.INVALID_COORDINATES | false |
+| V3 | client: accuracy | LOCATION.ACCURACY_TOO_LOW | false |
+| V4 | client: containment | LOCATION.OUTSIDE_SUPPORTED_AREA | false |
+| V5 | server: forbidden keys | LOCATION.PRECISE_NOT_ALLOWED | false |
+| V6 | server: consent | LOCATION.CONSENT_REQUIRED | false |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+V5 is enforced by a deny-list schema check at the gateway before parsing, so any precise field is rejected regardless of nesting.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Rejected input leaves stored cell unchanged.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Client errors are rendered locally; server never receives the rejected coordinates. Server error responses never echo values (CTR-ERR-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-048-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Consent check occurs after authentication (PS-048-05).
+
+## Failure, idempotency, concurrency, offline
+Validation is deterministic. Offline: picker selection queued? No: location set requires server; offline attempts are blocked with a message, not queued (D08 PROVISIONAL).
+
+## Privacy, retention, abuse
+Gateway logs record only the rule code (V5 counts as `PRECISE_NOT_ALLOWED`), not the body.
+
+## Observability & budgets
+Counter `location_validation_reject_total{code}`; any V5 event is a privacy alert.
+
+## Tests
+- TEST-PS-048-02-01 (unit): V1–V6 pass/fail.
+- TEST-PS-048-02-02 (security): request with nested `lat` field is rejected.
+- TEST-PS-048-02-03 (client): accuracy 30 km fix refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All six rules tested.
+2. Any V5 rejection triggers privacy alert in staging test.
+3. No coordinate value appears in any server log sample.
+
+## Assumptions & open decisions
+- ASSUMPTION: 25 km accuracy cutoff (F10 to validate).

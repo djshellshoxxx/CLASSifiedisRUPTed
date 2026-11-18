@@ -1,44 +1,50 @@
 # F17.S01.M01 — unit
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F17.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** QA Lead (F17). **Parent:** [F17.S01](../SPEC.md).
 
 ## Purpose and business behavior
-Provide unit as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Define how ClassRup unit tests are specified, mapped to stable `TEST-PS-*` IDs, executed in CI and reported. The module owns the unit test manifest (TEST-ID to test file to owning module), per-module coverage snapshots and the quarantine list for unit tests excluded from the gate. It does not own domain behavior: each module owns the test logic for its own records, and this module only checks that the mapping is complete, deterministic and auditable.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a developer, I can find the unit test that proves a given TEST-ID without searching the repository.
+- As a QA Lead, I can see which specified TEST-IDs still lack a unit test before a module leaves SPEC-DRAFT-COMPLETE.
+- As a developer, I get a fast, deterministic unit run with no network access, a fixed clock and seeded randomness.
 
 ## Scope
-- Required process spec: `unit_domain_model.md` (not yet authored)
-- Required process spec: `unit_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `unit_validation_and_authorization.md` (not yet authored)
-- Required process spec: `unit_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `unit_interfaces_and_events.md` (not yet authored)
-- Required process spec: `unit_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `unit_acceptance_and_property_tests.md` (not yet authored)
+- Process spec 01: `domain_schema.md` (PS-137-01)
+- Process spec 02: `validation_rules.md` (PS-137-02)
+- Process spec 03: `workflow_state_machine.md` (PS-137-03)
+- Process spec 04: `commands_queries_events.md` (PS-137-04)
+- Process spec 05: `authorization_capabilities.md` (PS-137-05)
+- Process spec 06: `failure_recovery_idempotency.md` (PS-137-06)
+- Process spec 07: `privacy_retention_abuse.md` (PS-137-07)
+- Process spec 08: `observability_performance.md` (PS-137-08)
+- Process spec 09: `contract_and_acceptance_tests.md` (PS-137-09)
+- Process spec 10: `import_export_backup_rollback.md` (PS-137-10)
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal only. Read API: manifest lookup by TEST-ID and unmapped-ID list per module. Events: `unit.TestMapped`, `unit.CoverageRecorded`, `unit.TestQuarantined` (envelope per [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md)). Errors per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: every module's `TEST-PS-*` IDs; CI runner from [mod_ci](../../03_release/mod_ci/SPEC.md). Downstream: [mod_gates](../../03_release/mod_gates/SPEC.md) reads pass state, coverage and quarantine counts. Integration tests are owned by sibling [mod_integration](../mod_integration/SPEC.md); property tests by [mod_property](../mod_property/SPEC.md).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns manifest rows, coverage snapshots and quarantine records. Does not own test fixtures containing domain data; those follow the fixture rules in PS-137-07. Canonical identifiers come from [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Specific to unit testing: (1) false green from tests that assert nothing or mock the unit under test; (2) quarantine used to hide real defects; (3) coverage gaming on validation and authorization code; (4) personal or location-like values in fixtures leaking into CI logs; (5) clock and RNG nondeterminism eroding trust in the gate. No security audit has been performed on this module.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Manifest covers 100% of TEST-IDs in SPEC files of modules in scope; all ten process specs approved; gate rules in PS-137-08 agreed with mod_gates; no quarantine without a named approver.
 
 ## Required process specification inventory
-- [ ] `unit_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `unit_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `unit_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `unit_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `unit_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `unit_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `unit_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-137-01 drafted
+- [x] `validation_rules.md` — PS-137-02 drafted
+- [x] `workflow_state_machine.md` — PS-137-03 drafted
+- [x] `commands_queries_events.md` — PS-137-04 drafted
+- [x] `authorization_capabilities.md` — PS-137-05 drafted
+- [x] `failure_recovery_idempotency.md` — PS-137-06 drafted
+- [x] `privacy_retention_abuse.md` — PS-137-07 drafted
+- [x] `observability_performance.md` — PS-137-08 drafted
+- [x] `contract_and_acceptance_tests.md` — PS-137-09 drafted
+- [x] `import_export_backup_rollback.md` — PS-137-10 drafted

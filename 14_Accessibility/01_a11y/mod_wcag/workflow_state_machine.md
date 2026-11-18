@@ -1,35 +1,54 @@
 # PS-111-03 — workflow state machine
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_wcag. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-111-03. **Owner:** [14_Accessibility/01_a11y/mod_wcag](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_wcag. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-111-03.R01 | A finding is in one of `open`, `in_progress`, `fixed`, `verified`, `accepted_risk`. | MVP |
+| PS-111-03.R02 | No finding of severity blocker may be `accepted_risk`. | MVP |
+| PS-111-03.R03 | Release gate passes only when zero blocker findings are open or in progress. | MVP |
 
-## Purpose and scope
-Define the workflow state machine process for wcag within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Finding `status`, `revision`, `accepted_until`.
 
-## Requirements to specify
-- [ ] PS-111-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-111-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-111-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+`wcag.finding.transition` emits `accessibility_finding.transitioned`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| open | start | owner assigned | in_progress | event |
+| in_progress | fix | fix build submitted | fixed | event |
+| fixed | verify | QA re-test passes | verified | event |
+| fixed | verify fails | — | open | event |
+| open or in_progress | accept_risk | severity ≠ blocker; Accessibility Lead approves; accepted_until ≤ 90 days | accepted_risk | event |
+| accepted_risk | expiry | date reached | open | event; release gate re-evaluated |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+See [PS-111-02](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+See [PS-111-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+See [PS-111-06](failure_recovery_idempotency.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-111-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+No personal data.
+
+## Observability & budgets
+Open-blocker count per release is a release metric.
+
+## Tests
+- TEST-PS-111-03-01 unit: each row of the table.
+- TEST-PS-111-03-02 integration: blocker cannot enter accepted_risk.
+- TEST-PS-111-03-03 integration: expiry reopens finding and fails gate.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Transition table exhaustive.
+2. Release gate fails in test with one open blocker.
+3. Expiry reopens accepted findings in test.
+
+## Assumptions & open decisions
+- ASSUMPTION: 90-day maximum acceptance period.
+- No Dxx decision directly affects this state machine.

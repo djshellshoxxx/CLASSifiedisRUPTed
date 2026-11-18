@@ -1,35 +1,53 @@
 # PS-030-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-030-10. **Owner:** [03_Services/02_service_booking/mod_disputes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_disputes. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-COM-001.
 
-## Purpose and scope
-Define the import export backup rollback process for disputes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-030-10.R01 | Export: a participant may export its own `service_dispute_link` rows as JSON (≤ 20 per request) with reason codes and amounts (PRV-001 R11). Counterparty identifiers redacted to pseudonym. | MVP |
+| PS-030-10.R02 | Canonical dispute records are exported by F09 only; this module's export contains link fields only. | MVP |
+| PS-030-10.R03 | Import into this module is not supported in MVP. Imported links would bypass F09 eligibility. | MVP |
+| PS-030-10.R04 | Backups: link rows included in backups with CTR-PRV-001 R06 expiry; restore creates a new version; no in-place overwrite. | MVP |
+| PS-030-10.R05 | Rollback: a schema or code rollback never re-opens closed disputes; `link_state` values are preserved. | MVP |
+| PS-030-10.R06 | Export and restore operations emit one audit record each with counts and no content (CTR-PRV-001 R12). | MVP |
+| PS-030-10.R07 | Federation export of disputes is Future and requires a separate decision (CTR-FED-001 R03). | Future |
 
-## Requirements to specify
-- [ ] PS-030-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-030-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-030-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{ "format": "classrup.service_dispute_link.v1", "exported_at": "…", "rows": [ … ] }`. Schema per CTR-SCH-001.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`service_dispute.exported` (audit event, counts only). No import command exists.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Export does not change `link_state`. Restore sets `link_state` only from the backed-up snapshot ([workflow_state_machine.md](workflow_state_machine.md)).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`DISPUTE.EXPORT_LIMIT` above 20 rows per request (retryable false, use cursor). `DISPUTE.IMPORT_NOT_SUPPORTED` if an import is attempted.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: participant only. Restore: `ope` with purpose and dual approval (ASSUMPTION). See [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-030-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export is read-only and retry-safe. Restore is keyed by snapshot ID.
+
+## Privacy, retention, abuse
+Exports exclude other parties' reason notes (never stored here) and amounts of counterparties. Export files are deleted after download or 24 h, whichever first (ASSUMPTION).
+
+## Observability & budgets
+Export of 20 rows ≤ 1 s (ASSUMPTION). Restore audited.
+
+## Tests
+- TEST-PS-030-10-01 contract: export round-trip preserves all link fields.
+- TEST-PS-030-10-02 negative: import request refused.
+- TEST-PS-030-10-03 integration: restore does not reopen a `refused` or terminal link.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export contains no counterparty `acc_`.
+2. Restore never changes a terminal `link_state`.
+3. No import path exists in MVP.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h export expiry.
+- D07 (retention) PROVISIONAL for backups.
+- Payment checklist applies: amounts exported only to participants.

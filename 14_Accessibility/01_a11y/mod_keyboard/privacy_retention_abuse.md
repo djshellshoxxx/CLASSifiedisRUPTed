@@ -1,35 +1,53 @@
-# PS-109-07 — privacy retention abuse
+# PS-109-07 — privacy, retention and abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_keyboard. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-FED-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-109-07. **Owner:** [14_Accessibility/01_a11y/mod_keyboard](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_keyboard. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-109-07.R01 | Keystroke values are never sent to any server, analytics tool or log. | MVP |
+| PS-109-07.R02 | Shortcut handlers do not capture keys while a text input, textarea or contenteditable element has focus. | MVP |
+| PS-109-07.R03 | Account-scope bindings are never federated (CTR-FED-001 item-level `federate=false`). | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for keyboard within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Account scope: PSEUDONYMOUS. Device scope: stays in the device store; not personal data on the server.
 
-## Requirements to specify
-- [ ] PS-109-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-109-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-109-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+No additional commands. Analytics events carry counts only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Keys used by assistive technology are rejected by [PS-109-02](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+See [PS-109-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Not applicable beyond [PS-109-06](failure_recovery_idempotency.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-109-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+| Data | Class | Retention default | Deletion |
+|---|---|---|---|
+| Account bindings | PSEUDONYMOUS | until reset or account deletion | propagates within 24 h (CTR-PRV-001 R06) |
+| Device bindings | local only | 365 days idle (ASSUMPTION) | cleared on app data reset |
+| Conflict and reset counters | aggregate | 90 days | no identifiers |
+
+Abuse: a third-party script cannot read bindings (same-origin storage only). Binding UI must not shadow screen reader commands. Retention default is PROVISIONAL (D07 default, unapproved).
+
+## Observability & budgets
+Only aggregate counters ([PS-109-08](observability_performance.md)).
+
+## Tests
+- TEST-PS-109-07-01 unit: handler ignores keydown when an input is focused.
+- TEST-PS-109-07-02 static: no logger call receives a `key` or `chord` field (lint rule).
+- TEST-PS-109-07-03 integration: account bindings absent from federation export.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero keystroke values in logs, telemetry and network payloads in the test suite.
+2. Shortcut handlers inactive in 100% of tested text-entry contexts.
+3. Deletion of an account removes account bindings within 24 h in test.
+
+## Assumptions & open decisions
+- ASSUMPTION: 365-day device retention default.
+- D07 (retention): PROVISIONAL (D07 default, unapproved).

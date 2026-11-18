@@ -1,35 +1,55 @@
-# PS-080-04 — commands queries events
+# PS-080-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-080-04. **Owner:** [10_Privacy/02_security_boundaries/mod_metadata](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_metadata. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_metadata (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001 (R08 export rules, R12 timing jitter), CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for metadata within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-080-04.R01 | Internal commands: `metadata.sanitize_attachment` (sys), `metadata.egress_filter` (in-process, every outbound surface). | MVP |
+| PS-080-04.R02 | Admin commands: `meta.policy.publish`, `meta.policy.activate`; query `meta.policy.get_active`. | MVP |
+| PS-080-04.R03 | Sanitise command idempotent on (`att_`, sanitizer_version); repeat returns the existing report. | MVP |
+| PS-080-04.R04 | Events carry category counts and IDs only; never field names with values. | MVP |
+| PS-080-04.R05 | Federation batches keep CTR-FED-001 R12 random delay (0–60 s) and carry no origin metadata beyond CTR-FED rules. | MVP |
 
-## Requirements to specify
-- [ ] PS-080-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-080-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-080-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Sanitise request: `{"attachment_id": "att_...", "declared_mime": "image/jpeg"}` (internal).
+Report response: `{"attachment_id", "format", "removed": {"gps": 2, "device": 1, "author": 0, "thumbnail": 0, "other": 3}}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Idempotency | Emits | Errors |
+|---|---|---|---|
+| sanitize_attachment | att + version | `attachment.metadata_stripped` or `attachment.quarantined` | META.UNSUPPORTED_FORMAT, META.STRIP_FAILED |
+| egress_filter | none (pure) | none; drops field and increments counter | META.DISALLOWED_FIELD |
+| policy.publish | key + digest | `meta.policy_published` | META.POLICY_VERSION_MISMATCH |
+| policy.activate | key | `meta.policy_activated` | CAP.DUAL_APPROVAL_REQUIRED |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Per PS-080-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Per PS-080-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Admin commands per PS-080-05; sanitize is `sys_` only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-080-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Egress filter is synchronous and fails closed: if the filter cannot load policy, the outbound payload is not sent (`SYS.UNAVAILABLE`).
+
+## Privacy, retention, abuse
+Events hold counts only. Egress filter never logs removed values.
+
+## Observability & budgets
+Egress filter overhead p95 ≤ 2 ms per payload (ASSUMPTION).
+
+## Tests
+- TEST-PS-080-04-01 (contract): event schemas pass CTR-SCH-001.
+- TEST-PS-080-04-02 (fail-closed): policy store unavailable → no outbound payload sent.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command and event in the table exists in the contract.
+2. Fail-closed test passes.
+3. No event carries a removed value (fixture scan).
+
+## Assumptions & open decisions
+- ASSUMPTION: 2 ms egress budget.
+- PENDING: sanitiser library selection; candidates to be evaluated in Prompt 3 research with versions recorded then.

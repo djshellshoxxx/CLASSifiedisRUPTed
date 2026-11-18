@@ -1,35 +1,57 @@
 # PS-054-09 — contract and acceptance tests
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_sessions. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-SCH-001, CTR-CAP-001, CTR-ERR-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-054-09. **Owner:** [07_Identity/01_accounts/mod_sessions](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_sessions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-054-09.R01 | Schema fixture (valid and invalid) for every route and event. | MVP |
+| PS-054-09.R02 | State table fully covered; property test over random refresh and revoke interleavings. | MVP |
+| PS-054-09.R03 | Negative tests for token reuse, cross-account access, timing, and rate limits. | MVP |
+| PS-054-09.R04 | Accessibility: session management screens meet WCAG 2.1 AA; device list readable by screen reader. | MVP |
 
-## Purpose and scope
-Define the contract and acceptance tests process for sessions within 01_accounts. Do not assume implementation or successful external settlement.
+## Data / schema
+Fixtures contain synthetic tokens only.
 
-## Requirements to specify
-- [ ] PS-054-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-054-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-054-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Contract tests replay each command with fixed keys.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+TEST-PS-054-05 and -06.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+One test per code in [validation_rules](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+One test per row in [authorization_capabilities](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+TEST-PS-054-11 to -14.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-054-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+TEST-PS-054-15 to -17.
+
+## Observability & budgets
+Recovery suite runtime ≤ 4 min in CI.
+
+## Tests
+| Test ID | Level | Scope |
+|---|---|---|
+| TEST-PS-054-01 | unit | field class lint |
+| TEST-PS-054-02 | unit | storage dump has no plaintext |
+| TEST-PS-054-03 | unit | malformed token table |
+| TEST-PS-054-04 | integration | unknown vs expired timing band |
+| TEST-PS-054-05 | unit | state table rows |
+| TEST-PS-054-06 | property | refresh interleavings |
+| TEST-PS-054-07 | contract | routes vs CTR-EVT-001 and CTR-ERR-001 |
+| TEST-PS-054-08 | integration | create replay returns SYS.CONFLICT; one session exists |
+| TEST-PS-054-09 | unit | authorization matrix |
+| TEST-PS-054-10 | unit | cross-account NOT_FOUND |
+| TEST-PS-054-11 to -14 | integration | concurrency, outage, offline exclusion, propagation |
+| TEST-PS-054-15 to -20 | integration/e2e | logs, limits, notice, metrics, load, redaction |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-054-01 to -20 pass in CI.
+2. Contract tests pass against pinned CTR versions.
+
+## Assumptions & open decisions
+- ASSUMPTION: load profile 2 000 validations/s.

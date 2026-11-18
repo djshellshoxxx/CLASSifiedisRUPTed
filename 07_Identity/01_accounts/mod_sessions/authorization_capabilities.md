@@ -1,35 +1,54 @@
-# PS-054-05 — authorization capabilities
+# PS-054-05 — authorization and capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_sessions. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-054-05. **Owner:** [07_Identity/01_accounts/mod_sessions](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_sessions. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-054-05.R01 | Capabilities: `session.create`, `session.read`, `session.delete`, `session.execute` (refresh), `session.attest` (step-up). Default deny. | MVP |
+| PS-054-05.R02 | Owner may read and revoke only sessions where `account_id` matches the principal. | MVP |
+| PS-054-05.R03 | Revoking a session other than the current one requires step-up ≤ 5 min. | MVP |
+| PS-054-05.R04 | No support or operator capability can create, read or revoke another user's session tokens (CTR-CAP-001 R12). | MVP |
+| PS-054-05.R05 | `admin_security` bulk revoke requires dual control (two distinct `ope_`), reason code, and `aud_` record. | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for sessions within 01_accounts. Do not assume implementation or successful external settlement.
+## Data / schema
+Owner relation derived at decision time (CTR-CAP-001 R05); no stored grant.
 
-## Requirements to specify
-- [ ] PS-054-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-054-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-054-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Capability per command: create → `session.create` (anonymous, rate-limited); refresh → `session.execute` (refresh secret); revoke → `session.delete` (owner); step-up → `session.attest`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable beyond [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Cross-account access returns `SYS.NOT_FOUND` (CTR-CAP-001 action matrix).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization matrix
+| Actor | Action | Resource | Outcome |
+|---|---|---|---|
+| anonymous | session.create | acc_ by proof | ALLOW if proof valid |
+| holder of refresh secret | session.execute | own ses_ | ALLOW if current or in grace |
+| owner session | session.read | own ses_ list | ALLOW |
+| owner, step-up ≤ 5 min | session.delete | other own ses_ | ALLOW |
+| ope_ single approver | session.delete | any | DENY (R05 needs two) |
+| ope_ dual approval | session.delete (admin_security) | any | ALLOW, audited |
+| mod_ case grant | session.read | metadata of ses_ in case | ALLOW, no device or IP |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Revocation takes effect at next decision (CTR-CAP-001 R09); session validation cache TTL ≤ 60 s for reads, zero for writes and step-up checks.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-054-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Every bulk revoke and privileged read emits `aud_` without device or IP content (CTR-CAP-001 R08).
+
+## Observability & budgets
+`session_denied_total{reason}`; alert on any single `ope_` attempt at `admin_security`.
+
+## Tests
+TEST-PS-054-09 (matrix rows), TEST-PS-054-10 (cross-account revoke returns NOT_FOUND, no existence leak).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every matrix row has a passing test.
+2. No test path yields another user's token material.
+
+## Assumptions & open decisions
+- ASSUMPTION: step-up window 5 min.
+- PROVISIONAL (D10 default, unapproved).

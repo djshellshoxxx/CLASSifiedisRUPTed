@@ -1,35 +1,52 @@
-# PS-134-07 — privacy retention abuse
+# PS-134-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-134-07. **Owner:** [17_Quality/01_testing/mod_e2e](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_e2e. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_e2e. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for e2e within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-134-07.R01 | Personas are fictional; pseudonym and region_code only; PII linter reports 0 hits | MVP |
+| PS-134-07.R02 | Screenshots captured only at scenario checkpoints, with all form inputs and message bodies masked | MVP |
+| PS-134-07.R03 | Location in fixtures limited to coarse public regions; no coordinate finer than 0.1 degree | MVP |
+| PS-134-07.R04 | Trace and screenshot artifacts deleted after 14 days; run records kept 1 year | MVP |
 
-## Requirements to specify
-- [ ] PS-134-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-134-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-134-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data class for personas and artifacts: test-synthetic (CTR-PRV-001). Artifact record: `{artifact_id, run_id, kind: trace|screenshot, masked: bool, created_at, delete_after}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No new commands. Artifact deletion is a scheduled job.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Artifact: created -> deleted (at delete_after). No other states.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`E2E.ARTIFACT_UNMASKED` (non-retryable): screenshot captured without masking. Diagnostic: checkpoint name.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Artifacts readable by QA Lead and CI identity. Engineers see run pass/fail only unless QA Lead grants access for a specific run.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-134-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deletion job idempotent per artifact_id.
+
+## Privacy, retention, abuse
+- Abuse: a scenario uses a real account to reproduce a bug. Control: linter, and test-account registry rejects non-fixture accounts.
+- Retention per R04; D07 PROVISIONAL (D07 default, unapproved).
+- Masking is best-effort; screenshots are reviewed on first publication of a new checkpoint (ASSUMPTION).
+
+## Observability & budgets
+Count of unmasked artifact attempts (target 0). Artifact store size per week (target < 5 GB, ASSUMPTION).
+
+## Tests
+- TEST-PS-134-07-01 (unit): screenshot without mask flag rejected.
+- TEST-PS-134-07-02 (unit): persona with real-format phone number rejected.
+- TEST-PS-134-07-03 (integration): artifact deleted at delete_after, run record remains.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero personal-data hits in fixture sweep.
+2. Masked screenshots verified at each checkpoint in the scenario set.
+3. Deletion job drill passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: masking by selector list covers all input and message elements.
+- D05 PROVISIONAL (D05 default, unapproved): region-level fixtures only.
+- D07 PROVISIONAL (D07 default, unapproved): 14-day artifacts, 1-year run records.

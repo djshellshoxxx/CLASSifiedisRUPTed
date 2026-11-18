@@ -1,35 +1,53 @@
 # PS-029-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-029-07. **Owner:** [03_Services/01_service_catalog/mod_skills](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_skills. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_skills. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-EVT-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for skills within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-029-07.R01 | Module stores no location, device identifier or IP-derived field (CTR-PRV-001 R03, R09). | MVP |
+| PS-029-07.R02 | Skill attachments are not federated in MVP (CTR-FED-001 R02 default false). | MVP |
+| PS-029-07.R03 | Skill-combination queries are limited to ≤ 5 codes (PS-029-04.R07) to limit graph inference of a provider's profile. | MVP |
+| PS-029-07.R04 | Self-declared proficiency and labels are displayed with the label "self-declared" in every surface. | MVP |
+| PS-029-07.R05 | Keyword stuffing: > 20 attachments or > 10 attach/detach cycles per listing per day → `SKILLS.LIMIT_EXCEEDED` and report signal to F12. | MVP |
+| PS-029-07.R06 | Reports on a skill attachment go to F12 by full ID; this module does not decide account sanctions. | MVP |
+| PS-029-07.R07 | Erasure of an account removes its listing_skill rows within 24 h and writes a completion record (CTR-PRV-001 R12). | MVP |
 
-## Requirements to specify
-- [ ] PS-029-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-029-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-029-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data classes: `skill_code`, `proficiency`, `status` = PUBLIC once active; `owner_acc_id` = PSEUDONYMOUS; `label_nfc` = PSEUDONYMOUS while pending. Retention: pending label 30 days; detached row 30 days (D07 PROVISIONAL).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Deletion propagates through `listing_skill.detached` with reason `erasure`. Event payloads carry no label text.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Erasure and expiry both route through the detach transition in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+No additional codes beyond [validation_rules.md](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Retention and erasure jobs run as `sys_` with scope limited to this module (CTR-CAP-001 R02).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-029-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Erasure job is idempotent per account; partial completion resumes on retry within 24 h.
+
+## Privacy, retention, abuse
+Threats: profiling via unique skill sets, Sybil listings to inflate search, stale labels after account deletion, operator over-collection of pending labels. Controls: R03, R05, R07, and purge at 30 days. Backups expire within the CTR-PRV-001 R06 window.
+
+## Observability & budgets
+Logs record listing ID and code count only. No label text or proficiency values in logs. Erasure completion within 24 h (ASSUMPTION).
+
+## Tests
+- TEST-PS-029-07-01 unit: attach/detach cycle counter triggers at 11th cycle.
+- TEST-PS-029-07-02 integration: account erasure removes all rows and emits one completion record.
+- TEST-PS-029-07-03 privacy: log-scan test finds no label text across a test run.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No field classified above PSEUDONYMOUS except through a declared retention class.
+2. Erasure completes within 24 h in test environment and leaves only IDs, timestamps and counts.
+3. No federated export of skill rows in MVP.
+
+## Assumptions & open decisions
+- ASSUMPTION: abuse thresholds (20 attachments, 10 cycles).
+- D07 (retention) PROVISIONAL: 30-day purge defaults.
+- No payment or receipt checklist applies.

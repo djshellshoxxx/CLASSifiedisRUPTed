@@ -1,44 +1,53 @@
 # F06.S02.M01 — coarse
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F06.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Marketplace Lead. **Parent:** F06.S02.
 
 ## Purpose and business behavior
-Provide coarse as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Own the registered region-cell set used for every coarse location in discovery, and decide which cells may be shown. A cell is published only when it holds at least K_MIN = 5 active items; sparser cells merge upward or are suppressed. This keeps "in your area" results from exposing individual listings or households.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a buyer, I browse by named regions (cells), not by coordinates.
+- As a seller, I can see that my area is shown, and I am not shown a sparse cell that would expose me.
+- As a privacy reviewer, I can confirm that no cell or count below K_MIN leaves the system.
+- As an operator, I can propose, approve and retire cells with two-person control.
 
 ## Scope
-- Required process spec: `coarse_domain_model.md` (not yet authored)
-- Required process spec: `coarse_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `coarse_validation_and_authorization.md` (not yet authored)
-- Required process spec: `coarse_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `coarse_interfaces_and_events.md` (not yet authored)
-- Required process spec: `coarse_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `coarse_acceptance_and_property_tests.md` (not yet authored)
+Cell registry, parent hierarchy, publication thresholds, merge and suppression, registry versioning. Not in scope: converting a user's location to a cell (F06.S02.M02 location), proximity queries (M03 proximity), index contents (F06.S01.M01 index).
+
+- [domain_schema.md](domain_schema.md) — PS-047-01
+- [validation_rules.md](validation_rules.md) — PS-047-02
+- [workflow_state_machine.md](workflow_state_machine.md) — PS-047-03
+- [commands_queries_events.md](commands_queries_events.md) — PS-047-04
+- [authorization_capabilities.md](authorization_capabilities.md) — PS-047-05
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-047-06
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-047-07
+- [observability_performance.md](observability_performance.md) — PS-047-08
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-047-09
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-047-10
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `cell.propose`, `cell.approve`, `cell.retire`, `publication.recompute`; query `geo.cells.list`; event `geo.cell.published_state_changed`. Error prefix `COARSE.`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F10 (K_MIN, disclosure rules, cell approval), F06.S01.M01 index (active counts), F16 (capabilities). Downstream: mod_location (cell assignment), mod_proximity (adjacency), mod_query (scope validation), mod_index (cell field). Federation of cells follows CTR-PRV-001 K_MIN rule.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns the cell registry, its versions and publication flags. Does not own item counts (index) or user locations (location module).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Differencing attacks on publication flags; sparse cells that identify a single seller; mis-drawn cell boundaries that place a home in the wrong cell; stale registry after retirement; unauthorized cell proposals. No platform custody of money involved. Cell-level location is not anonymity: small regions remain identifying.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Process specs at SPEC-DRAFT-COMPLETE; F10 validates K_MIN and cell format; PENDING CTR-DSC-001 resolved; test IDs mapped.
 
 ## Required process specification inventory
-- [ ] `coarse_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `coarse_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `coarse_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `coarse_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `coarse_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `coarse_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `coarse_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-047-01, SPEC-DRAFT-COMPLETE
+- [x] [validation_rules.md](validation_rules.md) — PS-047-02, SPEC-DRAFT-COMPLETE
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-047-03, SPEC-DRAFT-COMPLETE
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-047-04, SPEC-DRAFT-COMPLETE
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-047-05, SPEC-DRAFT-COMPLETE
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-047-06, SPEC-DRAFT-COMPLETE
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-047-07, SPEC-DRAFT-COMPLETE
+- [x] [observability_performance.md](observability_performance.md) — PS-047-08, SPEC-DRAFT-COMPLETE
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-047-09, SPEC-DRAFT-COMPLETE
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-047-10, SPEC-DRAFT-COMPLETE

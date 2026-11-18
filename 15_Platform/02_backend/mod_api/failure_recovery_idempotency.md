@@ -1,35 +1,57 @@
-# PS-117-06 — failure recovery idempotency
+# PS-117-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-117-06. **Owner:** [15_Platform/02_backend/mod_api](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_api. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_api. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R03), CTR-ERR-001 (R03), CTR-SCH-001 (R06).
 
-## Purpose and scope
-Define the failure recovery idempotency process for api within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-117-06.R01 | Request timeout 10 s end to end; downstream call timeout 5 s (ASSUMPTION). | MVP |
+| PS-117-06.R02 | api retries a downstream call at most once and only when the downstream declares the command idempotent. | MVP |
+| PS-117-06.R03 | Idempotency state survives api restart (durable store, PS-117-01). | MVP |
+| PS-117-06.R04 | Circuit breaker opens after 50% failures over 20 calls; half-open probe every 10 s (ASSUMPTION). Open state returns 503 with `retry_after_ms`. | MVP |
 
-## Requirements to specify
-- [ ] PS-117-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-117-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-117-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retry metadata uses `retry_after_ms` only for `rate_limited` and `unavailable` (CTR-ERR-001 R03 table). No new fields.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No new commands. Replays emit no events (CTR-EVT-001 R03).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Circuit breaker: CLOSED → OPEN (failure rate ≥ 50%) → HALF_OPEN (after 10 s) → CLOSED (3 successes) or OPEN (1 failure).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Situation | Code | Category | Retryable |
+|---|---|---|---|
+| Downstream timeout | API.DOWNSTREAM_TIMEOUT | unavailable | true |
+| Circuit open | SYS.UNAVAILABLE | unavailable | true |
+| Store unavailable | SYS.UNAVAILABLE | unavailable | true |
+| Internal fault | SYS.INTERNAL | internal | false |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Recovery actions (replay of dead letters, breaker reset) require `ope_` with `api.administer` (ASSUMPTION); logged as `aud_` records.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-117-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Committed but response lost: client retries with the same key and receives the stored response (PS-117-03).
+- Store down during insert: request is rejected before any downstream call (no partial effect).
+- Clock skew: TTL uses the store clock, not the api host clock.
+- Offline (D08 PROVISIONAL default, unapproved): the PWA resends with the original key until acknowledgment or expiry at 24 h; after expiry, the client must re-validate and use a new key.
+
+## Privacy, retention, abuse
+Dead-letter entries store `request_id`, command type and code only. They are purged after 7 days (ASSUMPTION).
+
+## Observability & budgets
+Metrics: `api_breaker_state{downstream}`, `api_retries_total`. Recovery time objective for api tier: 15 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-117-06-01 (integration): inject 6 s downstream delay; client gets API.DOWNSTREAM_TIMEOUT.
+- TEST-PS-117-06-02 (chaos): kill store primary during 100 commands; zero duplicate effects.
+- TEST-PS-117-06-03 (unit): breaker transitions match the state list.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No command produces two committed effects under a 10× retry storm (load test).
+2. Breaker opens within 20 calls of a 50% failure rate.
+3. After restart, replay of a pre-restart key returns the original result.
+
+## Assumptions & open decisions
+- ASSUMPTION: timeout and breaker thresholds above.
+- D08 (PROVISIONAL default, unapproved): offline key window of 24 h.

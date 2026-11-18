@@ -1,35 +1,56 @@
-# PS-119-05 — authorization capabilities
+# PS-119-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-05. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_storage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R04, R05, R06, R09, R10), CTR-PRV-001 (R03), CTR-ID-001 (R07).
 
-## Purpose and scope
-Define the authorization capabilities process for storage within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-119-05.R01 | Every byte read requires a decision from the referencing owner's module (`attachment.read`, `listing.read`, etc.). Storage never authorizes by possession of a `blob_id`. | MVP |
+| PS-119-05.R02 | Signed or public URLs are forbidden in MVP; downloads go through the API (ASSUMPTION; Future scope for CDN signed URLs with expiry ≤ 5 min). | MVP |
+| PS-119-05.R03 | Scanner and cleanup principals are `sys_` scoped to `blob` only. | MVP |
+| PS-119-05.R04 | Quarantine by `mod_` requires a `cas_` case ID (CTR-CAP-001 R04). | MVP |
 
-## Requirements to specify
-- [ ] PS-119-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Actor | Action | Scope |
+|---|---|---|
+| acc_ owner | attachment.create, listing.update (upload) | owner |
+| acc_ participant | attachment.read | participant (F08 rules) |
+| acc_ other | any blob read | deny (404) |
+| sys_ scanner | blob.scan_complete | internal |
+| mod_ moderator | blob.quarantine | case:cas_ |
+| ope_ operator | blob.read_metadata | global, no bytes |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond PS-119-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unreadable blob → 404 `SYS.NOT_FOUND` (CTR-ERR-001 R08). Denied write → 403 `SYS.FORBIDDEN`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Operators never receive bytes of blobs with data class PRIVATE_PERSONAL or higher without dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Decisions are not cached for downloads (CTR-CAP-001 R09: zero cache for private access). Public listing images may be cached `public`.
+
+## Privacy, retention, abuse
+Access to a blob is audited as `aud_` for privileged reads only (CTR-CAP-001 R08).
+
+## Observability & budgets
+Counter `stored_authz_denied_total{owner_scope}`. Alert on any `ope_` byte read.
+
+## Tests
+- TEST-PS-119-05-01 (unit): matrix above.
+- TEST-PS-119-05-02 (security): guessed blob_id from another account returns 404.
+- TEST-PS-119-05-03 (integration): revoked participant loses read at next request.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No byte read path bypasses an owner decision (static route audit).
+2. Operator byte reads blocked without dual control.
+3. Zero signed URLs issued in MVP.
+
+## Assumptions & open decisions
+- ASSUMPTION: signed URLs deferred.
+- D10 PROVISIONAL (unapproved): not applied; storage holds no user keys.

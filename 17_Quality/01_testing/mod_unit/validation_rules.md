@@ -1,35 +1,59 @@
 # PS-137-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-02. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_unit. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the validation rules process for unit within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-137-02.R01 | Manifest build rejects any `test_id` not matching `^TEST-PS-\d{3}-\d{2}-\d{2}$` | MVP |
+| PS-137-02.R02 | Manifest build fails if `test_file` does not exist or contains no executable test case (0 test cases = fail) | MVP |
+| PS-137-02.R03 | A SPEC.md requirement ID with no mapped unit test is reported; count must be 0 before module leaves SPEC-DRAFT-COMPLETE | MVP |
+| PS-137-02.R04 | Quarantine reason 20..500 chars and must reference a tracking note ID | MVP |
+| PS-137-02.R05 | Coverage values outside 0.00..100.00 or with more than 2 decimals are rejected | MVP |
 
-## Requirements to specify
-- [ ] PS-137-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Validation operates on `TestManifestEntry`, `CoverageSnapshot`, `QuarantineRecord` from PS-137-01.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Validation runs inside `unit.MapTest`, `unit.RecordCoverage`, `unit.QuarantineTest` (PS-137-04). Read-only check mode `unit.CheckManifest` runs in CI without writes.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable: validation is stateless. Failed validation leaves the previous manifest revision in place.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Trigger | Retryable | User message key | Diagnostic (privacy-safe) |
+|---|---|---|---|---|
+| UNIT.TEST_ID_INVALID | regex fails | no | unit.test_id_invalid | test_id pattern, no file content |
+| UNIT.TEST_ID_DUPLICATE | same test_id in two rows | no | unit.test_id_duplicate | both file paths |
+| UNIT.TEST_FILE_MISSING | path absent or no test cases | no | unit.test_file_missing | path only |
+| UNIT.REQ_UNMAPPED | SPEC requirement without test | no | unit.req_unmapped | requirement ID |
+| UNIT.QUARANTINE_REASON_INVALID | reason length or tracking ID fails | no | unit.quarantine_reason_invalid | length only |
+| UNIT.COVERAGE_OUT_OF_RANGE | percent invalid | no | unit.coverage_out_of_range | field name |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Errors are typed per CTR-ERR-001; no stack traces or test output in user-facing messages.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Validators run with CI service identity. Validation rules are versioned with the manifest schema.
+
+## Failure, idempotency, concurrency, offline
+Validation is deterministic for the same repository commit: same input yields the same error list order (sorted by `test_id`). Re-running validation has no side effects.
+
+## Privacy, retention, abuse
+Error diagnostics must not echo test fixture values. Tracking note IDs are references only; do not paste ticket content into reasons.
+
+## Observability & budgets
+Counter per error code per CI run. Full manifest check p95 <= 30 s for 5,000 TEST-IDs (ASSUMPTION).
+
+## Tests
+- TEST-PS-137-02-01 (unit): each error code triggered by a minimal fixture.
+- TEST-PS-137-02-02 (property): any string not matching regex is rejected (generated inputs, PS-136 harness).
+- TEST-PS-137-02-03 (integration): SPEC requirement with deleted test produces UNIT.REQ_UNMAPPED.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All six error codes have one unit test each.
+2. Validation output is byte-identical across two runs on the same commit.
+3. No validation error contains fixture values or stack traces.
+
+## Assumptions & open decisions
+- ASSUMPTION: tracking note ID format is `NOTE-<n>` in the repository issue tracker; format to confirm.
+- D07 PROVISIONAL (D07 default, unapproved): quarantine retention reasons are kept as audit records.

@@ -1,35 +1,49 @@
 # PS-137-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-09. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_unit. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for unit within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-137-09.R01 | Each process spec of mod_unit (PS-137-01..10) has at least one test mapped in the manifest | MVP |
+| PS-137-09.R02 | Event payloads emitted by mod_unit validate against the CTR-EVT-001 envelope in CI | MVP |
+| PS-137-09.R03 | Error codes in PS-137-02 and PS-137-05 are listed in the CTR-ERR-001 registry; unlisted code fails CI | MVP |
+| PS-137-09.R04 | Acceptance checklist for mod_unit is complete before SPEC status moves past SPEC-DRAFT-COMPLETE | MVP |
 
-## Requirements to specify
-- [ ] PS-137-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Test-catalogue entry: `{test_id, ps_id, layer, file, status}`. Layers used by this module: unit, property (PS-136 owner), contract.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract check runs as `unit.CheckManifest` (PS-137-04). No new events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Contract mismatch returns UNIT.CONTRACT_MISMATCH (non-retryable) with schema path only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Contract test suite run by CI identity; contract changes need QA Lead and the owner of the affected CTR.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+A contract test failing on a CTR owned elsewhere is reported as upstream drift, not patched locally.
+
+## Privacy, retention, abuse
+Contract fixtures use synthetic identifiers only (PS-137-07).
+
+## Observability & budgets
+Count of contract checks per run and failures per CTR; contract suite <= 2 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-137-09-01 (contract): `unit.TestMapped` v1 validates against CTR-EVT-001 envelope.
+- TEST-PS-137-09-02 (contract): all UNIT.* codes present in CTR-ERR-001 registry.
+- TEST-PS-137-09-03 (integration): PS-137-01..10 each has a mapped test row.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Contract tests pass on main branch.
+2. Coverage of PS-137 process specs by manifest rows is 100%.
+3. Acceptance checklist in module PROCESS_CHECKLIST.md reviewed by QA Lead.
+
+## Assumptions & open decisions
+- ASSUMPTION: CTR-ERR-001 registry exists as a machine-readable list; currently DRAFT, so check is PENDING.
+- PENDING CTR-EVT-001 and CTR-ERR-001 approval before these tests are binding.

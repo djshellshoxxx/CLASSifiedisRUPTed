@@ -1,35 +1,57 @@
 # PS-061-08 — observability performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_threads. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R09 logs), CTR-ERR-001 (R10 logging), CTR-EVT-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-061-08. **Owner:** [08_Communications/01_messaging/mod_threads](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_threads. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-061-08.R01 | `msg.send` server commit p95 ≤ 300 ms, p99 ≤ 800 ms, measured at API edge (ASSUMPTION). | MVP |
+| PS-061-08.R02 | `thr.list` p95 ≤ 150 ms for 50 items. `msg.page` p95 ≤ 150 ms for 50 items. | MVP |
+| PS-061-08.R03 | `att.complete` p95 ≤ 2 s for a 2 MiB image (ASSUMPTION). | MVP |
+| PS-061-08.R04 | Availability target 99.9% monthly for send and read paths (ASSUMPTION). | MVP |
+| PS-061-08.R05 | Logs and traces contain no `body_text`, filenames or EXIF values (CTR-ERR-001 R10). | MVP |
+| PS-061-08.R06 | Client-side: time from send tap to "sent" state ≤ 100 ms p95 with optimistic `pending_local` (D08). | MVP |
 
-## Purpose and scope
-Define the observability performance process for threads within 01_messaging. Do not assume implementation or successful external settlement.
+## Data / schema
+Metric names: `threads_command_total{cmd,outcome}`, `threads_command_latency_ms{cmd}` (histogram), `threads_queue_depth{client_bucket}`, `threads_upload_orphaned_total`, `threads_authz_denied_total{action,reason_code}`. Labels contain no `acc_` values.
 
-## Requirements to specify
-- [ ] PS-061-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-061-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-061-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Event lag metric: `threads_event_lag_ms` from `recorded_at` to subscriber ack, p95 ≤ 2 s (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable beyond metrics on transitions in [PS-061-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Rejection counters by code: `threads_validation_reject_total{code}`. Codes only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Authorization denial counters as in [PS-061-05](authorization_capabilities.md). Denial spikes alert.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Dashboards show replay rate and conflict rate (`EVT.REVISION_CONFLICT`). Conflict rate > 2% of sends over 15 min alerts (ASSUMPTION).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-061-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Metrics are aggregate. Trace spans carry opaque IDs only. Retention RET-OPS, 30 days.
+
+## Observability & budgets
+| Budget | Target | Source |
+|---|---|---|
+| msg.send p95 | ≤ 300 ms | R01 |
+| thr.list p95 | ≤ 150 ms | R02 |
+| att.complete p95 | ≤ 2 s | R03 |
+| Monthly availability | ≥ 99.9% | R04 |
+| Orphan upload rate | ≤ 1% / day | PS-061-06 |
+
+Alerts: availability burn-rate; any log line matching body-text fixture; authz denial spike.
+
+## Tests
+- TEST-PS-061-08-01 (performance): load test at 2× expected peak; p95 targets met.
+- TEST-PS-061-08-02 (logs): synthetic body and EXIF fixture never appear in captured logs or traces.
+- TEST-PS-061-08-03 (metrics): every metric in the Data list is emitted in staging with stated labels only.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Latency budgets met in load test (TEST-PS-061-08-01).
+2. Log redaction test passes in CI (TEST-PS-061-08-02).
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above are pre-launch targets, not measured data.
+- D08 (PWA offline writes): PROVISIONAL (D08 default, unapproved) affects R06 measurement method.

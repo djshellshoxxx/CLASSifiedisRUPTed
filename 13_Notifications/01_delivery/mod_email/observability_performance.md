@@ -1,35 +1,59 @@
 # PS-102-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-102-08. **Owner:** [13_Notifications/01_delivery/mod_email](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_email. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_email (Platform Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R09), CTR-ERR-001 (R10), CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for email within 01_delivery. Do not assume implementation or successful external settlement.
+**Decision labels:** Budgets are ASSUMPTION, PROVISIONAL (D07 default, unapproved; Platform Lead to validate).
 
-## Requirements to specify
-- [ ] PS-102-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-102-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-102-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-102-08.R01 | Counters: `email_sent_total{template_id}`, `email_rejected_total{code}`, `email_bounce_total{type}`, `email_complaint_total`. | MVP |
+| PS-102-08.R02 | Gauges: `email_queue_depth`, `email_queue_oldest_age_seconds`, `email_breaker_state`. | MVP |
+| PS-102-08.R03 | Logs carry IDs, template ID, code and timing only. No address, token or body. | MVP |
+| PS-102-08.R04 | Metric labels use closed sets (templates from catalog; unknown → `other`). | MVP |
+| PS-102-08.R05 | Traces carry `correlation_id` and provider latency; never recipient data. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Metric label values are catalog-bound. Log schema: `ts`, `module`, `event`, `email_id`, `dlv_id`, `code`, `duration_ms`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Each command and event increments one counter.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Queue age measured from `QUEUED` to `SENT`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Rejected counts by code.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-102-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Dashboards are restricted to Platform Lead and on-call operators; no per-account view.
+
+## Failure, idempotency, concurrency, offline
+Metric failure never blocks send. Offline: not applicable.
+
+## Privacy, retention, abuse
+Metrics retained 30 days; logs 30 days (RET-OPS). Bounce rate by template is the only per-template breakdown.
+
+## Observability and budgets
+| Budget | Target | Status |
+|---|---|---|
+| Bind request p95 (excluding provider) | ≤ 300 ms | ASSUMPTION |
+| Verify request p95 | ≤ 200 ms | ASSUMPTION |
+| Queue to provider acceptance p95 | ≤ 60 s | ASSUMPTION |
+| Sustained send throughput | 50 messages/s per node | ASSUMPTION |
+
+Alerts: hard bounce rate > 2% over 1 hour; complaint rate > 0.1% over 24 hours (ASSUMPTION; provider policy thresholds apply if stricter); breaker open > 5 minutes.
+
+## Tests
+- TEST-PS-102-23 (integration): counters increment once per accepted command.
+- TEST-PS-102-24 (negative): log scan finds no address or token.
+- TEST-PS-102-25 (load): 50 messages/s for 10 minutes meets queue budget.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Alert rules configured and tested with synthetic bounce.
+2. Log scan clean in CI.
+3. Load budget met or revised through Platform Lead review.
+
+## Assumptions & open decisions
+- ASSUMPTION: provider exposes delivery, bounce and complaint webhooks.
+- D07 (PROVISIONAL, unapproved).

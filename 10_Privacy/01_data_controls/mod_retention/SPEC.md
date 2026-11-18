@@ -1,44 +1,60 @@
 # F10.S01.M02 — retention
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F10.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Privacy Lead (F10). **Parent:** [F10.S01 data_controls](../SPEC.md).
 
 ## Purpose and business behavior
-Provide retention as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Own the retention policy for every data class in ClassRup: the maximum keep period per RET-* class, the anchor that starts each clock, the sweep that purges expired records across replicas, caches and indexes, and the scoped legal holds that suspend purge. Policy changes are versioned and approved by F10; lengthening a period needs notice; shortening needs a migration plan. The module does not decide the legal length of any period; those values stay PENDING jurisdiction review (R07).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a privacy lead, I can publish a versioned retention policy and see which fields each class covers.
+- As a case operator, I can place a scoped hold on a dispute or moderation case that stops purge only for matching records.
+- As a participant, I know when my messages and location-derived data expire.
+- As an operator, I see sweep backlog and hold counts without seeing record content.
 
 ## Scope
-- Required process spec: `retention_domain_model.md` (not yet authored)
-- Required process spec: `retention_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `retention_validation_and_authorization.md` (not yet authored)
-- Required process spec: `retention_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `retention_interfaces_and_events.md` (not yet authored)
-- Required process spec: `retention_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `retention_acceptance_and_property_tests.md` (not yet authored)
+- In: policy table, class anchors, sweep scheduling, scoped holds with dual control, policy versioning, retention metrics.
+- Out: deletion requests (`mod_delete`), export package expiry (`mod_export`, RET-EPH), federation tombstone semantics (F11.S02), moderation case creation (F12).
+- Required process specs (registry PS-079-01 to PS-079-10):
+  - [domain_schema.md](domain_schema.md) (PS-079-01)
+  - [validation_rules.md](validation_rules.md) (PS-079-02)
+  - [workflow_state_machine.md](workflow_state_machine.md) (PS-079-03)
+  - [commands_queries_events.md](commands_queries_events.md) (PS-079-04)
+  - [authorization_capabilities.md](authorization_capabilities.md) (PS-079-05)
+  - [failure_recovery_idempotency.md](failure_recovery_idempotency.md) (PS-079-06)
+  - [privacy_retention_abuse.md](privacy_retention_abuse.md) (PS-079-07)
+  - [observability_performance.md](observability_performance.md) (PS-079-08)
+  - [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) (PS-079-09)
+  - [import_export_backup_rollback.md](import_export_backup_rollback.md) (PS-079-10)
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `retention.policy.publish|activate`, `retention.hold.apply|release`; queries `retention.policy.get_active`, `retention.hold.list_active`; events `retention.*`, `hold.*`, `record.expired`, `record.purged`. Errors `RETAIN.*`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: field registry (CTR-SCH-001), case lifecycle (F12.S01 reporting and F12.S02 policy), dual-control approvals (F16.S01.M01 `mod_authorization`). Downstream: deletion (F10.S01.M04), export expiry (F10.S01.M03), backups (F15.S03.M02), federation dedupe retention (F11.S02.M02 `mod_dedup`).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns: `retention_policy`, `retention_hold`, `retention_sweep_run`. Does not own: the records purged (feature owners), evidence content (F09).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Holds used to block a subject's legitimate deletion or to keep data longer than policy.
+- Sweep bug purges a record under hold.
+- Silent lengthening of a period without approval.
+- Restore from backup drops a hold.
+- Legal periods chosen without jurisdiction review.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+- All ten canonical process specs SPEC-DRAFT-COMPLETE (pending approval).
+- R07 jurisdiction items recorded as OPEN with owner.
+- Hold dual-control and sweep invariants have tests (PS-079-09).
 
 ## Required process specification inventory
-- [ ] `retention_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `retention_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `retention_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `retention_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `retention_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `retention_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `retention_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-079-01 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `validation_rules.md` — PS-079-02 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `workflow_state_machine.md` — PS-079-03 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `commands_queries_events.md` — PS-079-04 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `authorization_capabilities.md` — PS-079-05 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `failure_recovery_idempotency.md` — PS-079-06 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `privacy_retention_abuse.md` — PS-079-07 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `observability_performance.md` — PS-079-08 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `contract_and_acceptance_tests.md` — PS-079-09 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `import_export_backup_rollback.md` — PS-079-10 — SPEC-DRAFT-COMPLETE (pending approval)

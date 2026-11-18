@@ -1,35 +1,53 @@
-# PS-053-07 — privacy retention abuse
+# PS-053-07 — privacy, retention and abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/01_accounts/mod_recovery. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-053-07. **Owner:** [07_Identity/01_accounts/mod_recovery](SPEC.md). **Implementing module:** 07_Identity/01_accounts/mod_recovery. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-053-07.R01 | Recovery never discloses the account's contact address, region cell or home location to the requester. | MVP |
+| PS-053-07.R02 | Enumeration resistance: identical responses for known and unknown accounts (PS-053-02.R01). | MVP |
+| PS-053-07.R03 | Max 3 OTP sends per contact address per hour and 10 `start` calls per account hint per 24 h (ASSUMPTION). | MVP |
+| PS-053-07.R04 | Every recovery start notifies all verified contacts and active sessions with generic text ("A recovery was requested. Cancel if this was not you."). | MVP |
+| PS-053-07.R05 | Recovery codes are shown once at enrolment and never again. | MVP |
+| PS-053-07.R06 | Requester IP is never stored raw; coarse network prefix is keyed-hashed (CTR-PRV-001 R09). | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for recovery within 01_accounts. Do not assume implementation or successful external settlement.
+## Data / schema
+Data classes: codes and OTP = SECRET; contact address = PRIVATE_PERSONAL; `requester_ctx_digest` = PSEUDONYMOUS; `rec_` state = PSEUDONYMOUS.
 
-## Requirements to specify
-- [ ] PS-053-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-053-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-053-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Notification payloads: template key and `rec_` ID only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Cancel path is the user's defence against takeover; see [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Abuse-triggered rejections return `MOD_RECOVERY.LOCKED` (429) without revealing whether the account exists.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Support staff cannot see contact addresses or codes (PS-053-05.R03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Not applicable beyond PS-053-06.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-053-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+| Data | Class | Retention |
+|---|---|---|
+| recovery_request row | PSEUDONYMOUS | 30 days (RET-OPS) |
+| OTP HMAC | SECRET | purged at expiry or use (RET-EPH) |
+| recovery_method secret_hash | SECRET | until rotated; purged 30 days after revoke (RET-SEC) |
+| contact_enc | PRIVATE_PERSONAL | account lifetime (RET-ACC) |
+Threats addressed: social engineering of contact channel (cooldown + notice + cancel), SIM or mailbox takeover (warn at enrolment; recommend codes), brute force (lock), enumeration (uniform response), notification spam (send caps).
+
+## Observability & budgets
+Logs: `rec_` ID, state, method, code. Never contact, code, OTP.
+
+## Tests
+TEST-PS-053-15 (log scan for contact and code strings), TEST-PS-053-16 (send caps), TEST-PS-053-17 (IP not stored).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero occurrences of test contact addresses or codes in logs and events.
+2. Caps enforced at the configured thresholds.
+
+## Assumptions & open decisions
+- ASSUMPTION: caps and retention above.
+- PROVISIONAL (D07 default, unapproved): per-category retention.

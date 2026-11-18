@@ -1,35 +1,51 @@
-# PS-110-04 — commands queries events
+# PS-110-04 — commands, queries and events
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_screenreader. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-04. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-110-04.R01 | `scr.template.publish` requires `idempotency_key` and `expected_revision`. | MVP |
+| PS-110-04.R02 | Template query returns the published revision in ≤ 100 ms p95 from the bundled catalog or CDN. | MVP |
+| PS-110-04.R03 | Events validate against v1.0.0 schemas in CTR-SCH-001. | MVP |
 
-## Purpose and scope
-Define the commands queries events process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Command `scr.template.publish` v1.0.0 input: `{idempotency_key, template_id, expected_revision}`.
+Response `200`: `{"template_id":"ann_01...","revision":2,"status":"published"}`.
+Query `scr.template.list` v1.0.0: `{event_key?}` returns published templates (max 500).
 
-## Requirements to specify
-- [ ] PS-110-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Event `announcement_template.published` (aggregate `ann`, data class PUBLIC): `{template_id, revision, event_key}`.
+Event `announcement_template.deprecated`: `{template_id, revision}`.
+Errors per [PS-110-02](validation_rules.md); `SYS.NOT_FOUND` for unknown IDs.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Event emission per [PS-110-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Validation before idempotency lookup.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Actors and capabilities per [PS-110-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Idempotency scope (actor, command, key) per CTR-EVT-001 R03. Stale `expected_revision` returns `SYS.CONFLICT`-class error via CTR-ERR-001 registry (code PENDING registration).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Payloads contain template IDs and keys only.
+
+## Observability & budgets
+Per-command counters and latency. See [PS-110-08](observability_performance.md).
+
+## Tests
+- TEST-PS-110-04-01 contract: request and response validate against v1.0.0.
+- TEST-PS-110-04-02 integration: duplicate publish with same key yields one event.
+- TEST-PS-110-04-03 contract: `announcement_template.published` validates against registry.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command has schema, error list and idempotency scope.
+2. Duplicate publish produces one event.
+3. Query meets the latency budget in the test run.
+
+## Assumptions & open decisions
+- ASSUMPTION: template catalog is small (≤ 500 entries) and bundled in the app build.
+- No Dxx decision directly affects the interface.

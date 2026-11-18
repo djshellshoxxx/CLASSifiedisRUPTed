@@ -1,35 +1,54 @@
-# PS-048-04 — commands queries events
+# PS-048-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-048-04. **Owner:** [06_Discovery/02_geoprivacy/mod_location](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_location. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_location. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R03, R06, R11), CTR-ERR-001, CTR-ID-001, CTR-SCH-001; PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the commands queries events process for location within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** None beyond D05 PROVISIONAL.
 
-## Requirements to specify
-- [ ] PS-048-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-048-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-048-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-048-04.R01 | All state-changing commands require `idempotency_key` (CTR-EVT-001 R03). | MVP |
+| PS-048-04.R02 | Event `location.cell.changed` max_data_class = LOCATION_COARSE; no coordinate field. | MVP |
+| PS-048-04.R03 | Query `location.cell.get` returns only the caller's own cell (self scope). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+| Name | Kind | Signature | Idempotency | Version | Errors |
+|---|---|---|---|---|---|
+| `location.cell.set` | command | `(region_cell, source, consent_id?)` | key | 1.0.0 | LOCATION.UNKNOWN_CELL, LOCATION.PRECISE_NOT_ALLOWED, LOCATION.CONSENT_REQUIRED |
+| `location.cell.clear` | command | `()` | key | 1.0.0 | LOCATION.INVALID_TRANSITION |
+| `location.consent.grant` | command | `(scope: device_resolution)` | key | 1.0.0 | SYS.FORBIDDEN |
+| `location.consent.withdraw` | command | `(consent_id)` | key | 1.0.0 | SYS.NOT_FOUND |
+| `location.cell.get` | query | `()` | n/a | 1.0.0 | SYS.NOT_FOUND |
+| `location.cell.changed` | event | `{account_ref, region_cell, source, state}` | n/a | 1.0.0 | n/a |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Client-only function `resolveCell(fix) → region_cell | error` is not an API; it runs on device against cell geometry.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+See PS-048-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+See PS-048-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-048-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+See PS-048-05.
+
+## Failure, idempotency, concurrency, offline
+See PS-048-06.
+
+## Privacy, retention, abuse
+Event payload excludes coordinates by schema.
+
+## Observability & budgets
+Trace id per command; no coordinates in traces.
+
+## Tests
+- TEST-PS-048-04-01 (contract): command schemas match registry.
+- TEST-PS-048-04-02 (contract): `location.cell.changed` schema rejects any coordinate key.
+- TEST-PS-048-04-03 (unit): duplicate `cell.set` with same key returns original.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Command table complete with versions and idempotency rules.
+2. Event schema static check passes.
+
+## Assumptions & open decisions
+- D05 PROVISIONAL.

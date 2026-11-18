@@ -1,35 +1,64 @@
 # PS-101-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-101-05. **Owner:** [12_Moderation/03_antifraud/mod_signals](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_signals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_signals (Trust&Safety Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ERR-001 (R08 not-found rule), CTR-PRV-001.
 
-## Purpose and scope
-Define the authorization capabilities process for signals within 03_antifraud. Do not assume implementation or successful external settlement.
+**Decision labels:** Case-scoped access without dual control is PROVISIONAL (D07 default, unapproved; signals are not PRIVATE or FINANCIAL classes). Security review of this matrix: OPEN.
 
-## Requirements to specify
-- [ ] PS-101-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-101-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-101-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-101-05.R01 | Capabilities: `sgn.create`, `sgn.read`, `sgn.update`, `sgn_aggregate.read`. No other verbs are declared (CTR-CAP-001 R03). | MVP |
+| PS-101-05.R02 | Individual signals are readable only by a `mod_` principal with an active `case:<cas_>` grant. | MVP |
+| PS-101-05.R03 | Any grant to read signals requires `constraints.purpose` and `expires_at` ≤ 72 h. | MVP |
+| PS-101-05.R04 | Users never read their own raw signals. Decision reasons reach users via appeal (F12.S01.M01), citing signal type and bucket only. | MVP |
+| PS-101-05.R05 | `ope_` principals have no access to signal content. Support cannot read or change signals. | MVP |
+| PS-101-05.R06 | Denials for unauthorized `sgn_` reads return `SYS.NOT_FOUND`. | MVP |
+| PS-101-05.R07 | Revocation takes effect at next decision; cache TTL is zero for `sgn.read` and `sgn.update`. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Grant record fields used by this module: `grant_id` (`grt_`), `principal_ref`, `capability`, `scope` (`case:<cas_>` or `global`), `constraints.purpose`, `expires_at`, `decision_ref` (`dec_`). Owner of grants: F16.S01.M01 (CTR-CAP-001).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Capability mapping:
+| Command or query | Capability | Principal | Scope |
+|---|---|---|---|
+| `sgn.create` | `sgn.create` | `sys_` producer | global (write-only) |
+| `sgn.list_by_subject` | `sgn.read` | `mod_` | `case:` |
+| `sgn.update` | `sgn.update` | `mod_` | `case:` |
+| `sgn_aggregate.read` | `sgn_aggregate.read` | `sys_` scorer | global, aggregate only |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization is evaluated before any transition (PS-101-03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| CAP.GRANT_NOT_ACTIVE | false | conflict / 409 | Suppress on inactive grant |
+| CAP.SCOPE_INVALID | false | validation / 400 | Scope not allowed for capability |
+| SYS.NOT_FOUND | false | not_found / 404 | Unauthorized read |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-101-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Default deny (CTR-CAP-001 R01). Relation rules do not apply: no signal is owned by a user. Actor identity comes from the authenticated principal only.
+
+## Failure, idempotency, concurrency, offline
+Grant revocation mid-command: the command fails with `CAP.GRANT_NOT_ACTIVE` and writes nothing. Details: PS-101-06.
+
+## Privacy, retention, abuse
+Every privileged read emits an `aud_` record with resource ID, purpose and decision ID, and no content (CTR-CAP-001 R08). Abuse by moderators: monthly access review by Trust&Safety Lead (PROCESS, ASSUMPTION).
+
+## Observability and budgets
+Count of privileged reads per moderator per day; alert above 200 (ASSUMPTION). See PS-101-08.
+
+## Tests
+- TEST-PS-101-12 (integration): moderator without grant reads signal → `SYS.NOT_FOUND` with body identical to nonexistent ID.
+- TEST-PS-101-13 (integration): user reads own signal → `SYS.NOT_FOUND`.
+- TEST-PS-101-14 (negative): `ope_` principal reads signal → denied.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every capability ID in the mapping is registered in CTR-CAP-001 vocabulary.
+2. No path returns raw signals to `user` or `ope` principals.
+3. Revocation test passes at next decision.
+
+## Assumptions & open decisions
+- ASSUMPTION: signal records are not PRIVATE_PERSONAL; if F10 reclassifies behavioural signals, dual control applies (CTR-CAP-001 R07).
+- D07 (PROVISIONAL, unapproved). D10 identity and key model: not used here.

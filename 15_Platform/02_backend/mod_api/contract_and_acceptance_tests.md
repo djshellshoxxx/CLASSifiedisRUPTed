@@ -1,35 +1,50 @@
 # PS-117-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-117-09. **Owner:** [15_Platform/02_backend/mod_api](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_api. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_api. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001 (R03, R09), CTR-EVT-001, CTR-ID-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for api within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-117-09.R01 | Every error code in PS-117-02, PS-117-06 has at least one contract test. | MVP |
+| PS-117-09.R02 | CI runs the CTR-SCH-001 compatibility checker against the previous published OpenAPI document. | MVP |
+| PS-117-09.R03 | Golden fixtures exist for every supported `from` version of the request envelope (CTR-SCH-001 R09). | MVP |
 
-## Requirements to specify
-- [ ] PS-117-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-117-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-117-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Test fixture set: `fixtures/api/v1/*.json` (valid, invalid, boundary), with expected status and code.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract tests exercise `POST /v1/commands/*` and `GET` routes only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Tests cover PS-117-03 transitions via the public API (black-box).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Each negative fixture asserts code, HTTP status, `retryable`, `message_key`, and absence of input echo.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Tests run with fixtures for `acc_`, `ope_`, `mod_` and anonymous principals (PS-117-05 matrix).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-117-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrency test: 50 identical and 50 distinct keys in parallel. Expected: one effect per key.
+
+## Privacy, retention, abuse
+Fixtures use synthetic IDs only (no real user data). Canary strings for redaction tests.
+
+## Observability & budgets
+Test suite runtime ≤ 10 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-117-09-01 (contract): error table conformance.
+- TEST-PS-117-09-02 (contract): OpenAPI compatibility check.
+- TEST-PS-117-09-03 (integration): concurrency matrix above.
+- TEST-PS-117-09-04 (e2e, offline): PWA queue replay after 2 h offline with original key.
+- TEST-PS-117-09-05 (accessibility): not applicable to api; PWA client tests cover localized messages via `message_key`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100% of error codes in PS-117-02 and PS-117-06 covered by contract tests.
+2. Zero breaking-change findings in CI for MINOR releases.
+3. Concurrency matrix passes 100 consecutive runs.
+
+## Assumptions & open decisions
+- ASSUMPTION: CI runtime budget.
+- D08 (PROVISIONAL default, unapproved): offline replay test assumes 24 h key window.

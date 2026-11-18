@@ -1,44 +1,47 @@
-# F02.S03.M03 — dropouts
+# F02.S03.M03 — mod_dropouts (cycle dropout handling)
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.S03.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Marketplace Lead (accountable role). **Parent:** [F02.S03 cycle_execution](../SPEC.md).
 
 ## Purpose and business behavior
-Provide dropouts as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Handle a participant who withdraws, misses the lock-confirmation window or misses the attestation window after a cycle is consented or locked. The module moves the affected cycle version to exactly one resolution: re-solve with a successor proposal (which must be consented again), cancel and release all locks, record a partial outcome for recovery, or escalate. It never completes or settles a cycle.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I can withdraw before locks are placed, and the other parties are told why in plain words without seeing my home address.
+- As a remaining participant, I get a successor proposal to consent to instead of a silently broken cycle.
+- As an operator, I see dropout rates by cycle size without party identities.
 
 ## Scope
-- Required process spec: `dropouts_domain_model.md` (not yet authored)
-- Required process spec: `dropouts_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `dropouts_validation_and_authorization.md` (not yet authored)
-- Required process spec: `dropouts_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `dropouts_interfaces_and_events.md` (not yet authored)
-- Required process spec: `dropouts_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `dropouts_acceptance_and_property_tests.md` (not yet authored)
+Process specs (all MVP unless marked):
+- domain_schema, validation_rules, workflow_state_machine, commands_queries_events, authorization_capabilities, failure_recovery_idempotency, privacy_retention_abuse, observability_performance, contract_and_acceptance_tests, import_export_backup_rollback.
+
+Out of scope: lock acquisition (mod_lock), consent (mod_consent), compensation (mod_recovery), federated dropout signals (FUTURE, PS-022-07 R05).
+
+## Canonical ownership (B-06)
+Dropout case records are owned by this module (`F02.S03.M03`). No duplicate slug in the registry. Compensation claims are owned by CTR-COM-001 (F09 Commerce), referenced by `clm_` ID only.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `cyc.withdraw`, `cyc.dropout.report`, `cyc.dropout.resolve`; queries `cyc.dropout.get`; events `cycle.dropout_detected`, `cycle.dropout_resolving`, `cycle.resolved_again`, `cycle.cancelled`, `cycle.partially_resolved`, `cycle.escalated`. See [commands_queries_events.md](commands_queries_events.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: mod_consent (consent state and expiry), mod_lock (lock state), F02.S02 cycle proposals (successor versions, D02), CTR-CAP-001. Downstream: mod_recovery (escalation), F07.S03 reputation (count signal only), F13 notifications. Contract tests required for each consumer.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `dropout_case` and `dropout_lock_ref`. Lock records belong to mod_lock; claims to CTR-COM-001.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Griefing by repeated withdrawal; false reports used to exclude a rival; timing inference of which party backed out; stranded locks after a dropout (fixed by R03 in failure spec); reconciliation that moves state backward. No platform custody of money; dropout does not settle anything.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+PS-022-01..10 approved; locks-before-resolution property test passes; abuse review rules approved by F12; privacy review of reason enum complete.
 
 ## Required process specification inventory
-- [ ] `dropouts_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dropouts_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dropouts_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dropouts_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dropouts_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dropouts_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `dropouts_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-022-01
+- [x] [validation_rules.md](validation_rules.md) — PS-022-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-022-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-022-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-022-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-022-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-022-07
+- [x] [observability_performance.md](observability_performance.md) — PS-022-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-022-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-022-10

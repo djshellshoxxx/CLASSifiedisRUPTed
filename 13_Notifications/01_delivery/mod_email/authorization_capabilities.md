@@ -1,35 +1,62 @@
 # PS-102-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-102-05. **Owner:** [13_Notifications/01_delivery/mod_email](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_email. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_email (Platform Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ERR-001 (R08), CTR-PRV-001 (R07, R11, R12).
 
-## Purpose and scope
-Define the authorization capabilities process for email within 01_delivery. Do not assume implementation or successful external settlement.
+**Decision labels:** Recovery mail sent without a session is PROVISIONAL (D10 default, unapproved). Security review of recovery paths: OPEN (S3-01).
 
-## Requirements to specify
-- [ ] PS-102-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-102-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-102-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-102-05.R01 | Capabilities: `eml.create` (bind), `eml.update` (verify), `eml.delete` (remove), `eml.read` (status), `eml.send` (system). | MVP |
+| PS-102-05.R02 | Users act on their own binding only (`self` scope). Request-body `account_ref` is ignored. | MVP |
+| PS-102-05.R03 | Sending requires a `sys_` principal with `global` scope limited to template catalog. | MVP |
+| PS-102-05.R04 | Moderators and operators have no read access to addresses. Moderation notices contain no address. | MVP |
+| PS-102-05.R05 | Support cannot read or change the binding (CTR-CAP-001 R12). | MVP |
+| PS-102-05.R06 | Email-based recovery never grants a capability that skips proof requirements (S3-01). Verifying an address alone does not reset credentials. | MVP |
+| PS-102-05.R07 | Webhook principal is a `sys_` identity whose only capability is `eml.webhook_ingest`. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Grant fields used: `grant_id`, `principal_ref`, `capability`, `scope`, `expires_at`. Owner: F16.S01.M01.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+| Operation | Capability | Principal | Scope |
+|---|---|---|---|
+| `eml.bind`, `eml.verify`, `eml.remove`, `eml.status` | `eml.create`, `eml.update`, `eml.delete`, `eml.read` | `acc_` | `self` |
+| `eml.send` | `eml.send` | `sys_` | `global`, template-limited |
+| `eml.webhook_ingest` | `eml.webhook_ingest` | `sys_` (provider) | `global` |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Authorization precedes every transition (PS-102-03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| SYS.NOT_FOUND | false | not_found / 404 | Non-owner access to a binding |
+| SYS.UNAUTHORIZED | false | auth / 401 | Webhook signature missing or invalid |
+| CAP.SCOPE_INVALID | false | validation / 400 | Scope not allowed for capability |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-102-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Default deny. Relation rule: owner of `acc_`. Revocation is effective next decision; cache TTL zero for `eml.update` and `eml.delete`.
+
+## Failure, idempotency, concurrency, offline
+Capability check runs before idempotency lookup to avoid oracle responses. Details: PS-102-06.
+
+## Privacy, retention, abuse
+Every privileged send emits an `aud_` record with template ID and decision ID, no address (CTR-CAP-001 R08). Webhook secrets rotate every 90 days (ASSUMPTION).
+
+## Observability and budgets
+Count of denied `eml.read` attempts per account; alert on bursts (PS-102-08).
+
+## Tests
+- TEST-PS-102-12 (integration): account B reads account A's binding → `SYS.NOT_FOUND`, body identical to nonexistent ID.
+- TEST-PS-102-13 (integration): support principal attempts `eml.read` on any binding → denied.
+- TEST-PS-102-14 (negative): verify on binding with recovery token does not change credentials.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Capability IDs registered in CTR-CAP-001 vocabulary.
+2. Access tests for owner, non-owner, support, moderator and system pass.
+3. No path sends an address to a non-owner principal.
+
+## Assumptions & open decisions
+- ASSUMPTION: system sending principal is distinct from webhook principal.
+- D10 (PROVISIONAL, unapproved).

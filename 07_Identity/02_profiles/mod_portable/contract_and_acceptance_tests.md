@@ -1,35 +1,57 @@
 # PS-055-09 — contract and acceptance tests
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001, CTR-CAP-001, CTR-PRV-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-09. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-055-09.R01 | Golden bundle fixtures for each MINOR of `portable.bundle` (CTR-SCH-001 R09). | MVP |
+| PS-055-09.R02 | Round-trip test: export → import on a second node reproduces all permitted fields. | MVP |
+| PS-055-09.R03 | Tamper test: one-byte change in any field fails signature. | MVP |
+| PS-055-09.R04 | Accessibility: export and import flows meet WCAG 2.1 AA; file picker labelled; progress announced. | MVP |
 
-## Purpose and scope
-Define the contract and acceptance tests process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+## Data / schema
+Fixtures use synthetic profiles only.
 
-## Requirements to specify
-- [ ] PS-055-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Contract tests replay routes with fixed keys.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+TEST-PS-055-05, -06.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+One test per code in [validation_rules](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+One test per row in [authorization_capabilities](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+TEST-PS-055-11 to -13.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+TEST-PS-055-14 to -17.
+
+## Observability & budgets
+Suite runtime ≤ 6 min in CI.
+
+## Tests
+| Test ID | Level | Scope |
+|---|---|---|
+| TEST-PS-055-01 | contract | manifest schema |
+| TEST-PS-055-02 | unit | no acc_, reputation or moderation field in body |
+| TEST-PS-055-03 | unit | failing fixture per validation step |
+| TEST-PS-055-04 | unit | size check before parse |
+| TEST-PS-055-05 | unit | state rows |
+| TEST-PS-055-06 | integration | double apply |
+| TEST-PS-055-07 | contract | routes |
+| TEST-PS-055-08 | integration | idempotent export and apply |
+| TEST-PS-055-09 | unit | authorization matrix |
+| TEST-PS-055-10 | unit | download token reuse |
+| TEST-PS-055-11 to -13 | integration | export fault, apply crash, concurrent apply |
+| TEST-PS-055-14 to -20 | integration/e2e | class rules, LOCATION_PRECISE, rate limits, logs, metrics, latency, round trip (R02) |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-055-01 to -20 pass in CI.
+2. Round-trip and tamper tests pass (R02, R03).
+
+## Assumptions & open decisions
+- ASSUMPTION: 25 MiB bundle budget.

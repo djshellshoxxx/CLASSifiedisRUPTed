@@ -1,35 +1,60 @@
-# PS-125-04 — commands queries events
+# PS-125-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-125-04. **Owner:** [15_Platform/04_configuration/mod_tenants](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_tenants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [mod_tenants](SPEC.md) (Platform Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for tenants within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-125-04.R01 | Every state-changing command requires an `idempotency_key` (UUID v4) and `expected_revision` where a revision exists. | MVP |
+| PS-125-04.R02 | Commands return within 500 ms p95 excluding provisioning; provisioning returns `202` with a status query. | MVP |
+| PS-125-04.R03 | Every command emits exactly one CTR-EVT-001 envelope per committed change. | MVP |
+| PS-125-04.R04 | `tenant.list` returns ≤ 50 items per page and only for `ope` principals with a purpose. | MVP |
 
-## Requirements to specify
-- [ ] PS-125-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-125-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-125-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Command payloads are JSON objects with `schema_version: "1.0.0"`. Config updates use JSON Merge Patch (RFC 7396; ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Input (required) | Idempotency | Emits | Errors |
+|---|---|---|---|---|
+| `tenant.create` | slug, display_name, admin_ref, region_cells, config | key | `tenant.created` | TEN.SLUG_TAKEN, TEN.SLUG_INVALID, TEN.CONFIG_INVALID |
+| `tenant.update_config` | tenant_id, expected_revision, patch | key | `tenant.config_changed` | EVT.REVISION_CONFLICT, TEN.CONFIG_INVALID |
+| `tenant.suspend` | tenant_id, reason_code, approvals[2] | key | `tenant.suspended` | TEN.INVALID_TRANSITION, CAP.DUAL_APPROVAL_REQUIRED |
+| `tenant.resume` | tenant_id, approvals[2] | key | `tenant.resumed` | TEN.INVALID_TRANSITION |
+| `tenant.offboard` | tenant_id, export_profile | key | `tenant.offboarding_started` | TEN.INVALID_TRANSITION, TEN.ADMIN_NOT_ACTIVE |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Queries: `tenant.get(tenant_id)`, `tenant.get_by_slug(slug)` (PUBLIC fields only; rate limited), `tenant.list(cursor, limit ≤ 50)`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Events (aggregate_type `tenant`, `max_data_class` PSEUDONYMOUS): `tenant.created`, `tenant.activated`, `tenant.config_changed`, `tenant.suspended`, `tenant.resumed`, `tenant.offboarding_started`, `tenant.deleted`. Payload carries `tenant_id`, changed field names and `revision`; never config values.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Command-to-transition mapping is in [PS-125-03](workflow_state_machine.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-125-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Codes are in [PS-125-02](validation_rules.md). Shared codes (`SYS.NOT_FOUND`, `EVT.REVISION_CONFLICT`, `CAP.DUAL_APPROVAL_REQUIRED`) are referenced from their contracts.
+
+## Authorization
+Per-command rules are in [PS-125-05](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Same key and same digest returns the original result with no new event. Same key and different digest returns `EVT.IDEMPOTENCY_KEY_REUSED`. Key retention: 7 days (RET-OPS default).
+
+## Privacy, retention, abuse
+Payloads are not logged (CTR-ERR-001 R10). `admin_ref` is pseudonymous in events.
+
+## Observability & budgets
+Latency and outcome metrics per command (see [PS-125-08](observability_performance.md)).
+
+## Tests
+- TEST-PS-125-04-01 (contract): each command validates against its schema; missing `idempotency_key` → `SYS.VALIDATION_FAILED`.
+- TEST-PS-125-04-02 (idempotency): replay with same digest returns identical response and one event.
+- TEST-PS-125-04-03 (contract): event envelopes validate against CTR-EVT-001.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each command row maps to exactly one event on success.
+2. No event payload contains a config value or a display name.
+3. Query `tenant.get_by_slug` returns no fields beyond PUBLIC.
+
+## Assumptions & open decisions
+- ASSUMPTION: JSON Merge Patch for config updates.
+- PROVISIONAL (D07 default, unapproved): 7-day idempotency retention.
+- ASSUMPTION: `SYS.VALIDATION_FAILED` is the shared code for a malformed envelope (to be confirmed in CTR-ERR-001 catalogue).

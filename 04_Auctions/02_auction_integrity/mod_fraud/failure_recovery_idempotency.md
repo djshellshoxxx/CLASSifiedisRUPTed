@@ -1,35 +1,51 @@
 # PS-037-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-037-06. **Owner:** [04_Auctions/02_auction_integrity/mod_fraud](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_fraud. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_fraud. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001
 
-## Purpose and scope
-Define the failure recovery idempotency process for fraud within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-037-06.R01 | Bid-stream consumption is at-least-once. Signal writes are idempotent on the dedupe key (PS-037-01). | MVP |
+| PS-037-06.R02 | Each rule evaluation has a 200 ms timeout. Timeouts retry up to 5 times with backoff 1 s, 4 s, 16 s, 64 s, 256 s, then move to a dead-letter queue (DLQ). | MVP |
+| PS-037-06.R03 | A reconciler runs every 5 min and opens a case for any auction whose max score >= 70 but has no open case. | MVP |
+| PS-037-06.R04 | Events older than 24 h at receipt are recorded with `late=true` and do not reopen closed cases. | MVP |
+| PS-037-06.R05 | Case writes use optimistic locking on `version`; no last-write-wins. | MVP |
 
-## Requirements to specify
-- [ ] PS-037-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-037-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-037-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Adds `late` boolean and `attempt` int to the rule-audit stream (not to FraudSignal).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries reuse the original idempotency key. DLQ entries carry `source_event_id` only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery does not create new case states. Reconciler opens cases via `fraud.case_opened` (OPEN).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`FRAUD.EVAL_TIMEOUT` (retryable), `FRAUD.DLQ_ENTRY` (non-retryable until replayed by operator).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Reconciler and replay run as `sys`. Operator replay from DLQ requires `fraud.read_aggregate` plus ops ticket reference.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-037-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Partial failure (signal written, case not opened): repaired by R03 within 5 min. Concurrent claims: one wins via `version`; the other gets 409. Offline: none; the server is the only writer.
+
+## Privacy, retention, abuse
+DLQ payloads hold IDs only, not features or device hashes. DLQ retention 7 days (ASSUMPTION).
+
+## Observability & budgets
+DLQ depth gauge; alert when DLQ > 0 for 15 min. Reconciler lag p95 <= 5 min.
+
+## Tests
+- TEST-PS-037-06-01 (integration): duplicate delivery produces one signal.
+- TEST-PS-037-06-02 (fault): forced timeout x5 lands in DLQ with IDs only.
+- TEST-PS-037-06-03 (fault): signal written with case-open failure is repaired within 5 min.
+- TEST-PS-037-06-04 (concurrency): two concurrent claims yield one success and one 409.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No duplicate signal under 10x redelivery fixture.
+2. Every failure path ends in retry, DLQ or repair; none silently drops.
+3. Case updates never lose a version increment.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h late-event window.
+- PROVISIONAL (D07 default, unapproved): DLQ retention 7 days.

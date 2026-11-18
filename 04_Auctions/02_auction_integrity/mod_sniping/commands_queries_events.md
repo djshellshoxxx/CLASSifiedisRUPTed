@@ -1,35 +1,56 @@
 # PS-038-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-04. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_sniping. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001
 
-## Purpose and scope
-Define the commands queries events process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-038-04.R01 | `sniping.timing.record` is idempotent on `bid_id`; repeat returns the existing `timing_id`. | MVP |
+| PS-038-04.R02 | Events carry `timing_id`, `auction_id`, `class`, `acceptance` only. No `bidder_id` in events. | MVP |
+| PS-038-04.R03 | `sniping.auction.timing_summary` returns counts by class; returns no breakdown when the auction has fewer than 5 bids. | MVP |
+| PS-038-04.R04 | Recording responds within 100 ms p95; classification may complete asynchronously within 1 s. | MVP |
 
-## Requirements to specify
-- [ ] PS-038-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+- `sniping.timing.record { auction_id, bid_id, client_sent_at? }` key `bid_id`. Server fields are never accepted from the client.
+- `sniping.auction.timing_summary { auction_id }` returns `{ total, normal, late, snipe, unclassified }` or `{ suppressed: true }` when total < 5.
+- Schema version 1.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Name | Type | Event | Idempotent |
+|---|---|---|---|
+| sniping.timing.record | command (sys, from bid path) | sniping.bid_classified | yes |
+| sniping.bid_rejected_after_close | event only | — | n/a |
+| sniping.clock_degraded / clock_restored | event | — | yes |
+| sniping.auction.timing_summary | query | — | n/a |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Commands drive the PS-038-03 table only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+PS-038-02 codes in CTR-ERR-001 envelope.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-038-05. Summary query is available to the auction seller and F12.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Duplicate `bid_id` returns the original result. Events are published after the state commit (outbox pattern, ASSUMPTION).
+
+## Privacy, retention, abuse
+Summary suppression at k < 5 prevents single-bidder inference. Event `max_data_class` = PSEUDONYMOUS.
+
+## Observability & budgets
+Latency histogram per command; event lag p95 <= 2 s.
+
+## Tests
+- TEST-PS-038-04-01 (contract): events validate against CTR-EVT-001 envelope.
+- TEST-PS-038-04-02 (negative): event fixture containing `bidder_id` fails lint.
+- TEST-PS-038-04-03 (privacy): summary with 4 bids returns suppressed=true.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command has key, capability and error list.
+2. No event includes a bidder identifier.
+3. Summary suppression verified at k=4 and k=5.
+
+## Assumptions & open decisions
+- ASSUMPTION: outbox pattern for event publication.
+- PROVISIONAL (no Dxx): k=5 suppression threshold, matching fraud aggregates.

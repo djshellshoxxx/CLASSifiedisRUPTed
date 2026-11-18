@@ -1,35 +1,51 @@
-# PS-109-08 — observability performance
+# PS-109-08 — observability and performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_keyboard. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-109-08. **Owner:** [14_Accessibility/01_a11y/mod_keyboard](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_keyboard. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-109-08.R01 | Metrics emitted for conflicts, resets, focus-trap escapes and stale responses. | MVP |
+| PS-109-08.R02 | Keydown-to-action latency p95 ≤ 50 ms on reference mid-range device (ASSUMPTION). | MVP |
+| PS-109-08.R03 | Logs redact chord values and any element text. | MVP |
 
-## Purpose and scope
-Define the observability performance process for keyboard within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Metric names: `kbd_binding_conflict_total{code}`, `kbd_binding_reset_total`, `kbd_focus_trap_escape_total`, `kbd_stale_response_total`, `kbd_shortcut_latency_ms` (histogram).
 
-## Requirements to specify
-- [ ] PS-109-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-109-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-109-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+None.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Metric labels limited to error codes from CTR-ERR-001.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Metrics readable by Accessibility Lead and QA Lead roles only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Metrics buffered locally when offline; flushed after reconnect; dropped after 24 h.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-109-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+No account ID in client metrics; server metrics carry pseudonymous `acc_` only where needed for debugging, retained 14 days (ASSUMPTION).
+
+## Observability & budgets
+| Budget | Target |
+|---|---|
+| Keydown to action p95 | ≤ 50 ms |
+| Focus restore after dialog close p95 | ≤ 100 ms |
+| `kbd.binding.list` server p95 | ≤ 200 ms |
+| Client bundle added for keyboard module | ≤ 10 KiB gzip (ASSUMPTION) |
+
+## Tests
+- TEST-PS-109-08-01 performance: synthetic keydown benchmark on reference device.
+- TEST-PS-109-08-02 static: log lines in test run contain no chord values.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All five metrics present in staging dashboards.
+2. Latency budgets met in the performance test run; failures block release.
+3. No chord or element text appears in captured logs.
+
+## Assumptions & open decisions
+- ASSUMPTION: reference device is defined at implementation time.
+- No Dxx decision directly affects observability.

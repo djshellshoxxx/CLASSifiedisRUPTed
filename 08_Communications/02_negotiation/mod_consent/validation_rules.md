@@ -1,35 +1,58 @@
 # PS-062-02 — validation rules
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_consent. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-COM-001 (R04 quote validity), CTR-CAP-001, CTR-ID-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-062-02. **Owner:** [08_Communications/02_negotiation/mod_consent](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-062-02.R01 | `proposal_version` in request must equal current version; otherwise `CONSENT.STALE_VERSION`. | MVP |
+| PS-062-02.R02 | `terms_digest` in request must equal the server-computed digest of the current terms. Mismatch → `CONSENT.TERMS_DIGEST_MISMATCH`. | MVP |
+| PS-062-02.R03 | Consent to a cross-currency version requires `quote_id` with `now ≤ valid_until`; else `COM.QUOTE_EXPIRED` (CTR-COM-001). | MVP |
+| PS-062-02.R04 | Non-participant slot → `SYS.NOT_FOUND`. | MVP |
+| PS-062-02.R05 | Consent requires an explicit `scope` value; default values are rejected. | MVP |
+| PS-062-02.R06 | Withdrawal rejected once the proposal reaches execution lock (`cyc_` lock event from F02.S03.M01). | MVP |
 
-## Purpose and scope
-Define the validation rules process for consent within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Rule identifiers for `details[].rule`: `stale_version`, `digest_mismatch`, `quote_expired`, `scope_missing`, `scope_invalid`, `execution_locked`, `already_withdrawn`.
 
-## Requirements to specify
-- [ ] PS-062-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-062-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-062-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Validation precedes idempotency lookup for malformed input. Repeats of a committed key return the original record.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Validation does not change state.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+| Code | Retryable | Category / HTTP | message_key | Diagnostic |
+|---|---|---|---|---|
+| CONSENT.STALE_VERSION | false | conflict / 409 | err.consent.stale_version | current version number (not terms) |
+| CONSENT.TERMS_DIGEST_MISMATCH | false | conflict / 409 | err.consent.terms_changed | rule only |
+| CONSENT.SCOPE_INVALID | false | validation / 400 | err.consent.scope | field path |
+| CONSENT.EXECUTION_LOCKED | false | unprocessable_state / 422 | err.consent.locked | state name |
+| CONSENT.ALREADY_WITHDRAWN | false | conflict / 409 | err.consent.withdrawn | none |
+| COM.QUOTE_EXPIRED | false | unprocessable_state / 422 | err.com.quote_expired | none (owned by CTR-COM-001) |
+| SYS.NOT_FOUND | false | not_found / 404 | err.sys.not_found | none |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Party identity from the authenticated principal only; body `acc_` fields are ignored (CTR-CAP-001 R11).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Server re-runs R01–R03 at commit even for offline-queued consent (see [PS-062-06](failure_recovery_idempotency.md)).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-062-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Diagnostics never include terms text, amounts or the counterparty ID.
+
+## Observability & budgets
+Counter `consent_validation_reject_total{code}`.
+
+## Tests
+- TEST-PS-062-02-01 (unit): each code in the table reachable.
+- TEST-PS-062-02-02 (negative): version bumped by counterparty between view and consent → `CONSENT.STALE_VERSION`; no record written.
+- TEST-PS-062-02-03 (negative): terms edited with same version number is impossible (version bump enforced) — assert digest check still rejects forged digest.
+- TEST-PS-062-02-04 (time): consent at `valid_until + 1 ms` on cross-currency terms → `COM.QUOTE_EXPIRED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Stale or altered terms never produce a `given` record (TEST-PS-062-02-02, -03).
+2. Quote-expiry rule matches CTR-COM-001 R04 (TEST-PS-062-02-04).
+
+## Assumptions & open decisions
+- ASSUMPTION: version numbers are integers starting at 1; each term edit increments.
+- D03 (mixed currency valuation): PROVISIONAL (D03 default, unapproved) — pinned quote at consent.

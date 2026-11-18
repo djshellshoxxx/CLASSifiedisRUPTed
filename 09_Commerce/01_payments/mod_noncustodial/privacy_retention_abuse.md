@@ -1,35 +1,63 @@
-# PS-069-07 — privacy retention abuse
+# PS-069-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-069-07. **Owner:** [09_Commerce/01_payments/mod_noncustodial](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_noncustodial. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_noncustodial (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R03, R06, R08, R09, R11), CTR-FED-001 (R03), CTR-COM-001 (R01). **Decisions:** D05 (PROVISIONAL default, unapproved), D07 (PROVISIONAL default, unapproved).
 
-## Purpose and scope
-Define the privacy retention abuse process for noncustodial within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-069-07.R01 | `contact_hint` is PRIVATE_PERSONAL; purged 30 days after trx reaches a terminal state, or on owner request, whichever is first (ASSUMPTION). | MVP |
+| PS-069-07.R02 | Route rows: RET-EVD (24 months after final state; personal fields redacted at 12 months, CTR-PRV-001 table). | MVP |
+| PS-069-07.R03 | No route data is federated, exported to a third party, sent in push previews or written to analytics (CTR-PRV-001 disclosure matrix). | MVP |
+| PS-069-07.R04 | Max 20 `route.declare` per `acc_` per hour (ASSUMPTION) to limit address enumeration. | MVP |
+| PS-069-07.R05 | Logs carry `route_id` only. `destination`, `destination_hash` and `contact_hint` are never logged. | MVP |
 
-## Requirements to specify
-- [ ] PS-069-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-069-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-069-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data classes per field are in PS-069-01. Retention table entries are referenced by class name (RET-EVD, RET-PRIV, RET-OPS), not redefined.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No additional commands. Deletion request on `contact_hint` emits `route.hint_purged` (payload: `route_id`, `purged_at`).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Hint purge does not change route `status`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Rate-limit breach returns `SYS.RATE_LIMITED` (retryable true, `retry_after` header).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner may purge own hint at any time; counterparty may not.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-069-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge job is idempotent on `route_id`. Backups expire by their own schedule; restore replays hint purges (CTR-PRV-001 R06).
+
+## Privacy, retention, abuse
+Threats and controls:
+
+| Threat | Control |
+|---|---|
+| Address enumeration across users | Rate limit R04; destination is visible only to trx participants |
+| Graph deanonymization (on-chain address reuse linked to `acc_`) | Advice to use one destination per trx; warning shown; ASSUMPTION: no enforcement in MVP |
+| Off-platform handle leakage | PRIVATE_PERSONAL class; no logging; encrypted at rest |
+| Fake route to divert payment | Route visible to both parties; counterparty attestation in PS-071 |
+| Scraping `route.read` | PS-069-05 denied-access alert |
+
+Pseudonyms do not guarantee anonymity: a stable `acc_` plus a public on-chain destination links activity.
+
+## Observability & budgets
+Count of purges per day; rate-limit hits per 1000 requests (alert > 5 per 1000).
+
+## Tests
+- TEST-PS-069-07-01 (integration): hint purge at trx terminal state plus 30 days.
+- TEST-PS-069-07-02 (negative): log scan for canary destination and hint strings returns zero matches.
+- TEST-PS-069-07-03 (negative): federation export of a route is refused (`FED.DATA_CLASS_NOT_ALLOWED`).
+- TEST-PS-069-07-04 (abuse): 21st declare within an hour is rate limited.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Canary strings never appear in logs, analytics or push payloads (automated scan on staging).
+2. Retention jobs remove `contact_hint` within 30 days in 100% of fixtures.
+3. Federation export of route records is impossible in MVP (tested).
+
+## Assumptions & open decisions
+- ASSUMPTION: 30-day hint retention after trx terminal state.
+- ASSUMPTION: 20 declares per hour per account.
+- D07 (PROVISIONAL default, unapproved): minimal per-category retention with legal-hold exceptions (CTR-PRV-001 R07).
+- D05 (PROVISIONAL default, unapproved): destinations are never coarse-location; no geoprivacy surface here.

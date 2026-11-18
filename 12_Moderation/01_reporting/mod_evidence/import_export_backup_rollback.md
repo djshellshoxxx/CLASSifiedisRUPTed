@@ -1,35 +1,59 @@
-# PS-093-10 — import export backup rollback
+# PS-093-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-093-10. **Owner:** [12_Moderation/01_reporting/mod_evidence](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_evidence. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_evidence (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-FED-001, CTR-SCH-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the import export backup rollback process for evidence within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-093-10.R01 | No import of moderation evidence from any federated peer (CTR-FED-001 R03). | MVP |
+| PS-093-10.R02 | Export only under a signed legal-process ticket and an active legal hold; dual `ope` approval. | MVP |
+| PS-093-10.R03 | Export bundle is encrypted, contains a SHA-256 manifest, and redacts uninvolved third-party personal fields. | MVP |
+| PS-093-10.R04 | Backups are encrypted and excluded from analytics restores. | MVP |
+| PS-093-10.R05 | Rollback disables capture only; it never deletes or alters stored items. | MVP |
 
-## Requirements to specify
-- [ ] PS-093-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-093-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-093-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Export
+| Step | Rule |
+|---|---|
+| Request | `evidence.export` by `sys_` on ticket; ticket has case ID, legal basis, end date |
+| Scope | items in one `cas_` under hold only |
+| Bundle | encrypted, manifest (IDs, sha256, captured_at), redaction applied |
+| Delivery | to approved recipient only; download link expires in 24 h |
+| Audit | `aud_` per export; bundle hash recorded |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Backup and restore
+- Backup schedule per F15 policy (ASSUMPTION daily, 30-day retention for staging-free snapshots).
+- Restore order: purges → holds → serve. Restored items with expired retention are purged, not served (BT-04).
+- Content keys held in KMS; a backup without KMS access is unreadable by design.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Rollback
+- Feature flag `evidence.capture_enabled` (F15.S04.M02 flags, distinct class) off → new captures return `SYS.UNAVAILABLE`.
+- Read paths and redaction stay on during rollback so that moderators keep access.
+- Schema rollback is forbidden for 1.0.0 once items exist; use a new MINOR.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Versioning
+Schema 1.0.0. Adding an optional field is MINOR. Changing a class is MAJOR (CTR-PRV-001).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Export without ticket → `CAP.DUAL_APPROVAL_REQUIRED` or `SYS.FORBIDDEN`. Expired bundle link → `SYS.GONE`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-093-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export is idempotent on (ticket ID, bundle hash). Interrupted export restarts from manifest; no partial bundle is delivered.
+
+## Privacy, retention, abuse
+Exports are the highest-risk path: manifest contains IDs only; recipients receive an access log entry. Federation and third-party sharing are not permitted.
+
+## Observability & budgets
+`evidence_exports_total{outcome}`; any export without ticket is a Sev-1 alert.
+
+## Tests
+- TEST-PS-093-10-01 (export): bundle manifest hashes match; third-party personal fields absent.
+- TEST-PS-093-10-02 (backup): restored store replays redaction before serving.
+- TEST-PS-093-10-03 (rollback): capture disabled, reads and redaction still work, no item altered.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No federated import path exists for `mev_` (lint).
+2. Rollback leaves item count and hashes unchanged (TEST-03).
+
+## Assumptions & open decisions
+- ASSUMPTION: legal-process handling defined by F10 with jurisdiction review (OPEN).
+- PROVISIONAL (D10 default, unapproved): user-controlled keys with documented recovery; evidence keys are operator-held in KMS, not user-held.

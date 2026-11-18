@@ -1,35 +1,55 @@
-# PS-134-08 — observability performance
+# PS-134-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-134-08. **Owner:** [17_Quality/01_testing/mod_e2e](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_e2e. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_e2e. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the observability performance process for e2e within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-134-08.R01 | Pass rate per flow and device reported per commit | MVP |
+| PS-134-08.R02 | Flake rate per scenario reported; scenario with > 2% flake over 50 runs flagged | MVP |
+| PS-134-08.R03 | Full e2e suite wall time <= 25 min with 4 parallel workers (ASSUMPTION) | MVP |
+| PS-134-08.R04 | Each of 12 flows has at least one scenario on each device (desktop, phone_360) | MVP |
 
-## Requirements to specify
-- [ ] PS-134-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-134-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-134-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric record: `{commit, flow, device, passed, failed, errored, skipped, flake_ids[], duration_s, at}`. TEST-IDs only in flake_ids.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Emits run summary per commit. No new commands.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Missing device coverage for a flow fails the summary with E2E.COVERAGE_GAP (non-retryable for the commit).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards readable by engineering roles; artifacts per PS-134-07.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-134-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Summary generation idempotent per commit.
+
+## Privacy, retention, abuse
+Metric records contain no artifact content.
+
+## Observability & budgets
+| Metric | Target |
+|---|---|
+| main-branch pass rate per flow | >= 98% |
+| flaky scenarios in gate | 0 |
+| suite wall time | <= 25 min |
+| device coverage gaps | 0 |
+Targets ASSUMPTION until baseline.
+
+## Tests
+- TEST-PS-134-08-01 (unit): summary with missing device flags E2E.COVERAGE_GAP.
+- TEST-PS-134-08-02 (integration): planted flaky scenario appears in flake_ids.
+- TEST-PS-134-08-03 (performance): 25-scenario sample completes within 6 min at 4 workers (scaled budget).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Summary renders per commit with all 12 flows.
+2. Flake detection reproduces planted case.
+3. Device coverage gap check blocks merge via mod_gates.
+
+## Assumptions & open decisions
+- ASSUMPTION: 4 parallel workers is the CI baseline.
+- No direct D-number; D07 PROVISIONAL applies to retention of metric records (1 year).

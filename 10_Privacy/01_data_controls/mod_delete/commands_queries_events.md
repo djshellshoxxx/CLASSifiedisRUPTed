@@ -1,35 +1,62 @@
-# PS-077-04 — commands queries events
+# PS-077-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-077-04. **Owner:** [10_Privacy/01_data_controls/mod_delete](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_delete. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_delete (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001 (R07 tombstones), CTR-PRV-001.
 
-## Purpose and scope
-Define the commands queries events process for delete within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-077-04.R01 | Commands: `privacy.deletion.request`, `privacy.deletion.cancel`. Queries: `privacy.deletion.get`, `privacy.deletion.list_own`. Internal: `privacy.deletion.execute` (sys only). | MVP |
+| PS-077-04.R02 | State-changing commands require `Idempotency-Key` (UUID v4); idempotency scope per CTR-EVT-001 R03 (7-day retention). | MVP |
+| PS-077-04.R03 | Command responses return `dsr_` ID, `state`, `aggregate_revision`. Never returns target content. | MVP |
+| PS-077-04.R04 | Owner-originated tombstones for federated content are issued as `<aggregate_type>.tombstoned` events (CTR-FED-001 R07) by the origin node only. | MVP |
+| PS-077-04.R05 | Event payloads are IDs, counts, state and timestamps. `max_data_class` ≤ PSEUDONYMOUS. | MVP |
 
-## Requirements to specify
-- [ ] PS-077-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-077-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-077-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Request body (`privacy.deletion.request`):
+```json
+{"scope": "content_item", "target_id": "lst_01HZ...", "expected_revision": null}
+```
+Response (201 new, 200 replay):
+```json
+{"id": "dsr_01HZ...", "state": "executing", "aggregate_revision": 2, "cooling_off_until": null}
+```
+Event envelope fields per CTR-EVT-001; `event_type` regex compliant (`deletion.completed`).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Idempotency | Emits | Errors |
+|---|---|---|---|
+| request | key + digest | `deletion.requested` | DEL.SCOPE_INVALID, DEL.REAUTH_REQUIRED, DEL.FULLY_HELD, DEL.ALREADY_PENDING |
+| cancel | key | `deletion.cancelled` | DEL.CANCEL_WINDOW_CLOSED, SYS.NOT_FOUND |
+| execute (sys) | executor lease id | `record.deleted`, `deletion.completed`, `<type>.tombstoned` | SYS.UNAVAILABLE (retryable) |
+| get / list_own | none | none | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Event emission follows PS-077-03. `record.deleted` is emitted per target with IDs and store class only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Errors per PS-077-02 and PS-077-03. Command with same key and different digest → `EVT.IDEMPOTENCY_KEY_REUSED` (409).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Caller principal `acc_` for request, cancel, get, list_own. `sys_` for execute. Federation tombstone emission requires origin-node signing key (CTR-FED-001 R09).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-077-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Replay of an identical request returns the original response without a new event. Execute uses an executor lease (60 s, ASSUMPTION) to prevent double execution.
+
+## Privacy, retention, abuse
+Event bodies are kept under RET-AUD. Requests are rate-limited (PS-077-07).
+
+## Observability & budgets
+Command p95 ≤ 250 ms excluding executor work (ASSUMPTION).
+
+## Tests
+- TEST-PS-077-04-01 (contract): response and event schemas validate against registry.
+- TEST-PS-077-04-02 (idempotency): same key, same body twice → one event; same key, changed body → 409.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command and query in the table exists in the API contract with error codes listed.
+2. No event payload field contains content (TEST-PS-077-04-01 negative fixture).
+3. Tombstone events are emitted only by the origin node key (TEST-PS-077-04-02 extension).
+
+## Assumptions & open decisions
+- PENDING: `dsr_` prefix in CTR-ID-001.
+- ASSUMPTION: executor lease 60 s.

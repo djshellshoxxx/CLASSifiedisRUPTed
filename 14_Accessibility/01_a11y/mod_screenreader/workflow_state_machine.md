@@ -1,35 +1,60 @@
 # PS-110-03 — workflow state machine
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_screenreader. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-COM-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-03. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-110-03.R01 | A template is in exactly one of `draft`, `published`, `deprecated`. | MVP |
+| PS-110-03.R02 | At most one announcement per live region per 1 s window; duplicates within the window are dropped. | MVP |
+| PS-110-03.R03 | A claim state announcement uses only the CTR-COM-001 catalog label for that state. | MVP |
 
-## Purpose and scope
-Define the workflow state machine process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Template `status` and `revision` ([PS-110-01](domain_schema.md)).
 
-## Requirements to specify
-- [ ] PS-110-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Transitions driven by `scr.template.publish` and `scr.template.deprecate`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| (none) | create | validation passes | draft | revision=1 |
+| draft | publish | PS-110-02 passes | published | event `announcement_template.published` |
+| published | edit | — | draft (new revision) | published revision remains active |
+| published | deprecate | no active event_key depends on it, or replacement published | deprecated | event; clients keep last render |
+| draft | discard | — | (removed) | no event |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Live region dispatch:
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| idle | announce | no message in last 1 s | announcing | text written to region |
+| announcing | announce (same text) | within 1 s | announcing | dropped |
+| announcing | announce (new text) | — | announcing | replaces text |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [PS-110-02](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Publish and deprecate: a11y change-control role only ([PS-110-05](authorization_capabilities.md)).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+See [PS-110-06](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Announcement text is not persisted client-side beyond the live region.
+
+## Observability & budgets
+Dispatch latency p95 ≤ 100 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-110-03-01 unit: each row of both tables.
+- TEST-PS-110-03-02 unit: duplicate within 1 s dropped; after 1 s accepted.
+- TEST-PS-110-03-03 integration: claim label for CLAIMED never contains "paid", "payment received" or "settled".
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No undefined (state, event) pair in template tables.
+2. Duplicate suppression holds in the unit test.
+3. Claim-state announcements match the CTR-COM-001 label catalog in 100% of fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1 s duplicate window.
+- No Dxx decision directly affects this state machine.

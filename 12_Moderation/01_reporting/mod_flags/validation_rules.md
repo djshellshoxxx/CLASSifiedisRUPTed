@@ -1,35 +1,51 @@
 # PS-094-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-094-02. **Owner:** [12_Moderation/01_reporting/mod_flags](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_flags (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-ID-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the validation rules process for flags within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-094-02.R01 | Checks run in order: auth, restriction, schema, reason, target, self-report, dedupe, quota. First failure stops. | MVP |
+| PS-094-02.R02 | `detail_text` ≤ 500 UTF-8 characters after NFC normalization; HTML and control characters stripped; longer → error, never truncated silently. | MVP |
+| PS-094-02.R03 | A reporter may not report their own content or their own account (`FLG.SELF_REPORT_FORBIDDEN`). | MVP |
+| PS-094-02.R04 | Target must exist and be readable by the reporter, otherwise `SYS.NOT_FOUND` (CTR-CAP-001). | MVP |
+| PS-094-02.R05 | Reporting restricted accounts (set by mod_abuse) are refused with `FLG.REPORTING_RESTRICTED`. | MVP |
+| PS-094-02.R06 | Reporter may withdraw only while status is `submitted` or `queued`. | MVP |
 
-## Requirements to specify
-- [ ] PS-094-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-094-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-094-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| FLG.REASON_INVALID | false | validation / 400 | reason_code not in enum. |
+| FLG.DETAIL_TOO_LONG | false | validation / 400 | detail_text > 500 characters. |
+| FLG.SELF_REPORT_FORBIDDEN | false | unprocessable_state / 422 | Target owned by reporter. |
+| FLG.TARGET_NOT_REPORTABLE | false | unprocessable_state / 422 | Target type has no report path (e.g., draft visible only to owner). |
+| FLG.REPORTING_RESTRICTED | false | forbidden / 403 | Reporter restricted by abuse controls. |
+| FLG.WITHDRAW_NOT_ALLOWED | false | conflict / 409 | Withdraw after triage. |
+| FLG.QUOTA_EXCEEDED | true | rate_limited / 429 | More than 20 submissions per reporter per 24 h (ASSUMPTION), with `retry_after_ms`. |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Detail: error responses never echo `detail_text` or target content (CTR-ERR-001 R07).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Authorization
+Caller must be authenticated `user` (`acc_`). Visibility of the target decides `SYS.NOT_FOUND` versus validation errors.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Failure, idempotency, concurrency, offline
+Validation is pure and deterministic. Dedupe check happens after validation so that duplicates still get the `deduplicated` response even within quota.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Privacy, retention, abuse
+Validation logs record code and field path only. Reason and text are never logged. Repeated `FLG.SELF_REPORT_FORBIDDEN` or `FLG.REPORTING_RESTRICTED` responses feed mod_abuse.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-094-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Observability & budgets
+`flags_validation_rejections_total{code}`. Validation p95 ≤ 10 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-094-02-01 (unit): every code in the table reachable with its exact condition.
+- TEST-PS-094-02-02 (boundary): 500 characters accepted, 501 rejected, combining marks counted after NFC.
+- TEST-PS-094-02-03 (negative): self-report, unreadable target, restricted reporter.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Check order matches R01 for every rejection path (TEST-02 traces).
+2. No error body contains reporter, target owner or detail text (TEST-CTR-ERR-001-04 fixture).
+
+## Assumptions & open decisions
+- ASSUMPTION: 20 submissions per 24 h per reporter; tuned by mod_limits.
+- PROVISIONAL (D07 default, unapproved): detail text limit is a minimum-necessary choice.

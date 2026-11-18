@@ -1,35 +1,67 @@
 # PS-078-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-078-01. **Owner:** [10_Privacy/01_data_controls/mod_export](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_export. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_export (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (owner-export matrix, R11), CTR-SCH-001, CTR-ID-001 (PENDING: `dsr_` prefix, shared with mod_delete), CTR-EVT-001.
 
-## Purpose and scope
-Define the domain schema process for export within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-078-01.R01 | One `data_subject_request` row with `request_type = "export"`; `scope` closed enum: `full`, `profile`, `messages`, `commerce_records`. | MVP |
+| PS-078-01.R02 | `include_precise_location` defaults to false; true only with explicit confirmation (PS-078-02 R04). | MVP |
+| PS-078-01.R03 | Only SHA-256 of the download token is stored (SECRET class, RET-SEC). The token itself is never persisted. | MVP |
+| PS-078-01.R04 | Package manifest lists each file with `path`, `sha256`, `bytes`, `data_class`; manifest is stored with the row. | MVP |
+| PS-078-01.R05 | At most one non-terminal export per subject and scope (unique partial index). | MVP |
 
-## Requirements to specify
-- [ ] PS-078-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-078-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-078-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "id": "dsr_<ULID>",
+  "subject_acc_id": "acc_<ULID>",
+  "request_type": "export",
+  "scope": "full | profile | messages | commerce_records",
+  "include_precise_location": "boolean",
+  "state": "requested | generating | ready | downloaded | expired | failed",
+  "package_ref": "opaque storage key (not an entity ID)",
+  "manifest_sha256": "64 hex chars | null",
+  "bytes_total": "int | null",
+  "ready_at": "timestamp | null",
+  "expires_at": "timestamp | null",
+  "download_token_sha256": "64 hex chars | null",
+  "aggregate_revision": "int >= 1",
+  "schema_version": "1.0.0"
+}
+```
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Defined in PS-078-04. Manifest format: JSON files per data class plus attachment originals; schema referenced as PENDING CTR-PORT-001 (shared portability package format).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See PS-078-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See PS-078-02. Stored values are validated against the field registry (CTR-SCH-001 R01).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner only. The row never exposes counterparty identifiers.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-078-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Row creation idempotent on (subject, scope, active state). `aggregate_revision` increments per transition.
+
+## Privacy, retention, abuse
+Row retention RET-AUD. Package retention in PS-078-07. Token hash RET-SEC, purged on expiry plus 30 days (CTR-PRV-001).
+
+## Observability & budgets
+No content fields in metrics or logs; row write p95 ≤ 100 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-078-01-01 (unit): the token string never appears in the row after creation.
+- TEST-PS-078-01-02 (schema): `manifest_sha256` is null until state `ready`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema validates against registry lint.
+2. No token plaintext in DB snapshot (TEST-PS-078-01-01).
+3. Manifest rows match file list byte-for-byte in golden fixture.
+
+## Assumptions & open decisions
+- PENDING: `dsr_` prefix in CTR-ID-001.
+- PENDING: CTR-PORT-001 manifest and package format.
+- PROVISIONAL (D10 default, unapproved): user-controlled keys for package encryption, with documented recovery.

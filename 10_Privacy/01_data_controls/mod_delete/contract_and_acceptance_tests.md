@@ -1,35 +1,50 @@
 # PS-077-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-077-09. **Owner:** [10_Privacy/01_data_controls/mod_delete](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_delete. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_delete (Privacy Lead, F10; QA Lead, F17). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (TEST-CTR-PRV-001-06, -07, -12), CTR-EVT-001, CTR-ERR-001, CTR-FED-001 (R07), CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for delete within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-077-09.R01 | Every error code `DEL.*` in PS-077-02 has a contract test asserting category, HTTP status and `retryable` value. | MVP |
+| PS-077-09.R02 | Event payload schemas for `deletion.*` and `record.deleted` pass CTR-SCH-001 lint. | MVP |
+| PS-077-09.R03 | Deletion propagation test seeds one subject across ≥ 6 store classes and asserts absence after completion. | MVP |
+| PS-077-09.R04 | Federation tombstone contract test verifies origin-only signing (CTR-FED-001 R07). | MVP |
+| PS-077-09.R05 | Test fixtures contain synthetic data only; no real personal data. | MVP |
 
-## Requirements to specify
-- [ ] PS-077-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-077-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-077-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixture schema: `subject`, `targets[]` (one per store class), `expected_absent_values[]`. Synthetic values only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Tests drive PS-077-04 commands through the public API and assert emitted events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Scenarios cover all rows in PS-077-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative fixtures for each error row in PS-077-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Tests run for subject, counterparty, operator and executor principals (PS-077-05 matrix).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-077-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection: store timeout, executor crash mid-run, duplicate request, stale revision.
+
+## Privacy, retention, abuse
+Test artifacts purged after run; no production data.
+
+## Observability & budgets
+Suite runtime ≤ 15 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-077-09-01 (contract): all DEL.* codes in registry.
+- TEST-PS-077-09-02 (integration): six-store propagation with hold on one target.
+- TEST-PS-077-09-03 (e2e, offline): cancel queued offline and replayed after reconnect within window.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-077-09-01 to -03 pass in CI before any implementation merge.
+2. Each acceptance criterion in PS-077-01 to -08 maps to at least one TEST ID.
+3. Accessibility test: deletion confirmation dialog keyboard-operable (F14 reference).
+
+## Assumptions & open decisions
+- PENDING: test data generator and fixture registry (QA, F17).
+- PROVISIONAL (D08 default) for offline e2e expectations.

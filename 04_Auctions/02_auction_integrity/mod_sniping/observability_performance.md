@@ -1,35 +1,50 @@
 # PS-038-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-08. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_sniping. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001
 
-## Purpose and scope
-Define the observability performance process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-038-08.R01 | Counters: `sniping_classified_total{class}`, `sniping_rejected_after_close_total`, `sniping_clock_degraded_seconds`. | MVP |
+| PS-038-08.R02 | Classification p95 <= 50 ms; record endpoint p95 <= 100 ms. | MVP |
+| PS-038-08.R03 | Clock skew gauge per node with p99 reported. | MVP |
+| PS-038-08.R04 | Logs carry `timing_id` prefix only; no bidder_id, no timestamps of individual bids. | MVP |
+| PS-038-08.R05 | Dashboards show aggregates with k >= 5. | MVP |
 
-## Requirements to specify
-- [ ] PS-038-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels: `class`, `acceptance`, `node`. No account labels.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Alert event `sniping.skew_alert` internal only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Redaction test rejects `acc_` tokens and ISO timestamps tied to a bid in log lines.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboard read requires `sniping.read_summary` for operator aggregate role (ops).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metrics are best-effort; loss does not block bid recording.
+
+## Privacy, retention, abuse
+Telemetry retention 30 days (ASSUMPTION). Traces drop bid payloads.
+
+## Observability & budgets
+Budget: 2,000 bids/min per platform (ASSUMPTION), <= 2% CPU overhead.
+
+## Tests
+- TEST-PS-038-08-01 (redaction): log fixture with bidder and timing values is redacted.
+- TEST-PS-038-08-02 (performance): 2,000 bids/min meets R02.
+- TEST-PS-038-08-03 (alert): skew above 500 ms for 3 checks raises alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Counters present in staging.
+2. Zero bidder_id leaks in logs.
+3. p95 budgets met under fixture load.
+
+## Assumptions & open decisions
+- ASSUMPTION: 2,000 bids/min planning budget.
+- PROVISIONAL (D07 default, unapproved): 30-day telemetry retention.

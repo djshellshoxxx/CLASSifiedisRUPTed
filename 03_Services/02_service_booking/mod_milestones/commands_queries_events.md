@@ -1,35 +1,65 @@
 # PS-031-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-031-04. **Owner:** [03_Services/02_service_booking/mod_milestones](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_milestones. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_milestones. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for milestones within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-031-04.R01 | State-changing commands carry `idempotency_key` (ULID) and `expected_revision`. | MVP |
+| PS-031-04.R02 | Commands: `milestone.plan_set` (replace whole plan in `planned` booking), `milestone.start`, `milestone.submit`, `milestone.accept`, `milestone.reject`, `milestone.cancel`. Queries: `milestone.list_for_booking`, `milestone.get`. | MVP |
+| PS-031-04.R03 | `milestone.plan_set` is atomic: all rows or none; max 12 rows. | MVP |
+| PS-031-04.R04 | Events use past-tense verbs (CTR-EVT-001 R10) listed in [workflow_state_machine.md](workflow_state_machine.md). | MVP |
+| PS-031-04.R05 | Event payload ≤ 4 KiB; contains `milestone_id`, `booking_id`, `state`, `revision`, `amount_minor` as decimal string. No acceptance text. | MVP |
+| PS-031-04.R06 | `milestone.list_for_booking` returns ≤ 12 rows (plan size), ordered by `order_index`. | MVP |
+| PS-031-04.R07 | Schemas registered per CTR-SCH-001 (`milestone.submitted` 1.0.0, etc.). | MVP |
 
-## Requirements to specify
-- [ ] PS-031-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-031-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-031-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Submit request example:
+```
+{ "milestone_id": "…", "expected_revision": 4, "idempotency_key": "01J…",
+  "evidence_digests": ["sha256:…"] }
+```
+`evidence_digests` ≤ 10 entries.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Name | Kind | Idempotent | Errors |
+|---|---|---|---|
+| milestone.plan_set | command | yes | MILESTON.COUNT_INVALID, SUM_MISMATCH, PLAN_LOCKED |
+| milestone.start | command | yes | INVALID_TRANSITION |
+| milestone.submit | command | yes | INVALID_TRANSITION, EVT.REVISION_CONFLICT |
+| milestone.accept | command | yes | INVALID_TRANSITION |
+| milestone.reject | command | yes | REASON_INVALID (via MILESTON.TEXT_INVALID) |
+| milestone.cancel | command | yes | INVALID_TRANSITION |
+| milestone.list_for_booking | query | n/a | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Commands map to [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+[validation_rules.md](validation_rules.md); envelope per CTR-ERR-001 R01.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+[authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-031-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Idempotency scope (actor, command, key) per CTR-EVT-001 R03. Replay returns original result; no new event.
+
+## Privacy, retention, abuse
+Evidence digests only; no media. Query results limited to booking participants.
+
+## Observability & budgets
+`milestone.submit` p95 ≤ 300 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-031-04-01 contract: fixtures for all commands and events.
+- TEST-PS-031-04-02 integration: `plan_set` partial failure leaves prior plan intact.
+- TEST-PS-031-04-03 integration: replay of `milestone.accept` emits one event.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command has schema and error set registered.
+2. `plan_set` is all-or-nothing under injected failure.
+3. Event payloads contain no acceptance text.
+
+## Assumptions & open decisions
+- ASSUMPTION: 4 KiB event cap.
+- Payment checklist applies: amounts as decimal strings only (CTR-COM-001 R02).

@@ -1,35 +1,54 @@
 # PS-062-09 — contract and acceptance tests
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_consent. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001, CTR-COM-001 (R04), CTR-ID-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-062-09. **Owner:** [08_Communications/02_negotiation/mod_consent](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-062-09.R01 | Contract tests run in CI for `consent.v1` and all `consent.*` events. | MVP |
+| PS-062-09.R02 | Every requirement in PS-062-01 to -08 maps to ≥ 1 test ID below. | MVP |
+| PS-062-09.R03 | Accessibility: consent control reachable by keyboard; terms readable at 200% zoom; screen reader reads scope and version before action. | MVP |
+| PS-062-09.R04 | Cross-module contract test with F02.S03.M01 lock event and F08.S02.M01 offers. | MVP |
 
-## Purpose and scope
-Define the contract and acceptance tests process for consent within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Fixtures in `fixtures/consent/`: valid record, duplicate-given record, scope-missing request, stale version, quote-expired cross-currency request.
 
-## Requirements to specify
-- [ ] PS-062-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-062-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-062-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Contract replay of each command in [PS-062-04](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+State matrix from [PS-062-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Each code in [PS-062-02](validation_rules.md) asserted.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Matrix from [PS-062-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Offline replay tests from [PS-062-06](failure_recovery_idempotency.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-062-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Tests from [PS-062-07](privacy_retention_abuse.md).
+
+## Observability & budgets
+Tests from [PS-062-08](observability_performance.md).
+
+## Tests
+| Test ID | Type | Covers |
+|---|---|---|
+| TEST-PS-062-09-01 | contract | command and event shapes (PS-062-04) |
+| TEST-PS-062-09-02 | unit | validation codes (PS-062-02) |
+| TEST-PS-062-09-03 | integration | transition table, lock race (PS-062-03) |
+| TEST-PS-062-09-04 | property | at most one `given` per (proposal, slot, version) under random interleavings |
+| TEST-PS-062-09-05 | e2e | three-party cycle: each party gives consent; lock; one withdraw refused |
+| TEST-PS-062-09-06 | offline | queued withdraw after lock rejected (S4-02) |
+| TEST-PS-062-09-07 | a11y | keyboard and screen-reader path for give and decline |
+| TEST-PS-062-09-08 | negative | guessed slot IDs; body-supplied party ID ignored |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-062-09-01 to -08 and all IDs in PS-062-01 to -08 pass in CI.
+2. Zero committed-after-lock withdrawals across the randomized suite.
+
+## Assumptions & open decisions
+- ASSUMPTION: fixtures synthetic.
+- Future-phase execution only.

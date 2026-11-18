@@ -1,35 +1,50 @@
 # PS-063-10 — import export backup rollback
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_offers. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R07, R11, R12), CTR-SCH-001 (R07, R08), CTR-EVT-001 (R08)
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-063-10. **Owner:** [08_Communications/02_negotiation/mod_offers](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-063-10.R01 | Export gives each party their own offers, counters and terms in JSON within 24 h. | MVP |
+| PS-063-10.R02 | Export excludes other party's identifiers beyond the pseudonymous ref already in the party's own offer. | MVP |
+| PS-063-10.R03 | Offer records are signed-evidence-grade (CTR-SCH-001 R08): stored bytes unchanged, lossy migrations forbidden. | MVP |
+| PS-063-10.R04 | Restore never reopens an expired offer or re-accepts a withdrawn one. | MVP |
+| PS-063-10.R05 | Kill switch `offers.create.enabled` disables new offers; accept/decline/withdraw remain available until in-flight offers expire. | MVP |
+| PS-063-10.R06 | Money fields are never migrated by floating-point conversion; migrations are string-preserving. | MVP |
 
-## Purpose and scope
-Define the import export backup rollback process for offers within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Export: `{"export_id":"…","offers":[{"offer_id":"ofr_…","version":2,"counter_of":"…","terms":{…},"state":"…","expires_at":"…"}],"schema_version":"1.0.0"}`.
 
-## Requirements to specify
-- [ ] PS-063-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-063-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-063-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+`offer.exported` event (IDs and counts only).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Export job: `requested` → `building` → `ready` (24 h) → `expired`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+`OFFERS.EXPORT_NOT_READY` (412, retryable); `OFFERS.EXPORT_EXPIRED` (410).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Self-scope export ([PS-063-05](authorization_capabilities.md)).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Export idempotent per (party, day). Restore re-checks `expires_at` against server time.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-063-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Exports are FINANCIAL_EVIDENCE: authenticated download only, deleted 24 h after expiry. Backups encrypted.
+
+## Observability & budgets
+Alert on restore producing an `open` offer past `expires_at`.
+
+## Tests
+- TEST-PS-063-10-01 (export): own offers present; third-party data absent.
+- TEST-PS-063-10-02 (restore): backup taken before expiry, restored after → offer `expired`, not `open`.
+- TEST-PS-063-10-03 (money): export and re-import preserve `amount_minor` as strings, byte for byte.
+- TEST-PS-063-10-04 (kill switch): `offers.create.enabled` off → create refused; accept still works on existing offer.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export contains no third-party amounts (TEST-PS-063-10-01).
+2. Money round-trip exact (TEST-PS-063-10-03).
+
+## Assumptions & open decisions
+- D07 (retention): PROVISIONAL (D07 default, unapproved).
+- OPEN: portability format for compensation items referencing `lst_` (default: ID only).

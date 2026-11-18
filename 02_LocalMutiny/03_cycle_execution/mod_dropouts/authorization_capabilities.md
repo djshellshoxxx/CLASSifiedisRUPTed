@@ -1,35 +1,62 @@
-# PS-022-05 — authorization capabilities
+# PS-022-05 — Authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-022-05. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_dropouts](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_dropouts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_dropouts. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for dropouts within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-022-05.R01 | Own withdrawal: `cyc.withdraw` on the actor's own `acc_` in `participant` scope. | MVP |
+| PS-022-05.R02 | Reporting another party's dropout: `cyc.dropout.report`, `participant` scope, requires an observed `reason_code` only; report counts are capped at 1 per reporter per case. | MVP |
+| PS-022-05.R03 | Resolution (`cyc.dropout.resolve`) by any participant of the cycle with a majority of the remaining parties, or by `sys_` timer. Operators cannot resolve without a `case:` scope grant with `expires_at` (CTR-CAP-001 R06). | MVP |
+| PS-022-05.R04 | Operators cannot read party-level reasons unless a privileged grant with purpose exists (CTR-CAP-001 R07 dual control). | MVP |
+| PS-022-05.R05 | Participation removed on resolution is effective for new commands within 60 s (CTR-CAP-001 R09). | MVP |
 
-## Requirements to specify
-- [ ] PS-022-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-022-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-022-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Inputs: `acc_` of actor, cycle membership derived from proposal version and case state.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Authorization evaluated before idempotency lookup; non-participants receive `SYS.NOT_FOUND`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Membership changes re-evaluated on each decision (CTR-CAP-001 R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Condition | Code | Class / HTTP |
+|---|---|---|
+| Non-participant | SYS.NOT_FOUND | not_found / 404 |
+| Removed participant | SYS.FORBIDDEN | forbidden / 403 |
+| Operator without grant | SYS.FORBIDDEN | forbidden / 403 |
+| Second report by same reporter | (idempotent replay) | 200 |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor × action | Scope | Capability | Result |
+|---|---|---|---|
+| participant × withdraw (own) | cycle | cyc.withdraw | ALLOW before CONSENTED and after, with routing |
+| participant × report another | cycle | cyc.dropout.report | ALLOW, max 1 per reporter |
+| participant × resolve | cycle | cyc.dropout.resolve | ALLOW if majority rule (R03) |
+| sys_ timer × escalate | system | cyc.dropout.resolve | ALLOW |
+| ope_ × read reasons | case | privileged | DENY unless dual-control grant |
+| non-participant × any | — | — | DENY SYS.NOT_FOUND |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-022-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Policy store down → `SYS.UNAVAILABLE`, fail closed. Offline clients never decide membership.
+
+## Privacy, retention, abuse
+Grants for reason access carry `purpose` and `expires_at ≤ 72 h`. Abuse: serial false reports are counted and surfaced to F12 Trust&Safety as signals, never auto-penalized.
+
+## Observability & budgets
+Audit record `aud_` for every allow/deny and every privileged read (CTR-CAP-001 R08).
+
+## Tests
+- TEST-PS-022-05-01 (matrix): each row above.
+- TEST-PS-022-05-02 (negative): operator reads reason without grant → denied and audited.
+- TEST-PS-022-05-03 (abuse): second report from same reporter → single report counted.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix outcomes match codes.
+2. Majority rule enforced in 3- and 4-party cases.
+3. Every privileged read produces an `aud_` record.
+
+## Assumptions & open decisions
+- ASSUMPTION: majority rule uses remaining parties excluding the dropout.
+- [DECISIONS.md](../../../DECISIONS.md) D10 — PROVISIONAL (D10 default, unapproved): user-controlled keys sign withdrawals where available.

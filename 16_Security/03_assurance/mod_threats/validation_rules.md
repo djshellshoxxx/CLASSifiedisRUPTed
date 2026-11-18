@@ -1,35 +1,58 @@
 # PS-133-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-133-02. **Owner:** [16_Security/03_assurance/mod_threats](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_threats. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_threats. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the validation rules process for threats within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-133-02.R01 | threat_id matches `^THR-[A-Z]{2,8}-\d{3}$`; reject otherwise | MVP |
+| PS-133-02.R02 | framework and category pair must match the enum sets in PS-133-01 | MVP |
+| PS-133-02.R03 | description and title contain no `http(s)://` strings and no fenced code blocks (0 matches allowed) | MVP |
+| PS-133-02.R04 | Residual acceptance rejected when accepted_by_role == approved_by_role | MVP |
+| PS-133-02.R05 | Control links must resolve to an existing module path or CTR file at publish | MVP |
 
-## Requirements to specify
-- [ ] PS-133-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-133-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-133-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Validates `Threat`, `ControlLink`, `ResidualAcceptance` from PS-133-01.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Validation runs inside all write commands in PS-133-04. `threats.CheckModel` runs the full set read-only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable; validation is stateless.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Trigger | Retryable | User message key | Diagnostic |
+|---|---|---|---|---|
+| THREATS.THREAT_ID_INVALID | regex fails | no | threats.id_invalid | pattern only |
+| THREATS.FRAMEWORK_CATEGORY_MISMATCH | pair not allowed | no | threats.category_mismatch | framework name |
+| THREATS.RATING_OUT_OF_RANGE | likelihood or impact outside 1..5 | no | threats.rating_range | field name |
+| THREATS.DESCRIPTION_UNSAFE | URL or code block found | no | threats.description_unsafe | rule ID, no matched text |
+| THREATS.CONTROL_REF_UNRESOLVED | target missing | no | threats.control_unresolved | target path only |
+| THREATS.RESIDUAL_SELF_APPROVED | same role twice | no | threats.self_approved | role name |
+| THREATS.REVIEW_OVERDUE | review_due passed | warning, not error | threats.review_overdue | threat_id |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validators run with server identity; rule set versioned with schema.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-133-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Deterministic: same input gives same error list, sorted by field name. No side effects.
+
+## Privacy, retention, abuse
+Diagnostics never echo description text (it may contain sensitive attack paths).
+
+## Observability & budgets
+Counter per code per day. Check of full register p95 <= 10 s for 500 threats (ASSUMPTION).
+
+## Tests
+- TEST-PS-133-02-01 (unit): each error code triggered by minimal fixture.
+- TEST-PS-133-02-02 (property): generated descriptions containing "http://" fragments are always rejected.
+- TEST-PS-133-02-03 (unit): accepted_by == approved_by rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All seven codes have one unit test each.
+2. No diagnostic contains description text (grep test on error output).
+3. Dangling control detection fires on publish, not only nightly.
+
+## Assumptions & open decisions
+- ASSUMPTION: URL detection is a heuristic; analysts may still paste indirect references. Human review remains required.
+- D06 is not applicable (no receipts here).

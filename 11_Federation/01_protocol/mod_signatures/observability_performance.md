@@ -1,35 +1,46 @@
-# PS-085-08 — observability performance
+# PS-085-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-085-08. **Owner:** [11_Federation/01_protocol/mod_signatures](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_signatures. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10 server logs), CTR-PRV-001 (R09 telemetry), CTR-FED-001 (R10 limits enforced before verification), CTR-EVT-001 (R12 payload limits).
 
-## Purpose and scope
-Define the observability performance process for signatures within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-085-08.R01 | Metrics: `fed_signature_sign_total{result}`, `fed_signature_verify_total{result}`, `fed_signature_verify_duration_seconds` (histogram), `fed_key_cache_hit_ratio`, `fed_outbox_held_total{reason}`. Labels contain no personal data. | MVP |
+| PS-085-08.R02 | Latency budgets (ASSUMPTION, single core, excludes network): sign p95 ≤ 2 ms per event; verify p95 ≤ 2 ms per event; 100-event batch verify p95 ≤ 250 ms; key lookup p95 ≤ 5 ms on cache hit, ≤ 20 ms on miss. | MVP |
+| PS-085-08.R03 | Alerts: any sign failure sustained for 5 min → page. Peer invalid ratio > 5% over 1 h → review queue. Key expiring within 14 days without a successor → warning to F16. | MVP |
+| PS-085-08.R04 | Logs are structured JSON with the fields in PS-085-07 R03. Signature values and payload bytes are excluded. | MVP |
+| PS-085-08.R05 | Throughput: verification sustains ≥ 600 events/min per peer, matching the rate limit in CTR-FED-001 R11, with headroom ≥ 2× (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-085-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-085-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-085-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric and log schemas are registered in CTR-SCH-001 (PENDING). Field names are fixed.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Telemetry for each code in PS-085-02. Unknown code values are logged as `unknown` and counted, not dropped.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Authorization
+Dashboards are restricted to operators (PS-085-05). Peers never see metrics.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Failure, idempotency, concurrency, offline
+Metric emission is non-blocking. A telemetry outage does not block verification (fail open for telemetry only; fail closed for verification).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Privacy, retention, abuse
+Telemetry follows CTR-PRV-001 R09. Logs follow PS-085-07 retention.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-085-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Observability & budgets
+This file is the budget source for PS-085-02 and PS-085-06. Accessibility is not applicable: this module has no UI. Operator views belong to F15.
+
+## Tests
+- TEST-PS-085-08-01 (perf): 100-event batch verify p95 ≤ 250 ms on the reference runner (ASSUMPTION runner spec, F15).
+- TEST-PS-085-08-02 (unit): metric label sets contain no fields outside the allowed list.
+- TEST-PS-085-08-03 (integration): injected sign failure for 5 min raises the page alert.
+- TEST-PS-085-08-04 (integration): telemetry backend down; verification results unchanged.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All budgets measured in CI on the reference runner; TEST-PS-085-08-01 passes.
+2. Label sets are clean; TEST-PS-085-08-02 passes.
+3. Telemetry outage does not change verification outcomes; TEST-PS-085-08-04 passes.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- ASSUMPTION: latency and throughput budgets above (F15 to confirm on reference hardware).
+- PENDING CTR-SCH-001: metric and log schema IDs.

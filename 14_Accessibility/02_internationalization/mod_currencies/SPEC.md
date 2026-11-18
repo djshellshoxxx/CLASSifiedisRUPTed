@@ -1,44 +1,33 @@
 # F14.S02.M02 — currencies
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F14.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Accessibility Lead (F14); valuation owned by Commerce Lead (F09). **Parent:** F14.S02.
 
 ## Purpose and business behavior
-Provide currencies as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Maintains the catalog of currency codes (ISO 4217 fiat, CAIP-19 assets), their minor-unit exponents, display names and locale formatting rules, and formats amounts for display from integer minor units. It does not compute values, convert currencies or hold quotes; valuation and pinned quotes belong to F09.S03.M01 (`qte_`).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, every amount I see shows its currency code and the correct number of decimals (JPY has none, BHD has three).
+- As a participant, I can read an amount offline with the same formatting as online.
+- As an operator, I publish a new currency entry with two approvers.
+- As a participant, my currency choice is never guessed from my location.
 
 ## Scope
-- Required process spec: `currencies_domain_model.md` (not yet authored)
-- Required process spec: `currencies_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `currencies_validation_and_authorization.md` (not yet authored)
-- Required process spec: `currencies_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `currencies_interfaces_and_events.md` (not yet authored)
-- Required process spec: `currencies_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `currencies_acceptance_and_property_tests.md` (not yet authored)
+In: catalog, exponents, formatting, display names, currency preference field.
+Out: valuation, FX quotes, rounding policy for exchanges (F09.S03.M01, D03); locale and message catalog (mod_languages).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Command `cur.catalog.publish`; query `cur.catalog.get`; client function `format`; event `currency_catalog.published`; error prefix `CUR.`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: CTR-COM-001 (amount and code rules), CTR-ID-001. Downstream: all screens that display amounts (F01 through F05, F09). Consumes locale tags from mod_languages. Valuation consumer: F02.S04 through CTR-COM-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns catalog and format rules. Owns no quote, rate, balance or payment record.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Wrong decimals misstate value (for example 1000 JPY shown as 10.00); a display code missing from an amount; floats in the formatting path; location-based currency guessing; catalog changes that alter historical display. No platform custody of money.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Ten process specifications at SPEC-DRAFT-COMPLETE; exponent source confirmed against ISO table at implementation; valuation boundary with F09 recorded.
 
 ## Required process specification inventory
-- [ ] `currencies_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currencies_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currencies_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currencies_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currencies_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currencies_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `currencies_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2

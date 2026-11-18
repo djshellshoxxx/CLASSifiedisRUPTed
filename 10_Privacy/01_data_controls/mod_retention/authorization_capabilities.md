@@ -1,35 +1,56 @@
-# PS-079-05 — authorization capabilities
+# PS-079-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-079-05. **Owner:** [10_Privacy/01_data_controls/mod_retention](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_retention. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_retention (Privacy Lead, F10; review F16 Security Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R04 case scope, R06 privileged grants, R07 dual control, R08 audit), CTR-PRV-001 (R07 hold scope), CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for retention within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-079-05.R01 | `retention_policy.publish` and `activate`: global scope, F10 approval record required; no single principal can both propose and approve (CAP.SELF_APPROVAL_FORBIDDEN). | MVP |
+| PS-079-05.R02 | `retention_hold.apply` and `release`: `case:<cas_>` scope, dual control with two distinct `ope_` or `mod_` approvers (CTR-CAP-001 R07). | MVP |
+| PS-079-05.R03 | Hold grant carries `constraints.purpose` (coded), `expires_at` ≤ 72 h after `not_before` (CTR-CAP-001 R06); hold lifetime is separate (PS-079-02 R03). | MVP |
+| PS-079-05.R04 | Sweep uses `sys_` grant `retention.sweep` with scope `global` and purpose `retention_enforcement`; cannot read record content. | MVP |
+| PS-079-05.R05 | Operators cannot read PRIVATE_PERSONAL content through hold tooling; hold tooling shows counts only. | MVP |
+| PS-079-05.R06 | Every apply, release, publish and sweep emits an `aud_` record and a CTR-EVT-001 event (CTR-CAP-001 R08). | MVP |
 
-## Requirements to specify
-- [ ] PS-079-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-079-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-079-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Grant references `grt_`; decisions `dec_` with reason codes.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Map: policy.* → `retention_policy.publish`/`activate`; hold.* → `retention_hold.apply`/`release`; sweep → `retention.sweep`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Authorization per command; hold release requires hold in `applied`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unauthorized and invisible → `SYS.NOT_FOUND`; visible denied → `SYS.FORBIDDEN`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | publish/activate | hold apply/release | sweep | read counts |
+|---|---|---|---|---|
+| F10 approver ope_ | approve (not propose) | approve | no | yes |
+| ope_ case operator | no | propose (case scope) | no | case scope |
+| sys_ scheduler | activate at effective_from | no | global, purpose-bound | global |
+| subject acc_ | no | no | no | no |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-079-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Revocation of an operator grant does not release existing holds; release requires dual control.
+
+## Privacy, retention, abuse
+Audit records RET-AUD. Hold tooling denies content read (R05).
+
+## Observability & budgets
+Alert on any hold applied without two approvers (should be impossible; detection test).
+
+## Tests
+- TEST-PS-079-05-01 (negative): proposer approving own hold → CAP.SELF_APPROVAL_FORBIDDEN.
+- TEST-PS-079-05-02 (negative): sweep grant attempting content read → SYS.FORBIDDEN.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix enforced deny-by-default.
+2. Dual control tested for apply and release.
+3. Audit records present for each privileged action (sample audit).
+
+## Assumptions & open decisions
+- ASSUMPTION: grant ≤ 72 h.
+- PROVISIONAL (D07 default).
+- OPEN (R07): whether hold existence can be disclosed to the subject.

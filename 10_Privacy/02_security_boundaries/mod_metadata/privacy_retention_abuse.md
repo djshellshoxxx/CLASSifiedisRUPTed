@@ -1,35 +1,51 @@
-# PS-080-07 — privacy retention abuse
+# PS-080-07 — privacy, retention and abuse controls
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-080-07. **Owner:** [10_Privacy/02_security_boundaries/mod_metadata](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_metadata. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_metadata (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R03 precise location, R09 logs, disclosure matrix), CTR-EVT-001 (R06), CTR-FED-001 (R02, R12).
 
-## Purpose and scope
-Define the privacy retention abuse process for metadata within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-080-07.R01 | Attachment GPS, device serial, author and software tags removed before storage; zero occurrences in clean output (fixture corpus). | MVP |
+| PS-080-07.R02 | Log allowlist excludes raw IP, user agent, query strings containing identifiers, request bodies and cookies. | MVP |
+| PS-080-07.R03 | IP addresses stored as prefixes only (PS-080-01 R04); no per-user IP history. | MVP |
+| PS-080-07.R04 | Push preview payloads use generic text only (CTR-PRV-001 R10); metadata of attachments never appears in preview. | MVP |
+| PS-080-07.R05 | Federation exports omit attachment metadata entirely and never federate PRIVATE_PERSONAL attachments (CTR-FED-001 R03). | MVP |
+| PS-080-07.R06 | Timing side channels: outbound meetup timestamps coarsened to 15 min (PS-080-01 R05). Message length padding is a documented Future item. | MVP |
 
-## Requirements to specify
-- [ ] PS-080-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-080-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-080-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Field registry marks every outbound field's data class (CTR-SCH-001).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None additional.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Quarantined attachments not served (PS-080-03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Per PS-080-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Per PS-080-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-080-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fail-closed per PS-080-06.
+
+## Privacy, retention, abuse
+Retention: sanitiser reports RET-OPS; hash block list 7 days; quarantined bytes 24 h. Abuse: uploads of images containing GPS to reveal home location are stripped; uploads of files disguised with a supported MIME type are caught by magic-byte check. Pseudonyms do not guarantee anonymity: metadata stripping does not remove visual identifiers (faces, street signs); this is documented for users.
+
+## Observability & budgets
+Alert on any GPS or author tag in clean output (zero tolerance).
+
+## Tests
+- TEST-PS-080-07-01 (privacy): corpus of 50 JPEG/PNG/WebP files with GPS, device and author tags; zero survive.
+- TEST-PS-080-07-02 (log redaction): request fixture; logs contain no raw IP or cookie.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-080-07-01 zero residual tags.
+2. TEST-PS-080-07-02 zero matches.
+3. User-facing warning text reviewed by F14 for accessibility (future gate).
+
+## Assumptions & open decisions
+- PROVISIONAL (D05 default): coarse location and timestamp rules.
+- ASSUMPTION: IP prefixes /24 and /48.
+- Deferred (Future): visual-identifier detection, PDF and HEIC.

@@ -1,35 +1,57 @@
 # PS-055-01 — domain schema
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-SCH-001, CTR-PRV-001, CTR-EVT-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-01. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-055-01.R01 | Entities: `bnd_` portability bundle (signed export artifact) and `imj_` import job (one per bundle applied to one target node). | MVP |
+| PS-055-01.R02 | Bundle manifest carries `bundle_digest` (SHA-256 of JCS of the body) and an Ed25519 signature by the exporting node key. | MVP |
+| PS-055-01.R03 | Bundle subject is a per-bundle random `subject_token` (opaque, 128-bit). No `acc_` ID appears in the bundle body. | MVP |
+| PS-055-01.R04 | Reputation tiers, moderation flags and evidence references are excluded from bundles (non-transferable derived data). | MVP |
+| PS-055-01.R05 | Bundle `max_data_class` = PRIVATE_PERSONAL (owner's own data). LOCATION_PRECISE excluded unless explicit owner request (CTR-PRV-001 R11). | MVP |
+| PS-055-01.R06 | Prefixes `bnd` and `imj` are PENDING CTR-ID-001 registry entries. | MVP |
 
-## Purpose and scope
-Define the domain schema process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+## Data / schema
+```json
+bundle_manifest {
+  "bundle_id": "bnd_<26 ulid>", "schema_version": "1.0.0", "subject_token": "base64url22",
+  "created_at": "RFC3339 ms UTC", "expires_at": "created_at + 7 d", "max_data_class": "PRIVATE_PERSONAL",
+  "record_counts": {"profile": "int", "region_cells": "int", "languages": "int", "avatar_refs": "int"},
+  "bundle_digest": "hex64", "signature": {"alg": "Ed25519", "key_id": "key_<26>", "value": "base64url86"}
+}
+import_job { "id": "imj_<26>", "bundle_digest": "hex64", "target_node": "nod_<26>", "state": "staged | applied | rejected", "created_at": "RFC3339", "applied_profile_id": "prf_<26> | null" }
+```
+Signing domain tag: `CLASSRUPT-BND-SIG-v1\n` followed by JCS of the body (ASSUMPTION; distinct from the event tag in CTR-EVT-001 R05).
 
-## Requirements to specify
-- [ ] PS-055-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+See [commands_queries_events](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+See [workflow_state_machine](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+See [validation_rules](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Owner only. Field visibility: `signature.value` and `subject_token` visible to owner; no field is visible to counterparties.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Schema versions follow CTR-SCH-001; migrations in [import_export_backup_rollback](import_export_backup_rollback.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Bundle file: RET-EPH (deleted on download or at expiry). `bnd_` metadata: RET-AUD 12 months (no content).
+
+## Observability & budgets
+Counts by record type only.
+
+## Tests
+TEST-PS-055-01 (manifest schema), TEST-PS-055-02 (no `acc_` in body).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Manifest validates against CTR-SCH-001 fixture.
+2. Body scan finds no `acc_`, reputation or moderation field.
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day bundle expiry; signature domain tag.
+- Canonical owner note: this module owns portable profile bundle records (F07.S02.M01). Slug is shared with `11_Federation/01_protocol/mod_portable`, which owns federation transport and consumes `bnd_` by full ID under CTR-FED-001.
+- PROVISIONAL (D10 default, unapproved): user-controlled keys and bundle signing.

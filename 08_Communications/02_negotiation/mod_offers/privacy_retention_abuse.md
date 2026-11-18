@@ -1,35 +1,51 @@
 # PS-063-07 — privacy retention abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_offers. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (FINANCIAL_EVIDENCE, RET-EVD, disclosure matrix), CTR-FED-001 (no financial federation), CTR-CAP-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-063-07. **Owner:** [08_Communications/02_negotiation/mod_offers](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-063-07.R01 | Offer amounts, currencies and compensation lines are FINANCIAL_EVIDENCE. Never in logs, analytics, push previews, events or federation. | MVP |
+| PS-063-07.R02 | Push previews: "New offer" only. | MVP |
+| PS-063-07.R03 | Retention RET-EVD: 24 months after final state; personal fields redacted after 12 months, digests kept (CTR-PRV-001). | MVP |
+| PS-063-07.R04 | Abuse: ≤ 20 offers created per account per hour; ≤ 5 offers to the same recipient per 24 h without response (ASSUMPTION). | MVP |
+| PS-063-07.R05 | Lowball or spam offers are not auto-blocked; only rate-limited and reportable (F12). | MVP |
+| PS-063-07.R06 | Offers cannot be used to probe another user's availability: `ofr.create` against an unknown target returns generic `SYS.NOT_FOUND`. | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for offers within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Classes: `terms.*` FINANCIAL_EVIDENCE; `offerer`, `recipient`, `target` PSEUDONYMOUS; `terms_digest` PSEUDONYMOUS.
 
-## Requirements to specify
-- [ ] PS-063-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-063-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-063-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+`offer.*` payloads: IDs, state, version, digest only. Report creation delegated to F12 (`rpt_`).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Retention: `active` → `final` → `redacted_personal` (12 months) → `expired` (24 months). `legal_hold` overrides.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+`OFFERS.RATE_LIMITED` (rate_limited / 429, retryable, `retry_after_ms`).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+[PS-063-05](authorization_capabilities.md). Export gives each party their own offers.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Redaction job idempotent.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-063-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Threats: (1) amount leakage to observers via timing or counts (aggregates only with K_MIN, CTR-PRV-001 R04); (2) lowball spam; (3) probing listing owners' willingness to sell (R06); (4) disclosure of offer to third party through notifications (R02). Federation of offers is not permitted in MVP.
+
+## Observability & budgets
+Aggregates only; `offers_created_total{currency_kind}`.
+
+## Tests
+- TEST-PS-063-07-01 (privacy): push and log fixtures contain no amount or currency.
+- TEST-PS-063-07-02 (abuse): 21st offer in an hour → `OFFERS.RATE_LIMITED`.
+- TEST-PS-063-07-03 (probe): unknown target and forbidden target responses identical.
+- TEST-PS-063-07-04 (retention): at 12 months personal fields redacted, digests intact.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero amounts in logs, events, pushes (TEST-PS-063-07-01).
+2. Probe responses indistinguishable (TEST-PS-063-07-03).
+
+## Assumptions & open decisions
+- D07 (retention): PROVISIONAL (D07 default, unapproved).
+- ASSUMPTION: rate limits pending F12 review.
+- OPEN: whether offer history is portable (default: yes, own records only).

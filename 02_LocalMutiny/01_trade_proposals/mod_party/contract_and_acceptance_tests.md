@@ -1,35 +1,47 @@
 # PS-014-09 — contract and acceptance tests
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-014-09. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-014-09.R01 | Contract tests cover every command and event in PS-014-04 against CTR-SCH-001 snapshots. | MVP |
+| PS-014-09.R02 | Fixtures: ≥ 30 valid and ≥ 50 invalid party fixtures covering every `PARTY.*` code. | MVP |
+| PS-014-09.R03 | Each acceptance criterion in PS-014-01..08 maps to a TEST ID. | MVP |
+| PS-014-09.R04 | Two-party and six-party cycle fixtures run end to end with `mod_offer` and `mod_two` contracts. | MVP |
 
-## Purpose and scope
-Define the contract and acceptance tests process for party within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Fixtures at `fixtures/party/valid|invalid/` (paths PENDING implementation).
 
-## Requirements to specify
-- [ ] PS-014-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-014-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-014-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Harness replays invite/accept/decline sequences and asserts events.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Model-based generation from PS-014-03.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+One fixture and one `message_key` assertion per code.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Matrix from PS-014-05 runs in this suite.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Concurrency at 20 and 200 clients; offline suite for decline and withdraw.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-014-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Assertion: no `acc_id` in any fixture output outside system scope.
+
+## Observability & budgets
+Suite ≤ 10 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-014-09-01 (contract): schema snapshot diff fails build on breaking change.
+- TEST-PS-014-09-02 (model-based): 10,000 sequences.
+- TEST-PS-014-09-03 (e2e): six-party cycle invites, accepts and locks.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100% acceptance criteria mapped to passing TEST IDs.
+2. Fixture thresholds met (R02).
+
+## Assumptions & open decisions
+- ASSUMPTION: no implementation exists; fixtures are future-prompt work.
+- PENDING F14 review of invitation and error announcement patterns.

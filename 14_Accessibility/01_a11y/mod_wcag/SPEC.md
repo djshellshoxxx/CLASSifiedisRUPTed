@@ -1,44 +1,43 @@
 # F14.S01.M03 — wcag
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F14.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Accessibility Lead (F14). **Parent:** F14.S01.
 
 ## Purpose and business behavior
-Provide wcag as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Maps every PWA screen to WCAG 2.1 Level A and AA success criteria, records conformance results with evidence digests, tracks accessibility findings to closure, and provides the release gate that blocks a build with an open blocker. It does not perform fixes; it records and gates them.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a QA lead, I submit a conformance record per screen per build and see which of the 50 criteria failed.
+- As an accessibility lead, I approve a time-limited accepted risk for a major finding, and I cannot approve a blocker.
+- As an engineer, I see which findings block my release and their owner role.
+- As an auditor, I export the record set for one app version.
 
 ## Scope
-- Required process spec: `wcag_domain_model.md` (not yet authored)
-- Required process spec: `wcag_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `wcag_validation_and_authorization.md` (not yet authored)
-- Required process spec: `wcag_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `wcag_interfaces_and_events.md` (not yet authored)
-- Required process spec: `wcag_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `wcag_acceptance_and_property_tests.md` (not yet authored)
+In: criteria mapping (WCAG 2.1 A/AA), conformance records, findings, accepted-risk expiry, release gate, audit export.
+Out: keyboard behavior (F14.S01.M01), announcement text (F14.S01.M02), test tooling selection (F17), certification by any external body.
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `wcag.record.submit`, `wcag.finding.transition`; query `wcag.gate.get`; events `conformance_record.submitted`, `accessibility_finding.transitioned`; error prefix `WCAG.`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: screen catalog from UI modules; keyboard and screenreader specifications for test mapping. Downstream: release process (F17), governance reporting (F18). Pending: `acr_` and `acf_` prefixes in CTR-ID-001; WCAG 2.2 evaluation (RESEARCH_NOTES).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+This module owns conformance records and accessibility findings. Screens belong to UI modules; evidence artifacts are stored in a restricted QA store.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+False conformance claims (no certification exists here); accepted risks that never expire; evidence drawn from real user data; a gate that passes on incomplete criteria lists. No claim of WCAG conformance is made by this specification.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Ten process specifications at SPEC-DRAFT-COMPLETE; criteria list pinned; gate defined; governance review pending (future gate).
 
 ## Required process specification inventory
-- [ ] `wcag_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `wcag_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `wcag_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `wcag_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `wcag_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `wcag_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `wcag_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-111-01 — SPEC-DRAFT-COMPLETE
+- [x] [validation_rules.md](validation_rules.md) — PS-111-02 — SPEC-DRAFT-COMPLETE
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-111-03 — SPEC-DRAFT-COMPLETE
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-111-04 — SPEC-DRAFT-COMPLETE
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-111-05 — SPEC-DRAFT-COMPLETE
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-111-06 — SPEC-DRAFT-COMPLETE
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-111-07 — SPEC-DRAFT-COMPLETE
+- [x] [observability_performance.md](observability_performance.md) — PS-111-08 — SPEC-DRAFT-COMPLETE
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-111-09 — SPEC-DRAFT-COMPLETE
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-111-10 — SPEC-DRAFT-COMPLETE

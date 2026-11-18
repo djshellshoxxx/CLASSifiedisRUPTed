@@ -1,35 +1,52 @@
-# PS-023-09 — contract and acceptance tests
+# PS-023-09 — Contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-023-09. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_lock](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_lock. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_lock. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for lock within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-023-09.R01 | Examples in PS-023-04 validate against schema 1.0.0 in CI. | MVP |
+| PS-023-09.R02 | Scenario: 2-party swap of single items locks both and consumes both on completion. | MVP |
+| PS-023-09.R03 | Scenario: 4-party cycle, one item unavailable → all 8 acquired items released. | MVP |
+| PS-023-09.R04 | Consumer contract: F01 availability consumes `item.locked` and `item.lock_consumed` idempotently. | MVP |
+| PS-023-09.R05 | Accessibility: lock status shown as text ("reserved until ...") not colour alone. | MVP |
 
-## Requirements to specify
-- [ ] PS-023-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-023-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-023-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures in `fixtures/cycle_lock/`: two_party_swap, four_party_conflict, expiry_at_24h, extension_second_attempt.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract tests for each emitted event.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Scenario tests in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Each code in [validation_rules.md](validation_rules.md) has a fixture.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Matrix from [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-023-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Race and fault fixtures from [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Uniform-error fixture and privacy log scan.
+
+## Observability & budgets
+Load run compared with PS-023-08 budgets.
+
+## Tests
+- TEST-PS-023-09-01 (contract): schema examples validate.
+- TEST-PS-023-09-02 (e2e): 2-party swap, lock then consume after completion.
+- TEST-PS-023-09-03 (e2e): 4-party conflict, full release.
+- TEST-PS-023-09-04 (contract): F01 consumer idempotent under duplicate delivery.
+- TEST-PS-023-09-05 (a11y): lock state read by screen reader with expiry time.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-023-09-01..05 pass in CI.
+2. No scenario ends with a HELD item after cycle terminal state.
+3. Duplicate event delivery does not double-decrement availability.
+
+## Assumptions & open decisions
+- ASSUMPTION: availability consumer contract owned by F01.S03.M01.
+- [DECISIONS.md](../../../DECISIONS.md) D02 — PROVISIONAL (D02 default, unapproved).

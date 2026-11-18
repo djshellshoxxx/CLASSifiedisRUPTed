@@ -1,35 +1,49 @@
-# PS-021-10 — import export backup rollback
+# PS-021-10 — Import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-021-10. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_consent](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_consent. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001, CTR-FED-001.
 
-## Purpose and scope
-Define the import export backup rollback process for consent within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-021-10.R01 | Export of a participant's consent rows: own rows only, schema 1.0.0, no other parties' IDs. | MVP |
+| PS-021-10.R02 | Consent rows are not imported from federated peers in MVP; federation of consent is deferred (FUTURE). | FUTURE |
+| PS-021-10.R03 | Backup restore never resurrects a WITHDRAWN or EXPIRED row as ACCEPTED; restore runs a state reconciliation. | MVP |
+| PS-021-10.R04 | Rollback of a schema version keeps rows readable under 1.0.0. | MVP |
 
-## Requirements to specify
-- [ ] PS-021-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-021-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-021-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export file: JSON array of objects matching `cycle_consent` fields, minus `party_id` of counterparties (none present) and `consent_record_ref` expanded only to F10 export.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`cyc.consent.export` (capability `cyc.export`, scope `self`), idempotent by export ID.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore reconciliation maps each row to the state machine; invalid combinations are quarantined, not auto-corrected.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Import is not supported in MVP; any import attempt returns `SYS.FORBIDDEN`. Restore validation errors: `CYC_CONSENT.RESTORE_INCONSISTENT`, retryable false.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export by `self` only; operator restore requires dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-021-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Backups taken at 15-minute intervals (ASSUMPTION); RPO 15 min, RTO 4 h. Rollback to previous release does not drop the `cycle_consent` table.
+
+## Privacy, retention, abuse
+Exports are encrypted at rest and expire after 7 days (ASSUMPTION). Backups follow the 90-day retention of PS-021-07.
+
+## Observability & budgets
+Export job duration p95 ≤ 30 s for 10 000 rows (ASSUMPTION).
+
+## Tests
+- TEST-PS-021-10-01 (integration): export contains own rows only.
+- TEST-PS-021-10-02 (restore): restore of a WITHDRAWN row yields WITHDRAWN.
+- TEST-PS-021-10-03 (rollback): 1.0.0 rows readable after rollback drill.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export excludes counterparty identifiers.
+2. Restore drill passes reconciliation with zero resurrected consents.
+3. Rollback drill passes with no data loss.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO/RTO and export expiry values.
+- [DECISIONS.md](../../../DECISIONS.md) D07 — PROVISIONAL (D07 default, unapproved): exports and backups follow retention defaults.

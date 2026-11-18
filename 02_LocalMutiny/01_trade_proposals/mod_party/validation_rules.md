@@ -1,35 +1,57 @@
 # PS-014-02 — validation rules
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-CAP-001, CTR-PRV-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-014-02. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-014-02.R01 | An invitation is accepted only when the `prf_` is an active view of the invitee `acc_` at accept time. | MVP |
+| PS-014-02.R02 | A `region_cell_id` is accepted only if it is in the registry and has at least K_MIN active items (CTR-PRV-001 R04). | MVP |
+| PS-014-02.R03 | Slot count and index rules (PS-014-01 R02) are checked at cycle creation and at each invite. | MVP |
+| PS-014-02.R04 | Pseudonym switch after accept is refused for the rest of the cycle. | MVP |
 
-## Purpose and scope
-Define the validation rules process for party within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Errors: `code` = `PARTY.<CODE>`; `message_key` = `err.party.<code>`; field paths as JSON pointers.
 
-## Requirements to specify
-- [ ] PS-014-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-014-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-014-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Applies to `party.invite`, `party.accept`, `party.decline`, `party.withdraw` (PS-014-04).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Validation only. Rules R01 and R04 run at accept; R02 runs at accept and at each region change while `invited`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+| Code | Retryable | Rule |
+|---|---|---|
+| PARTY.SLOT_LIMIT | false | slot count outside 2–6 |
+| PARTY.DUPLICATE_MEMBER | false | same `acc_` already in cycle (R05 of PS-014-01) |
+| PARTY.NOT_INVITED | false | caller holds no `invited` slot |
+| PARTY.ALREADY_RESOLVED | false | slot not in `invited` state |
+| PARTY.PSEUDONYM_INACTIVE | false | `prf_` not active for caller |
+| PARTY.PSEUDONYM_SWITCH | false | R04 violated |
+| PARTY.REGION_NOT_REGISTERED | false | R02, cell unknown |
+| PARTY.REGION_BELOW_THRESHOLD | true | R02, cell below K_MIN; retry after count changes |
+| PARTY.REMOVED | false | slot removed by case or suspension |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Authorization check precedes validation; foreign slot IDs return `SYS.NOT_FOUND`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Deterministic on a snapshot. Concurrent accept and decline on one slot: first commit wins.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-014-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Errors never reveal another party's `acc_` or `prf_` (CTR-ERR-001 R06–R08).
+
+## Observability & budgets
+Counts per code. Validation ≤ 20 ms p95.
+
+## Tests
+- TEST-PS-014-02-01 (unit): each code on minimal fixture.
+- TEST-PS-014-02-02 (integration): region cell drops below K_MIN between invite and accept → BELOW_THRESHOLD.
+- TEST-PS-014-02-03 (security): non-invitee gets `SYS.NOT_FOUND` for the slot.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every code has a fixture and a message key.
+2. No error body contains `acc_` or `prf_` values of other parties.
+
+## Assumptions & open decisions
+- ASSUMPTION: K_MIN = 5 (F10 to validate).
+- D05 PROVISIONAL (Dxx default, unapproved): coarse regions only.

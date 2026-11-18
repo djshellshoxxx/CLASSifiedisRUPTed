@@ -1,35 +1,49 @@
-# PS-079-10 — import export backup rollback
+# PS-079-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-079-10. **Owner:** [10_Privacy/01_data_controls/mod_retention](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_retention. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_retention (Privacy Lead, F10; backups F15.S03.M02). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06 backup replay, R07 holds), CTR-SCH-001 (R07 upcast, R08 lossless signed evidence), CTR-FED-001 (R07 tombstones).
 
-## Purpose and scope
-Define the import export backup rollback process for retention within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-079-10.R01 | Policy versions are exported as configuration with version and approvals; no import of policy from outside the approval workflow. | MVP |
+| PS-079-10.R02 | Restore replays all holds applied at backup time and all purges since backup before serving (PS-079-06 R04). | MVP |
+| PS-079-10.R03 | Signed evidence (CTR-COM-001 claims, CTR-FED-001 envelopes) is never purged by a migration; migration only redacts personal fields under RET-EVD. | MVP |
+| PS-079-10.R04 | Rollback of a policy version re-evaluates only `expired` records (PS-079-06 R05). | MVP |
+| PS-079-10.R05 | Holds are included in backup manifests so a restore cannot silently drop them. | MVP |
 
-## Requirements to specify
-- [ ] PS-079-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-079-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-079-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{"policy_version", "approved_by", "effective_from", "classes": {...}}` per class.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond PS-079-04. Restore emits `retention.holds_replayed` with counts.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore: `restoring` → `replaying_holds` → `serving`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Restore with missing hold manifest → `SYS.INTERNAL` (not retryable); serving stays blocked and an incident opens.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Restore is an operator action with dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-079-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Replay is idempotent on hold ID.
+
+## Privacy, retention, abuse
+Backups encrypted; purged records excluded from analytics restores (CTR-PRV-001 disclosure row).
+
+## Observability & budgets
+`retention_restore_replay_seconds` p95 ≤ 1 h (ASSUMPTION).
+
+## Tests
+- TEST-PS-079-10-01 (restore): backup before hold, restore, hold present and enforced.
+- TEST-PS-079-10-02 (migration): shortening migration leaves signed evidence bytes intact.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-079-10-01 and -02 pass.
+2. Hold manifest present in every backup manifest (static check).
+3. Rollback test confirms purged data is not restored.
+
+## Assumptions & open decisions
+- ASSUMPTION: replay ≤ 1 h.
+- PROVISIONAL (D07 default).

@@ -1,35 +1,56 @@
-# PS-133-06 — failure recovery idempotency
+# PS-133-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-133-06. **Owner:** [16_Security/03_assurance/mod_threats](SPEC.md). **Implementing module:** 16_Security/03_assurance/mod_threats. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 16_Security/03_assurance/mod_threats. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for threats within 03_assurance. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-133-06.R01 | PublishModel failure at any step leaves the prior published version active and no partial version rows | MVP |
+| PS-133-06.R02 | Dangling control links detected within 24 h by scheduled job and at each publish | MVP |
+| PS-133-06.R03 | Concurrent edits on the same threat: second writer receives THREATS.REVISION_CONFLICT | MVP |
+| PS-133-06.R04 | A control rename or removal never deletes a threat; status moves to `assessed` with flag `control_unresolved` | MVP |
 
-## Requirements to specify
-- [ ] PS-133-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-133-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-133-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Uses `revision`, `content_hash` and `ThreatModelVersion.status`. Flag field `control_unresolved: bool` on Threat (added to PS-133-01 record view).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry-safe per PS-133-04. Failure event: `threats.PublishFailed` (model_id, version, code).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| draft version | PublishModel ok | all checks pass | published | previous published -> superseded |
+| draft version | PublishModel fail | any check fails | draft | emit PublishFailed |
+| published | control removed | link unresolved | published (flag set) | notify owner |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`THREATS.REVISION_CONFLICT` (retryable after re-read), `THREATS.PUBLISH_ABORTED` (retryable after fix), `THREATS.STORE_UNAVAILABLE` (retryable; 3 attempts with 2 s backoff, ASSUMPTION).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Recovery jobs run as server identity; manual unflagging requires Security Lead.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-133-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+- Publish is a single transaction; partial failure rolls back.
+- Timeout for write commands 5 s (ASSUMPTION).
+- Concurrency via compare-and-set on `revision`.
+- Offline: not applicable; no client-side queue for this register.
+
+## Privacy, retention, abuse
+Recovery logs carry IDs and codes only.
+
+## Observability & budgets
+Publish failure count per week (target 0); dangling-link count (target 0 after 24 h).
+
+## Tests
+- TEST-PS-133-06-01 (integration): inject failure at each publish step; prior version stays active.
+- TEST-PS-133-06-02 (integration): two writers race on one threat; exactly one succeeds.
+- TEST-PS-133-06-03 (integration): removing a control target sets flag and keeps the threat.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Failure injection at four publish steps leaves prior version active in 100% of runs.
+2. No threat row deleted by any recovery path.
+3. Dangling link flag visible in CoverageReport.
+
+## Assumptions & open decisions
+- ASSUMPTION: 3-attempt retry with 2 s backoff is adequate for a low-traffic back-office store.
+- No D-number applies beyond D10 (not used here).

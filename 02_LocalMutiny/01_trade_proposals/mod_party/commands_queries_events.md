@@ -1,35 +1,49 @@
-# PS-014-04 — commands queries events
+# PS-014-04 — commands, queries and events
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001, CTR-SCH-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-014-04. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-014-04.R01 | Every mutating command carries `idempotency_key` (UUIDv4) and `expected_revision`. | MVP |
+| PS-014-04.R02 | Event payloads carry IDs, status, slot index and region cell ID only; no `acc_`, no `prf_` beyond the event's `actor_ref`. | MVP |
+| PS-014-04.R03 | Schema version `1.0.0`; unknown major → `SCH.UNKNOWN_VERSION`. | MVP |
 
-## Purpose and scope
-Define the commands queries events process for party within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+- `party.invite` `{cyc_id, invitee_prf_ref, idempotency_key}` → `{par_id, slot_index, status: "invited"}`. Invitee resolved server-side from `prf_` to `acc_`.
+- `party.accept` `{par_id, expected_revision, region_cell_id, idempotency_key}`.
+- `party.decline`, `party.withdraw` `{par_id, expected_revision, idempotency_key}`.
+- Query `party.list_for_cycle` `{cyc_id, cursor, limit ≤ 6}` returns `prf_ref`, `slot_index`, `status`, `region_cell_id`.
 
-## Requirements to specify
-- [ ] PS-014-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-014-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-014-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Events `party.invited|accepted|declined|withdrawn|removed|expired`; `aggregate_type` = `party`. Example `party.accepted` payload: `{"par_id","cyc_id","slot_index","region_cell_id","max_data_class":"LOCATION_COARSE"}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Effects per PS-014-03.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+PS-014-02 codes. Idempotency conflict: `SYS.IDEMPOTENCY_KEY_REUSED`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+PS-014-05. Caller identity from authenticated principal only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Same key and digest returns original (CTR-EVT-001 R03). Retries per PS-014-06.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-014-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+`actor_ref` carries `acc_` for the acting party (CTR-EVT-001 R06); federation export would re-key (not in MVP).
+
+## Observability & budgets
+Command p95 ≤ 250 ms; logs carry codes and IDs only.
+
+## Tests
+- TEST-PS-014-04-01 (contract): payload schema snapshot; forbidden-field scan.
+- TEST-PS-014-04-02 (contract): replay returns original; zero new events.
+- TEST-PS-014-04-03 (contract): same key with different digest → `SYS.IDEMPOTENCY_KEY_REUSED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All commands and events pass CTR-SCH-001 schema tests.
+2. No event fixture carries `prf_` outside `actor_ref`.
+
+## Assumptions & open decisions
+- ASSUMPTION: invitee is addressed by `prf_` only; the invitee's `acc_` is never sent to the proposer.
+- PENDING CTR-ID-001: `par` prefix is already registered (no action).

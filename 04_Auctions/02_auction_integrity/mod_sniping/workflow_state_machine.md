@@ -1,35 +1,57 @@
 # PS-038-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-03. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_sniping. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001
 
-## Purpose and scope
-Define the workflow state machine process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-038-03.R01 | Timing record states: RECEIVED, CLASSIFIED, ACCEPTED_IN_ORDER, REJECTED_AFTER_CLOSE. No other states. | MVP |
+| PS-038-03.R02 | Clock states: OK and DEGRADED. DEGRADED is entered when measured skew > 500 ms (ASSUMPTION) for 3 consecutive checks. | MVP |
+| PS-038-03.R03 | Records are never moved back from a terminal state. | MVP |
+| PS-038-03.R04 | Each transition appends one `sniping.*` event. | MVP |
 
-## Requirements to specify
-- [ ] PS-038-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`BidTimingEvent.class` and `acceptance` per PS-038-01. Clock state stored in the clock-health stream, not per bid.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions are triggered by `sniping.timing.record` (PS-038-04) and clock-health checks.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| (none) | bid.received | bid_id not seen | RECEIVED | assign server_received_at |
+| RECEIVED | classify | clock_status OK | CLASSIFIED | set class NORMAL, LATE or SNIPE |
+| RECEIVED | classify | clock_status DEGRADED | CLASSIFIED | set class UNCLASSIFIED |
+| CLASSIFIED | order.commit | seconds_before_close > 0 | ACCEPTED_IN_ORDER | emit sniping.bid_classified |
+| CLASSIFIED | order.commit | seconds_before_close <= 0 | REJECTED_AFTER_CLOSE | emit sniping.bid_rejected_after_close |
+| OK | skew checks x3 > 500 ms | — | DEGRADED | emit sniping.clock_degraded |
+| DEGRADED | skew checks x3 <= 500 ms | — | OK | emit sniping.clock_restored |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transitions: `SNIPE.STATE_CONFLICT` (internal; alert).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Transitions run as `sys`. Read rules in PS-038-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Classification is recomputed from `server_received_at` on retry, so it is idempotent. Offline bids remain RECEIVED until server acknowledgment; they are never classified from device time.
+
+## Privacy, retention, abuse
+Events carry `timing_id` and class only; no `bidder_id` in clock events.
+
+## Observability & budgets
+Gauge of time in DEGRADED. Classification p95 <= 50 ms.
+
+## Tests
+- TEST-PS-038-03-01 (unit): each row executes once with stated side effect.
+- TEST-PS-038-03-02 (fault): three skew samples above 500 ms enter DEGRADED; three below restore OK.
+- TEST-PS-038-03-03 (offline): bid queued offline for 90 s before ack is classified by server time at ack.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No transition outside the table.
+2. DEGRADED never produces SNIPE or LATE.
+3. Offline fixture classifies from server time only.
+
+## Assumptions & open decisions
+- ASSUMPTION: 500 ms skew threshold and three-sample hysteresis.
+- PROVISIONAL (D08 default, unapproved): offline bids wait for relay acknowledgment before classification.

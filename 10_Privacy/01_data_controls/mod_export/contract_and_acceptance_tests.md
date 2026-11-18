@@ -1,35 +1,50 @@
 # PS-078-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-078-09. **Owner:** [10_Privacy/01_data_controls/mod_export](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_export. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_export (Privacy Lead, F10; QA Lead, F17). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (TEST-CTR-PRV-001-11 export), CTR-SCH-001 (R09 golden fixtures), CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for export within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-078-09.R01 | Every `EXPORT.*` code has a contract test asserting category, HTTP status and `retryable`. | MVP |
+| PS-078-09.R02 | Golden package fixture for each scope (`full`, `profile`, `messages`, `commerce_records`) with expected file list and hashes. | MVP |
+| PS-078-09.R03 | Manifest schema validated against CTR-SCH-001 registry with golden fixtures per supported version. | MVP |
+| PS-078-09.R04 | Redaction suite: counterparty names, emails, coordinates and secrets absent from packages unless permitted. | MVP |
+| PS-078-09.R05 | Synthetic data only in all fixtures. | MVP |
 
-## Requirements to specify
-- [ ] PS-078-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-078-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-078-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixture: `subject`, `counterparties[]`, `records[]`, `expected_manifest`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Drive PS-078-04 through the public API; assert emitted events.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Scenarios cover all rows of PS-078-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Negative fixtures per PS-078-02 rule.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Tests for subject, other user, operator and generator principals.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-078-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Fault injection: worker kill, network drop, duplicate request, expired token.
+
+## Privacy, retention, abuse
+Test packages deleted at end of run.
+
+## Observability & budgets
+Suite ≤ 20 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-078-09-01 (contract): all EXPORT.* codes registered.
+- TEST-PS-078-09-02 (golden): four scope fixtures match hashes.
+- TEST-PS-078-09-03 (e2e): request, wait, download, token consumed, package expired on time.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-078-09-01 to -03 pass in CI.
+2. Redaction suite (R04) passes with zero leaks.
+3. Accessibility: export request and download controls keyboard-operable (F14 reference).
+
+## Assumptions & open decisions
+- PENDING: CTR-PORT-001 golden fixture location.
+- PROVISIONAL (D10 default) for encryption test vectors.

@@ -1,35 +1,47 @@
 # PS-111-09 — contract and acceptance tests
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_wcag. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001, CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-111-09. **Owner:** [14_Accessibility/01_a11y/mod_wcag](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_wcag. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-111-09.R01 | Every release candidate has one conformance record per screen in the catalog. | MVP |
+| PS-111-09.R02 | Automated scan runs in CI on every build; manual keyboard and reader pass per release. | MVP |
+| PS-111-09.R03 | Contract tests run on every schema change. | MVP |
 
-## Purpose and scope
-Define the contract and acceptance tests process for wcag within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Fixtures: synthetic screens for listing form, message thread, cycle consent, payment claim state, dispute form, and settings.
 
-## Requirements to specify
-- [ ] PS-111-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-111-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-111-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Replays of `wcag.record.submit` and `wcag.finding.transition`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Covered by TEST-PS-111-03 series.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Negative fixtures per [PS-111-02](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Negative tests per [PS-111-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Per [PS-111-06](failure_recovery_idempotency.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-111-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Per [PS-111-07](privacy_retention_abuse.md).
+
+## Observability & budgets
+Per [PS-111-08](observability_performance.md).
+
+## Tests
+- TEST-PS-111-09-01 contract: record schema validates.
+- TEST-PS-111-09-02 a11y: automated scan of six fixture screens (tool PENDING research).
+- TEST-PS-111-09-03 e2e: release gate blocks build with open blocker fixture.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each release candidate has a complete record set.
+2. Gate blocks in the blocker fixture.
+3. Traceability covers all PS-111 requirements.
+
+## Assumptions & open decisions
+- ASSUMPTION: automated scan supplements, does not replace, manual testing.
+- No Dxx decision directly affects testing.

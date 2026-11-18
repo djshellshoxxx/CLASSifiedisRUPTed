@@ -1,35 +1,46 @@
-# PS-086-08 — observability performance
+# PS-086-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-086-08. **Owner:** [11_Federation/02_relay_sync/mod_conflicts](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_conflicts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_conflicts. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10 server logs), CTR-PRV-001 (R09 telemetry), CTR-FED-001 (R10–R11 limits; R06 equivocation), CTR-EVT-001 (R12 payload limits).
 
-## Purpose and scope
-Define the observability performance process for conflicts within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-086-08.R01 | Metrics: `fed_conflict_detected_total{kind}`, `fed_conflicts_open{kind}`, `fed_hold_queue_depth{origin}`, `fed_hold_expired_total`, `fed_conflict_transitions_total{from,to}`, `fed_conflict_read_total{principal_type,field_class}`. No personal data in labels. | MVP |
+| PS-086-08.R02 | Budgets (ASSUMPTION, reference runner): detection p95 ≤ 5 ms per event on cache hit; equivocation transaction p95 ≤ 50 ms; lock wait p95 ≤ 100 ms. | MVP |
+| PS-086-08.R03 | Alerts: any new `equivocation` → page federation steward within 5 min. Any gap hold older than 1 h → warning. Hold queue > 80% of cap → warning. | MVP |
+| PS-086-08.R04 | Logs are structured JSON with IDs and codes (PS-086-07 R05). | MVP |
+| PS-086-08.R05 | Dashboards show open conflicts by `kind` and age. Age buckets: < 1 h, < 24 h, ≥ 24 h. | MVP |
 
-## Requirements to specify
-- [ ] PS-086-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-086-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-086-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric and log schemas registered PENDING CTR-SCH-001.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Each code in PS-086-02 has a counter; unknown codes are logged as `unknown` and counted.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Authorization
+Dashboards are restricted to stewards (PS-086-05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Failure, idempotency, concurrency, offline
+Telemetry failure does not change detection outcomes (fail open for telemetry only).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Privacy, retention, abuse
+Telemetry follows CTR-PRV-001 R09. Logs follow RET-OPS.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-086-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Observability & budgets
+This file is the source of budgets for PS-086-02, -03 and -06. No UI in this module; operator views belong to F15. Accessibility not applicable.
+
+## Tests
+- TEST-PS-086-08-01 (perf): detection p95 ≤ 5 ms on reference runner (ASSUMPTION).
+- TEST-PS-086-08-02 (unit): label sets contain only allowed fields.
+- TEST-PS-086-08-03 (integration): injected equivocation raises the page alert within 5 min.
+- TEST-PS-086-08-04 (integration): gap hold older than 1 h raises warning.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets measured in CI; TEST-PS-086-08-01 passes.
+2. Labels clean; TEST-PS-086-08-02 passes.
+3. Alerts fire as specified; TEST-PS-086-08-03 and -04 pass.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- ASSUMPTION: budgets above (F15 to confirm).
+- PENDING CTR-SCH-001: metric and log schema IDs.

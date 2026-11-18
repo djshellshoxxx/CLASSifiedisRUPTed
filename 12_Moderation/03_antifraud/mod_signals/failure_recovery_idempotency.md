@@ -1,35 +1,60 @@
 # PS-101-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-101-06. **Owner:** [12_Moderation/03_antifraud/mod_signals](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_signals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_signals (Trust&Safety Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02 revision, R03 idempotency), CTR-ERR-001 (R03 retryable), CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for signals within 03_antifraud. Do not assume implementation or successful external settlement.
+**Decision labels:** Retry schedule and dead-letter window are PROVISIONAL (D07 default, unapproved). Offline writes: not applicable (server-side producers only); D08 is not used here.
 
-## Requirements to specify
-- [ ] PS-101-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-101-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-101-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-101-06.R01 | Ingestion is at-least-once. Dedupe key (`source_event_ref`, `signal_type`) makes effective processing exactly-once. | MVP |
+| PS-101-06.R02 | Signal write and outbox entry commit in one transaction. No event without a record, no record without an outbox entry. | MVP |
+| PS-101-06.R03 | Retries apply only to retryable codes. Validation failures go to the producer, not the retry queue. | MVP |
+| PS-101-06.R04 | After 5 failed attempts, the message moves to a dead-letter queue retained 30 days. | MVP |
+| PS-101-06.R05 | Suppress uses `expected_revision`; first valid suppress wins, the second gets `EVT.REVISION_CONFLICT`. | MVP |
+| PS-101-06.R06 | Aggregates are rebuildable by replay in revision order. Timestamps never order events. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Dedupe table `sgn_dedupe`: `(source_event_ref, signal_type)` primary key, `signal_id`, `created_at`. Retained with idempotency records (7 days, CTR-EVT-001 R03), then re-derived from the signal record.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Retry policy: backoff 1 s, 4 s, 16 s, 64 s, 256 s (5 attempts). Producer timeout 2 s. Handler budget p95 150 ms.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Dead-lettered messages do not change record state. They can be replayed by an operator (`sys_` principal, global) after the cause is fixed.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | Retryable | Category / HTTP | When |
+|---|---|---|---|
+| EVT.REVISION_CONFLICT | false | conflict / 409 | Stale suppress |
+| EVT.REVISION_GAP | true | internal / 500 | Replica sees gap; holds and resyncs |
+| SYS.UNAVAILABLE | true | availability / 503 | Store unreachable |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-101-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Replay of dead letters uses an audited `sys_` grant (CTR-CAP-001 R08).
+
+## Failure, idempotency, concurrency, offline
+- Crash after commit, before producer ack: producer retries; dedupe returns original `signal_id`.
+- Scorer lag: aggregates stale by at most one job cycle; scoring tolerates staleness.
+- Concurrency: per-subject lock for suppress and expiry; ingest needs no lock beyond dedupe insert.
+- Offline: not applicable.
+
+## Privacy, retention, abuse
+Dead-letter payloads contain the same forbidden-field guarantees as live records (PS-101-02). Dead letters expire after 30 days (RET-OPS).
+
+## Observability and budgets
+Metrics: `sig_dlq_depth`, `sig_retry_total`, `sig_dedupe_hit_total`. Alert when DLQ depth > 100 for 15 minutes (ASSUMPTION).
+
+## Tests
+- TEST-PS-101-15 (integration): kill process after DB commit; retry returns same `signal_id`; one event total.
+- TEST-PS-101-16 (integration): five forced failures move message to DLQ; no record written.
+- TEST-PS-101-17 (property): concurrent suppresses (10 threads) → exactly one success.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retry policy matches the table in tests; no validation error is retried.
+2. Replay from zero rebuilds identical aggregates (checksum equal).
+3. Crash test loses no committed signal.
+
+## Assumptions & open decisions
+- ASSUMPTION: message broker provides at-least-once delivery with ordering per subject.
+- D07 retry and retention defaults (PROVISIONAL, unapproved).

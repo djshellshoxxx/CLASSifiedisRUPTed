@@ -1,35 +1,54 @@
-# PS-134-05 — authorization capabilities
+# PS-134-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-134-05. **Owner:** [17_Quality/01_testing/mod_e2e](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_e2e. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_e2e. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (capability names PENDING approval).
 
-## Purpose and scope
-Define the authorization capabilities process for e2e within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-134-05.R01 | Scenario registration limited to QA Lead and flow owners for their own flow | MVP |
+| PS-134-05.R02 | Run records writable only by CI identity; humans cannot edit a result | MVP |
+| PS-134-05.R03 | Test accounts hold no production credentials and no live payment-rail credentials (0 allowed) | MVP |
+| PS-134-05.R04 | Quarantine approver differs from requester | MVP |
 
-## Requirements to specify
-- [ ] PS-134-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-134-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-134-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Proposed capabilities (PENDING CTR-CAP-001): `e2e.scenario.write`, `e2e.scenario.propose`, `e2e.run.write`, `e2e.run.read`, `e2e.quarantine.approve`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Applies to PS-134-04 commands.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`E2E.UNAUTHORIZED` (non-retryable). Diagnostic: capability name only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Register scenario | Run | Record result | Quarantine request | Quarantine approve | Read results |
+|---|---|---|---|---|---|---|
+| QA Lead | yes | yes | no | yes | yes | yes |
+| Flow owner (own flow) | propose | no | no | yes | no | yes |
+| CI identity | no | yes | yes | no | no | yes |
+| Engineer | no | no | no | no | no | yes |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-134-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Revocation applies to next command. Sandbox payment credentials are stored in CI secret store, scoped to test environment, rotated per D10 PROVISIONAL.
+
+## Privacy, retention, abuse
+Abuse case: a developer edits a run result to show green. Control: write capability withheld and records immutable after finish.
+
+## Observability & budgets
+Denials per week; any denial from CI identity triggers review.
+
+## Tests
+- TEST-PS-134-05-01 (unit): human RecordResult call denied.
+- TEST-PS-134-05-02 (unit): flow owner registering scenario for another flow denied.
+- TEST-PS-134-05-03 (integration): test environment cannot resolve live payment-rail hosts (network deny test).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix enforced; one test per "no" cell.
+2. Network deny test passes in CI.
+3. Capability names confirmed against CTR-CAP-001.
+
+## Assumptions & open decisions
+- ASSUMPTION: CI secret store is the only location of sandbox credentials.
+- D10 PROVISIONAL (D10 default, unapproved): sandbox key rotation documented; user-controlled keys out of scope for e2e.

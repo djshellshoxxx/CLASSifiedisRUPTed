@@ -1,35 +1,53 @@
 # PS-031-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-031-10. **Owner:** [03_Services/02_service_booking/mod_milestones](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_milestones. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_milestones. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-SCH-001, CTR-FED-001, CTR-COM-001.
 
-## Purpose and scope
-Define the import export backup rollback process for milestones within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-031-10.R01 | Participant export of own milestone plans (≤ 12 rows per booking) as JSON; acceptance text included for the exporter's own rows only (CTR-PRV-001 R11). | MVP |
+| PS-031-10.R02 | Counterparty acceptance text is redacted in exports. | MVP |
+| PS-031-10.R03 | Import of milestone plans is not supported in MVP; plans are created only via `milestone.plan_set`. | MVP |
+| PS-031-10.R04 | Backups follow CTR-PRV-001 R06 expiry; restore creates a new version, never overwrites. | MVP |
+| PS-031-10.R05 | Rollback never reverts a claim state; `accepted` milestones remain accepted after a code rollback. | MVP |
+| PS-031-10.R06 | Export and restore emit audit records with counts only (CTR-PRV-001 R12). | MVP |
+| PS-031-10.R07 | Federation of milestone plans is Future (CTR-FED-001). | Future |
 
-## Requirements to specify
-- [ ] PS-031-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-031-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-031-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export: `{ "format": "classrup.milestone_plan.v1", "rows": [ … ] }`; schema per CTR-SCH-001.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`milestone.exported` (audit, counts only). No import command.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore sets state only from snapshot; never moves a terminal milestone back. See [workflow_state_machine.md](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`MILESTON.EXPORT_LIMIT` above 12 rows per request; `MILESTON.IMPORT_NOT_SUPPORTED`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Export: participant only. Restore: `ope` with purpose and dual approval (ASSUMPTION). See [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-031-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export is read-only and retry-safe. Restore keyed by snapshot ID.
+
+## Privacy, retention, abuse
+Export files deleted after download or 24 h (ASSUMPTION). Backups per CTR-PRV-001 R06.
+
+## Observability & budgets
+Export ≤ 1 s for one booking (ASSUMPTION).
+
+## Tests
+- TEST-PS-031-10-01 contract: export round trip.
+- TEST-PS-031-10-02 negative: import refused.
+- TEST-PS-031-10-03 integration: restore keeps `accepted` state.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export contains no counterparty acceptance text.
+2. Restore never changes a terminal milestone state.
+3. No import path in MVP.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h export expiry.
+- D07 PROVISIONAL for backups.
+- Payment checklist applies: amounts exported to participants only.

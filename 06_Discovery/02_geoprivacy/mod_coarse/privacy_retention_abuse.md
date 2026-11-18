@@ -1,35 +1,52 @@
-# PS-047-07 — privacy retention abuse
+# PS-047-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-047-07. **Owner:** [06_Discovery/02_geoprivacy/mod_coarse](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_coarse. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_coarse. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R02, R04, R05), CTR-FED-001 (R03 and LOCATION_COARSE rule in CTR-PRV-001 Federation section); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for coarse within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** K_MIN = 5 (ASSUMPTION, F10). Cell-only disclosure PROVISIONAL (D05 default, unapproved).
 
-## Requirements to specify
-- [ ] PS-047-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-047-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-047-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-07.R01 | A cell is shown only when active item count ≥ 5 (K_MIN); cells below are merged or suppressed. | MVP |
+| PS-047-07.R02 | Counts below K_MIN are never returned, logged or emitted. | MVP |
+| PS-047-07.R03 | Federation of coarse cells uses the same K_MIN rule as public display (CTR-PRV-001). | Future |
+| PS-047-07.R04 | Cell geometry is stored at cell granularity only; no vertex finer than the registered cell boundary (ASSUMPTION). | MVP |
+| PS-047-07.R05 | Registry justifications are deleted 24 months after approval (RET-AUD-aligned, ASSUMPTION). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Retention: registry versions RET-AUD; recompute windows RET-OPS; justification text as above.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+No personal data flows through this module; input is aggregate counts from index.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Suppression state is privacy-driven, not abuse-driven.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Not applicable beyond PS-047-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-047-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Justification access limited (PS-047-05 R05).
+
+## Failure, idempotency, concurrency, offline
+Privacy failure (K_MIN check unavailable) fails closed (PS-047-06 R04).
+
+## Privacy, retention, abuse
+Differencing attacks: an attacker comparing publication flags over time to infer when a single listing appears. Mitigation: flags recompute on 5-minute windows and change only on K_MIN crossing; publication change events are not per-listing (ASSUMPTION; F10 to threat-model further). Sybil abuse on cell proposals: proposals require `ope_`.
+
+## Observability & budgets
+Aggregate dashboards show cell state counts only when cell count of cells ≥ K_MIN.
+
+## Tests
+- TEST-PS-047-07-01 (unit): boundary at 4 and 5.
+- TEST-PS-047-07-02 (property): no response includes integer count per cell.
+- TEST-PS-047-07-03 (abuse): differencing simulation shows flag change does not reveal single listing (fixture).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. K_MIN enforced across all outputs (API, events, logs, dashboards).
+2. Differencing test within tolerance defined by F10.
+3. Justification retention purge verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: K_MIN = 5 (F10 to validate).
+- D05 PROVISIONAL.

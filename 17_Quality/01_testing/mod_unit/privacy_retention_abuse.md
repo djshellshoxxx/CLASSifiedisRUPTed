@@ -1,35 +1,52 @@
-# PS-137-07 — privacy retention abuse
+# PS-137-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-07. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_unit. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for unit within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-137-07.R01 | Unit fixtures use synthetic values only; a fixture linter rejects real-looking emails, phone numbers and street addresses (0 hits allowed) | MVP |
+| PS-137-07.R02 | Test logs and coverage artifacts exclude fixture payloads; redaction pattern list is versioned | MVP |
+| PS-137-07.R03 | Location-like fixtures use coordinates inside a reserved test region at coarse precision only (no more precise than 0.1 degree) | MVP |
+| PS-137-07.R04 | Quarantine reasons and tracking notes contain no personal data (checked by PS-137-02 rule) | MVP |
 
-## Requirements to specify
-- [ ] PS-137-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data class for all manifest fields: public-engineering (CTR-PRV-001). Fixture manifest annotation: `fixture_class: synthetic`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No new commands. Redaction applies to `unit.RunFailed` payloads and `unit.RecordCoverage` artifacts.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`UNIT.FIXTURE_NOT_SYNTHETIC` (non-retryable): fixture linter failure. Diagnostic: file path and rule ID only, never matched value.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Linter config changes need QA Lead approval (PS-137-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Linter failure blocks the run; it does not silently skip the file.
+
+## Privacy, retention, abuse
+- Retention: coverage snapshots 180 days; quarantine records 1 year for audit; manifest history follows git history (PROVISIONAL, D07 default, unapproved).
+- Abuse: adding real user data to fixtures to reproduce a bug. Control: linter plus review rule that bug reproductions use synthetic equivalents.
+- No security audit has been performed on the linter; its rules are a best-effort control (ASSUMPTION).
+
+## Observability & budgets
+Count of redaction hits per run; target 0 in main branch. Linter runtime <= 20 s per 1,000 files (ASSUMPTION).
+
+## Tests
+- TEST-PS-137-07-01 (unit): linter flags synthetic-looking but real-format email as violation.
+- TEST-PS-137-07-02 (unit): redaction removes a planted fixture value from a sample failure log.
+- TEST-PS-137-07-03 (unit): coordinate fixture beyond 0.1 degree precision rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Linter rule set versioned and referenced in SPEC.
+2. Redaction tests pass on sample logs containing planted values.
+3. No fixture file in the repository matches the personal-data patterns.
+
+## Assumptions & open decisions
+- ASSUMPTION: pattern-based linting is a partial control; it does not prove absence of personal data.
+- D05 PROVISIONAL (D05 default, unapproved): coarse public regions are the only precision allowed in test fixtures.
+- D07 PROVISIONAL (D07 default, unapproved): retention periods above.

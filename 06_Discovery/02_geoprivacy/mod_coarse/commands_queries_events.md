@@ -1,35 +1,54 @@
-# PS-047-04 — commands queries events
+# PS-047-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-047-04. **Owner:** [06_Discovery/02_geoprivacy/mod_coarse](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_coarse. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_coarse. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001, CTR-SCH-001, CTR-PRV-001 (R04); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the commands queries events process for coarse within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** Dual approval for registry changes PROVISIONAL (D05 default, unapproved).
 
-## Requirements to specify
-- [ ] PS-047-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-047-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-047-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-04.R01 | All state-changing commands require `idempotency_key`; same key and digest return original result. | MVP |
+| PS-047-04.R02 | `cell.approve` and `cell.retire` require `registry_version` precondition (optimistic concurrency). | MVP |
+| PS-047-04.R03 | `geo.cell.published_state_changed` payload contains `cell_code`, `state`, `registry_version`, no count. | MVP |
+| PS-047-04.R04 | Query `geo.cells.list(version?)` returns active and retired codes with publication flag only. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+| Name | Kind | Signature | Idempotency | Version | Errors |
+|---|---|---|---|---|---|
+| `cell.propose` | command | `(cell_code, parent_code, label_key, justification ≤ 500)` | key | 1.0.0 | COARSE.REGISTRY_INVALID, COARSE.LABEL_MISSING |
+| `cell.approve` | command | `(proposal_id, registry_version)` | key | 1.0.0 | COARSE.CONFLICT, COARSE.INVALID_TRANSITION |
+| `cell.retire` | command | `(cell_code, registry_version)` | key | 1.0.0 | COARSE.CELL_IN_USE |
+| `publication.recompute` | command (sys) | `(window_id)` | `window_id` | 1.0.0 | COARSE.RECOMPUTE_FAILED (retryable true) |
+| `geo.cells.list` | query | `(version?)` | n/a | 1.0.0 | SYS.NOT_FOUND |
+| `geo.cell.published_state_changed` | event | see R03 | n/a | 1.0.0 | n/a |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See PS-047-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See PS-047-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-047-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-047-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Retries of recompute keyed by `window_id`. Offline clients receive a cached registry version and must refresh before search.
+
+## Privacy, retention, abuse
+Justification text is PRIVATE to ope_ and F10; not in events.
+
+## Observability & budgets
+Trace `correlation_id` for approvals; recompute budget in PS-047-08.
+
+## Tests
+- TEST-PS-047-04-01 (contract): command schemas match registry.
+- TEST-PS-047-04-02 (unit): duplicate `cell.approve` with same key returns original.
+- TEST-PS-047-04-03 (contract): event payload has no count field.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command has version and idempotency rule.
+2. Stale `registry_version` returns COARSE.CONFLICT.
+3. Event schema has no numeric count.
+
+## Assumptions & open decisions
+- ASSUMPTION: justification field capped at 500 chars.

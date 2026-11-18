@@ -1,35 +1,62 @@
 # PS-039-04 — commands queries events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-039-04. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/01_rental_catalog/mod_availability. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-ID-001
 
-## Purpose and scope
-Define the commands queries events process for availability within 01_rental_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-039-04.R01 | Every state-changing command has an idempotency key. | MVP |
+| PS-039-04.R02 | `availability.read` returns free and busy intervals without renter identity, rental_id or reason. | MVP |
+| PS-039-04.R03 | Hold and block commands respond within 200 ms p95. | MVP |
+| PS-039-04.R04 | Events follow CTR-EVT-001; `rental_id` is included only in owner and renter scoped delivery. | MVP |
 
-## Requirements to specify
-- [ ] PS-039-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-039-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-039-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+- `rental.availability.hold { item_id, start_date, end_date }` key `item_id|start|end|renter_id`
+- `rental.availability.block { item_id, start_date, end_date, block_type, expected_version? }` key `item_id|start|end|block_type|owner_id|request_id`
+- `rental.availability.unblock { block_id, expected_version }`
+- `rental.availability.release { block_id, expected_version }` (renter own hold or pre-handoff booking)
+- `rental.availability.confirm { block_id, rental_id }` (sys only)
+- `availability.read { item_id, from, to }` returns `[{ start_date, end_date, state: FREE|BUSY }]`, max 366 days.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Name | Type | Event | Idempotent |
+|---|---|---|---|
+| rental.availability.hold | command | availability.hold_created | yes |
+| rental.availability.confirm | command (sys) | availability.booked | yes |
+| rental.availability.block | command (owner) | availability.blocked | yes |
+| rental.availability.unblock | command (owner) | availability.unblocked | yes |
+| rental.availability.release | command | availability.released | yes |
+| availability.read | query | none | n/a |
+| (lifecycle) | consumes handoff and return events | availability.in_use, availability.released | yes |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Commands map only to PS-039-03 rows.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+PS-039-02 codes in CTR-ERR-001 envelope.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See PS-039-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-039-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Duplicate command returns original result. Stale `expected_version` returns 409. Query is cacheable for 30 s with ETag per item.
+
+## Privacy, retention, abuse
+Query response contains only dates and FREE or BUSY. Event max_data_class PSEUDONYMOUS (rental_id) or LOCATION_COARSE (timezone) per CTR-PRV-001 R02.
+
+## Observability & budgets
+Latency histogram per command; query p95 <= 150 ms for 366-day window.
+
+## Tests
+- TEST-PS-039-04-01 (contract): events validate against CTR-EVT-001.
+- TEST-PS-039-04-02 (negative): anonymous `availability.read` response lacks rental_id and renter identity.
+- TEST-PS-039-04-03 (idempotency): duplicate hold request yields one block.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each command lists key, capability, version and error codes.
+2. Read responses pass privacy lint.
+3. Latency budgets met in fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: `availability.read` is public without login, rate-limited (PS-039-05).
+- PROVISIONAL (no Dxx): `confirm` is only invoked by the rental lifecycle service principal.

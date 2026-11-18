@@ -1,35 +1,47 @@
 # PS-013-09 — contract and acceptance tests
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-013-09. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_offer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-013-09.R01 | Contract tests run in CI against CTR-SCH-001 schema snapshots for every command and event in PS-013-04. | MVP |
+| PS-013-09.R02 | Fixture set: ≥ 40 valid and ≥ 60 invalid offer fixtures covering every code in PS-013-02. | MVP |
+| PS-013-09.R03 | Each acceptance criterion in PS-013-01..08 maps to at least one TEST ID. | MVP |
+| PS-013-09.R04 | Offline and reconnect scenarios run on a device emulator with network toggled (PS-013-06). | MVP |
 
-## Purpose and scope
-Define the contract and acceptance tests process for offer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Fixture files: `fixtures/offer/valid/*.json`, `fixtures/offer/invalid/*.json` (paths PENDING implementation; no code exists yet). Each fixture names its expected code.
 
-## Requirements to specify
-- [ ] PS-013-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-013-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-013-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Contract test harness replays command sequences and asserts events and errors.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Model-based test generates sequences from PS-013-03 table; asserts end state and event order.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Every `OFFER.*` code has one fixture and one assertion of `message_key`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Matrix tests from PS-013-05 run as part of this suite.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Concurrency suite (PS-013-06) runs at 20 and 200 parallel clients. Offline suite runs on airplane-mode toggles.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-013-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Privacy assertion: no fixture output contains note text in forbidden surfaces (PS-013-07).
+
+## Observability & budgets
+Suite runtime ≤ 10 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-013-09-01 (contract): schema snapshot diff fails build on breaking change.
+- TEST-PS-013-09-02 (model-based): 10,000 transition sequences.
+- TEST-PS-013-09-03 (a11y): submit and error screens meet WCAG 2.1 AA for error announcements (F14 review pending).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100% of acceptance criteria in this module map to a passing TEST ID.
+2. Fixture count and code coverage thresholds met (R02).
+
+## Assumptions & open decisions
+- ASSUMPTION: no implementation exists; fixtures and harness are future-prompt work.
+- PENDING F14 accessibility review of error announcement patterns.

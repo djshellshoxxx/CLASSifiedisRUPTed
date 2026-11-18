@@ -1,61 +1,44 @@
-# Process inventory and integration checklist
+# Process checklist — F06.S01.M02 query
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-
-## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
-- [ ] Complete Prompt 3 specification-quality review before implementation.
+- [x] [domain_schema.md](domain_schema.md) — PS-046-01 written
+  - [ ] Confirm no stored table has a query-text column
+  - [ ] Cell-scope required (1–5 cells) enforced in schema
+  - [ ] Count bucket rounding fixtures at 49, 50, 51
+- [x] [validation_rules.md](validation_rules.md) — PS-046-02 written
+  - [ ] Bidi and control character fixtures
+  - [ ] Tampered cursor set (bit flip, expired, wrong digest)
+  - [ ] Invalid requests do not consume budget
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-046-03 written
+  - [ ] Removal between page 1 and page 2 does not reappear
+  - [ ] Timeout at 2 s returns no partial page
+  - [ ] Every state row has a unit test
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-046-04 written
+  - [ ] Search emits zero domain events (10 000-request test)
+  - [ ] Aggregate suppressed below K_MIN = 5
+  - [ ] Schema versioning test for `api_version`
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-046-05 written
+  - [ ] Guest sees PUBLIC and LOCATION_COARSE only
+  - [ ] Unauthorized and empty cells return byte-identical responses
+  - [ ] Cursor reuse by another principal fails
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-046-06 written
+  - [ ] Breaker opens within 30 s at 50% errors
+  - [ ] Stale results never marked current
+  - [ ] Guest fail-open limited to 60 s
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-046-07 written
+  - [ ] Log formatter rejects query text
+  - [ ] Rate limit fires at 301st text search per hour (fixture)
+  - [ ] Page 51 rejected
+- [x] [observability_performance.md](observability_performance.md) — PS-046-08 written
+  - [ ] Metric labels exclude text, cursor and principal ID
+  - [ ] Zero-result alert at 40% over 30 min with ≥ 5 queries
+  - [ ] Load test at 500 req/s holds p95 ≤ 150 ms
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-046-09 written
+  - [ ] Golden fixtures for every error code
+  - [ ] Live-region zero-result announcement (F14)
+  - [ ] Offline cached results labelled stale
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-046-10 written
+  - [ ] Export bundle has no query-related keys
+  - [ ] Config below minimum rejected
+  - [ ] Dual-version window for MAJOR bump tested

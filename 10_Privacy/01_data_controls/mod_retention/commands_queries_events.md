@@ -1,35 +1,55 @@
-# PS-079-04 — commands queries events
+# PS-079-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-079-04. **Owner:** [10_Privacy/01_data_controls/mod_retention](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_retention. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_retention (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001 (R07 hold events, R12 deletion record), CTR-SCH-001.
 
-## Purpose and scope
-Define the commands queries events process for retention within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-079-04.R01 | Commands: `retention.policy.publish`, `retention.policy.activate`, `retention.hold.apply`, `retention.hold.release`. Queries: `retention.policy.get_active`, `retention.hold.list_active` (counts and IDs only). | MVP |
+| PS-079-04.R02 | Internal: `retention.sweep.run` (sys), idempotent per run window. | MVP |
+| PS-079-04.R03 | State-changing commands require `Idempotency-Key` (CTR-EVT-001 R03). | MVP |
+| PS-079-04.R04 | Hold events carry `cas_` ID, selector type and counts; never subject IDs. Hold events on LOCATION_PRECISE data are local-only (CTR-PRV-001 R07 analogue; OPEN R07 item). | MVP |
+| PS-079-04.R05 | Events: `max_data_class` ≤ PSEUDONYMOUS. | MVP |
 
-## Requirements to specify
-- [ ] PS-079-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-079-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-079-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Apply hold body: `{"case_id": "cas_...", "selector": {"record_type": "dispute_record"}, "ends_at": "2027-06-30T00:00:00Z", "approver_ids": ["ope_...", "ope_..."]}`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Idempotency | Emits | Errors |
+|---|---|---|---|
+| policy.publish | key + digest | `retention.policy_published` | RETAIN.UNKNOWN_CLASS, RETAIN.POLICY_NOT_APPROVED, SCH.DATA_CLASS_CHANGE_REQUIRES_REVIEW |
+| policy.activate | key | `retention.policy_superseded` | RETAIN.INVALID_TRANSITION |
+| hold.apply | key + `cas_` | `hold.applied` | PRV.HOLD_SCOPE_INVALID, RETAIN.HOLD_TOO_LONG, CAP.DUAL_APPROVAL_REQUIRED |
+| hold.release | key | `hold.released` | CAP.GRANT_NOT_ACTIVE (inactive hold), CAP.SELF_APPROVAL_FORBIDDEN |
+| sweep.run (sys) | run window | `record.expired`, `record.purged` | RETAIN.SWEEP_BACKLOG |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Emissions follow PS-079-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Per PS-079-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Commands require capabilities in PS-079-05; sweep requires `sys_` grant.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-079-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Repeated `hold.apply` with identical body returns original hold. Offline clients cannot issue retention commands.
+
+## Privacy, retention, abuse
+Events and responses contain no subject content. Hold selectors are coded types.
+
+## Observability & budgets
+Command p95 ≤ 250 ms; sweep run start within 5 min of schedule (ASSUMPTION).
+
+## Tests
+- TEST-PS-079-04-01 (contract): all RETAIN.* and referenced PRV/CAP codes present in registries.
+- TEST-PS-079-04-02 (idempotency): repeated hold apply → one `hold.applied` event.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command/event listed exists in the API contract.
+2. No event contains subject IDs (negative fixture).
+3. Sweep run is idempotent on rerun (TEST-PS-079-04-02 extension).
+
+## Assumptions & open decisions
+- ASSUMPTION: sweep start tolerance 5 min.
+- OPEN (R07): event locality for hold events outside location class.

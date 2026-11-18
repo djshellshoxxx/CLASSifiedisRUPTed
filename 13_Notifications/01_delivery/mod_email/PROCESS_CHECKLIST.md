@@ -1,57 +1,57 @@
 # Process inventory and integration checklist
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md) rows PS-102-01 to PS-102-10.
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
+- [x] [domain_schema.md](domain_schema.md) — PS-102-01 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [validation_rules.md](validation_rules.md) — PS-102-02 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-102-03 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-102-04 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-102-05 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-102-06 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-102-07 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [observability_performance.md](observability_performance.md) — PS-102-08 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-102-09 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-102-10 — expanded
+- [x] Requirements, state and error contracts expanded
+- [x] Upstream producers and downstream consumers mapped to full IDs
+- [x] Privacy, abuse, accessibility (templates) and offline review (offline: not applicable)
+- [x] Test fixtures and measurable acceptance conditions defined
 
 ## Integration gates
 - [ ] Resolve cross-module ownership and dependencies.

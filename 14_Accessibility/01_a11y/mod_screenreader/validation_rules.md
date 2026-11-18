@@ -1,35 +1,54 @@
 # PS-110-02 — validation rules
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_screenreader. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-PRV-001, CTR-COM-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-02. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-110-02.R01 | Reject a template whose placeholder is not in the allowed class set (`SCRN.PRIVATE_FIELD_FORBIDDEN`). | MVP |
+| PS-110-02.R02 | Reject rendered text longer than 140 characters (`SCRN.TEXT_TOO_LONG`). | MVP |
+| PS-110-02.R03 | Reject any template that announces a LOCATION_PRECISE or FINANCIAL_EVIDENCE value, including amounts. | MVP |
 
-## Purpose and scope
-Define the validation rules process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Allowed placeholder classes: PUBLIC, PSEUDONYMOUS. Forbidden: PRIVATE_PERSONAL, LOCATION_COARSE in announcements (exact region names are not spoken), LOCATION_PRECISE, FINANCIAL_EVIDENCE, SECRET.
 
-## Requirements to specify
-- [ ] PS-110-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Validation runs on `scr.template.publish` ([PS-110-04](commands_queries_events.md)).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Publish allowed only from `draft` after validation passes ([PS-110-03](workflow_state_machine.md)).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+| Rule | Code | Retryable | Message key | Diagnostic |
+|---|---|---|---|---|
+| Placeholder not in allowed set | SCRN.PRIVATE_FIELD_FORBIDDEN | false | err.scrn.private_field_forbidden | placeholder name |
+| Unknown placeholder | SCRN.TEMPLATE_UNKNOWN_FIELD | false | err.scrn.template_unknown_field | placeholder name |
+| Rendered length > 140 | SCRN.TEXT_TOO_LONG | false | err.scrn.text_too_long | length only |
+| Event has no published template | SCRN.TEMPLATE_NOT_PUBLISHED | false | err.scrn.template_not_published | event_key |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Template text is never echoed to the client in error bodies.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation runs for every principal; publishing requires the capability in [PS-110-05](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Client validates against the bundled template catalog; mismatched versions fall back to the last published template.
+
+## Privacy, retention, abuse
+Rejected template text is not stored outside the draft record.
+
+## Observability & budgets
+Counter per error code. Validation p95 ≤ 5 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-110-02-01 unit: one fixture per error code.
+- TEST-PS-110-02-02 property: any template with a LOCATION_PRECISE placeholder is rejected.
+- TEST-PS-110-02-03 unit: rendered 141-character string is rejected; 140 accepted.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All four codes return the documented retryable value.
+2. No allowed template can render a LOCATION_PRECISE or FINANCIAL_EVIDENCE value.
+3. Length limit enforced at publish and at render time.
+
+## Assumptions & open decisions
+- ASSUMPTION: 140-character limit covers screen reader verbosity targets across common readers; verification PENDING manual testing.
+- No Dxx decision directly affects validation.

@@ -1,35 +1,47 @@
-# PS-013-08 — observability performance
+# PS-013-08 — observability and performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-PRV-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-013-08. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_offer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-013-08.R01 | Emit counters for submit, validation failure per code, expiry, lock, conflict. Labels never include `acc_`, `ofr_` or note text. | MVP |
+| PS-013-08.R02 | Submit p95 ≤ 300 ms; read p95 ≤ 150 ms at 1,000 open offers per cycle index (ASSUMPTION). | MVP |
+| PS-013-08.R03 | Traces carry `cor_` IDs; span attributes are IDs and counts only. | MVP |
+| PS-013-08.R04 | Dashboards show module health only; no per-user views. | MVP |
 
-## Purpose and scope
-Define the observability performance process for offer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Metric names: `offer_submit_total{result}`, `offer_validation_failure_total{code}`, `offer_revision_conflict_total`, `offer_expired_total`, `offer_lock_total`, `offer_submit_latency_seconds` (histogram).
 
-## Requirements to specify
-- [ ] PS-013-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-013-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-013-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Event lag metric: time from `recorded_at` to consumer ack, p95 ≤ 5 s.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Gauge of offers per state, sampled every 60 s, aggregated by cycle size only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Validation failure metrics use codes from PS-013-02; no input values.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Telemetry access follows F16 operator grants; no content access.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Metric emission is best-effort and must not block commits. Client offline queue depth reported in aggregate, once per day (PS-013-06).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-013-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Logs carry pseudonymous IDs only (CTR-PRV-001 R09). Metric retention 30 days (ASSUMPTION).
+
+## Observability & budgets
+Alert: lock conflict rate > 2% for 15 min. Alert: submit p95 > 300 ms for 10 min. Log redaction test runs in CI.
+
+## Tests
+- TEST-PS-013-08-01 (unit): metric label set excludes forbidden keys.
+- TEST-PS-013-08-02 (performance): 1,000 open offers, 50 concurrent readers, p95 within budget.
+- TEST-PS-013-08-03 (integration): alert fires on injected conflict spike.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero forbidden fields in log and trace fixtures.
+2. Budgets in R02 met in load test at the stated scale.
+
+## Assumptions & open decisions
+- ASSUMPTION: 1,000 open offers per cycle index is the MVP sizing target.
+- D07 PROVISIONAL (Dxx default, unapproved): metric retention 30 days.

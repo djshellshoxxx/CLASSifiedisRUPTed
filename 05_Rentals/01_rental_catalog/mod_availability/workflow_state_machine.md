@@ -1,35 +1,60 @@
 # PS-039-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-039-03. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 05_Rentals/01_rental_catalog/mod_availability. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-CAP-001
 
-## Purpose and scope
-Define the workflow state machine process for availability within 01_rental_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-039-03.R01 | Block states: TENTATIVE, BOOKED, IN_USE, OWNER_BLOCK, MAINTENANCE, RELEASED. RELEASED is terminal. | MVP |
+| PS-039-03.R02 | TENTATIVE holds expire 15 min after creation (ASSUMPTION) and release automatically. | MVP |
+| PS-039-03.R03 | BOOKED moves to IN_USE only on a handoff event from 05_Rentals/02_rental_lifecycle/mod_handoff, and IN_USE moves to RELEASED only on a return event from mod_return. | MVP |
+| PS-039-03.R04 | A BOOKED block is released by renter cancellation only before handoff. After handoff, cancellation is handled by the rental lifecycle, not here. | MVP |
+| PS-039-03.R05 | Every transition emits one `availability.*` event and increments `version`. | MVP |
 
-## Requirements to specify
-- [ ] PS-039-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-039-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-039-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`block_type` and `released_at` per PS-039-01.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Transitions driven by commands in PS-039-04 and by lifecycle events from mod_handoff and mod_return.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| from | event | guard | to | side effect |
+|---|---|---|---|---|
+| (none) | hold | no overlap; renter holds < 3 active | TENTATIVE | set hold_expires_at; emit availability.hold_created |
+| TENTATIVE | confirm (sys) | rental payment-free confirmation recorded in rental lifecycle; not expired | BOOKED | emit availability.booked |
+| TENTATIVE | timer 15 min | still TENTATIVE | RELEASED | emit availability.hold_expired |
+| TENTATIVE | renter cancel | owner of hold | RELEASED | emit availability.released |
+| BOOKED | renter cancel | before handoff | RELEASED | emit availability.released |
+| BOOKED | handoff event (mod_handoff) | rental_id matches | IN_USE | emit availability.in_use |
+| IN_USE | return event (mod_return) | rental_id matches | RELEASED | emit availability.released |
+| (none) | block (owner) | no overlap with BOOKED or IN_USE | OWNER_BLOCK or MAINTENANCE | emit availability.blocked |
+| OWNER_BLOCK or MAINTENANCE | unblock (owner) | not overlapped by booking | RELEASED | emit availability.unblocked |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Invalid transition returns `AVAIL.STATE_CONFLICT` (retryable after re-read).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Guards per PS-039-05. Timer and lifecycle transitions run as `sys`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-039-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Each transition uses compare-and-set on `version`. Timer is idempotent. Lifecycle events are deduplicated by `rental_id` + event type.
+
+## Privacy, retention, abuse
+Events carry `block_id`, `item_id`, `block_type` only; `rental_id` is in the event envelope for the owner and renter views.
+
+## Observability & budgets
+Gauge of TENTATIVE count; hold-expiry lag p95 <= 30 s.
+
+## Tests
+- TEST-PS-039-03-01 (unit): each row executes once with stated side effect.
+- TEST-PS-039-03-02 (timer): hold created at T is RELEASED at T+15 min with no renter action.
+- TEST-PS-039-03-03 (lifecycle): handoff event moves BOOKED to IN_USE; return event releases.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No transition outside the table.
+2. Hold expiry within 30 s of 15 min.
+3. Lifecycle integration fixtures pass with mod_handoff and mod_return stubs.
+
+## Assumptions & open decisions
+- ASSUMPTION: 15 min hold duration; 3 active holds per renter.
+- PROVISIONAL (D08 default, unapproved): holds are online-only; no offline hold creation.

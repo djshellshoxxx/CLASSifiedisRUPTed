@@ -1,35 +1,58 @@
 # PS-031-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-031-06. **Owner:** [03_Services/02_service_booking/mod_milestones](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_milestones. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_milestones. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-COM-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for milestones within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-031-06.R01 | Idempotent writes on (actor, command, key), 24 h window. Different digest with same key → `EVT.IDEMPOTENCY_KEY_REUSED`. | MVP |
+| PS-031-06.R02 | `plan_set` is one transaction: all rows and one `milestone.plan_set` event, or nothing. | MVP |
+| PS-031-06.R03 | Auto-accept job is idempotent per `(milestone_id, revision)`; re-run after crash emits no duplicate. | MVP |
+| PS-031-06.R04 | Claim request to F09 is sent with a deterministic key `(milestone_id, revision, "claim")`; F09 replays return the same claim (CTR-COM-001 R10 uniqueness). | MVP |
+| PS-031-06.R05 | If F09 call fails after local acceptance commit, a retry queue (≤ 24 h, 5 attempts, exponential backoff ASSUMPTION) completes the claim request; milestone stays `accepted`. | MVP |
+| PS-031-06.R06 | Timeouts 5 s; unknown outcome → retry with same key. | MVP |
+| PS-031-06.R07 | Offline: `submit` and `accept` queued until relay acknowledgment (D08 PROVISIONAL); plan edits not queued offline. | MVP |
 
-## Requirements to specify
-- [ ] PS-031-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-031-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-031-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency and claim-request queue: `(key, digest, status, attempts, next_attempt_at)`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Replay semantics per [commands_queries_events.md](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery never skips a transition in [workflow_state_machine.md](workflow_state_machine.md). Accept commit precedes claim request; claim failure does not revert acceptance.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Retryable: `SYS.UNAVAILABLE`. Non-retryable: `MILESTON.INVALID_TRANSITION`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Queued commands re-check capability on relay receipt.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-031-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+| Failure | Outcome |
+|---|---|
+| Crash after accept commit, before claim request | queue drives claim on restart |
+| F09 duplicate claim request | single claim returned |
+| Auto-accept racing with client reject | revision conflict; one winner |
+| Offline accept, plan changed meanwhile | server rejects with `EVT.REVISION_CONFLICT` |
+
+## Privacy, retention, abuse
+Queue rows hold IDs and digests only. Queue purged after completion or 24 h.
+
+## Observability & budgets
+Metric `milestone_claim_queue_depth`; alert if any item older than 1 h (ASSUMPTION).
+
+## Tests
+- TEST-PS-031-06-01 integration: crash between accept commit and claim request, restart, exactly one claim.
+- TEST-PS-031-06-02 integration: `plan_set` fault injection leaves prior plan.
+- TEST-PS-031-06-03 offline: queued accept replayed once.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No accepted milestone without eventual claim request or alert.
+2. No duplicate claim across injected faults.
+3. Plan writes are all-or-nothing.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h queue window, 5 attempts.
+- D08 PROVISIONAL.
+- Payment checklist applies: claim uniqueness per CTR-COM-001 R10.

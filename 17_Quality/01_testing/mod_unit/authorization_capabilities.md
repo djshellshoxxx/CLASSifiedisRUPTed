@@ -1,35 +1,54 @@
-# PS-137-05 — authorization capabilities
+# PS-137-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-137-05. **Owner:** [17_Quality/01_testing/mod_unit](SPEC.md). **Implementing module:** 17_Quality/01_testing/mod_unit. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 17_Quality/01_testing/mod_unit. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (capability names PENDING CTR-CAP-001 approval).
 
-## Purpose and scope
-Define the authorization capabilities process for unit within 01_testing. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-137-05.R01 | Every command checks actor role and capability before any write; denied calls write nothing and log one denial event | MVP |
+| PS-137-05.R02 | Quarantine approver is never the requester (enforced by server check, not UI only) | MVP |
+| PS-137-05.R03 | CI service identity can write coverage and manifest rows only; cannot approve quarantine | MVP |
+| PS-137-05.R04 | Capability changes take effect within one CI run (no cached grants beyond run) | MVP |
 
-## Requirements to specify
-- [ ] PS-137-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-137-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-137-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Capability grants: `{actor_id, role, capability, granted_by, granted_at}`. Proposed capability names (PENDING CTR-CAP-001): `qa.manifest.write`, `qa.quarantine.approve`, `qa.coverage.write`, `qa.manifest.read`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Authorization applies to every command in PS-137-04. Queries require `qa.manifest.read`, which every engineering role holds.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`UNIT.UNAUTHORIZED` (non-retryable, message key `unit.unauthorized`). Diagnostic: capability name and role only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | MapTest | RecordCoverage | Quarantine request | Quarantine approve | Retire |
+|---|---|---|---|---|---|
+| Module developer (own module) | yes | no | yes | no | request only |
+| QA Lead | yes | no | yes | yes | yes |
+| CI service identity | yes | yes | no | no | no |
+| Auditor (read-only) | no | no | no | no | no |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-137-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Grant revocation mid-run: command rejected at next call, no partial write. Authorization is server-side in the CI check tool; no offline mode.
+
+## Privacy, retention, abuse
+Denial logs keep actor reference and capability, not request body. Abuse case: developer self-approves quarantine via second account; mitigated by reviewer role separation and audit log review each sprint (ASSUMPTION).
+
+## Observability & budgets
+Count of UNAUTHORIZED per week; any non-zero count for CI identity triggers review.
+
+## Tests
+- TEST-PS-137-05-01 (unit): requester == approver rejected with UNIT.UNAUTHORIZED.
+- TEST-PS-137-05-02 (unit): CI identity calling ApproveQuarantine denied.
+- TEST-PS-137-05-03 (integration): revoked grant blocks next MapTest in same fixture run.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Permission matrix above enforced by tests, one test per cell that is "no".
+2. No write occurs on denied call (row count check).
+3. Capability names confirmed against CTR-CAP-001 before status leaves SPEC-DRAFT-COMPLETE.
+
+## Assumptions & open decisions
+- ASSUMPTION: QA Lead role is held by one or more named people; named owner is not yet assigned.
+- D10 PROVISIONAL (D10 default, unapproved): actor identity and key handling for CI identity follow user-controlled key rules where applicable; not applicable to repository-held tests.

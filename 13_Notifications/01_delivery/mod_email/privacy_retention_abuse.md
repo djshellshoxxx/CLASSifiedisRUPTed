@@ -1,35 +1,65 @@
 # PS-102-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-102-07. **Owner:** [13_Notifications/01_delivery/mod_email](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_email. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_email (Platform Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R03, R06, R08, R09, R10, R11, R12), CTR-EVT-001 (R06, R11), CTR-CAP-001 (R08).
 
-## Purpose and scope
-Define the privacy retention abuse process for email within 01_delivery. Do not assume implementation or successful external settlement.
+**Decision labels:** Retention defaults are PROVISIONAL (D07 default, unapproved). Address handling and encryption are PROVISIONAL (D10 default, unapproved). Privacy review by F10: OPEN.
 
-## Requirements to specify
-- [ ] PS-102-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-102-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-102-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-102-07.R01 | Address is class PRIVATE_PERSONAL. Stored encrypted; never in logs, events, metrics, errors or exports except to its owner. | MVP |
+| PS-102-07.R02 | Binding retained for account lifetime plus 30 days grace (RET-ACC); removed within 24 hours of account deletion request. | MVP |
+| PS-102-07.R03 | Delivery attempts retained 30 days (RET-OPS); provider message IDs follow the same rule. | MVP |
+| PS-102-07.R04 | Token hashes retained until use or expiry plus 30 minutes, then purged (RET-SEC). | MVP |
+| PS-102-07.R05 | Every outgoing body is generic for account and security categories: no listing, counterparty, location or message content. | MVP |
+| PS-102-07.R06 | Enumeration: bind and recover requests return the same response for registered and unregistered addresses. | MVP |
+| PS-102-07.R07 | Rate limits: 5 verification sends per address per 24 h; 3 bind attempts per account per hour (ASSUMPTION). | MVP |
+| PS-102-07.R08 | Marketing and digest email are out of MVP scope and require a separate opt-in category (PS-107-01). | Future |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Field classes per PS-102-01: `address_ciphertext` PRIVATE_PERSONAL; `address_hmac` PSEUDONYMOUS (keyed); `token_hash` SECRET; `provider_message_id` PSEUDONYMOUS. The keyed HMAC key is SECRET and rotated under D10.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Events never carry address fields (PS-102-04 R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+REMOVED erases ciphertext (PS-102-03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Diagnostic codes only; no value echo (PS-102-02).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-102-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Owner-only access to address (PS-102-05).
+
+## Failure, idempotency, concurrency, offline
+Deletion job retries until erasure is confirmed; erasure receipt is an `aud_` record without address (CTR-PRV-001 R12).
+
+## Privacy, retention, abuse
+| Threat | Control |
+|---|---|
+| Account enumeration | R06 identical responses; timing equalized to within 50 ms (ASSUMPTION) |
+| Mail bombing a third party | R07 per-address cap; per-IP cap on truncated, keyed-hash IP (CTR-PRV-001 R09) |
+| Token theft from mail client | Single use, 30-minute TTL, bound to account, link on first-party origin only |
+| Phishing via templates | Template catalog signed; link allowlist (PS-102-02 R06) |
+| Header injection | PS-102-02 R03 |
+| Provider metadata exposure | Provider contract reviewed by F10 (OPEN); no body content beyond template |
+
+Pseudonyms do not guarantee anonymity: a verified address can link back to a person. Users are told this at binding.
+
+## Observability and budgets
+Logs: `email_id`, `template_id`, `code`, timing. Dashboards aggregate bounce rates only.
+
+## Tests
+- TEST-PS-102-19 (negative): log scan of 10,000 sends finds no address, token or body text.
+- TEST-PS-102-20 (integration): deleted account's binding erased within 24 hours.
+- TEST-PS-102-21 (negative): bind for registered and unregistered address produce identical responses and timing within 50 ms.
+- TEST-PS-102-22 (negative): 6th verification send in 24 h rejected with `EMAIL.RATE_LIMITED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. F10 review of address handling (future gate; OPEN).
+2. Enumeration test passes.
+3. Log scan clean.
+
+## Assumptions & open decisions
+- ASSUMPTION: deletion of binding is independent of retention of delivery logs (logs carry no address).
+- D10 and D07 (PROVISIONAL, unapproved).

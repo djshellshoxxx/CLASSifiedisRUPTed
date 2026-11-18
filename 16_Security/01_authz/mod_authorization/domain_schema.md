@@ -1,35 +1,56 @@
 # PS-126-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-126-01. **Owner:** [16_Security/01_authz/mod_authorization](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_authorization. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [mod_authorization](SPEC.md) (Security Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (grant and decision record schemas), CTR-ID-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the domain schema process for authorization within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-126-01.R01 | Grant rows conform to the CTR-CAP-001 grant record; storage adds `created_at`, `revision` and `row_hash`. | MVP |
+| PS-126-01.R02 | Every decision stores `policy_version` and `reason_code`; no object content is stored. | MVP |
+| PS-126-01.R03 | At most one `active` grant per (`subject.ref`, `capability`, `resource.type`, `resource.scope`, `resource.object_id`). | MVP |
+| PS-126-01.R04 | Decision-cache key includes `policy_version`; entries from another version are never returned. | MVP |
+| PS-126-01.R05 | Indexes support lookup by subject, by object and by case with p95 ≤ 5 ms at 10 million grants (ASSUMPTION). | MVP |
 
-## Requirements to specify
-- [ ] PS-126-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-126-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-126-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Entity | Key | Key fields | Class |
+|---|---|---|---|
+| grant | `grt_` | subject (kind, ref), capability, resource (type, scope, case_id, object_id), constraints, status, approvals[] | FINANCIAL_EVIDENCE if purpose is evidence; else PSEUDONYMOUS |
+| policy | `pol_` (ASSUMPTION) | version (semver), rules_hash (SHA-256), status, published_by, approvals[2] | PUBLIC |
+| decision | `dec_` | principal (kind, ref), action, resource (type, id), outcome, reason_code, policy_version, decided_at, cache_hit | PSEUDONYMOUS |
+| cache entry | composite | principal, action, resource_id, policy_version, outcome, expires_at | PSEUDONYMOUS, RET-EPH |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Not applicable to the schema. See [PS-126-04](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [PS-126-03](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Field rules: [PS-126-02](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Table access is restricted to the authorization service identity (`sys_`). No human reads these tables directly.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-126-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Grant and approval writes use a revision column for optimistic concurrency. Decision records are append-only.
+
+## Privacy, retention, abuse
+Decision records: RET-AUD (12 months). Grant events: RET-EVD while the subject is active, then RET-AUD. Cache entries: RET-EPH (≤ 60 s effective).
+
+## Observability & budgets
+Table row counts and index sizes reported monthly; p95 lookups in [PS-126-08](observability_performance.md).
+
+## Tests
+- TEST-PS-126-01-01 (schema): grant fixtures validate against the CTR-CAP-001 grant schema.
+- TEST-PS-126-01-02 (constraint): second active grant with identical key is rejected by the database.
+- TEST-PS-126-01-03 (cache): policy version bump invalidates all cached entries for the old version.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every decision row has a non-null `policy_version` and `reason_code`.
+2. No decision row contains a field from object content.
+3. Uniqueness constraint holds under 100 concurrent grant creates.
+
+## Assumptions & open decisions
+- ASSUMPTION: `pol_` prefix and index targets.
+- PROVISIONAL (D05 default, unapproved): grants for LOCATION_PRECISE content carry object-level scope only.
+- PROVISIONAL (D07 default, unapproved): decision retention 12 months.

@@ -1,35 +1,63 @@
 # PS-061-05 — authorization capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/01_messaging/mod_threads. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001 (action vocabulary, scopes, decision records), CTR-PRV-001 (field visibility classes), CTR-ID-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-061-05. **Owner:** [08_Communications/01_messaging/mod_threads](SPEC.md). **Implementing module:** 08_Communications/01_messaging/mod_threads. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-061-05.R01 | Every action in the matrix below is evaluated server-side with default deny (CTR-CAP-001 R01). | MVP |
+| PS-061-05.R02 | Thread access uses the `participant` scope; message and attachment access inherit it. | MVP |
+| PS-061-05.R03 | Counterparty `acc_` is never returned. Only the `prf_` view is returned (CTR-CAP-001 R02). | MVP |
+| PS-061-05.R04 | Non-participants receive `SYS.NOT_FOUND` for every thread, message and attachment ID (CTR-ERR-001 R08). | MVP |
+| PS-061-05.R05 | `thr.lock` is granted only to principal `sys_` (dispute resolver) or `mod_` with `case` scope and `cas_` ID. | MVP |
+| PS-061-05.R06 | Attachment download URLs are signed, single-principal and valid ≤ 300 s (ASSUMPTION). | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for threads within 01_messaging. Do not assume implementation or successful external settlement.
+## Data / schema
+Capability vocabulary used: `thr.read`, `thr.create`, `thr.archive`, `thr.lock`, `thr.unlock`, `msg.read`, `msg.send`, `msg.redact`, `att.read`, `att.create`, `thr.export`.
 
-## Requirements to specify
-- [ ] PS-061-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-061-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-061-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Decision records (`dec_`) are written for every denial of a privileged action and for `thr.lock`/`thr.unlock` (CTR-CAP-001 R08).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Relation rules are derived from thread participants at decision time (CTR-CAP-001 R05). Removing a participant is not a supported transition in MVP.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Authorization
+| Actor | Action | Resource | Outcome |
+|---|---|---|---|
+| user (participant) | thr.read, msg.read, msg.send | own thread, thread open | ALLOW (rule: participant) |
+| user (participant) | msg.send | thread archived or locked | DENY (STATE_FORBIDS) |
+| user (author) | msg.redact | own message | ALLOW (rule: owner) |
+| user (other participant) | msg.redact | message by counterparty | DENY (SCOPE_MISMATCH) |
+| user (non-participant) | thr.read | thread | DENY → SYS.NOT_FOUND |
+| sys_ (dispute resolver) | thr.lock | thread with `dsp_` | ALLOW (grant) |
+| mod_ (case scope, grant) | thr.lock | thread in `cas_` | ALLOW (grant, purpose required) |
+| mod_ (no grant) | msg.read | any | DENY → SYS.NOT_FOUND |
+| user (participant) | thr.export | own data | ALLOW (rule: self), counterparty redacted |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Field visibility: `body_text` = participant; `sender` = participant as `prf_`; `redacted` body = `never`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Denial codes from CTR-CAP-001 mapped to `SYS.FORBIDDEN` or `SYS.NOT_FOUND` per R04 above.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-061-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Authorization is re-evaluated at commit. A participant removed or a thread locked between send and commit causes rejection (see [PS-061-06](failure_recovery_idempotency.md)). Decision cache TTL zero for writes (CTR-CAP-001 R09).
+
+## Privacy, retention, abuse
+Decision records hold no content (CTR-CAP-001 R13). Case-scoped moderator reads are logged in `aud_` with case ID and purpose.
+
+## Observability & budgets
+Metric `threads_authz_denied_total{action,reason_code}`. Alert on > 20 denials per principal per hour (ASSUMPTION).
+
+## Tests
+- TEST-PS-061-05-01 (matrix): every row of the authorization table produces the stated outcome and code.
+- TEST-PS-061-05-02 (negative): guessed `msg_` IDs from another thread return `SYS.NOT_FOUND`, identical body and timing class to a nonexistent ID.
+- TEST-PS-061-05-03 (negative): a `mod_` without grant cannot read messages; with a grant for another case cannot read this case's thread.
+- TEST-PS-061-05-04 (privacy): counterparty `acc_` absent from every response (grep across fixtures).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix rows pass (TEST-PS-061-05-01).
+2. No `acc_` of counterparty appears in any non-audit response (TEST-PS-061-05-04).
+
+## Assumptions & open decisions
+- ASSUMPTION: 300 s signed attachment URL lifetime.
+- OPEN: moderator read purposes list (owned by F16; see CTR-CAP-001).
+- Related: CTR-CAP-001 R04 case scope; F12 Trust&Safety reviews moderator grants.

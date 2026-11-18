@@ -1,35 +1,54 @@
-# PS-022-07 — privacy retention abuse
+# PS-022-07 — Privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-022-07. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_dropouts](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_dropouts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_dropouts. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-FED-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for dropouts within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-022-07.R01 | Dropout records hold closed-enum reasons only; no free text, no location, no item descriptions. | MVP |
+| PS-022-07.R02 | Party-level reasons visible to the cycle's participants and operators with privileged grant only. | MVP |
+| PS-022-07.R03 | Retention: 180 days after resolution for abuse review, then aggregate counts (D07 default, PROVISIONAL). | MVP |
+| PS-022-07.R04 | Dropout signals may feed F07.S03 reputation only as a count with a case reference; no automatic penalty. | MVP |
+| PS-022-07.R05 | Peer-originated dropout signals from federation are quarantined until CTR-FED-001 verification (FUTURE). | FUTURE |
 
-## Requirements to specify
-- [ ] PS-022-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-022-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-022-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data classes per CTR-PRV-001: `party_id` PSEUDONYMOUS; `reason_code` PSEUDONYMOUS; timestamps visible to participants.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events never disclose which party reported another party (reporter identity limited to case record).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retention expiry is a background transition, not a state of the case; expired cases become counts.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Class | Notes |
+|---|---|---|---|
+| CYC_DROPOUT.RATE_LIMITED | true | rate_limited / 429 | 10 reports per principal per hour (ASSUMPTION) |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See [authorization_capabilities.md](authorization_capabilities.md). Deletion requests by a party remove that party's own report text (none exists) and anonymize their identifiers in counts.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-022-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Retention job idempotent; re-running produces no extra deletions.
+
+## Privacy, retention, abuse
+Threats: (1) griefing by repeated withdrawals to stall cycles — mitigated by per-version single withdrawal and reputation signal count; (2) false reports to exclude a rival — mitigated by report cap, no auto penalty, F12 review; (3) timing inference of which party backed out — deadlines hidden until passed; (4) deanonymization across cycles via dropout frequency — counts bucketed (0, 1, 2–4, 5+) in exports.
+
+## Observability & budgets
+Logs: envelope IDs and reason codes only; keyed HMAC for `party_id` (ASSUMPTION).
+
+## Tests
+- TEST-PS-022-07-01 (privacy): schema has no free-text column.
+- TEST-PS-022-07-02 (abuse): 11th report in one hour → rate limited.
+- TEST-PS-022-07-03 (retention): case reduced to counts at T+180 days.
+- TEST-PS-022-07-04 (privacy): reporter identity absent from participant-visible events.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No free-text or location field in dropout storage.
+2. Reporter identity never returned to the reported party.
+3. Retention verified on seeded data.
+
+## Assumptions & open decisions
+- ASSUMPTION: report cap 10 per hour; count buckets.
+- [DECISIONS.md](../../../DECISIONS.md) D07 — PROVISIONAL (D07 default, unapproved): 180 days abuse-review retention.
+- [DECISIONS.md](../../../DECISIONS.md) D05 — PROVISIONAL (D05 default, unapproved): no location data in cycle records.

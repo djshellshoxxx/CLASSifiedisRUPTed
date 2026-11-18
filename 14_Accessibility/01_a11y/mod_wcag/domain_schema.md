@@ -1,35 +1,52 @@
 # PS-111-01 — domain schema
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_wcag. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-SCH-001, CTR-PRV-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-111-01. **Owner:** [14_Accessibility/01_a11y/mod_wcag](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_wcag. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-111-01.R01 | Each conformance record `acr_` covers all 50 WCAG 2.1 Level A and AA success criteria (ASSUMPTION: 2.1 pinned; 2.2 evaluation PENDING research). | MVP |
+| PS-111-01.R02 | Each finding `acf_` links exactly one criterion and one screen. | MVP |
+| PS-111-01.R03 | Records contain no user content; evidence is referenced by digest only. | MVP |
 
-## Purpose and scope
-Define the domain schema process for wcag within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Conformance record `acr_` (PENDING CTR-ID-001 prefix; `ulid`, data class PUBLIC):
+```json
+{"record_id":"acr_01...","screen_id":"string dotted","app_version":"semver",
+ "criteria":[{"sc":"1.4.3","result":"pass|fail|not_applicable|not_tested","evidence_digest":"sha256 hex|null","na_reason_key":"string|null"}],
+ "reviewer_role":"QA Lead|Accessibility Lead","submitted_at":"recorded at commit"}
+```
+Finding `acf_` (PENDING prefix; PUBLIC): `{finding_id, sc, screen_id, severity: blocker|major|minor, status, accepted_until (≤ 90 days, ASSUMPTION), owner_role, test_id}`.
 
-## Requirements to specify
-- [ ] PS-111-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-111-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-111-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+See [PS-111-04](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+See [PS-111-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+See [PS-111-02](validation_rules.md). Prefix `WCAG.`
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+See [PS-111-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+See [PS-111-06](failure_recovery_idempotency.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-111-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+No personal data. See [PS-111-07](privacy_retention_abuse.md).
+
+## Observability & budgets
+See [PS-111-08](observability_performance.md).
+
+## Tests
+- TEST-PS-111-01-01 unit: a record missing any of the 50 criteria fails schema validation.
+- TEST-PS-111-01-02 property: finding with two criteria rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every submitted record has exactly 50 criterion entries.
+2. Findings reference exactly one criterion and one screen.
+3. No free-text field exceeds 280 characters.
+
+## Assumptions & open decisions
+- ASSUMPTION: WCAG 2.1 A and AA = 50 success criteria.
+- No Dxx decision directly affects this schema.

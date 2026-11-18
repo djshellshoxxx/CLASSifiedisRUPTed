@@ -1,35 +1,51 @@
 # PS-038-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-06. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_sniping. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001
 
-## Purpose and scope
-Define the failure recovery idempotency process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-038-06.R01 | If the classifier fails, the bid stays RECEIVED and is retried every 2 s for up to 60 s, then flagged for reconciliation. | MVP |
+| PS-038-06.R02 | Reconciler reclassifies RECEIVED records older than 60 s every 5 min. | MVP |
+| PS-038-06.R03 | Offline bids: the client holds `bid_id` in its local pending queue (D08) until server ack. Client never sends a time that affects class. | MVP |
+| PS-038-06.R04 | Bids that race the close: the close snapshot used is the one stored at receipt; later close changes by mod_close do not reclassify. | MVP |
+| PS-038-06.R05 | Time source failure (NTP loss) sets clock DEGRADED per PS-038-03 within 10 s. | MVP |
 
-## Requirements to specify
-- [ ] PS-038-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Adds `reconcile_attempts` int to the internal queue record, not to BidTimingEvent.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries reuse `bid_id` as key.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery moves RECEIVED back to CLASSIFIED or to UNCLASSIFIED only (PS-038-03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`SNIPE.CLASSIFY_PENDING` (retryable, internal). `SNIPE.CLOCK_DEGRADED` surfaces as status.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Reconciler runs as `sys`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Duplicate delivery of the same bid: one timing event. Concurrent close-time change: snapshot rule R04 prevents divergence. Offline: queue survives app restart; ack is required before the UI shows "received". Bids with no ack after 24 h are dropped by the client and shown as "not sent".
+
+## Privacy, retention, abuse
+Queue on device stores bid IDs only. Stale-queue cleanup on logout.
+
+## Observability & budgets
+Reconciler backlog gauge; RECEIVED older than 60 s must be 0 in steady state.
+
+## Tests
+- TEST-PS-038-06-01 (fault): classifier outage for 30 s recovers without duplicates.
+- TEST-PS-038-06-02 (offline): queued bid acknowledged after 10 min is classified by server time.
+- TEST-PS-038-06-03 (race): bid arriving 1 ms before close is ACCEPTED_IN_ORDER; 1 ms after is REJECTED_AFTER_CLOSE.
+- TEST-PS-038-06-04 (clock): NTP loss flips DEGRADED within 10 s.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No bid lost or double-counted under the fault fixtures.
+2. Offline classification uses server time only.
+3. Close snapshot is immutable per record.
+
+## Assumptions & open decisions
+- ASSUMPTION: 60 s classifier retry window; 24 h offline ack window.
+- PROVISIONAL (D08 default, unapproved): local pending queue until relay acknowledgment.

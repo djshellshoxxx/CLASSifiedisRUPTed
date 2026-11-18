@@ -1,35 +1,53 @@
 # PS-037-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-037-07. **Owner:** [04_Auctions/02_auction_integrity/mod_fraud](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_fraud. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_fraud. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-ID-001
 
-## Purpose and scope
-Define the privacy retention abuse process for fraud within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-037-07.R01 | Signals and `device_key_hash` are PRIVATE_PERSONAL. Signals are never shown to other bidders or sellers. | MVP |
+| PS-037-07.R02 | `device_key_hash` = HMAC-SHA256 with a key held in the F16 KMS, rotated every 30 days; old-key hashes are dropped at rotation. | MVP |
+| PS-037-07.R03 | Retention: signals 180 days after auction close; upheld cases 2 years; dismissed cases 90 days; `device_key_hash` 30 days. All PROVISIONAL (D07). | MVP |
+| PS-037-07.R04 | Legal holds per CTR-PRV-001 R07 override retention and expire automatically. | MVP |
+| PS-037-07.R05 | Fraud signals are never federated (D01 default: not exported). | MVP |
+| PS-037-07.R06 | Precise location is never an input feature (CTR-PRV-001 R03). | MVP |
 
-## Requirements to specify
-- [ ] PS-037-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-037-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-037-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data classes: FraudSignal PRIVATE_PERSONAL; FraudCase PSEUDONYMOUS; aggregates PUBLIC at k >= 5.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+No event carries `device_key_hash` (PS-037-04 R03).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+On retention expiry: signal row is deleted; case keeps score_max and status only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`FRAUD.FEATURE_PROHIBITED` if a feature key matches a location or device class. Non-retryable.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Deletion requests from account holders produce an `aud_` completion record with IDs and counts only (CTR-PRV-001 R12).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-037-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Retention job is idempotent by date window. Deletion propagates to replicas and search within 24 h (CTR-PRV-001 R06).
+
+## Privacy, retention, abuse
+Abuse controls: rule thresholds not published in detail; claims rate-limited to 20 per moderator per day (ASSUMPTION); no automatic account suspension; false-positive appeals tracked as a metric. Pseudonyms do not guarantee anonymity: account linkage across auctions is a known risk.
+
+## Observability & budgets
+Retention job completion report with counts only. Appeal overturn rate tracked monthly.
+
+## Tests
+- TEST-PS-037-07-01 (lint): `device_key_hash` never appears in API or event schema.
+- TEST-PS-037-07-02 (retention): fixture signal expires at 180 days; case keeps status.
+- TEST-PS-037-07-03 (hold): legal-hold cas_ fixture is not deleted; auto-releases at end date.
+- TEST-PS-037-07-04 (abuse): 21st claim in one day by one moderator is rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retention table matches CTR-PRV-001 classes.
+2. No non-F12 response includes another account's identifiers.
+3. Key rotation test shows old hashes dropped.
+
+## Assumptions & open decisions
+- ASSUMPTION: subject access returns the requester's own rule_id, score and outcome, not other accounts' data.
+- PROVISIONAL (D07 default, unapproved): all retention periods above.
+- PROVISIONAL (D01 default, unapproved): no federation of fraud records.

@@ -1,35 +1,62 @@
 # PS-029-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-029-02. **Owner:** [03_Services/01_service_catalog/mod_skills](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_skills. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_skills. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the validation rules process for skills within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-029-02.R01 | Validation runs server-side before any write. Client checks are advisory only. | MVP |
+| PS-029-02.R02 | `skill_code` must exist in the active `taxonomy_version` at attach time. Otherwise `SKILLS.TAXONOMY_UNKNOWN` unless the label is routed to `pending_review` (R05). | MVP |
+| PS-029-02.R03 | Attach that would make row count > 20 → `SKILLS.LIMIT_EXCEEDED`, no partial write. | MVP |
+| PS-029-02.R04 | Label input: trim, NFC, reject control characters and bidi overrides (`SKILLS.LABEL_INVALID`); length 1–64 scalars. | MVP |
+| PS-029-02.R05 | Free-text label with no taxonomy match is accepted as `pending_review` only when the taxonomy flag `allow_pending` is true (default true, ASSUMPTION). | MVP |
+| PS-029-02.R06 | Attaching a deprecated code → `SKILLS.CODE_DEPRECATED` (retryable false). Existing rows remain valid. | MVP |
+| PS-029-02.R07 | `proficiency` outside the closed enum → `SKILLS.PROFICIENCY_INVALID`. | MVP |
+| PS-029-02.R08 | Duplicate `(listing_id, skill_code)` → `SKILLS.DUPLICATE_ATTACHMENT`; the existing row is returned, no new event. | MVP |
+| PS-029-02.R09 | Listing not owned by actor, or not in an editable state → `SYS.NOT_FOUND` for non-owners (CTR-ERR-001 R08). | MVP |
 
-## Requirements to specify
-- [ ] PS-029-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-029-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-029-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Validation inputs are the `listing_skill` fields in [domain_schema.md](domain_schema.md). Rule versions are recorded on the event as `schema_version`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command returns rule codes in `details[].rule` (closed enum: `max_length`, `charset`, `unknown_code`, `limit`, `duplicate`, `deprecated`). Input values are never echoed (CTR-ERR-001 R07).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation precedes every transition in [workflow_state_machine.md](workflow_state_machine.md). Rejected input causes no transition.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | message_key | Diagnostic |
+|---|---|---|---|
+| SKILLS.TAXONOMY_UNKNOWN | false | err.skills.taxonomy_unknown | code not in version |
+| SKILLS.LIMIT_EXCEEDED | false | err.skills.limit_exceeded | row count |
+| SKILLS.LABEL_INVALID | false | err.skills.label_invalid | rule enum only |
+| SKILLS.PROFICIENCY_INVALID | false | err.skills.proficiency_invalid | enum name |
+| SKILLS.DUPLICATE_ATTACHMENT | false | err.skills.duplicate_attachment | row ID |
+| SKILLS.CODE_DEPRECATED | false | err.skills.code_deprecated | code |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Validation does not grant access. Rules run after the capability check in [authorization_capabilities.md](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-029-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Validation is deterministic for a given taxonomy version. Offline clients validate against the cached taxonomy version and the server re-validates on relay receipt (D08 PROVISIONAL).
+
+## Privacy, retention, abuse
+Rejected labels are not stored, except the normalized rule enum in logs. Repeated rejects from one account: rate limit after 30 per hour (ASSUMPTION).
+
+## Observability & budgets
+Counter per rule code. Validation p95 ≤ 5 ms excluding I/O (ASSUMPTION).
+
+## Tests
+- TEST-PS-029-02-01 unit: one case per rule code, including Unicode normalization of `café` in NFD and NFC.
+- TEST-PS-029-02-02 property: any label with a bidi override is rejected.
+- TEST-PS-029-02-03 negative: 21st attachment returns LIMIT_EXCEEDED and writes nothing.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every rule in R01–R09 maps to exactly one error code or accept path.
+2. No error response contains label text (CTR-ERR-001 R06).
+3. All codes in the table exist in the CTR-ERR-001 registry with fixed `retryable`.
+
+## Assumptions & open decisions
+- ASSUMPTION: `allow_pending` default true.
+- Module error prefix SKILLS follows CTR-ERR-001 R02 (2–8 uppercase letters).
+- No payment or receipt checklist applies.

@@ -1,35 +1,55 @@
-# PS-078-05 — authorization capabilities
+# PS-078-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-078-05. **Owner:** [10_Privacy/01_data_controls/mod_export](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_export. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_export (Privacy Lead, F10; review F16). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001 (R01–R13), CTR-PRV-001 (owner export matrix, R11), CTR-ERR-001 (R08).
 
-## Purpose and scope
-Define the authorization capabilities process for export within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-078-05.R01 | Capability `privacy_export.create` and `privacy_export.read` with scope `self`. | MVP |
+| PS-078-05.R02 | Export includes only the subject's own records; counterparty fields are replaced by per-export pseudonyms (PS-078-07 R03). | MVP |
+| PS-078-05.R03 | Download token is a bearer secret valid for one full download; possession of the `acc_` session alone is not sufficient to download when the token is missing (token is required on every download request). | MVP |
+| PS-078-05.R04 | Operators cannot create or download a subject's export in MVP. Legal-request exports are Future scope, requiring dual control (CTR-CAP-001 R07). | MVP |
+| PS-078-05.R05 | `sys_` generator grant: `privacy_export.generate`, scope `global`, purpose `subject_export`, expires ≤ 72 h. | MVP |
+| PS-078-05.R06 | Audit `aud_` record per download with `dsr_` ID and decision ID; no content. | MVP |
 
-## Requirements to specify
-- [ ] PS-078-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-078-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-078-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Grant references `grt_`; decision records `dec_` outcome only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Request and get → `privacy_export.create`/`read`; download → `privacy_export.read` plus token; generate → `privacy_export.generate`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not state-dependent except download, which requires state `ready` or `downloaded`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unauthorized object → `SYS.NOT_FOUND`; visible but denied → `SYS.FORBIDDEN`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | request | get | download | generate |
+|---|---|---|---|---|
+| subject acc_ | self | self | self + token | no |
+| other acc_ | no | no | no | no |
+| ope_ | no (MVP) | no | no | no |
+| sys_ generator | no | no | no | global, purpose-bound |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-078-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Decision cache TTL zero for download and PRIVATE-class reads (CTR-CAP-001 R09).
+
+## Privacy, retention, abuse
+Download event retention RET-AUD. Session revocation after download does not revoke the token; token is single-use.
+
+## Observability & budgets
+`export_authz_denied_total{actor_type}`; any `ope_` access attempt alerts.
+
+## Tests
+- TEST-PS-078-05-01 (negative): other `acc_` requesting a download of another subject's `dsr_` → `SYS.NOT_FOUND`.
+- TEST-PS-078-05-02 (negative): valid session without token → `SYS.UNAUTHENTICATED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix enforced deny-by-default.
+2. Negative tests pass.
+3. No operator path exists in MVP build (route audit).
+
+## Assumptions & open decisions
+- ASSUMPTION: generator grant ≤ 72 h.
+- PROVISIONAL (D10 default): user-controlled keys for package encryption and recovery documented before first release.

@@ -1,61 +1,44 @@
-# Process inventory and integration checklist
+# Process checklist — F06.S02.M02 location
 
-**Status:** DRAFT. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
+**Status:** SPEC-DRAFT-COMPLETE. Owner: [module](SPEC.md). See [registry](../../../planning/SPEC_REGISTRY.md).
 
-- [x] [authorization_capabilities.md](authorization_capabilities.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [commands_queries_events.md](commands_queries_events.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [domain_schema.md](domain_schema.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [observability_performance.md](observability_performance.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [validation_rules.md](validation_rules.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-- [x] [workflow_state_machine.md](workflow_state_machine.md) — placeholder exists; DRAFT
-- [ ] Expand requirements, state and error contracts for this process
-- [ ] Map upstream producers, downstream consumers and canonical contracts
-- [ ] Review privacy, fraud, moderation, accessibility and offline behavior
-- [ ] Define test fixtures and measurable acceptance conditions
-
-## Integration gates
-- [ ] Resolve cross-module ownership and dependencies.
-- [ ] Validate typed errors, capabilities, events and schema versioning.
-- [ ] Cover rollback, backup/restore, import/export and retention.
-- [ ] Record unresolved choices in DECISIONS.md.
-- [ ] Complete Prompt 3 specification-quality review before implementation.
+- [x] [domain_schema.md](domain_schema.md) — PS-048-01 written
+  - [ ] Schema has no lat, lon, accuracy or address key
+  - [ ] `source` enum closed to picker and device_resolved
+  - [ ] Client network capture shows no coordinates
+- [x] [validation_rules.md](validation_rules.md) — PS-048-02 written
+  - [ ] Nested `lat` key in request body rejected
+  - [ ] 30 km accuracy fix refused on client
+  - [ ] Fix outside all cells yields OUTSIDE_SUPPORTED_AREA
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-048-03 written
+  - [ ] Withdrawal clears device cell within 60 s
+  - [ ] Picker cell survives device withdrawal
+  - [ ] Deletion clears cell within 24 h
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-048-04 written
+  - [ ] Event schema rejects coordinate keys
+  - [ ] Duplicate cell.set with same key returns original
+  - [ ] Query returns only caller's own cell
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-048-05 written
+  - [ ] Cross-account read returns SYS.NOT_FOUND
+  - [ ] Support role cannot set another account's cell
+  - [ ] Guest path stores nothing
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-048-06 written
+  - [ ] Offline set blocked with local message and nothing queued
+  - [ ] Geometry older than 24 h forces picker mode
+  - [ ] Withdraw/set race resolved by consent revision
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-048-07 written
+  - [ ] Static check: no forbidden keys in payload schemas
+  - [ ] No coordinate in URL, headers or body in resolve-and-set flow
+  - [ ] Spoof flagging fixtures (1 000 fixes)
+- [x] [observability_performance.md](observability_performance.md) — PS-048-08 written
+  - [ ] Log scanner flags lat/lon keys
+  - [ ] Telemetry schema rejects coordinates
+  - [ ] Set p95 ≤ 150 ms at 200 req/s
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-048-09 written
+  - [ ] Pick→search→withdraw E2E
+  - [ ] Picker keyboard and screen reader checks (F14)
+  - [ ] Offline resolution with cached geometry
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-048-10 written
+  - [ ] Export contains cell, no coordinate keys
+  - [ ] Restore after deletion does not resurrect cell
+  - [ ] Migration golden fixtures

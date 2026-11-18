@@ -1,35 +1,55 @@
 # PS-038-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-05. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_sniping. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-PRV-001
 
-## Purpose and scope
-Define the authorization capabilities process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-038-05.R01 | Capabilities: `sniping.record`, `sniping.read_own`, `sniping.read_summary`, `sniping.read_detail`. All match CTR-CAP-001 pattern. | MVP |
+| PS-038-05.R02 | Default deny. Bidders see only their own timing class; no other bidder's class. | MVP |
+| PS-038-05.R03 | Sellers see summary counts for their own auctions only, with k >= 5 suppression. | MVP |
+| PS-038-05.R04 | `sniping.read_detail` (per-bid timestamps with `bidder_id`) is limited to F12 moderators with a case scope. | MVP |
 
-## Requirements to specify
-- [ ] PS-038-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Grant records per CTR-CAP-001. Seller link resolved via auction ownership in 01_auction_lifecycle.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command checks one capability before validation.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Grant revocation has no effect on stored records; it affects reads only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`CAP.DENIED` for missing capability; `CAP.SCOPE_MISMATCH` for seller querying another auction.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Capability |
+|---|---|---|---|
+| sys (bid path) | record timing | BidTimingEvent | sniping.record |
+| bidder (acc_) | read own class | own bid timing | sniping.read_own |
+| seller (acc_, owns auction) | read summary | auction aggregate | sniping.read_summary |
+| mod (F12, case scope) | read detail | BidTimingEvent | sniping.read_detail |
+| any other | any | any | deny |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Grant checks are synchronous with cache TTL <= 60 s.
+
+## Privacy, retention, abuse
+Seller cannot infer bidder identity from summaries (k >= 5). Detail access is logged with case ID.
+
+## Observability & budgets
+Denial counts by capability. Alert if seller summary queries exceed 60/min for one account (ASSUMPTION; scraping control).
+
+## Tests
+- TEST-PS-038-05-01 (negative): each actor-action pair allow/deny.
+- TEST-PS-038-05-02 (scope): seller querying another auction gets CAP.SCOPE_MISMATCH.
+- TEST-PS-038-05-03 (rate): 61st summary query in one minute is throttled.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command maps to one capability.
+2. No seller or other bidder can see a bidder_id.
+3. Scope and rate tests pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: 60 queries per minute per account for summary reads.
+- PROVISIONAL (no Dxx): detail read requires F12 case scope.

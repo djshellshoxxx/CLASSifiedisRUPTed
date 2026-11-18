@@ -1,35 +1,52 @@
 # PS-045-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-045-09. **Owner:** [06_Discovery/01_search/mod_index](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_index. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_index. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R03, R09), CTR-EVT-001, CTR-ERR-001 (R02, R09), CTR-PRV-001; PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for index within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** Test fixture corpus is ASSUMPTION (owner F17 QA Lead).
 
-## Requirements to specify
-- [ ] PS-045-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-045-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-045-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-09.R01 | Every consumed `lst.*` schema has golden fixtures for each supported MAJOR and each migration path (CTR-SCH-001 R09). | MVP |
+| PS-045-09.R02 | Contract tests run in CI on every change; a failing compatibility check blocks merge (CTR-SCH-001 R03). | MVP |
+| PS-045-09.R03 | End-to-end test: publish → index → query → withdraw → query absent, within 60 s. | MVP |
+| PS-045-09.R04 | Accessibility: query result list output has no index-specific barriers (screen reader labels from PS-045-01 fields only). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Fixture set: 500 listings across 12 region cells (ASSUMPTION), including adversarial titles (bidi, spam, phone numbers), federated fixtures (future), and K_MIN boundary cells (4 and 5 items).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Tests target `index.apply_event`, `index.suppress`, `index.rebuild` and `index.doc.changed`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Each state in PS-045-03 has at least one fixture reaching it.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Each code in PS-045-02 has one negative fixture.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-045-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Authorization matrix rows in PS-045-05 each have one allow and one deny test.
+
+## Failure, idempotency, concurrency, offline
+Chaos and replay fixtures from PS-045-06 included in this suite.
+
+## Privacy, retention, abuse
+Fixtures use synthetic data only; no real user data in test corpus.
+
+## Observability & budgets
+Test run reports latency percentiles per PS-045-08 budgets.
+
+## Tests
+- TEST-PS-045-09-01 (contract): schema golden files for all MAJOR versions.
+- TEST-PS-045-09-02 (e2e): publish→withdraw→query-absent timing.
+- TEST-PS-045-09-03 (a11y): query result rendering passes automated checks (owner F14).
+- TEST-PS-045-09-04 (offline): client shows last server snapshot, no local index writes.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. 100% of PS-045-01 to PS-045-08 requirement IDs mapped to at least one TEST ID.
+2. Contract suite green on golden fixtures for current MAJOR.
+3. E2E withdraw-to-absent under 60 s on reference profile.
+
+## Assumptions & open decisions
+- ASSUMPTION: synthetic fixture corpus is sufficient for MVP.
+- D08 PROVISIONAL: offline behavior is read-only.

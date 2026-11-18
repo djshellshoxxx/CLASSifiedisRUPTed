@@ -1,35 +1,65 @@
 # PS-070-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-070-01. **Owner:** [09_Commerce/02_settlement/mod_disputes](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_disputes (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-COM-001 (R05, R16), CTR-ID-001 (`dsp`, `evd`, `cas`), CTR-PRV-001, CTR-SCH-001. **Decisions:** D04, D07 (PROVISIONAL defaults, unapproved).
 
-## Purpose and scope
-Define the domain schema process for disputes within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-070-01.R01 | One `dispute` record per disputed claim `clm_` at a time. Record class `dsp_` is canonical here; other modules reference `dsp_` IDs only. | MVP |
+| PS-070-01.R02 | `reason_code` is an enum of 5 values: `not_received`, `amount_mismatch`, `not_as_described`, `fraudulent_claim`, `other`. | MVP |
+| PS-070-01.R03 | `statement` ≤ 1000 code points, PRIVATE_PERSONAL, stored encrypted. | MVP |
+| PS-070-01.R04 | `evidence_ids` ≤ 10 `evd_` references per party per dispute. Content lives in PS-071. | MVP |
+| PS-070-01.R05 | Every dispute record keeps the claim `state_version` at raise time (`raised_at_state_version`). | MVP |
 
-## Requirements to specify
-- [ ] PS-070-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-070-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-070-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Field | Type / constraint | Class |
+|---|---|---|
+| `dispute_id` | `dsp_` + ULID body | FINANCIAL_EVIDENCE |
+| `claim_id` | `clm_` ID | FINANCIAL_EVIDENCE |
+| `raised_by` | `acc_` (claimant or counterparty of the claim) | PSEUDONYMOUS |
+| `reason_code` | enum (R02) | FINANCIAL_EVIDENCE |
+| `statement` | string ≤ 1000 code points, nullable | PRIVATE_PERSONAL |
+| `evidence_ids` | array of `evd_`, ≤ 10 | FINANCIAL_EVIDENCE |
+| `status` | enum (PS-070-03) | FINANCIAL_EVIDENCE |
+| `response_due_at` | timestamp, raised_at + 7 d (ASSUMPTION) | PSEUDONYMOUS |
+| `case_id` | `cas_` or null | PSEUDONYMOUS |
+| `outcome` | enum `restore_prior`, `reverse` or null | FINANCIAL_EVIDENCE |
+| `state_version` | integer ≥ 1 | — |
+| `schema_version` | `1.0.0` | — |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Defined in PS-070-04. Claim transitions are written by CTR-COM-001 commands (`clm.dispute`, `case.resolve`) and never directly by this module.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See PS-070-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See PS-070-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Field visibility: `statement` visible to the two claim parties and the assigned moderator inside a case grant; `reason_code` and `status` visible to participants; `outcome` visible to participants.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-070-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Schema migrations follow CTR-SCH-001. A dispute row whose `claim_id` no longer exists is quarantined, not deleted.
+
+## Privacy, retention, abuse
+Classes as above. Retention: RET-EVD for the record, with `statement` redacted at 12 months after resolution (CTR-PRV-001 table).
+
+## Observability & budgets
+Count of open disputes per status (aggregate). No per-row logging.
+
+## Tests
+- TEST-PS-070-01-01 (unit): at most one open dispute per claim (second raise returns `DISPUTE.ALREADY_OPEN`).
+- TEST-PS-070-01-02 (unit): `reason_code` outside enum rejected with `SYS.REQUEST_MALFORMED`.
+- TEST-PS-070-01-03 (unit): 1000 vs 1001 code point statement boundary.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Schema matches the field table; each field has exactly one class.
+2. `statement` never appears in events or logs (canary test).
+3. Dispute rows reference claims by ID only; no copy of claim amounts beyond `claim_id` lookup (ASSUMPTION: amounts are read from the claim, not duplicated).
+
+## Assumptions & open decisions
+- PROVISIONAL canonical owner (B-06): `dsp_` records are owned by PS-070. PS-030 (03_Services/02_service_booking/mod_disputes) must reference `dsp_` by ID or define a separate record class under a different slug.
+- ASSUMPTION: 7-day response window.
+- D04 (PROVISIONAL default, unapproved): explicit per-party attestations and compensating recovery; no atomic real-world guarantee.
+- D07 (PROVISIONAL default, unapproved).

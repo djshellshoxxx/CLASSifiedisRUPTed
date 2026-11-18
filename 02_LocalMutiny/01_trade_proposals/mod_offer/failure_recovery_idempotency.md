@@ -1,35 +1,47 @@
-# PS-013-06 — failure recovery idempotency
+# PS-013-06 — failure, recovery and idempotency
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-013-06. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_offer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-013-06.R01 | Submit is atomic: revision insert, prior-revision supersede and event append commit together or not at all. | MVP |
+| PS-013-06.R02 | Idempotency keys are retained 7 days (CTR-EVT-001 R03); replay returns the original response. | MVP |
+| PS-013-06.R03 | Client retries only for retryable codes, max 3 attempts, backoff 1 s, 2 s, 4 s with ±20% jitter. | MVP |
+| PS-013-06.R04 | Offline drafts queue locally, max 50 offers, until relay acknowledgment (D08 PROVISIONAL). | MVP |
 
-## Purpose and scope
-Define the failure recovery idempotency process for offer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Recovery uses `ofr_id`, `revision_no`, `idempotency_key`, `content_digest` (PS-013-01). No additional tables.
 
-## Requirements to specify
-- [ ] PS-013-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-013-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-013-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Server timeout for submit 2 s; client timeout 5 s. Timeout after commit is resolved by replaying the same key.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Crash before commit: no state change. Crash after commit before response: client replays key, receives original result.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+`OFFER.REVISION_CONFLICT` (retryable after refresh of `revision_no`). `OFFER.QUOTE_STALE` (retryable after re-fetch). `OFFER.LISTING_UNAVAILABLE` (not retryable).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Replays re-authorize against current state; a withdrawn slot cannot submit even with a valid old key.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Concurrent submits on one slot: row lock on the slot's current revision; loser gets `OFFER.REVISION_CONFLICT`. Lock vs submit race: lock wins if committed first, then submit returns `OFFER.ILLEGAL_TRANSITION`. Offline queue is ordered per slot; a queued submit with stale `expected_revision` is rejected and kept for user review, not auto-merged.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-013-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Queued local drafts are encrypted at rest on the device (ASSUMPTION) and deleted on acknowledgment or after 30 days.
+
+## Observability & budgets
+Metrics: retry count per code, replay count, queue depth p95 ≤ 5. Alert when conflict rate exceeds 2% for 15 minutes.
+
+## Tests
+- TEST-PS-013-06-01 (integration): fault injection after commit, before response; replay returns original.
+- TEST-PS-013-06-02 (concurrency): 20 parallel submits on one slot yield one winner.
+- TEST-PS-013-06-03 (offline): queue survives app restart; 51st draft is refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero duplicate `offer.submitted` events across 10,000 fault-injected replays.
+2. No partial state after injected failure at each of the 4 write steps.
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day key retention is adequate for offline queues of ≤ 30 days; replays after 7 days return `SYS.IDEMPOTENCY_KEY_REUSED`.
+- D08 PROVISIONAL (Dxx default, unapproved): local pending queue until authenticated acknowledgment.

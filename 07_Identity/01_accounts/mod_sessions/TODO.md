@@ -1,10 +1,10 @@
-# TODO
+# TODO — mod_sessions (F07.S01.M02)
 
-**Status:** PLANNED — hierarchy established, process specifications pending.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). Owner: Identity&Trust Lead.
 
-- [x] Define ownership and directory contract.
-- [x] Enumerate module process specifications.
-- [ ] Expand each process spec to developer-ready acceptance tests.
-- [ ] Validate cross-feature contracts and risk controls.
+- [x] Expand each process spec to developer-ready acceptance tests (PS-054-01 to -10).
+- [ ] Register prefixes `ses_` and `rfm_` in CTR-ID-001 registry.
+- [ ] Confirm token format and lifetimes (24 h idle, 30 d absolute, 10 s grace) with Security Lead (F16).
+- [ ] Select audited token and keyed-hash libraries; no hand-rolled primitives.
 - [ ] Implement (future prompt only).
-- [ ] Verify tests, accessibility, privacy and security (future prompt).
+- [ ] Verify TEST-PS-054-01 to -23 (future prompt).

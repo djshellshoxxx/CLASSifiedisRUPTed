@@ -1,35 +1,48 @@
-# PS-112-08 — observability performance
+# PS-112-08 — observability and performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/02_internationalization/mod_currencies. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-112-08. **Owner:** [14_Accessibility/02_internationalization/mod_currencies](SPEC.md). **Implementing module:** 14_Accessibility/02_internationalization/mod_currencies. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-112-08.R01 | Count format errors and fallback uses by error code. | MVP |
+| PS-112-08.R02 | Format p95 ≤ 2 ms per amount on reference device (ASSUMPTION). | MVP |
+| PS-112-08.R03 | Logs carry codes and versions only. | MVP |
 
-## Purpose and scope
-Define the observability performance process for currencies within 02_internationalization. Do not assume implementation or successful external settlement.
+## Data / schema
+Metrics: `cur_format_error_total{code}`, `cur_catalog_version` gauge, `cur_format_ms` histogram.
 
-## Requirements to specify
-- [ ] PS-112-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-112-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-112-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+None.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Labels from CTR-ERR-001 codes.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Engineering roles read metrics.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Metrics buffered offline and dropped after 24 h.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-112-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+No amounts or codes tied to accounts in metrics.
+
+## Observability & budgets
+| Budget | Target |
+|---|---|
+| Format p95 | ≤ 2 ms per amount |
+| Catalog fetch p95 | ≤ 100 ms |
+
+## Tests
+- TEST-PS-112-08-01 performance: 1000 amounts formatted in a benchmark run.
+- TEST-PS-112-08-02 static: metric labels are enums.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Budgets met in test run.
+2. Catalog version gauge matches served version.
+
+## Assumptions & open decisions
+- ASSUMPTION: reference device defined at implementation.
+- No Dxx decision directly affects observability.

@@ -1,35 +1,49 @@
-# PS-095-06 — failure recovery idempotency
+# PS-095-06 — failure, recovery, idempotency and offline
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-095-06. **Owner:** [12_Moderation/02_policy/mod_abuse](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_abuse. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_abuse (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for abuse within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-095-06.R01 | Scanning is detective and asynchronous. Content publication is never blocked by scanner failure in this module. | MVP |
+| PS-095-06.R02 | Scan jobs are at-least-once with dedupe on (source_ref, rule_id, rule_version). | MVP |
+| PS-095-06.R03 | A rule rollout is staged: 5% of scans for 24 h, then full, with precision check before full rollout (ASSUMPTION). | MVP |
+| PS-095-06.R04 | Rule rollback is immediate; findings already recorded keep their cited rule_version. | MVP |
 
-## Requirements to specify
-- [ ] PS-095-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-095-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-095-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Retry and timeouts
+| Path | Timeout | Retry | Terminal |
+|---|---|---|---|
+| Scan job | 5 s per window | 3 attempts, backoff 2 s, 8 s, 32 s | job to dead-letter; alert |
+| Finding write | 2 s | 2 attempts | scan re-queued |
+| Enforcement proposal emit | 2 s | outbox pattern, at-least-once | outbox retained 7 days |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Recovery
+Dead-letter jobs are replayed after rule fix; replay is idempotent. Outbox rows are deleted only after consumer ack (PS-096 proposal).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Offline behavior
+Not applicable to server scanning. Reviewer offline clients are read-only for abuse queues (no local decisions).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Concurrency
+Review uses `expected_revision`; concurrent review returns `ABU.FINDING_NOT_OPEN`. Rule publish is serialized by governance lock.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Scanner credentials rotate every 24 h (F16); scans carry no user session.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-095-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Dead-letter payloads hold digests only, never text; they expire in 7 days (RET-OPS). Rule-evasion attempts (repeated near-identical content from one account) are tracked as counters.
+
+## Observability & budgets
+`abuse_scan_backlog`, `abuse_deadletter_total`, `abuse_rule_rollout_precision`. Alert when backlog > 10,000 items or lag > 60 s.
+
+## Tests
+- TEST-PS-095-06-01 (fault): scanner down 30 min → publication unaffected; backlog drains after recovery.
+- TEST-PS-095-06-02 (replay): duplicate scan jobs produce one finding.
+- TEST-PS-095-06-03 (rollback): rule disabled → subsequent scans skip it; existing findings keep version.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Scanner outage never blocks a write (TEST-01).
+2. No dead-letter payload contains text (privacy scan).
+
+## Assumptions & open decisions
+- ASSUMPTION: staged rollout 5% → 100% after 24 h.
+- PROVISIONAL (D08 default, unapproved): not applicable to server scans; reviewer tools read-only offline.

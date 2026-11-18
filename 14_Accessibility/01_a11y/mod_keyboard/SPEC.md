@@ -1,44 +1,43 @@
 # F14.S01.M01 — keyboard
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F14.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Accessibility Lead (F14). **Parent:** F14.S01.
 
 ## Purpose and business behavior
-Provide keyboard as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Keyboard-only operation of every PWA screen: focus order, visible focus, dialog focus trapping and focus return, roving focus in composite widgets (listing grid, message thread, barter cycle participant list), and optional user-set shortcuts. Output is one focus contract per interactive component (static catalog, PUBLIC) plus shortcut binding records. Only account-scope bindings reach the server; focus behavior runs entirely on the client.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a keyboard-only participant, I reach every action in a listing, a message thread and a cycle consent screen without a pointer.
+- As a keyboard-only participant, I close any dialog with Escape and land on the control that opened it.
+- As a participant, I change or reset a shortcut, and the change reaches my other devices when I am online.
+- As an operator, I disable user shortcuts without disabling focus behavior.
 
 ## Scope
-- Required process spec: `keyboard_domain_model.md` (not yet authored)
-- Required process spec: `keyboard_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `keyboard_validation_and_authorization.md` (not yet authored)
-- Required process spec: `keyboard_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `keyboard_interfaces_and_events.md` (not yet authored)
-- Required process spec: `keyboard_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `keyboard_acceptance_and_property_tests.md` (not yet authored)
+In: focus contracts, focus-trap rules, shortcut bindings (device and account scope), reserved-key and conflict rules.
+Out: screen reader announcements (F14.S01.M02), WCAG criteria evaluation (F14.S01.M03), component visuals (UI modules), offline replay engine (F15.S01.M01).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `kbd.binding.set`, `kbd.binding.reset`; query `kbd.binding.list`; event `keyboard_binding.changed`; error prefix `KBD.`. Detail in PS-109-04 and PS-109-02.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: identity and authorization (F07, F16) for account scope; offline queue (F15.S01.M01) for deferred sync. Downstream: every UI module that declares `component_id` focus contracts. Canonical contracts: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-PRV-001. Pending: `kbb_` prefix registration in CTR-ID-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+This module owns focus contract records and shortcut binding records. UI modules own their components. Account identity remains with F07.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Keyboard traps with no exit path; shortcuts that intercept assistive-technology keys or typed text; focus lost after offline banners or consent dialogs; binding data revealing usage patterns. Shortcut capture is disabled whenever a text field has focus. No platform custody of money.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specifications expanded to SPEC-DRAFT-COMPLETE; catalog coverage gate defined; privacy and accessibility review pending (future gate).
 
 ## Required process specification inventory
-- [ ] `keyboard_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `keyboard_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `keyboard_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `keyboard_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `keyboard_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `keyboard_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `keyboard_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-109-01 — SPEC-DRAFT-COMPLETE
+- [x] [validation_rules.md](validation_rules.md) — PS-109-02 — SPEC-DRAFT-COMPLETE
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-109-03 — SPEC-DRAFT-COMPLETE
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-109-04 — SPEC-DRAFT-COMPLETE
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-109-05 — SPEC-DRAFT-COMPLETE
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-109-06 — SPEC-DRAFT-COMPLETE
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-109-07 — SPEC-DRAFT-COMPLETE
+- [x] [observability_performance.md](observability_performance.md) — PS-109-08 — SPEC-DRAFT-COMPLETE
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-109-09 — SPEC-DRAFT-COMPLETE
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-109-10 — SPEC-DRAFT-COMPLETE

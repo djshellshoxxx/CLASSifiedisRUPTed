@@ -1,44 +1,54 @@
-# F16.S01.M01 — authorization
+# F16.S01.M01 — mod_authorization
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F16.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Security Lead. **Parent:** [F16.S01](../SPEC.md). **Registry:** PS-126-01 to PS-126-10 in [SPEC_REGISTRY](../../../planning/SPEC_REGISTRY.md). **Canonical contract:** [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Purpose and business behavior
-Provide authorization as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+The policy decision point for ClassRup. Every read, write, export, subscription and attachment download is allowed or denied here, on the server, by default-deny rules. The module evaluates relation rules (owner, participant), explicit grants (including privileged grants that need two approvers and a purpose), field visibility and decision records. It does not define domain actions; each module declares its own action subset in its `authorization_capabilities.md`.
+
+Object-level checks cover listings, messages, cycle proposals, reports and disputes. Bulk endpoints and alternate API paths are authorized per item.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I can read and update only the listings, proposals and messages I own or take part in; other objects look as if they do not exist.
+- As a moderator, I can read reports only inside an assigned case, for a stated purpose, until the grant expires.
+- As an operator, I cannot act on private data alone; a second operator must approve.
+- As a user, I see my access revoked on my devices within one minute of revocation.
 
 ## Scope
-- Required process spec: `authorization_domain_model.md` (not yet authored)
-- Required process spec: `authorization_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `authorization_validation_and_authorization.md` (not yet authored)
-- Required process spec: `authorization_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `authorization_interfaces_and_events.md` (not yet authored)
-- Required process spec: `authorization_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `authorization_acceptance_and_property_tests.md` (not yet authored)
+- Decision engine `authz.decide` and decision records (`dec_`).
+- Grant store (`grt_`) for explicit, time-bounded grants and approvals.
+- Policy versions (`pol_`) that bind rule sets to decisions.
+- Decision cache with TTL rules from CTR-CAP-001 R09.
+- Out of scope: authentication and sessions (F07), domain action vocabulary (each module), moderation case workflow (F12).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal decision call `authz.decide`; grant commands `grant.create`, `grant.approve`, `grant.revoke`; policy commands `policy.draft`, `policy.publish`, `policy.rollback`; events on CTR-EVT-001; errors on CTR-ERR-001 (`CAP.*`, `SYS.FORBIDDEN`, `SYS.NOT_FOUND`, `AUTHZ.*`).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+- Upstream: F07 identity (principal and session validity), CTR-ID-001 (`acc_`, `grt_`, `dec_`), CTR-PRV-001 (data classes for field visibility).
+- Downstream: every module that enforces authorization; CTR-FED-001 peer scopes; F12 moderation cases (case scope); F10 purpose registry.
+- CTR-CAP-001 is owned by F16 with F07 (named owners UNASSIGNED, S3-11). Reference by ID only.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns: grant records, approval records, decision records, policy versions, decision cache. Does not own: accounts, sessions, object content, moderation cases.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Object-level bypass through IDs, bulk endpoints and alternate routes (S3-02, Critical).
+- Stale grants after revocation, including offline clients and federated peers.
+- Fail-open behavior when the grant or policy store is down.
+- Self-approval or collusion between two operators (CR-12 Sybil and collusion risk).
+- Decision logs that leak object content or purposes.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specifications SPEC-DRAFT-COMPLETE; decision matrix from CTR-CAP-001 covered by tests; S3-02 negative suite defined; Security Lead review recorded (future gate).
 
 ## Required process specification inventory
-- [ ] `authorization_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `authorization_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `authorization_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `authorization_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `authorization_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `authorization_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `authorization_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-126-01 — SPEC-DRAFT-COMPLETE
+- [x] [validation_rules.md](validation_rules.md) — PS-126-02 — SPEC-DRAFT-COMPLETE
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-126-03 — SPEC-DRAFT-COMPLETE
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-126-04 — SPEC-DRAFT-COMPLETE
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-126-05 — SPEC-DRAFT-COMPLETE
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-126-06 — SPEC-DRAFT-COMPLETE
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-126-07 — SPEC-DRAFT-COMPLETE
+- [x] [observability_performance.md](observability_performance.md) — PS-126-08 — SPEC-DRAFT-COMPLETE
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-126-09 — SPEC-DRAFT-COMPLETE
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-126-10 — SPEC-DRAFT-COMPLETE

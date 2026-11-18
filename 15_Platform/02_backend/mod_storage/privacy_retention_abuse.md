@@ -1,35 +1,60 @@
-# PS-119-07 — privacy retention abuse
+# PS-119-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-07. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_storage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R03, R06, R07, R09, R10, R11), CTR-CAP-001 (R10), CTR-ERR-001 (R06).
 
-## Purpose and scope
-Define the privacy retention abuse process for storage within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-119-07.R01 | All location metadata removed from images before storage (PS-119-02 R05). | MVP |
+| PS-119-07.R02 | Storage keys and object paths carry no owner ID, filename or content hash. | MVP |
+| PS-119-07.R03 | Upload rate ≤ 30 per `acc_` per hour (ASSUMPTION); exceed → `SYS.RATE_LIMITED`. | MVP |
+| PS-119-07.R04 | Retention per owner scope; deletion propagates to replicas, caches and CDN within 24 h (CTR-PRV-001 R06). | MVP |
+| PS-119-07.R05 | Scanner and sweeper logs contain blob IDs and codes only. | MVP |
 
-## Requirements to specify
-- [ ] PS-119-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Data classes: listing photos default PUBLIC after strip; attachments per owner (PRIVATE_PERSONAL or FINANCIAL_EVIDENCE for evidence PDFs, CTR-PRV-001 class); profile images PSEUDONYMOUS.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Retention purge per PS-119-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`STO.CLASS_DOWNGRADE` (PS-119-02). Privacy checks never reveal the class to non-owners.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Class visible only to owner and authorized participant (CTR-CAP-001 R10).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Purge retried until confirmed; purge receipt stored as completion record (CTR-PRV-001 R12).
+
+## Privacy, retention, abuse
+| Threat | Control |
+|---|---|
+| EXIF or GPS leakage | strip and re-encode (PS-119-02) |
+| Malicious file (polyglot, SVG, bomb) | allow-list, sniffing, decode limits |
+| Enumeration of blobs | opaque random IDs; uniform 404 |
+| Storage abuse | per-owner quota 200 MiB; upload rate limit |
+| Hosting of illegal content | quarantine path (PS-119-03) with `mod_` case |
+| Stale copies after delete | 24 h propagation, CDN purge |
+
+Retention: DELETED tombstones 30 days; orphan window 24 h; logs 14 days.
+
+## Observability & budgets
+Redaction canary test on logs; zero filename occurrences in logs.
+
+## Tests
+- TEST-PS-119-07-01 (security): canary filename absent from logs and errors.
+- TEST-PS-119-07-02 (integration): deletion reaches CDN within 24 h test clock.
+- TEST-PS-119-07-03 (privacy): storage key entropy and no ID substrings.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero GPS tags in stored images (sampled audit weekly).
+2. Deletion propagation test passes.
+3. Privacy Lead (F10) approves class mapping before release.
+
+## Assumptions & open decisions
+- ASSUMPTION: quota, upload rate and retention values above.
+- D05 PROVISIONAL (default: coarse public regions; precision user-initiated; unapproved).
+- D07 PROVISIONAL (unapproved): per-category retention.

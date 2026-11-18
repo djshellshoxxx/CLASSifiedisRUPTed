@@ -1,35 +1,58 @@
-# PS-119-08 — observability performance
+# PS-119-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-08. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_storage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R10), CTR-PRV-001 (R09).
 
-## Purpose and scope
-Define the observability performance process for storage within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-119-08.R01 | Metrics: upload count and bytes by `owner_scope` and result; scan latency; orphan count; checksum mismatches. | MVP |
+| PS-119-08.R02 | No labels containing `blob_id`, `owner_ref` or MIME of user-declared strings. | MVP |
+| PS-119-08.R03 | Storage latency and error metrics per object store operation. | MVP |
 
-## Requirements to specify
-- [ ] PS-119-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+- `stored_upload_total{owner_scope,result}`
+- `stored_upload_bytes_total{owner_scope}`
+- `stored_scan_duration_seconds` (histogram)
+- `stored_orphans_reclaimed_total`
+- `stored_checksum_mismatch_total`
+- `stored_store_op_duration_seconds{op}`
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Telemetry drop counter; never blocks writes.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Operator dashboards: `ope_` with `observability.read`; no byte access.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metric push buffered; loss counted.
+
+## Privacy, retention, abuse
+Metrics 90 days; logs 14 days; traces 7 days (ASSUMPTION).
+
+## Observability & budgets
+| Measure | Target |
+|---|---|
+| upload accept (202) p95 | ≤ 1 s for 10 MiB (ASSUMPTION) |
+| scan wait p95 | ≤ 60 s |
+| download first byte (CDN) p95 | ≤ 300 ms |
+| availability of read path | 99.9% monthly (ASSUMPTION) |
+
+## Tests
+- TEST-PS-119-08-01 (unit): label set contains no forbidden labels.
+- TEST-PS-119-08-02 (load): 50 concurrent 5 MiB uploads meet accept p95.
+- TEST-PS-119-08-03 (alert): checksum mismatch raises page within 5 min.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Dashboards for each metric exist before release.
+2. Checksum mismatch alert verified in staging.
+3. Load test results attached to release record.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above.
+- D07 PROVISIONAL (unapproved): telemetry retention.

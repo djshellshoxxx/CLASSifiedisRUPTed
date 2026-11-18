@@ -1,35 +1,49 @@
-# PS-080-10 — import export backup rollback
+# PS-080-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-080-10. **Owner:** [10_Privacy/02_security_boundaries/mod_metadata](SPEC.md). **Implementing module:** 10_Privacy/02_security_boundaries/mod_metadata. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/02_security_boundaries/mod_metadata (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (backups row, R06), CTR-SCH-001 (R07, R08), CTR-FED-001 (R08 export re-keying).
 
-## Purpose and scope
-Define the import export backup rollback process for metadata within 02_security_boundaries. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-080-10.R01 | No import path accepts attachment metadata from external sources; imported attachments pass the same sanitiser. | MVP |
+| PS-080-10.R02 | Data exports (F10.S01.M03) include attachments only after sanitisation; original uploads are never exported because they are not stored. | MVP |
+| PS-080-10.R03 | Backups contain only `clean` attachments and sanitiser reports; no quarantined bytes. | MVP |
+| PS-080-10.R04 | Rollback of a sanitiser version keeps `clean` outputs; new uploads use the restored version. | MVP |
+| PS-080-10.R05 | Policy history is retained as versioned config and is restorable with approvals. | MVP |
 
-## Requirements to specify
-- [ ] PS-080-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-080-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-080-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Backup manifest flags: `attachments_clean_only: true`, `policy_version`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None beyond PS-080-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore: `restoring` → `verifying_clean_flags` → `serving`. Any attachment without clean flag is excluded.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Restore with unflagged attachment → `META.STRIP_FAILED` (not retryable), attachment excluded and reported.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Restore is operator action with dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-080-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Verification is idempotent by attachment ID.
+
+## Privacy, retention, abuse
+Quarantined files excluded from backups by construction.
+
+## Observability & budgets
+`meta_restore_excluded_total`; restore verification ≤ 1 h for 1 M attachments (ASSUMPTION).
+
+## Tests
+- TEST-PS-080-10-01 (backup): quarantined file absent from backup.
+- TEST-PS-080-10-02 (rollback): sanitiser v-1 restored; existing clean outputs still served; new upload sanitised with v-1.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-080-10-01 and -02 pass.
+2. Export path test shows no unsanitised attachment.
+3. Restore excludes unflagged attachments (fixture).
+
+## Assumptions & open decisions
+- ASSUMPTION: restore budget above.
+- PROVISIONAL (D07 default): backup retention per schedule.

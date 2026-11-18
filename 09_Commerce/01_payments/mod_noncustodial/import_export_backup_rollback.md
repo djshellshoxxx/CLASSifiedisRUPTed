@@ -1,35 +1,54 @@
-# PS-069-10 — import export backup rollback
+# PS-069-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-069-10. **Owner:** [09_Commerce/01_payments/mod_noncustodial](SPEC.md). **Implementing module:** 09_Commerce/01_payments/mod_noncustodial. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/01_payments/mod_noncustodial (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R11), CTR-SCH-001 (migration), CTR-FED-001 (R03), CTR-EVT-001 (R08). **Decisions:** D07 (PROVISIONAL default, unapproved), D09 (PROVISIONAL default, unapproved).
 
-## Purpose and scope
-Define the import export backup rollback process for noncustodial within 01_payments. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-069-10.R01 | Owner export includes own routes and own `contact_hint`; counterparty's `contact_hint` is redacted (CTR-PRV-001 R11). | MVP |
+| PS-069-10.R02 | Export format: JSON per CTR-SCH-001, destinations as strings, no floats. Export generated in ≤ 10 s for ≤ 100 routes. | MVP |
+| PS-069-10.R03 | No import path in MVP. Route import from any peer or file is refused (`SYS.FORBIDDEN`) until a separate decision. | MVP |
+| PS-069-10.R04 | Backup restore replays `route.*` and `adapter.*` events; restored state must equal pre-backup state at the recorded `state_version`. | MVP |
+| PS-069-10.R05 | Restore replays hint purges so purged hints are not resurrected (CTR-PRV-001 R06). | MVP |
+| PS-069-10.R06 | Schema changes use expand-contract; rollback disables new commands by feature flag and never deletes route rows. | MVP |
 
-## Requirements to specify
-- [ ] PS-069-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-069-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-069-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export manifest: `schema_version`, `exported_at`, `route_count`, `redactions` (count only), `digest` (SHA-256 of body).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export is a query, not a command. Restore emits no new domain events; it writes a `restore.completed` audit record (`aud_`) with counts only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback does not move routes between states; disabled commands return `SYS.UNAVAILABLE` (retryable true) until re-enabled.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Export request by non-owner returns `SYS.NOT_FOUND`. Restore digest mismatch returns `SCH.MIGRATION_FAILED`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner export requires `route.read` on own routes. Restore requires `ope_` with dual control (CTR-CAP-001 R07).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-069-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export is idempotent on (owner, manifest digest). Restore is idempotent by replaying from event sequence; a partial restore is discarded and retried from the start.
+
+## Privacy, retention, abuse
+Exports are PRIVATE_PERSONAL artefacts: encrypted, expire from download link in 24 h (ASSUMPTION), deleted from the server after download or expiry.
+
+## Observability & budgets
+Export duration p95 ≤ 10 s; restore duration recorded per GB, no budget in MVP.
+
+## Tests
+- TEST-PS-069-10-01 (integration): owner export contains own hint and redacts counterparty hint.
+- TEST-PS-069-10-02 (contract): export validates against CTR-SCH-001 schema.
+- TEST-PS-069-10-03 (integration): backup-restore round trip equals pre-backup digest.
+- TEST-PS-069-10-04 (integration): hint purged before backup is still purged after restore.
+- TEST-PS-069-10-05 (negative): import attempt refused with `SYS.FORBIDDEN`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round-trip restore digest matches in 100 of 100 fixture runs.
+2. No purged hint reappears after restore (automated).
+3. Rollback drill: commands disabled, no route rows lost (staging drill).
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h export link lifetime.
+- D07 (PROVISIONAL default, unapproved): retention with legal-hold exceptions.
+- D09 (PROVISIONAL default, unapproved).

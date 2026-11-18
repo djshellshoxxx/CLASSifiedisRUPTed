@@ -1,35 +1,57 @@
-# PS-125-08 — observability performance
+# PS-125-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-125-08. **Owner:** [15_Platform/04_configuration/mod_tenants](SPEC.md). **Implementing module:** 15_Platform/04_configuration/mod_tenants. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [mod_tenants](SPEC.md) (Platform Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the observability performance process for tenants within 04_configuration. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-125-08.R01 | Tenant read p95 ≤ 10 ms with cache; ≤ 40 ms without (ASSUMPTION). | MVP |
+| PS-125-08.R02 | `tenant.create` (excluding provisioning) p95 ≤ 500 ms. | MVP |
+| PS-125-08.R03 | Suspension write denial effective ≤ 0 s after commit; cache expiry ≤ 60 s. | MVP |
+| PS-125-08.R04 | Logs contain `tenant_id`, operation, code, request ID and timing only. | MVP |
+| PS-125-08.R05 | Dashboards show status counts per tenant state, never tenant names. | MVP |
 
-## Requirements to specify
-- [ ] PS-125-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-125-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-125-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels are bounded enums: `op`, `outcome`, `code`, `status`. `tenant_id` is never a metric label.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Metrics for each command in [PS-125-04](commands_queries_events.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+`tenant_status_total{status}` gauge reflects [PS-125-03](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`tenant_validation_failures_total{code}`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Metrics endpoints require `ope` with purpose `operations`; no tenant admin access.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-125-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metric emission failures never block commands. Trace sampling 1% (ASSUMPTION).
+
+## Privacy, retention, abuse
+Logs and traces use the redaction rules in [PS-125-07](privacy_retention_abuse.md). Operational logs retained 30 days (RET-OPS).
+
+## Observability & budgets
+| Metric | Type | Target |
+|---|---|---|
+| `tenant_operations_total{op,outcome}` | counter | — |
+| `tenant_provision_duration_ms` | histogram | p95 ≤ 2,000 ms (ASSUMPTION) |
+| `tenant_config_revision_conflicts_total` | counter | alert if > 5% of updates over 1 h |
+| `tenant_suspension_propagation_seconds` | histogram | p95 ≤ 60 |
+
+Alerts: suspended-tenant write accepted (P1); provisioning failure rate > 5% over 1 h (ASSUMPTION); any `SYS.NOT_FOUND` anomaly spike for one admin.
+
+## Tests
+- TEST-PS-125-08-01 (performance): 1,000 tenants, 200 reads/s, p95 ≤ 10 ms with cache.
+- TEST-PS-125-08-02 (observability): metrics contain no slug or `admin_ref` label values.
+- TEST-PS-125-08-03 (alert): injected suspended-tenant write produces a P1 alert within 60 s.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each metric in the table is emitted by the implementation (future phase).
+2. No log line in the lifecycle test contains config values or display names.
+3. Performance targets met on the reference fixture.
+
+## Assumptions & open decisions
+- ASSUMPTION: latency and sampling budgets as stated.
+- PROVISIONAL (D07 default, unapproved): operational log retention 30 days.

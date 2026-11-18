@@ -1,44 +1,49 @@
 # F15.S02.M02 — api
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F15.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Platform Lead (F15). **Parent:** [F15.S02 backend](../SPEC.md).
 
 ## Purpose and business behavior
-Provide api as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+api is the versioned HTTP/JSON boundary between ClassRup clients (PWA) and owning modules. It authenticates the session, validates request shape, enforces idempotency for state-changing commands, maps errors to CTR-ERR-001 envelopes and dispatches to the owning module. It owns no business aggregate and makes no completion claim: a 202 or 200 response reports acceptance by the owning module, not settlement.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant on a slow connection, I can resend a publish or offer without creating a duplicate, because my retry carries the same idempotency key.
+- As a participant, I receive a localized, stable error code when a request is rejected, without any echo of what I submitted.
+- As an operator, I can deprecate and sunset an API version with a dated notice, and clients on a sunset version receive an explicit `API.VERSION_SUNSET` response.
 
 ## Scope
-- Required process spec: `api_domain_model.md` (not yet authored)
-- Required process spec: `api_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `api_validation_and_authorization.md` (not yet authored)
-- Required process spec: `api_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `api_interfaces_and_events.md` (not yet authored)
-- Required process spec: `api_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `api_acceptance_and_property_tests.md` (not yet authored)
+Process specifications (see inventory below): PS-117-01 to PS-117-10. Routes `/v1/*` only. Federation traffic is out of scope (mod_relays, CTR-FED-001).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+- `POST /v1/commands/{command_type}` with required `Idempotency-Key`.
+- `GET /v1/{resource}/{entity_id}`, `GET /v1/{resource}` (keyset pagination).
+- `GET /v1/version`.
+- Error envelope: CTR-ERR-001 (PENDING CTR-ERR-001 registry entries for `API.*` codes to be added on approval).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F07 identity (session `ses_`), F16 authorization (CTR-CAP-001), F15 contracts (CTR-ID-001, CTR-EVT-001, CTR-SCH-001). Downstream: every owning module through the command registry. Sibling: mod_relays (federation transport), mod_storage (attachments). Integration tests use contract fixtures (PS-117-09). Timeouts and retries follow PS-117-06.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns `api_idempotency` and `api_version` only (PS-117-01). Owns no user, listing, transaction or message data.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Specific to api: duplicate effects from retried commands without keys; IDOR through guessable identifiers; enumeration of objects via error differences; mass assignment through lenient parsing; memory exhaustion from large or deeply nested bodies; metadata leakage through access logs. No platform custody of money: api never holds balances. Pseudonyms do not hide `acc_` IDs from api logs, which therefore use hashed or pseudonymous references only.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten PS-117 files approved by Platform Lead and Security Lead; contract tests PS-117-09 green; privacy review (F10) of access-log fields complete; traceability to CTR IDs complete.
 
 ## Required process specification inventory
-- [ ] `api_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `api_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `api_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `api_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `api_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `api_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `api_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-117-01 (SPEC-DRAFT-COMPLETE)
+- [x] [validation_rules.md](validation_rules.md) — PS-117-02 (SPEC-DRAFT-COMPLETE)
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-117-03 (SPEC-DRAFT-COMPLETE)
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-117-04 (SPEC-DRAFT-COMPLETE)
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-117-05 (SPEC-DRAFT-COMPLETE)
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-117-06 (SPEC-DRAFT-COMPLETE)
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-117-07 (SPEC-DRAFT-COMPLETE)
+- [x] [observability_performance.md](observability_performance.md) — PS-117-08 (SPEC-DRAFT-COMPLETE)
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-117-09 (SPEC-DRAFT-COMPLETE)
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-117-10 (SPEC-DRAFT-COMPLETE)
+
+## Assumptions and open decisions
+- D08 PROVISIONAL (default: local pending queue until authenticated relay acknowledgment; unapproved) drives the 24 h idempotency window.
+- D10 PROVISIONAL (default: user-controlled keys with documented recovery; unapproved) is not applied in api v1.
+- ASSUMPTION: limits and timeouts as stated in PS-117-02, -06, -07.

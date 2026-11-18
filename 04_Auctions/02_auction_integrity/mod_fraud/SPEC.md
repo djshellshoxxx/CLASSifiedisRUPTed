@@ -1,44 +1,43 @@
 # F04.S02.M03 — fraud
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F04.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Commerce Lead. **Parent:** F04.S02.
 
 ## Purpose and business behavior
-Provide fraud as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Detect and record auction-integrity signals that suggest shill bidding by seller-linked accounts, colluding bid rings, and duplicate or Sybil accounts bidding on one auction. Route aggregated evidence to a moderator case. Signals are advisory: this module never rejects a bid, suspends an account or changes an auction result on its own. A moderator records a `dec_` decision; 04_Auctions/01_auction_lifecycle/mod_close reads upheld decisions.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a bidder, I see that my auction is under review and which rule family applies, without seeing other bidders' identities.
+- As a moderator, I review a case with its signals and record a decision with a reason code.
+- As an operator, I disable one rule version without disabling bidding or other auction-integrity modules.
 
 ## Scope
-- Required process spec: `fraud_domain_model.md` (not yet authored)
-- Required process spec: `fraud_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `fraud_validation_and_authorization.md` (not yet authored)
-- Required process spec: `fraud_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `fraud_interfaces_and_events.md` (not yet authored)
-- Required process spec: `fraud_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `fraud_acceptance_and_property_tests.md` (not yet authored)
+- Four rules: SELLER_LINK, CO_BID_CLUSTER, DEVICE_OVERLAP, NEW_ACCOUNT_BURST.
+- Signal records, case lifecycle, moderator commands, retention, rule versioning.
+- Out of scope: bid acceptance (01_auction_lifecycle/mod_bids), close rules (mod_close), last-window timing (02_auction_integrity/mod_sniping), payments and claims (F09).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `fraud.signal.record`, `fraud.case.*`; queries `fraud.case.get`, `fraud.aggregate.get`; events `fraud.*`; errors `FRAUD.*`; capabilities `fraud.record`, `fraud.review`, `fraud.decide`, `fraud.escalate`, `fraud.read_aggregate`, `fraud.read_own_outcome`. Details in PS-037-04 and PS-037-05.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: 01_auction_lifecycle/mod_bids (bid events), F07 pseudonymous accounts, F16 capabilities, F15 event envelope. Downstream: F12 moderation cases and appeals, mod_close (reads decisions), F10 subject access. Boundary to confirm: 02_auction_integrity/mod_anti (outside this scope) must not also classify bid timing or shill patterns.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns FraudSignal, FraudCase and RuleVersion records. Does not own bids, accounts, decisions (`dec_` owned by F16 decision log) or moderator identities.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+False positives on shared households or carrier-grade NAT devices penalize legitimate bidders. Collusion across separate devices evades DEVICE_OVERLAP. Unrotated device keys enable linkage. Signals used across auctions can deanonymize bidders (graph analysis). Moderator conflict of interest. Late or replayed bid events skew scores. Pseudonyms do not guarantee anonymity. No platform custody of money, so a fraud signal never holds funds.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+PS-037-01 to PS-037-10 SPEC-DRAFT-COMPLETE; fixtures for all four rules; boundary with mod_anti resolved; privacy and security review scheduled (not claimed as done).
 
 ## Required process specification inventory
-- [ ] `fraud_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `fraud_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `fraud_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `fraud_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `fraud_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `fraud_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `fraud_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-037-01
+- [x] [validation_rules.md](validation_rules.md) — PS-037-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-037-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-037-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-037-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-037-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-037-07
+- [x] [observability_performance.md](observability_performance.md) — PS-037-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-037-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-037-10

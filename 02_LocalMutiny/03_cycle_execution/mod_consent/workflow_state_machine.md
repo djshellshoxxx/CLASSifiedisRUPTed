@@ -1,35 +1,62 @@
-# PS-021-03 — workflow state machine
+# PS-021-03 — Workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-021-03. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_consent](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_consent. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-CAP-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for consent within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-021-03.R01 | Per-party consent state for one cycle version: `PENDING`, `ACCEPTED`, `REJECTED`, `WITHDRAWN`, `EXPIRED`. | MVP |
+| PS-021-03.R02 | Cycle-level consent state is `CONSENTING` until all parties are ACCEPTED (→ `CONSENTED`) or any party is REJECTED/EXPIRED (→ `NOT_CONSENTED`). | MVP |
+| PS-021-03.R03 | `CONSENTED` is the only input to mod_lock. No other module may move a cycle past consent. | MVP |
+| PS-021-03.R04 | Revising the proposal creates `proposal_version + 1`; all prior per-party consents become `EXPIRED` in the same transaction. | MVP |
+| PS-021-03.R05 | Withdrawal is allowed until `CONSENTED`; after lock, withdrawal is handled only by mod_dropouts. | MVP |
+| PS-021-03.R06 | Transition effects are recorded as CTR-EVT-001 events with `revision` increments. | MVP |
 
-## Requirements to specify
-- [ ] PS-021-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-021-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-021-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+States stored in `cycle_consent.decision` ([domain_schema.md](domain_schema.md)) and in a cycle-level projection `cycle_consent_state` (`cyc_`, `proposal_version`, `state`, `revision`). The projection is derived; event log is authoritative.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See [commands_queries_events.md](commands_queries_events.md) for signatures; events emitted per transition below.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| — | `cycle.proposed` (new version) | snapshot valid, 2–8 parties | CONSENTING (all PENDING) | notify parties |
+| PENDING | `cycle.consent_recorded` (ACCEPTED) | validation_rules R01–R07 pass | ACCEPTED | record `consent_record_ref` |
+| PENDING | `cycle.consent_recorded` (REJECTED) | same | REJECTED | cycle → NOT_CONSENTED |
+| ACCEPTED | `cycle.consent_withdrawn` | state < CONSENTED | WITHDRAWN | cycle → NOT_CONSENTED |
+| PENDING, ACCEPTED | `cycle.consent_expired` (timer) | now ≥ expires_at | EXPIRED | cycle → NOT_CONSENTED |
+| ACCEPTED (all) | `cycle.consented` | all parties ACCEPTED | cycle CONSENTED | emit to mod_lock |
+| any | `cycle.proposal_revised` | new version | EXPIRED (prior) | new CONSENTING set |
+| REJECTED, WITHDRAWN, EXPIRED | any consent command | — | unchanged | error CYC_CONSENT.CYCLE_NOT_OPEN |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Terminal for a version: NOT_CONSENTED or CONSENTED. Consent can not be re-entered for the same version.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Guards reference [validation_rules.md](validation_rules.md). Invalid transitions return `SYS.UNPROCESSABLE_STATE`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-021-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Transitions require capability `cyc.consent` (participant) or system scope for timers.
+
+## Failure, idempotency, concurrency, offline
+Timer-driven EXPIRED is idempotent: repeated fires produce one event. Concurrent ACCEPT and revision race: the revision check on the cycle row decides; the loser receives `SYS.CONFLICT`. Details in [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Transition events carry no item descriptions (CTR-EVT-001 `max_data_class` = PSEUDONYMOUS).
+
+## Observability & budgets
+Gauge: cycles per state. Alert: CONSENTING older than TTL + 1 h (should not occur).
+
+## Tests
+- TEST-PS-021-03-01 (unit): every row of the transition table.
+- TEST-PS-021-03-02 (property): no path reaches CONSENTED without all ACCEPTED.
+- TEST-PS-021-03-03 (integration): revision during consent invalidates prior ACCEPTED.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All transitions above implemented and tested.
+2. CONSENTED is reachable only through `cycle.consented`.
+3. Revision race yields exactly one winner in 1000 concurrent trials.
+
+## Assumptions & open decisions
+- ASSUMPTION: event names `cycle.consent_recorded` etc. are registered under CTR-EVT-001 naming (verb past tense).
+- [DECISIONS.md](../../../DECISIONS.md) D04 — partial execution. PROVISIONAL (D04 default, unapproved): consent is per-party and does not imply execution.

@@ -1,35 +1,55 @@
-# PS-085-07 — privacy retention abuse
+# PS-085-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-085-07. **Owner:** [11_Federation/01_protocol/mod_signatures](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_signatures. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01 classes, R06 retention, R08 secrets, R09 logs), CTR-FED-001 (R08 per-audience pseudonyms, R09 compromise marker, peer states), CTR-EVT-001 (R06 no names or coordinates in envelopes).
 
-## Purpose and scope
-Define the privacy retention abuse process for signatures within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-085-07.R01 | Private signing keys are class `SECRET`. They are held only in the KMS and are never logged, exported, federated or shown after creation (CTR-PRV-001 R08). Scan test covers responses, logs and exports. | MVP |
+| PS-085-07.R02 | Signature value and `key_id` are `PUBLIC` in federated events. Key projection metadata is `PUBLIC`. No signature field carries an IP address, device identifier or account ID. | MVP |
+| PS-085-07.R03 | Verification logs carry `event_id`, `key_id`, `origin_node`, result code and timing. They never carry payload bytes or the signature value. | MVP |
+| PS-085-07.R04 | Abuse threshold: a peer whose invalid-signature ratio exceeds 5% of events over 1 h, or 50 invalid events in 1 h, moves to `restricted` by automated threshold (ASSUMPTION; CTR-FED-001 trust transition). | MVP |
+| PS-085-07.R05 | Export signatures are not linkable across audiences: the signed envelope uses the per-audience pseudonym (CTR-FED-001 R08); the key is the node key and is shared by design. | MVP |
 
-## Requirements to specify
-- [ ] PS-085-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-085-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-085-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Data | Class | Retention |
+|---|---|---|
+| Verification logs | PSEUDONYMOUS | RET-OPS, 30 days |
+| Outbox rows (IDs, counters) | PSEUDONYMOUS | until sent or held; held rows 90 days (ASSUMPTION) |
+| Key projection metadata | PUBLIC | while key is in force, plus RET-FED window (≥ 90 days beyond max envelope expiry) |
+| Compromise and revocation audit records | PSEUDONYMOUS | RET-EVD, 24 months (ASSUMPTION; jurisdiction review OPEN) |
+| Private key material | SECRET | KMS lifecycle only |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Diagnostics carry code and field path only (CTR-ERR-001 R06).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Authorization
+Log access requires `aud_`-recorded privileged read (PS-085-05 R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Failure, idempotency, concurrency, offline
+Deletion or expiry propagates to logs, outbox and caches within 24 h (CTR-PRV-001 R06). Compromise evidence is kept and not deleted early.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Privacy, retention, abuse
+- Threats: forged signatures from a compromised key (mitigated by compromise marker and quarantine); replay of old signed events (mitigated by `expires_at` and dedupe, PS-087); signature-failure flooding (mitigated by R04 and rate limits, CTR-FED-001 R11); metadata correlation through signature bytes (signatures are unique per event but carry no new identifiers).
+- Keys are node keys. No user-level key material is stored here (D10 OPEN).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-085-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Observability & budgets
+Log redaction test in CI (TEST-PS-085-07-03). Budgets in PS-085-08.
+
+## Tests
+- TEST-PS-085-07-01 (unit): key projection and signature objects carry no field outside their allowed class list.
+- TEST-PS-085-07-02 (negative): one planted key byte string never appears in logs, responses or exports.
+- TEST-PS-085-07-03 (integration): verification log line for a failed event contains only allowed fields.
+- TEST-PS-085-07-04 (abuse): peer sending 50 bad signatures in 1 h is moved to `restricted`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No private key material found by TEST-PS-085-07-02 across logs, responses and exports.
+2. Log fields are the allowed set; TEST-PS-085-07-03 passes.
+3. Abuse threshold triggers as specified; TEST-PS-085-07-04 passes.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- ASSUMPTION: 5% ratio and 50-event threshold (F10 to confirm).
+- ASSUMPTION: RET-EVD 24 months for compromise evidence; legal review OPEN (R07, RISK_REGISTER.md).
+- PROVISIONAL (D07 default, unapproved): minimal per-category retention with legal-hold exceptions.
+- OPEN (D10): whether user keys sign federated events.

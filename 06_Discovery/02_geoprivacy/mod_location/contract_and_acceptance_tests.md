@@ -1,35 +1,51 @@
 # PS-048-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-048-09. **Owner:** [06_Discovery/02_geoprivacy/mod_location](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_location. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_location. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R03, R09), CTR-PRV-001 (R03, R09), CTR-ERR-001 (R02); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for location within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** Synthetic location fixtures ASSUMPTION (F17 QA Lead).
 
-## Requirements to specify
-- [ ] PS-048-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-048-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-048-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-048-09.R01 | Contract tests for every command and event in PS-048-04. | MVP |
+| PS-048-09.R02 | Privacy contract test: every payload schema classified per CTR-PRV-001 R01. | MVP |
+| PS-048-09.R03 | E2E: pick cell → search filtered to cell → withdraw consent → cell cleared. | MVP |
+| PS-048-09.R04 | Accessibility: picker and device-permission prompts keyboard operable and labelled (owner F14). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Fixtures: synthetic fixes across 10 cells, boundary fixes on cell edges, out-of-area fixes, spoofed sequences.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Covers PS-048-04.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Each row of PS-048-03 reached.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Each code in PS-048-02.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-048-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Matrix rows in PS-048-05.
+
+## Failure, idempotency, concurrency, offline
+Offline and race fixtures from PS-048-06.
+
+## Privacy, retention, abuse
+Synthetic fixes only; no real coordinates in fixtures.
+
+## Observability & budgets
+Latency and log-scan results per PS-048-08.
+
+## Tests
+- TEST-PS-048-09-01 (contract): payload schemas.
+- TEST-PS-048-09-02 (e2e): pick→search→withdraw.
+- TEST-PS-048-09-03 (a11y): picker keyboard and screen reader.
+- TEST-PS-048-09-04 (offline): geometry cache used for resolution.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every PS-048 requirement mapped to TEST IDs.
+2. Privacy contract tests pass.
+3. E2E passes.
+
+## Assumptions & open decisions
+- ASSUMPTION: synthetic fixtures.

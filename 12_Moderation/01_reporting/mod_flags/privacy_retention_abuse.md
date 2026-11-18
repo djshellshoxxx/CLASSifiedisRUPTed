@@ -1,35 +1,54 @@
-# PS-094-07 — privacy retention abuse
+# PS-094-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-094-07. **Owner:** [12_Moderation/01_reporting/mod_flags](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_flags (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-CAP-001, CTR-FED-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the privacy retention abuse process for flags within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-094-07.R01 | Reporter identity is hidden from the reported party and other reporters in every response, notice and event. | MVP |
+| PS-094-07.R02 | `detail_text` is PRIVATE_PERSONAL; never published, federated, pushed or logged. | MVP |
+| PS-094-07.R03 | Reports are never federated (CTR-FED-001 is for signed content events; report data is local). | MVP |
+| PS-094-07.R04 | Status notices are generic ("We received your report"; "A decision was made") and never name the reason or reporter. | MVP |
 
-## Requirements to specify
-- [ ] PS-094-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-094-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-094-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data classes and retention
+| Item | Class | Retention |
+|---|---|---|
+| reporter_ref, weight, dedupe_hmac | PSEUDONYMOUS / SECRET (hmac) | RET-AUD 12 months after closure; hmac RET-EPH 24 h |
+| detail_text | PRIVATE_PERSONAL | RET-PRIV; redacted at closure when reason is doxxing_or_personal_data |
+| report status metadata | PUBLIC/PSEUDONYMOUS | RET-AUD |
+| queue entries | PSEUDONYMOUS | RET-EPH until triaged |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Threats and controls
+| Threat | Control |
+|---|---|
+| Brigading: many accounts flag one target | per-target weight cap per 24 h; new-account weight 0.2 (ASSUMPTION); threshold raises priority only |
+| Retaliatory reports after a dispute | reporter-target relation check; mod_abuse signal on repeat patterns |
+| Doxxing inside detail text | reason doxxing_or_personal_data routes to high priority; text redacted at closure |
+| Reporter discovered by timing | uniform responses (CTR-ERR-001 R08) |
+| Reporter identity in shared backups | backups encrypted; access per CTR-PRV-001 |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Abuse controls
+Quota 20 per 24 h per reporter (PS-094-02). Restricted reporters (mod_abuse) cannot submit. False-report pattern scoring is owned by mod_abuse (PS-095).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Privacy-driven refusals reuse `SYS.NOT_FOUND`; no detail text in errors.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Offline queue encrypted; purged at logout. Redaction at closure is idempotent.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-094-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Observability & budgets
+Zero tolerance: any reporter_ref in a non-case response is a Sev-2 alert (CTR-PRV-001 R09).
+
+## Tests
+- TEST-PS-094-07-01 (privacy): reported party responses across all endpoints lack reporter fields.
+- TEST-PS-094-07-02 (brigading): 50 reports from new accounts on one target → weight sum capped, one threshold event.
+- TEST-PS-094-07-03 (redaction): detail_text redacted at closure for doxxing reason; hash-chain retains event.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero reporter-identity leaks in fixture corpus.
+2. Retention purge of detail_text within 24 h of class maximum (CTR-PRV-001 R06).
+
+## Assumptions & open decisions
+- ASSUMPTION: new-account weight 0.2; per-target cap 2.0 per 24 h from single-source flood.
+- PROVISIONAL (D07 default, unapproved): minimal retention, legal-hold exceptions.
+- PROVISIONAL (D05 default, unapproved): report text cannot contain precise location fields (rejected at validation if detected by pattern).

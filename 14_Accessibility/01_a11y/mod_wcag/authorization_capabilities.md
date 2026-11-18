@@ -1,35 +1,50 @@
-# PS-111-05 — authorization capabilities
+# PS-111-05 — authorization and capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_wcag. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-111-05. **Owner:** [14_Accessibility/01_a11y/mod_wcag](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_wcag. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-111-05.R01 | Only QA Lead and Accessibility Lead roles may submit records or transition findings. | MVP |
+| PS-111-05.R02 | Accepting risk requires an Accessibility Lead approval distinct from the submitter. | MVP |
+| PS-111-05.R03 | Gate and records are readable by all engineering roles. | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for wcag within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Capabilities: `conformance_record.submit`, `accessibility_finding.transition`, `accessibility_finding.accept_risk`, `wcag_gate.read`.
 
-## Requirements to specify
-- [ ] PS-111-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-111-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-111-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Per [PS-111-04](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Denials return CTR-CAP-001 standard denial.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+| Actor | Action | Resource | Decision |
+|---|---|---|---|
+| QA Lead (ope_) | submit, transition (not accept_risk) | acr_, acf_ | ALLOW |
+| Accessibility Lead (ope_) | all of above incl. accept_risk | acf_ | ALLOW, distinct approver for accept_risk |
+| Engineering roles | wcag_gate.read | gate | ALLOW |
+| acc_ | submit or transition | any | DENY |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Grant revocation effective at next decision (CTR-CAP-001 R09).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-111-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Accepted-risk approvals recorded as `aud_` records.
+
+## Observability & budgets
+Audit records per approval.
+
+## Tests
+- TEST-PS-111-05-01 unit: decision table.
+- TEST-PS-111-05-02 integration: same person submits and approves accept_risk → refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. accept_risk requires two distinct principals in test.
+2. Every accept_risk writes an `aud_` record.
+
+## Assumptions & open decisions
+- ASSUMPTION: distinct-approver rule mirrors CTR-CAP-001 dual control for privileged decisions.
+- No Dxx decision directly affects authorization.

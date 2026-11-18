@@ -1,44 +1,60 @@
 # F10.S02.M03 — metadata
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F10.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Privacy Lead (F10; review F16). **Parent:** [F10.S02 security_boundaries](../SPEC.md).
 
 ## Purpose and business behavior
-Provide metadata as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Define and enforce what non-content metadata ClassRup may store or transmit. The module owns the per-surface allowlists (HTTP, server logs, event envelopes, attachment ingest, push, federation, error responses), the attachment sanitiser that removes GPS, device, author and thumbnail tags before storage, the egress filter that fails closed, and the timestamp and IP truncation rules. Its main goal is that a listing photo, a log line or a push preview cannot reveal a home address, a device or a person's network location.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a seller, I can upload listing photos without revealing where they were taken or which phone took them.
+- As a participant, I see that some visual details (faces, street signs) are not removed by the tool.
+- As an operator, I can see how much metadata was removed without seeing any removed value.
+- As a privacy lead, I can block any outbound surface that carries a field not on its allowlist.
 
 ## Scope
-- Required process spec: `metadata_domain_model.md` (not yet authored)
-- Required process spec: `metadata_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `metadata_validation_and_authorization.md` (not yet authored)
-- Required process spec: `metadata_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `metadata_interfaces_and_events.md` (not yet authored)
-- Required process spec: `metadata_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `metadata_acceptance_and_property_tests.md` (not yet authored)
+- In: seven surfaces; attachment sanitisation for JPEG, PNG and WebP; egress filter; log allowlist; IP truncation; timestamp granularity.
+- Out: attachment storage and delivery (F08.S01.M03 `mod_attachments`); visual-identifier detection (Future); PDF and HEIC sanitisation (Future, documented deferral); padding of message lengths (Future).
+- Required process specs (registry PS-080-01 to PS-080-10):
+  - [domain_schema.md](domain_schema.md) (PS-080-01)
+  - [validation_rules.md](validation_rules.md) (PS-080-02)
+  - [workflow_state_machine.md](workflow_state_machine.md) (PS-080-03)
+  - [commands_queries_events.md](commands_queries_events.md) (PS-080-04)
+  - [authorization_capabilities.md](authorization_capabilities.md) (PS-080-05)
+  - [failure_recovery_idempotency.md](failure_recovery_idempotency.md) (PS-080-06)
+  - [privacy_retention_abuse.md](privacy_retention_abuse.md) (PS-080-07)
+  - [observability_performance.md](observability_performance.md) (PS-080-08)
+  - [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) (PS-080-09)
+  - [import_export_backup_rollback.md](import_export_backup_rollback.md) (PS-080-10)
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal: `metadata.sanitize_attachment`, `metadata.egress_filter`. Admin: `meta.policy.publish|activate`, `meta.policy.get_active`. Events `attachment.metadata_stripped`, `attachment.quarantined`, `meta.policy_*`. Errors `META.*`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: attachment upload (F08.S01.M03 `mod_attachments`), event envelope rules (F15.S02.M02 `mod_api`, CTR-EVT-001), logging (F15.S03.M01 `mod_observability`). Downstream: push (F13.S01.M01 `mod_push`), federation batches (F11.S02.M01 `mod_delivery`), data export (F10.S01.M03 `mod_export`), backups (F15.S03.M02 `mod_backups`).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns: `metadata_policy`, `attachment_metadata_report`, sanitiser job state. Does not own: attachment bytes or state (F08.S01.M03), precise location (F10 disclosure rules).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+- Photos with embedded GPS reveal a seller's home.
+- Device serial or author tags link one account to a camera or person.
+- Logs or previews leak IP addresses, cookies or identifiers.
+- Egress filter bypass by a new surface added without a policy row.
+- Users over-trust stripping and assume faces or landmarks are removed.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+- All ten canonical process specs SPEC-DRAFT-COMPLETE (pending approval).
+- Sanitiser library chosen in Prompt 3 research with version and licence recorded (PENDING).
+- Corpus test (TEST-PS-080-09-01) defined.
 
 ## Required process specification inventory
-- [ ] `metadata_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `metadata_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `metadata_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `metadata_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `metadata_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `metadata_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `metadata_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-080-01 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `validation_rules.md` — PS-080-02 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `workflow_state_machine.md` — PS-080-03 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `commands_queries_events.md` — PS-080-04 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `authorization_capabilities.md` — PS-080-05 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `failure_recovery_idempotency.md` — PS-080-06 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `privacy_retention_abuse.md` — PS-080-07 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `observability_performance.md` — PS-080-08 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `contract_and_acceptance_tests.md` — PS-080-09 — SPEC-DRAFT-COMPLETE (pending approval)
+- [x] `import_export_backup_rollback.md` — PS-080-10 — SPEC-DRAFT-COMPLETE (pending approval)

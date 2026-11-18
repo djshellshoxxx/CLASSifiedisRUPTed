@@ -1,44 +1,50 @@
 # F17.S01.M04 — e2e
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F17.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** QA Lead (F17). **Parent:** [F17.S01](../SPEC.md).
 
 ## Purpose and business behavior
-Provide e2e as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Define ClassRup's end-to-end test scenarios that drive the product through browser or PWA flows across modules: paid classified listing, ordinary local sale, two-party barter, three-, four- and N-party cycles, mixed-value compensation, cancellation and dispute, fraud and moderation, private messages, payments, and federation import and export. The module owns scenario definitions, synthetic fixture sets, run records and the device matrix. It does not own the flows themselves; each flow's behavior is specified by its own module.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a QA Lead, I can see pass rate and last result for each of the twelve flows on main.
+- As a developer, I can run one flow's scenarios locally against a fixture set without real accounts.
+- As a Privacy Lead, I can confirm that e2e artifacts contain no personal data.
 
 ## Scope
-- Required process spec: `e2e_domain_model.md` (not yet authored)
-- Required process spec: `e2e_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `e2e_validation_and_authorization.md` (not yet authored)
-- Required process spec: `e2e_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `e2e_interfaces_and_events.md` (not yet authored)
-- Required process spec: `e2e_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `e2e_acceptance_and_property_tests.md` (not yet authored)
+- Process spec 01: `domain_schema.md` (PS-134-01)
+- Process spec 02: `validation_rules.md` (PS-134-02)
+- Process spec 03: `workflow_state_machine.md` (PS-134-03)
+- Process spec 04: `commands_queries_events.md` (PS-134-04)
+- Process spec 05: `authorization_capabilities.md` (PS-134-05)
+- Process spec 06: `failure_recovery_idempotency.md` (PS-134-06)
+- Process spec 07: `privacy_retention_abuse.md` (PS-134-07)
+- Process spec 08: `observability_performance.md` (PS-134-08)
+- Process spec 09: `contract_and_acceptance_tests.md` (PS-134-09)
+- Process spec 10: `import_export_backup_rollback.md` (PS-134-10)
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Internal: scenario registry and run records. Events: `e2e.ScenarioRegistered`, `e2e.RunCompleted`, `e2e.ScenarioQuarantined` (envelope per [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md)). Errors per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Covers flows owned by 01_LocalBazaar (for example [mod_publish](../../../01_LocalBazaar/01_listings/mod_publish/SPEC.md)), 02_LocalMutiny cycles (for example [mod_three](../../../02_LocalMutiny/02_cycle_matching/mod_three/SPEC.md)), 08_Communications, 09_Commerce and 11_Federation. Quarantine reuses the approval flow of [mod_unit](../mod_unit/SPEC.md). Contract-level checks are in [mod_integration](../mod_integration/SPEC.md).
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns scenario definitions, fixture set references, run records and artifact references. Does not own product data, production data or personas that map to real people.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Specific to e2e: (1) scenarios that pass while skipping the cycle or payment step they claim to cover; (2) flaky browser timing hiding real races in offline sync and messaging; (3) fixtures or screenshots carrying personal or location data; (4) test accounts reaching real payment rails; (5) a green suite that covers only happy paths for dispute and fraud flows. No security audit has been performed on test infrastructure.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Each of the twelve flows has at least one passing scenario on main; device matrix results recorded; no scenario depends on real accounts or real payment rails; all ten process specs approved.
 
 ## Required process specification inventory
-- [ ] `e2e_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `e2e_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `e2e_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `e2e_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `e2e_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `e2e_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `e2e_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-134-01 drafted
+- [x] `validation_rules.md` — PS-134-02 drafted
+- [x] `workflow_state_machine.md` — PS-134-03 drafted
+- [x] `commands_queries_events.md` — PS-134-04 drafted
+- [x] `authorization_capabilities.md` — PS-134-05 drafted
+- [x] `failure_recovery_idempotency.md` — PS-134-06 drafted
+- [x] `privacy_retention_abuse.md` — PS-134-07 drafted
+- [x] `observability_performance.md` — PS-134-08 drafted
+- [x] `contract_and_acceptance_tests.md` — PS-134-09 drafted
+- [x] `import_export_backup_rollback.md` — PS-134-10 drafted

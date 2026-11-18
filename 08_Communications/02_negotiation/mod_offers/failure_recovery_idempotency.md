@@ -1,35 +1,54 @@
 # PS-063-06 — failure recovery idempotency
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_offers. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R02, R03), CTR-COM-001 (R04 quote expiry), CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-063-06. **Owner:** [08_Communications/02_negotiation/mod_offers](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-063-06.R01 | Duplicate `ofr.create` or `ofr.accept` with the same key and digest returns the original result. | MVP |
+| PS-063-06.R02 | Accept after expiry is rejected even if the client's offline clock says valid. Server time governs. | MVP |
+| PS-063-06.R03 | Offline-queued counters and accepts are re-validated at commit; stale ones rejected, never rebased (D08). | MVP |
+| PS-063-06.R04 | Client retry: backoff base 1 s, cap 60 s, max 8 attempts; server timeout 2 s. | MVP |
+| PS-063-06.R05 | Offer creation and its event commit in one transaction. | MVP |
 
-## Purpose and scope
-Define the failure recovery idempotency process for offers within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Idempotency record per CTR-EVT-001 R03, 7-day retention.
 
-## Requirements to specify
-- [ ] PS-063-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-063-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-063-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+No new commands.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Offline queue item: `queued` → `committed` | `rejected` (stale, expired, withdrawn) | `expired_local` (> 7 days).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+| Code | Retryable | Category / HTTP | Note |
+|---|---|---|---|
+| OFFERS.EXPIRED | false | gone / 410 | Accept or counter past `expires_at`. |
+| OFFERS.STALE_VERSION | false | conflict / 409 | Terms digest or version changed. |
+| EVT.REVISION_CONFLICT | false | conflict / 409 | Concurrent write. |
+| SYS.UNAVAILABLE | true | unavailable / 503 | `retry_after_ms`. |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Re-run at commit ([PS-063-05](authorization_capabilities.md)).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Expiry job failure: accepts still checked against `expires_at` at commit, so job lag cannot extend validity. Counter and accept race: loser re-reads. Partial failure after commit: retry returns original.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-063-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Queued items hold IDs and digests only; cleared on logout (RET-EPH).
+
+## Observability & budgets
+`offers_queue_rejected_total{reason}`; alert if accepts committed after expiry (should be zero).
+
+## Tests
+- TEST-PS-063-06-01 (integration): duplicate accept → one event.
+- TEST-PS-063-06-02 (offline): device clock set 10 days ahead, accept queued after server expiry → rejected by server.
+- TEST-PS-063-06-03 (concurrency): counter and accept on same version → exactly one wins.
+- TEST-PS-063-06-04 (offline): queued counter after recipient withdrew → `OFFERS.STATE_FORBIDS`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No accept committed after server-side expiry (TEST-PS-063-06-02).
+2. No duplicate offer events under retry (TEST-PS-063-06-01).
+
+## Assumptions & open decisions
+- D08 (PWA offline writes): PROVISIONAL (D08 default, unapproved).
+- ASSUMPTION: client clock is never authoritative.

@@ -1,35 +1,50 @@
-# PS-110-08 — observability performance
+# PS-110-08 — observability and performance
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_screenreader. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-08. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-110-08.R01 | Count announcements dispatched, dropped (dedupe) and fallback-used, by event key. | MVP |
+| PS-110-08.R02 | Dispatch latency p95 ≤ 100 ms on reference device (ASSUMPTION). | MVP |
+| PS-110-08.R03 | Metrics carry event_key and counts only, never text. | MVP |
 
-## Purpose and scope
-Define the observability performance process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Metrics: `scr_announce_total{event_key,outcome}`, `scr_fallback_total{kind}`, `scr_dispatch_ms` histogram.
 
-## Requirements to specify
-- [ ] PS-110-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+None.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Labels limited to registered event keys.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Metrics visible to Accessibility Lead and QA Lead roles.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Metrics buffered offline and dropped after 24 h.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+No principal IDs in client metrics.
+
+## Observability & budgets
+| Budget | Target |
+|---|---|
+| Dispatch p95 | ≤ 100 ms |
+| Template query p95 | ≤ 100 ms |
+| Bundle size added | ≤ 4 KiB gzip (ASSUMPTION) |
+
+## Tests
+- TEST-PS-110-08-01 performance: dispatch benchmark on reference device.
+- TEST-PS-110-08-02 static: metric label set equals registry.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics present in staging.
+2. Budgets met in the performance run.
+3. No text values in metric labels.
+
+## Assumptions & open decisions
+- ASSUMPTION: reference device defined at implementation.
+- No Dxx decision directly affects observability.

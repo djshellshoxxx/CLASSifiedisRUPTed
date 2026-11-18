@@ -1,35 +1,56 @@
-# PS-078-04 — commands queries events
+# PS-078-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-078-04. **Owner:** [10_Privacy/01_data_controls/mod_export](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_export. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_export (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001 (R11), CTR-FED-001 (R08 pseudonym rule, analogue only).
 
-## Purpose and scope
-Define the commands queries events process for export within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-078-04.R01 | Commands: `privacy.export.request`, `privacy.export.download`. Queries: `privacy.export.get`. Internal: `privacy.export.generate` (sys). | MVP |
+| PS-078-04.R02 | State-changing commands require `Idempotency-Key`; scope per CTR-EVT-001 R03. | MVP |
+| PS-078-04.R03 | Download returns `application/octet-stream` with `Content-Disposition: attachment`, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. | MVP |
+| PS-078-04.R04 | Events carry IDs, state, counts and bytes only; `max_data_class` ≤ PSEUDONYMOUS. | MVP |
+| PS-078-04.R05 | Request body is ≤ 1 KiB; larger → `SYS.PAYLOAD_TOO_LARGE` (413). | MVP |
 
-## Requirements to specify
-- [ ] PS-078-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-078-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-078-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Request: `{"scope": "full", "include_precise_location": false}`.
+Response (202): `{"id": "dsr_01HZ...", "state": "requested", "aggregate_revision": 1}`.
+Download: `GET /privacy/exports/{dsr_id}/download` with header `X-Export-Token`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Operation | Idempotency | Emits | Errors |
+|---|---|---|---|
+| request | key + digest | `export.requested` | EXPORT.SCOPE_INVALID, EXPORT.REAUTH_REQUIRED, EXPORT.PRECISE_LOCATION_NOT_CONFIRMED, EXPORT.ALREADY_GENERATING |
+| download | none (single-use token) | `export.downloaded` | EXPORT.TOKEN_CONSUMED, EXPORT.PACKAGE_EXPIRED, SYS.NOT_FOUND |
+| generate (sys) | lease id | `export.generating`, `export.ready`, `export.failed` | SYS.UNAVAILABLE |
+| get | none | none | SYS.NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Emission per PS-078-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Per PS-078-02. Unknown major schema on stored manifest → `SCH.UNKNOWN_VERSION` (internal to ops, not returned to subject).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Subject `acc_` for request, download, get. `sys_` for generate with purpose `subject_export`.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-078-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Download is not idempotent by design: a second valid-token request after the first full download returns `EXPORT.TOKEN_CONSUMED` unless the client requests resume (range support, PS-078-06).
+
+## Privacy, retention, abuse
+Events never contain manifest contents. Download logs record `dsr_` ID and bytes only.
+
+## Observability & budgets
+Download first-byte p95 ≤ 500 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-078-04-01 (contract): response headers R03 asserted.
+- TEST-PS-078-04-02 (idempotency): repeated request with same key returns original `dsr_`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All operations and error codes match PS-078-02 and PS-078-03.
+2. Download response headers match R03 in a contract test.
+3. No event contains a manifest path or file name.
+
+## Assumptions & open decisions
+- PENDING: CTR-PORT-001 for manifest envelope.
+- ASSUMPTION: 1 KiB request limit.

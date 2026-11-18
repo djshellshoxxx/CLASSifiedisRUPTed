@@ -1,35 +1,52 @@
-# PS-014-05 — authorization capabilities
+# PS-014-05 — authorization and capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_party. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-014-05. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_party](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_party. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-014-05.R01 | Default deny. Capabilities declared here: `party.invite`, `party.accept`, `party.decline`, `party.withdraw`, `party.read`, `party.remove`. | MVP |
+| PS-014-05.R02 | Only the slot's `acc_` may accept, decline or withdraw. The cycle proposer may invite. | MVP |
+| PS-014-05.R03 | `party.remove` requires `mod_` principal with `case:cas_` scope and an approved case. | MVP |
+| PS-014-05.R04 | `acc_id` is never readable by any principal other than the system (CTR-CAP-001 R02). | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for party within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Field visibility: `par_id`, `cyc_id`, `slot_index`, `status`, `prf_ref`, `region_cell_id` → `participant`. `acc_id` → `never` (system only). `resolved_at` → `participant`.
 
-## Requirements to specify
-- [ ] PS-014-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-014-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-014-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+| Action | Actor | Scope | Rule |
+|---|---|---|---|
+| party.invite | proposer `acc_` | participant | cycle in draft |
+| party.accept / decline / withdraw | slot `acc_` | self | per state table |
+| party.read | cycle participant | participant | cycle not closed for removed parties |
+| party.remove | mod_ | case | case open, dual control for suspension-linked removal |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Authorization re-checked at each transition. A removed party loses `party.read` at next decision.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Unauthorized and nonexistent slots return `SYS.NOT_FOUND` (CTR-ERR-001 R08).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Decision cache TTL 0 for writes (CTR-CAP-001 R09). `party.remove` writes an `aud_` record with case ID.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Grants effective at next decision. Offline clients cannot accept without a fresh decision.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-014-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Moderator access to `acc_id` requires case scope and dual control (CTR-CAP-001 R07); reads write `aud_` with purpose, no content.
+
+## Observability & budgets
+Denial counts per action; alert at 50 denials per `acc_` per hour (probing signal, ASSUMPTION).
+
+## Tests
+- TEST-PS-014-05-01 (unit): matrix actor × action × scope; default deny.
+- TEST-PS-014-05-02 (security): `acc_id` absent for every non-system principal in fixtures.
+- TEST-PS-014-05-03 (integration): removal takes effect at next read.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix covers 100% of declared actions.
+2. Zero `acc_id` leaks in response fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: suspension-linked removal needs dual control (F12 to confirm).
+- D10 PROVISIONAL (Dxx default, unapproved): key rotation keeps the slot bound to the same `acc_`.

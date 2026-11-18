@@ -1,35 +1,62 @@
 # PS-101-07 — privacy retention abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-101-07. **Owner:** [12_Moderation/03_antifraud/mod_signals](SPEC.md). **Implementing module:** 12_Moderation/03_antifraud/mod_signals. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/03_antifraud/mod_signals (Trust&Safety Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R03, R04, R06, R09, R12), CTR-EVT-001 (R11), CTR-CAP-001 (R04).
 
-## Purpose and scope
-Define the privacy retention abuse process for signals within 03_antifraud. Do not assume implementation or successful external settlement.
+**Decision labels:** Retention 30 days and K_MIN = 5 are PROVISIONAL (D07 default, unapproved). Privacy review by F10: OPEN.
 
-## Requirements to specify
-- [ ] PS-101-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-101-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-101-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-101-07.R01 | Signal records are class PSEUDONYMOUS. Behavioural patterns are not exported as personal data in MVP. | MVP |
+| PS-101-07.R02 | No IP address, device identifier, coordinate, precise location or message content is stored or logged. | MVP |
+| PS-101-07.R03 | Active signals retained 30 days (RET-OPS). Suppression and audit records retained 12 months (RET-AUD), with no signal content. | MVP |
+| PS-101-07.R04 | Subject deletion redacts linkage within 24 hours (CTR-PRV-001 R06). Backups follow the backup schedule; restore replays redaction. | MVP |
+| PS-101-07.R05 | One reporter may contribute at most one `report_density` signal per target per 24 hours. | MVP |
+| PS-101-07.R06 | Aggregates output only when ≥ 5 distinct subjects contribute (K_MIN). | MVP |
+| PS-101-07.R07 | No per-subject signal graph is exported or published. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Only the fields in PS-101-01. Per-field classes: `subject_ref` PSEUDONYMOUS, `value` PSEUDONYMOUS, `window_*` PSEUDONYMOUS, `source_module` PUBLIC. Any future field requires an F10 class review (CTR-SCH-001 R10).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Events carry `max_data_class = PSEUDONYMOUS`. Redaction keeps the envelope and replaces `subject_ref` with a keyed digest (CTR-EVT-001 R08).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+REDACTED is entered on deletion (PS-101-03).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Forbidden-field rejection is the main collection control (PS-101-02 R04).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-101-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Access limited to case-scoped moderators (PS-101-05).
+
+## Failure, idempotency, concurrency, offline
+Deletion during scoring: scorer drops the subject on next cycle. Offline: not applicable.
+
+## Privacy, retention, abuse
+Abuse controls:
+| Threat | Control |
+|---|---|
+| Framing by coordinated false reports | R05 cap; reporter pseudonymity; signals alone never sanction (appeal path F12.S01.M01) |
+| Graph deanonymization from aggregates | K_MIN = 5 (R06); no per-subject outputs (R07) |
+| Sybil bursts from legitimate events (for example, a launch day) | `confidence_bucket` lowered by event calendar; human review before action |
+| Poisoning by compromised producer | Producer allowlist by `source_module`; anomaly alert on value distribution |
+| Federated poisoning | Out of MVP scope (PS-101-01 R07) |
+
+## Observability and budgets
+Retention job reports expired and redacted counts. Privacy alert on any forbidden-field rejection spike (PS-101-08).
+
+## Tests
+- TEST-PS-101-18 (negative): payload containing coordinates is rejected and not logged.
+- TEST-PS-101-19 (integration): deletion redacts all records of subject within 24 hours.
+- TEST-PS-101-20 (property): aggregate with 4 subjects never returned; with 5 returned.
+- TEST-PS-101-21 (integration): second report from same reporter on same target within 24 h produces no new signal.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. F10 privacy review completed (future gate; OPEN).
+2. Log scan finds no IP, coordinate or message content in test corpus.
+3. Abuse table has one test per row.
+
+## Assumptions & open decisions
+- ASSUMPTION: behavioural signals are not reclassified as LOCATION or FINANCIAL data.
+- D07 retention and abuse thresholds (PROVISIONAL, unapproved). D05 geoprivacy: no location input accepted.

@@ -1,35 +1,60 @@
-# PS-021-05 — authorization capabilities
+# PS-021-05 — Authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-021-05. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_consent](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_consent. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for consent within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-021-05.R01 | Default deny: a consent command succeeds only if the actor is a `participant` of the cycle version (CTR-CAP-001 R01, R04). | MVP |
+| PS-021-05.R02 | Capability `cyc.consent` (create, withdraw). Read of own consent state uses `cyc.read`, scope `participant`. | MVP |
+| PS-021-05.R03 | Operators cannot record consent for a party. `ope_` and `mod_` principals have no `cyc.consent` grant. | MVP |
+| PS-021-05.R04 | Consent counts visible to participants only; field visibility per CTR-CAP-001 R10 (`counterparty_decision` hidden until own decision recorded — ASSUMPTION). | MVP |
+| PS-021-05.R05 | Revoked participation (party removed by dropout handling) denies new consents within 60 s (CTR-CAP-001 R09). | MVP |
 
-## Requirements to specify
-- [ ] PS-021-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-021-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-021-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Authorization inputs: `acc_` of actor, cycle membership derived from the proposal version (relation rule, not stored grant).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Authorization is evaluated before idempotency lookup, so replays by non-participants return `SYS.NOT_FOUND`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Membership changes are events re-evaluated at decision time (CTR-CAP-001 R05).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Condition | Code | Class / HTTP |
+|---|---|---|
+| Actor not participant | SYS.NOT_FOUND | not_found / 404 |
+| Actor participant, revoked | SYS.FORBIDDEN | forbidden / 403 |
+| Operator attempts consent | SYS.FORBIDDEN | forbidden / 403 |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor × action | Resource scope | Capability | Result |
+|---|---|---|---|
+| participant × consent | cycle_id, current version | cyc.consent | ALLOW |
+| participant × consent | stale version | cyc.consent | DENY SYS.CONFLICT |
+| non-participant × consent | any | — | DENY SYS.NOT_FOUND |
+| ope_ / mod_ × consent | any | — | DENY SYS.FORBIDDEN |
+| participant × read counts | cycle_id | cyc.read | ALLOW (counts only) |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-021-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Policy store unavailable → fail closed `SYS.UNAVAILABLE` (CTR-CAP-001 TEST-10). Offline clients never decide authorization; queued consents are re-authorized at server commit.
+
+## Privacy, retention, abuse
+No privileged grants exist for this module; no PRIVATE_PERSONAL or LOCATION data is read here.
+
+## Observability & budgets
+Audit record `aud_` for every decision (allow and deny) with decision ID and reason code, no content (CTR-CAP-001 R08, R13).
+
+## Tests
+- TEST-PS-021-05-01 (matrix): each row of the authorization table.
+- TEST-PS-021-05-02 (negative integration): guessed `cyc_` ID from another cycle denied.
+- TEST-PS-021-05-03 (revocation): consent after removal denied within 60 s.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix rows produce the stated outcome and code.
+2. No operator path can write a consent row (static check plus test).
+3. Every denial writes an `aud_` record.
+
+## Assumptions & open decisions
+- ASSUMPTION: `counterparty_decision` visibility rule.
+- [DECISIONS.md](../../../DECISIONS.md) D10 — auth and portability. PROVISIONAL (D10 default, unapproved): consent signed by the party's user-controlled key when keys exist; pseudonymous session otherwise.

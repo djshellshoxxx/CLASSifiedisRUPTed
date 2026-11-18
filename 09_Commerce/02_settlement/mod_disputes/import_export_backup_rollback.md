@@ -1,35 +1,53 @@
-# PS-070-10 — import export backup rollback
+# PS-070-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-070-10. **Owner:** [09_Commerce/02_settlement/mod_disputes](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_disputes (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R11), CTR-SCH-001 (migration), CTR-FED-001 (R03), CTR-COM-001 (R13). **Decisions:** D07 (PROVISIONAL default, unapproved).
 
-## Purpose and scope
-Define the import export backup rollback process for disputes within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-070-10.R01 | Owner export includes own disputes (`statement` as raised by the owner) and dispute status; counterparty statement redacted. | MVP |
+| PS-070-10.R02 | No import of disputes in MVP; import attempts return `SYS.FORBIDDEN`. | MVP |
+| PS-070-10.R03 | Backup restore reproduces dispute states and escalation timers at recorded `state_version`. | MVP |
+| PS-070-10.R04 | Restore does not re-fire timers already `fired` (PS-070-06 timer table). | MVP |
+| PS-070-10.R05 | Rollback disables new dispute commands via feature flag; open disputes continue to be escalated by timers. | MVP |
+| PS-070-10.R06 | Export of a redacted dispute returns redaction markers and digest, not content. | MVP |
 
-## Requirements to specify
-- [ ] PS-070-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-070-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-070-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export manifest: `schema_version`, `exported_at`, `dispute_count`, `redaction_count`, `digest`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export is a query. Restore writes `aud_` completion record with counts. No domain events on restore.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Rollback does not change states. Disabled commands return `SYS.UNAVAILABLE`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Restore digest mismatch → `SCH.MIGRATION_FAILED`. Export of non-owned dispute → `SYS.NOT_FOUND`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner export requires `dispute.read` on own disputes. Restore requires `ope_` with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-070-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent on (owner, digest). Restore replays from event sequence; partial restore discarded and rerun.
+
+## Privacy, retention, abuse
+Export is PRIVATE_PERSONAL: encrypted, 24 h download link (ASSUMPTION), deleted after download or expiry. Exports exclude moderator notes.
+
+## Observability & budgets
+Export p95 ≤ 10 s for ≤ 100 disputes. Restore duration recorded.
+
+## Tests
+- TEST-PS-070-10-01 (integration): owner export includes own statement and redacts counterparty statement.
+- TEST-PS-070-10-02 (contract): export validates against CTR-SCH-001.
+- TEST-PS-070-10-03 (integration): backup-restore round trip digest equality.
+- TEST-PS-070-10-04 (integration): fired timers are not re-fired after restore.
+- TEST-PS-070-10-05 (negative): dispute import refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round-trip digest equality in 100 of 100 fixture runs.
+2. No duplicate escalations after restore.
+3. Rollback drill keeps all open disputes escalating.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h export link.
+- D07 (PROVISIONAL default, unapproved).

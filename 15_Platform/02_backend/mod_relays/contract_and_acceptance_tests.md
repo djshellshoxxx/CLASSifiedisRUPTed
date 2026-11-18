@@ -1,35 +1,50 @@
 # PS-118-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-118-09. **Owner:** [15_Platform/02_backend/mod_relays](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_relays. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_relays. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-FED-001 (R04–R13, Examples, Verification order), CTR-EVT-001 (R05), CTR-ERR-001, CTR-SCH-001 (R09).
 
-## Purpose and scope
-Define the contract and acceptance tests process for relays within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-118-09.R01 | Golden federation batches from CTR-FED-001 Examples are accepted/rejected exactly as the examples state. | MVP |
+| PS-118-09.R02 | Two-relay interop test: origin relay → destination relay, both current and previous MINOR. | MVP |
+| PS-118-09.R03 | Contract tests cover every RELAY.* and FED.* code used by this module. | MVP |
 
-## Requirements to specify
-- [ ] PS-118-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-118-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-118-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixture set `fixtures/relay/*.json`: valid batches, tampered batches, oversize batches, equivocation pairs, key-rotation sequences. Synthetic keys only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Tests exercise PS-118-04 routes and PS-118-03 transitions.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Full transition table covered by black-box tests through the queue API.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Each code asserted with status, retryable and `message_key`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Fixtures for peer A, peer B, suspended peer, operator (single and dual approval), user principal.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-118-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrency: 20 workers claiming 1 000 items; no item double-claimed.
+
+## Privacy, retention, abuse
+Fixtures contain no real identifiers; canary bytes for payload leak detection.
+
+## Observability & budgets
+Suite runtime ≤ 15 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-118-09-01 (contract): CTR-FED-001 example batches.
+- TEST-PS-118-09-02 (integration): two-relay interop.
+- TEST-PS-118-09-03 (integration): 20-worker claim race.
+- TEST-PS-118-09-04 (e2e): federation import then export of a PUBLIC listing across two nodes.
+- TEST-PS-118-09-05 (property): duplicates and reordering never produce two accepted results for one (origin, event).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All CTR-FED-001 examples pass.
+2. Interop passes for current and previous MINOR.
+3. Zero double-claims in 100 race runs.
+
+## Assumptions & open decisions
+- PENDING CTR-FED-001 HTTP path definitions (see PS-118-04).
+- D01 PROVISIONAL (unapproved).

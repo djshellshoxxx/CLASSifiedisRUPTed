@@ -1,35 +1,66 @@
 # PS-102-02 — validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-102-02. **Owner:** [13_Notifications/01_delivery/mod_email](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_email. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_email (Platform Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-SCH-001 (template schemas), CTR-PRV-001 (R09 diagnostics), CTR-ID-001.
 
-## Purpose and scope
-Define the validation rules process for email within 01_delivery. Do not assume implementation or successful external settlement.
+**Decision labels:** Disposable-domain list and rate limits are PROVISIONAL (D10 default, unapproved; abuse thresholds for F12 review).
 
-## Requirements to specify
-- [ ] PS-102-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-102-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-102-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-102-02.R01 | Address: RFC 5321 local-part and domain syntax, total length ≤ 254, IDN domains stored as punycode ASCII. Failure → `EMAIL.ADDRESS_INVALID`. | MVP |
+| PS-102-02.R02 | Normalization: domain lowercased; local part kept as entered for delivery, compared case-insensitively for uniqueness (ASSUMPTION). | MVP |
+| PS-102-02.R03 | Header fields: no CR, LF or NUL. Subject ≤ 78 characters, from a template catalog only. Violation → `EMAIL.HEADER_INVALID`. | MVP |
+| PS-102-02.R04 | Template ID must exist in catalog with matching version; variables allowlisted per template. Else `EMAIL.TEMPLATE_UNKNOWN`. | MVP |
+| PS-102-02.R05 | Body variables may contain no listing content, counterparty names or coordinates (CTR-PRV-001 R03). Violation rejected at template render. | MVP |
+| PS-102-02.R06 | Links in bodies: HTTPS only, host on first-party allowlist. Else `EMAIL.LINK_NOT_ALLOWED`. | MVP |
+| PS-102-02.R07 | Verification token: exact format `vtk_` + 43 base64url characters; expired or used → `EMAIL.VERIFICATION_EXPIRED` / `EMAIL.VERIFICATION_USED`. | MVP |
+| PS-102-02.R08 | Address disposable-domain list match → `EMAIL.ADDRESS_DISPOSABLE` for account-creation categories only. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Template catalog entries (CTR-SCH-001): `template_id`, `version`, `subject_key`, `allowed_variables[]`, `category` (see PS-107-01 categories), `sha256`. Schema-level constraints: `additionalProperties: false`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Applies to `eml.bind`, `eml.verify`, `eml.send` (PS-102-04).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Validation failure creates no state change and no event.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+| Code | Retryable | Category / HTTP | Message key |
+|---|---|---|---|
+| EMAIL.ADDRESS_INVALID | false | validation / 400 | err.email.address_invalid |
+| EMAIL.ADDRESS_DISPOSABLE | false | validation / 400 | err.email.address_disposable |
+| EMAIL.HEADER_INVALID | false | validation / 400 | err.email.header_invalid |
+| EMAIL.TEMPLATE_UNKNOWN | false | validation / 400 | err.email.template_unknown |
+| EMAIL.LINK_NOT_ALLOWED | false | validation / 400 | err.email.link_not_allowed |
+| EMAIL.VERIFICATION_EXPIRED | false | validation / 400 | err.email.verification_expired |
+| EMAIL.VERIFICATION_USED | false | conflict / 409 | err.email.verification_used |
+| EMAIL.RATE_LIMITED | true | rate / 429 | err.email.rate_limited |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-102-02`; scenarios and fixtures to be detailed in Prompt 3.
+Diagnostics: field path and rule only. The submitted address is never echoed (CTR-ERR-001 R07).
+
+## Authorization
+Validation runs after the capability check; unauthorized callers get `SYS.NOT_FOUND` (PS-102-05).
+
+## Failure, idempotency, concurrency, offline
+Validation is deterministic and side-effect free; retries of rejected input are not retried by the system.
+
+## Privacy, retention, abuse
+Disposable and header checks are abuse controls; their logs record code only.
+
+## Observability and budgets
+Rejected counts by code; validation p95 ≤ 10 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-102-03 (unit): 254-character address accepted; 255 rejected.
+- TEST-PS-102-04 (negative): address with CRLF in local part rejected with `EMAIL.HEADER_INVALID`.
+- TEST-PS-102-05 (negative): template variable containing a coordinate string rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Each code in the table has a fixture.
+2. No response echoes an address or variable value.
+3. Link allowlist test passes for all catalog templates.
+
+## Assumptions & open decisions
+- ASSUMPTION: RFC 5321 syntax subset is sufficient; quoted local parts are rejected.
+- D10 (PROVISIONAL, unapproved). D05 geoprivacy: no location variables allowed.

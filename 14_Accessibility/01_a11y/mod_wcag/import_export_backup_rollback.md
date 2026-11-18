@@ -1,35 +1,45 @@
-# PS-111-10 — import export backup rollback
+# PS-111-10 — import, export, backup and rollback
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_wcag. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-111-10. **Owner:** [14_Accessibility/01_a11y/mod_wcag](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_wcag. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-111-10.R01 | Conformance records export as a versioned report (JSON and PDF) for audit. | MVP |
+| PS-111-10.R02 | Records are append-only; corrections are new records. | MVP |
+| PS-111-10.R03 | Backups include all records and evidence digests; restore keeps append-only history. | MVP |
 
-## Purpose and scope
-Define the import export backup rollback process for wcag within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Report JSON: `{"report_version":"1.0.0","app_version":"...","records":[...]}`.
 
-## Requirements to specify
-- [ ] PS-111-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-111-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-111-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Export is a read query; no command.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Import is not supported in MVP; a report is not an input.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Export by engineering and QA roles.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Restore never removes a record; it re-applies events in order.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-111-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Reports contain no personal data.
+
+## Observability & budgets
+Report generation time ≤ 5 s for one app version (ASSUMPTION).
+
+## Tests
+- TEST-PS-111-10-01 integration: report contains every record for a version.
+- TEST-PS-111-10-02 restore: backup-restore keeps history identical.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Report reproduces record contents byte-for-byte in canonical form.
+2. No record is deleted by restore.
+
+## Assumptions & open decisions
+- ASSUMPTION: PDF rendering uses a reviewed library (selection PENDING research).
+- No Dxx decision directly affects this process.

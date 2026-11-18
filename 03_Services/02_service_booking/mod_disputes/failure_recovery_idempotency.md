@@ -1,35 +1,60 @@
 # PS-030-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-030-06. **Owner:** [03_Services/02_service_booking/mod_disputes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_disputes. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-COM-001, CTR-ID-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for disputes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-030-06.R01 | `dispute.create` idempotent on (actor, command, key) for 24 h; same key with different digest → `EVT.IDEMPOTENCY_KEY_REUSED`. | MVP |
+| PS-030-06.R02 | F09 call timeout 5 s. Unknown outcome: retry with the same key up to 3 times, backoff 1 s/2 s/4 s ±20%. | MVP |
+| PS-030-06.R03 | After retries exhausted, link stays `requested`; reconciliation job queries F09 by key every 5 min for 1 h, then sets `refused` with `DISPUTE.UNRESOLVED` (ASSUMPTION). | MVP |
+| PS-030-06.R04 | Two participants open simultaneously: F09 issues one `dispute_ref`; the second receives `DISPUTE.DUPLICATE_OPEN` with that ref. | MVP |
+| PS-030-06.R05 | Local link row and `link_opened` event commit together; no event without row. | MVP |
+| PS-030-06.R06 | Evidence and response commands use `expected_revision` on the F09 record; mismatch → `EVT.REVISION_CONFLICT`. | MVP |
+| PS-030-06.R07 | Dispute opening is online-only. Drafts (reason, note) may be kept locally (D08 PROVISIONAL) and are discarded on sign-out. | MVP |
 
-## Requirements to specify
-- [ ] PS-030-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-030-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-030-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Idempotency record per CTR-EVT-001 R03 with request digest; retained 24 h. Reconciliation state: `(idempotency_key, attempts, next_check_at)`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retry matrix in [commands_queries_events.md](commands_queries_events.md). `DISPUTE.UNRESOLVED` retryable = false (client must re-submit with a new key only after reconciliation says no record exists).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery moves `requested` → `opened` or `refused` only ([workflow_state_machine.md](workflow_state_machine.md)).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`DISPUTE.UNRESOLVED` (retryable false), `SYS.UNAVAILABLE` (retryable true).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Replays re-check participant capability unless a stored result is returned.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-030-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Partial failure matrix:
+| Failure point | Outcome |
+|---|---|
+| Before F09 call | nothing written; retry safe |
+| After F09 commit, before ack | reconciliation finds ref; link set `opened` |
+| After ack, before local write | retry returns existing ref; no duplicate |
+| Client offline | open refused; draft kept |
+
+## Privacy, retention, abuse
+Reconciliation logs carry key hash, not key. Attempt counts only.
+
+## Observability & budgets
+Metrics: `dispute_create_total{result}`, `dispute_reconcile_total{outcome}`. Alert on any `DISPUTE.UNRESOLVED` (ASSUMPTION).
+
+## Tests
+- TEST-PS-030-06-01 integration: F09 timeout after commit yields one `opened` link.
+- TEST-PS-030-06-02 integration: concurrent opens yield one `dispute_ref`.
+- TEST-PS-030-06-03 fault injection: crash between F09 ack and local write, then replay.
+- TEST-PS-030-06-04 offline: open attempt refused with no queued command.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No double-count of claim transitions after any injected fault.
+2. Every `requested` link is resolved to `opened` or `refused` within 1 h.
+3. Offline opens never enter the queue.
+
+## Assumptions & open decisions
+- ASSUMPTION: 5 s timeout, 3 retries, 1 h reconciliation window.
+- D08 (offline writes) PROVISIONAL: drafts only.
+- Payment checklist applies: a settlement claim is moved to `DISPUTED` at most once per window (CTR-COM-001 R13 append-only).

@@ -1,35 +1,59 @@
 # PS-037-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-037-05. **Owner:** [04_Auctions/02_auction_integrity/mod_fraud](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_fraud. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_fraud. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-PRV-001
 
-## Purpose and scope
-Define the authorization capabilities process for fraud within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-037-05.R01 | Capability IDs match `^[a-z_]{2,24}\.[a-z_]{2,24}$`: `fraud.record`, `fraud.review`, `fraud.decide`, `fraud.escalate`, `fraud.read_aggregate`, `fraud.read_own_outcome`. | MVP |
+| PS-037-05.R02 | Default deny. No actor may read another account's signal detail. | MVP |
+| PS-037-05.R03 | A moderator cannot hold `fraud.review` on an auction where they have a role (PS-037-03 R02). | MVP |
+| PS-037-05.R04 | Operators receive `fraud.read_aggregate` only; aggregates contain no account or bid IDs. | MVP |
 
-## Requirements to specify
-- [ ] PS-037-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-037-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-037-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Grant records per CTR-CAP-001 (`grt_` prefix). Scope field: `case` or `auction` for moderators.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Each command checks one capability before validation (PS-037-02).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Grant states follow CTR-CAP-001 (active, revoked). Revocation during UNDER_REVIEW releases the claim (PS-037-03).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Missing capability: `CAP.DENIED`. Scope mismatch: `CAP.SCOPE_MISMATCH`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+| Actor | Action | Resource | Capability |
+|---|---|---|---|
+| sys (bid-stream service) | record signal | FraudSignal | fraud.record |
+| mod (F12) | claim, read case | FraudCase (case scope) | fraud.review |
+| mod (F12 with decide grant) | dismiss, uphold | FraudCase | fraud.decide |
+| mod (F12 lead) | escalate, resolve | FraudCase | fraud.escalate |
+| ope | read counts | aggregate | fraud.read_aggregate |
+| bidder or seller (acc_) | read own outcome | own case result | fraud.read_own_outcome |
+| any other | any | any | deny |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-037-05`; scenarios and fixtures to be detailed in Prompt 3.
+Appellant sees: rule_id, rule_version, decision, date. Never: other accounts, scores, features.
+
+## Failure, idempotency, concurrency, offline
+Grant checks are synchronous; cache TTL for grants <= 60 s, revocation invalidates cache.
+
+## Privacy, retention, abuse
+Operator access to signal-level detail requires dual control (ASSUMPTION, CTR-CAP-001 R07). Access logs record actor ID and case ID.
+
+## Observability & budgets
+Count denials by capability. Alert on any denial spike > 10x baseline.
+
+## Tests
+- TEST-PS-037-05-01 (negative): each actor-action pair in the table tested for allow and deny.
+- TEST-PS-037-05-02 (conflict): moderator with bidder role on same auction is denied claim.
+- TEST-PS-037-05-03 (revocation): revoked grant blocks the next command within 60 s.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every command maps to exactly one capability.
+2. No response to any non-F12 actor contains other accounts' identifiers.
+3. Conflict and revocation tests pass.
+
+## Assumptions & open decisions
+- ASSUMPTION: moderator decide and escalate capabilities are separate grants.
+- PROVISIONAL (no Dxx): operator aggregate access requires no dual control.

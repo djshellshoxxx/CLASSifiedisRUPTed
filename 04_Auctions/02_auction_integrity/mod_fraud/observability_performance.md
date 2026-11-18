@@ -1,35 +1,50 @@
 # PS-037-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-037-08. **Owner:** [04_Auctions/02_auction_integrity/mod_fraud](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_fraud. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_fraud. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001
 
-## Purpose and scope
-Define the observability performance process for fraud within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-037-08.R01 | Emit counters: `fraud_signals_recorded_total{rule_id}`, `fraud_cases_total{status}`, `fraud_eval_timeouts_total{rule_id}`. | MVP |
+| PS-037-08.R02 | Rule evaluation p95 <= 200 ms per rule; bid event to signal p95 <= 60 s. | MVP |
+| PS-037-08.R03 | Logs are structured JSON with `case_id` or `signal_id` prefix only; no account, bid, device or feature values. | MVP |
+| PS-037-08.R04 | Time-to-first-claim p95 <= 24 h for OPEN cases (ASSUMPTION). | MVP |
+| PS-037-08.R05 | Dashboards show aggregates only (k >= 5). | MVP |
 
-## Requirements to specify
-- [ ] PS-037-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-037-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-037-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Metric labels limited to `rule_id`, `status`, `error_code`. No account-level labels.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Event `fraud.eval_slow` emitted when p95 breaches for 5 min; internal only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Log redaction tests reject any log line containing a regex match for `acc_`, `bid_` or 64-hex strings followed by bounded length.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboard access requires `fraud.read_aggregate` (PS-037-05).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-037-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metrics are best-effort; missing samples never block fraud writes.
+
+## Privacy, retention, abuse
+Metric and log retention 30 days (ASSUMPTION). Traces sample at 1% and drop payload attributes.
+
+## Observability & budgets
+Budgets: 2,000 bid events/min per platform hot path (ASSUMPTION); write CPU <= 5% overhead on bid stream.
+
+## Tests
+- TEST-PS-037-08-01 (redaction): synthetic log with account and device values is redacted.
+- TEST-PS-037-08-02 (performance): load fixture of 2,000 events/min meets R02.
+- TEST-PS-037-08-03 (alert): DLQ > 0 for 15 min fires alert.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All counters present in staging.
+2. Redaction test passes with zero leaks.
+3. Load fixture meets p95 budgets.
+
+## Assumptions & open decisions
+- ASSUMPTION: 2,000 events/min is the planning budget.
+- PROVISIONAL (D07 default, unapproved): 30-day telemetry retention.

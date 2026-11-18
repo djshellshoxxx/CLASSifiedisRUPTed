@@ -1,44 +1,44 @@
 # F12.S01.M02 — evidence
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F12.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead. **Parent:** F12.S01.
 
 ## Purpose and business behavior
-Provide evidence as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Captures, stores and gates access to the material a report relies on: point-in-time snapshots of reported listings, service and auction pages, messages, attachments and user-supplied images. Each snapshot is scanned, hashed, stripped of location metadata, immutable, and redacted or purged on schedule. Evidence shows what was reported and when. It does not prove that a sale, payment, delivery or handover happened.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a reporter, I attach up to 10 items to my report, see a receipt, and never see the reported person's identity.
+- As a moderator with a case grant, I view snapshots for the stated purpose until the grant expires.
+- As a participant named in evidence, I learn the outcome and that evidence about me was used, never who reported me.
 
 ## Scope
-- Required process spec: `evidence_domain_model.md` (not yet authored)
-- Required process spec: `evidence_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `evidence_validation_and_authorization.md` (not yet authored)
-- Required process spec: `evidence_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `evidence_interfaces_and_events.md` (not yet authored)
-- Required process spec: `evidence_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `evidence_acceptance_and_property_tests.md` (not yet authored)
+Ten process specs, all SPEC-DRAFT-COMPLETE: PS-093-01 to PS-093-10 (see inventory below).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+- Commands: `evidence.capture`, `evidence.redact`, `evidence.legal_hold.apply` (PS-093-04).
+- Queries: `evidence.get`, `evidence.list_by_report`, `evidence.content` (grant-gated, ≤ 60 s URL).
+- Events (aggregate `evidence`): `evidence.captured`, `evidence.redacted`, `evidence.legal_hold_applied`, `evidence.purged`.
+- Identifier: `mev_` (proposed; PENDING CTR-ID-001 registry entry).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: F12.S01.M01 flags (`rpt_`), F08 messages and attachments (`msg_`, `att_` read via F08 contract), F07 accounts (`acc_`), F16 capability model (CTR-CAP-001), F10 retention (CTR-PRV-001). Downstream: F12.S01.M03 appeals and F12.S02.M01 enforcement reference `mev_` IDs by full ID. Not federated.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns: `mev_` snapshot records, scan verdicts, redaction and hold links. Does not own: commerce evidence items `evd_` (F09, per CTR-ID-001 registry), identity evidence (F07.S03.M02), messages or attachments (F08). Canonical owner for moderation evidence snapshots is this module (B-06, PROVISIONAL, unapproved).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Third-party privacy exposure through forced captures; forged or edited screenshots; GPS or address leakage in image metadata; scanner outage exposing unscanned content; over-retention; reporter identity leaking through evidence metadata. Evidence is self-attested unless the snapshot came from the authoritative store. No platform custody of money; no payment or delivery assurance.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All ten process specs have approval gates passed (Privacy Lead F10, Security Lead F16); TEST-PS-093 IDs pass in a future implementation phase.
 
 ## Required process specification inventory
-- [ ] `evidence_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `evidence_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `evidence_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `evidence_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `evidence_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `evidence_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `evidence_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-093-01
+- [x] [validation_rules.md](validation_rules.md) — PS-093-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-093-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-093-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-093-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-093-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-093-07
+- [x] [observability_performance.md](observability_performance.md) — PS-093-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-093-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-093-10

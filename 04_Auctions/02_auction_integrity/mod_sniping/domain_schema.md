@@ -1,35 +1,68 @@
 # PS-038-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-038-01. **Owner:** [04_Auctions/02_auction_integrity/mod_sniping](SPEC.md). **Implementing module:** 04_Auctions/02_auction_integrity/mod_sniping. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 04_Auctions/02_auction_integrity/mod_sniping. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ID-001, CTR-PRV-001, CTR-SCH-001
 
-## Purpose and scope
-Define the domain schema process for sniping within 02_auction_integrity. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-038-01.R01 | Persist one immutable `BidTimingEvent` per accepted or rejected bid. Prefix `btm_` is ASSUMPTION until registered in CTR-ID-001. | MVP |
+| PS-038-01.R02 | `server_received_at` is the only time used for ordering and classification. Client timestamps are stored as hints only. | MVP |
+| PS-038-01.R03 | Close time is read from the auction's `close_at` owned by 01_auction_lifecycle/mod_close; this module never stores a second authoritative close time. | MVP |
+| PS-038-01.R04 | Classification thresholds (PROVISIONAL): SNIPE when 0 < seconds_before_close <= 10; LATE when 10 < s <= 120; NORMAL otherwise. | MVP |
+| PS-038-01.R05 | Per-auction timing aggregates are derived, not stored as truth; they are recomputable from events. | MVP |
 
-## Requirements to specify
-- [ ] PS-038-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-038-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-038-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```
+BidTimingEvent {
+  timing_id: "btm_<ulid>"                REQUIRED
+  auction_id: "auc_..."                  REQUIRED
+  bid_id: "bid_..."                      REQUIRED, unique per auction
+  bidder_id: "acc_..."                   REQUIRED (PSEUDONYMOUS)
+  server_received_at: RFC3339 UTC, ms    REQUIRED
+  close_at_snapshot: RFC3339 UTC, ms     REQUIRED
+  seconds_before_close: int              REQUIRED (negative = after close)
+  class: enum[NORMAL, LATE, SNIPE, UNCLASSIFIED]
+  clock_status: enum[OK, DEGRADED]
+  acceptance: enum[ACCEPTED, REJECTED_AFTER_CLOSE]
+  client_sent_at: RFC3339 | null         hint only, never ordering
+  source_event_id: "evt_..."             REQUIRED
+  schema_version: int >= 1
+}
+```
+Constraint: unique(auction_id, bid_id). No update path; corrections are new events.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Defined in PS-038-04. Schema changes via CTR-SCH-001.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Defined in PS-038-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Defined in PS-038-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+`client_sent_at` is visible to the bidder only; never to sellers or other bidders.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-038-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Insert is idempotent on `(auction_id, bid_id)`. Offline bids get `server_received_at` at server acknowledgment (PS-038-06).
+
+## Privacy, retention, abuse
+`bidder_id` with precise timestamps is PSEUDONYMOUS but behavior-revealing; retention in PS-038-07.
+
+## Observability & budgets
+Insert p95 <= 10 ms. Row count per auction reported, not row content.
+
+## Tests
+- TEST-PS-038-01-01 (constraint): duplicate `(auction_id, bid_id)` rejected.
+- TEST-PS-038-01-02 (lint): `client_sent_at` absent from any seller-facing schema.
+- TEST-PS-038-01-03 (recompute): aggregates rebuilt from events equal live aggregates.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every field has type, bounds, class and provenance.
+2. No stored second close time exists.
+3. Events are append-only.
+
+## Assumptions & open decisions
+- ASSUMPTION: `btm_` prefix registered in CTR-ID-001.
+- PROVISIONAL (no Dxx): thresholds 10 s and 120 s, for F04 product confirmation.
+- PROVISIONAL (D07 default, unapproved): retention per PS-038-07.

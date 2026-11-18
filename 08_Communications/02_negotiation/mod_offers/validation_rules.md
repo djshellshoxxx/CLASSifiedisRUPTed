@@ -1,35 +1,62 @@
 # PS-063-02 — validation rules
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_offers. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-COM-001 (R02, R03, R04), CTR-ERR-001, CTR-CAP-001, CTR-ID-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-063-02. **Owner:** [08_Communications/02_negotiation/mod_offers](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-063-02.R01 | `amount_minor` matches `^(0|[1-9][0-9]{0,38})$`; `exponent` equals registry value for `currency.code`. | MVP |
+| PS-063-02.R02 | Cross-currency compensation requires `quote_id` with `now ≤ valid_until`; new quotes are not created by this module. | MVP |
+| PS-063-02.R03 | Offerer ≠ recipient. Self-offers rejected. | MVP |
+| PS-063-02.R04 | A counter must change at least one term; identical terms → `OFFERS.NO_CHANGE`. | MVP |
+| PS-063-02.R05 | Counter allowed only from `open` state of the immediately prior version. | MVP |
+| PS-063-02.R06 | `expires_at` in (now, now + 14 d]. Default 72 h when omitted. | MVP |
+| PS-063-02.R07 | Counter depth ≤ 20; deeper → `OFFERS.DEPTH_EXCEEDED`. | MVP |
 
-## Purpose and scope
-Define the validation rules process for offers within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Rule identifiers for `details[].rule`: `amount_format`, `exponent_mismatch`, `quote_missing`, `quote_expired`, `self_offer`, `no_change`, `state_forbids`, `expiry_range`, `depth_exceeded`, `compensation_count`.
 
-## Requirements to specify
-- [ ] PS-063-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-063-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-063-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Validation precedes idempotency lookup for malformed input.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Validation does not change state.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+| Code | Retryable | Category / HTTP | message_key | Diagnostic |
+|---|---|---|---|---|
+| OFFERS.AMOUNT_INVALID | false | validation / 400 | err.offers.amount_invalid | field path, rule |
+| OFFERS.CURRENCY_MISMATCH | false | unprocessable_state / 422 | err.offers.currency | rule |
+| OFFERS.QUOTE_MISSING | false | unprocessable_state / 422 | err.offers.quote_missing | field path |
+| COM.QUOTE_EXPIRED | false | unprocessable_state / 422 | err.com.quote_expired | owned by CTR-COM-001 |
+| OFFERS.SELF_OFFER | false | validation / 400 | err.offers.self_offer | none |
+| OFFERS.NO_CHANGE | false | validation / 400 | err.offers.no_change | none |
+| OFFERS.STATE_FORBIDS | false | conflict / 409 | err.offers.state | state name |
+| OFFERS.EXPIRY_RANGE | false | validation / 400 | err.offers.expiry | field path |
+| OFFERS.DEPTH_EXCEEDED | false | unprocessable_state / 422 | err.offers.depth | none |
+| SYS.NOT_FOUND | false | not_found / 404 | err.sys.not_found | none |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Validation of target participation uses [PS-063-05](authorization_capabilities.md); body party IDs ignored (CTR-CAP-001 R11).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Server re-validates all money fields at commit even when the client pre-validated offline.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-063-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Diagnostics never echo amounts or currency codes.
+
+## Observability & budgets
+`offers_validation_reject_total{code}`.
+
+## Tests
+- TEST-PS-063-02-01 (unit): each code reachable; amount `"0250000"` rejected.
+- TEST-PS-063-02-02 (negative): float amount `2500.00` rejected with `OFFERS.AMOUNT_INVALID`.
+- TEST-PS-063-02-03 (time): counter with expired cross-currency quote → `COM.QUOTE_EXPIRED`.
+- TEST-PS-063-02-04 (boundary): `expires_at` at now + 14 d + 1 ms rejected.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No float or leading-zero money value accepted (TEST-PS-063-02-01, -02).
+2. Quote expiry enforced at offer creation (TEST-PS-063-02-03).
+
+## Assumptions & open decisions
+- ASSUMPTION: 14-day maximum expiry; 20 counter depth.
+- D03 (mixed currency valuation): PROVISIONAL (D03 default, unapproved).

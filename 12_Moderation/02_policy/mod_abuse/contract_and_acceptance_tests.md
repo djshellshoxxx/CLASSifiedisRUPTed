@@ -1,35 +1,46 @@
 # PS-095-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-095-09. **Owner:** [12_Moderation/02_policy/mod_abuse](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_abuse. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_abuse (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-CAP-001, CTR-ERR-001, CTR-PRV-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for abuse within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-095-09.R01 | Each rule in the registry ships with positive and negative fixtures; CI fails without them. | MVP |
+| PS-095-09.R02 | Evasion fixture corpus (homoglyph, zero-width, split tokens, abbreviations) is part of every release gate. | MVP |
 
-## Requirements to specify
-- [ ] PS-095-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-095-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-095-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
-
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-095-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Test map
+| Test ID | Level | Scope |
+|---|---|---|
+| TEST-PS-095-01-01 | lint | no matched text fields |
+| TEST-PS-095-01-02 | uniqueness | re-scan idempotent |
+| TEST-PS-095-02-01 | unit | normalization |
+| TEST-PS-095-02-02 | registry | two-approver rule |
+| TEST-PS-095-02-03 | window | boundary match |
+| TEST-PS-095-03-01 | property | review sequences |
+| TEST-PS-095-03-02 | negative | self-review |
+| TEST-PS-095-03-03 | restriction | 14-day expiry |
+| TEST-PS-095-04-01 | contract | schema 1.0.0 |
+| TEST-PS-095-04-02 | idempotency | repeat scan |
+| TEST-PS-095-04-03 | lint | event payloads |
+| TEST-PS-095-05-01 | matrix | action matrix |
+| TEST-PS-095-05-02 | scanner | no review rights |
+| TEST-PS-095-05-03 | governance | dual approval |
+| TEST-PS-095-06-01 | fault | scanner outage |
+| TEST-PS-095-06-02 | replay | duplicate jobs |
+| TEST-PS-095-06-03 | rollback | rule disable |
+| TEST-PS-095-07-01 | privacy | text absence |
+| TEST-PS-095-07-02 | bias | review record gate |
+| TEST-PS-095-07-03 | retention | 90-day purge |
+| TEST-PS-095-08-01 | logs | rule_id only |
+| TEST-PS-095-08-02 | alert | precision governance |
+| TEST-PS-095-08-03 | load | scan budget |
+| TEST-PS-095-10-01 | export | legal path only |
+| TEST-PS-095-10-02 | rollback | findings retained |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All test IDs pass in CI before implementation sign-off (future phase).
+2. Evasion corpus detection meets per-rule precision and recall targets set by Trust&Safety (OPEN values).
+
+## Assumptions & open decisions
+- ASSUMPTION: fixtures are synthetic.
+- OPEN: language coverage and recall targets (Trust&Safety, F14 for locales).

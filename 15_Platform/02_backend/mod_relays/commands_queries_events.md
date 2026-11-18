@@ -1,35 +1,59 @@
-# PS-118-04 — commands queries events
+# PS-118-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-118-04. **Owner:** [15_Platform/02_backend/mod_relays](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_relays. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_relays. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-FED-001 (Commands section, R13), CTR-EVT-001 (R03, R10), CTR-ERR-001.
 
-## Purpose and scope
-Define the commands queries events process for relays within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-118-04.R01 | Inbound federation endpoint `POST /v1/federation/batches` accepts one batch per request, idempotent by `batch_id`. | MVP |
+| PS-118-04.R02 | Response returns per-event result array in input order. | MVP |
+| PS-118-04.R03 | Outbound sends use `POST` to the peer's batch endpoint with the same contract (symmetry). | MVP |
+| PS-118-04.R04 | Internal commands carry `idempotency_key` = `(target_peer, origin_node, event_id)`. | MVP |
 
-## Requirements to specify
-- [ ] PS-118-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-118-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-118-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Request: batch envelope (PS-118-02). Response:
+```json
+{ "batch_id": "dlv_…", "results": [ { "event_id": "evt_…", "status": "accepted" }, { "event_id": "evt_…", "status": "rejected", "code": "RELAY.SIGNATURE_INVALID" } ] }
+```
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Caller | Idempotency | Errors |
+|---|---|---|---|
+| relay.enqueue | federation sync | (peer, origin, event) | PS-118-02 codes |
+| relay.forward | scheduler | queue item ID + attempt | FED.RATE_LIMITED, RELAY.PEER_UNREACHABLE |
+| relay.ack | peer response | queue item + attempt | RELAY.ACK_UNKNOWN_ITEM (404) |
+| relay.expire | TTL job | queue item | none |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Events: `relay_queue_item.dropped`, `relay_queue_item.expired` (CTR-EVT-001 naming). Relay does not emit CTR-FED-001 events itself.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Command effects as in PS-118-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`RELAY.PEER_UNREACHABLE` (503, unavailable, retryable true, retry_after_ms). `RELAY.QUEUE_FULL` (503, unavailable, retryable true).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-118-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+`relay.submit` for peers (own origin events only); `relay.read` for `ope_` diagnostics (digests, counts).
+
+## Failure, idempotency, concurrency, offline
+Batch retry by the sender with the same `batch_id` returns the stored result array (CTR-EVT-001 R03 scope).
+
+## Privacy, retention, abuse
+Responses contain event IDs and codes only. No envelope bytes in responses.
+
+## Observability & budgets
+Route label bounded; p95 batch accept ≤ 300 ms for 100 events (ASSUMPTION).
+
+## Tests
+- TEST-PS-118-04-01 (contract): response shape and ordering for mixed results.
+- TEST-PS-118-04-02 (integration): same `batch_id` twice returns identical array.
+- TEST-PS-118-04-03 (contract): `relay.ack` for unknown item returns 404 with no detail.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every route and command in the tables is implemented against the listed errors.
+2. Result order equals input order in 100% of property-test runs.
+3. Retry of a batch after timeout does not create a second queue item.
+
+## Assumptions & open decisions
+- PENDING CTR-FED-001 endpoint paths: CTR-FED-001 defines batches but not HTTP paths; path above is ASSUMPTION until the contract is updated.
+- D01 PROVISIONAL (default: versioned signed envelopes; unapproved).

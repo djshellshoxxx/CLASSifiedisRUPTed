@@ -1,35 +1,55 @@
-# PS-085-10 — import export backup rollback
+# PS-085-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-085-10. **Owner:** [11_Federation/01_protocol/mod_signatures](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_signatures. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R05, R08 hash chain, R13 export re-keying), CTR-FED-001 (R04, R08, R09), CTR-SCH-001 (R05–R09 compatibility, R07 no rewrite, R08 lossless evidence), CTR-PRV-001 (R06 backups, R07 holds).
 
-## Purpose and scope
-Define the import export backup rollback process for signatures within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-085-10.R01 | Export emits the signed bytes exactly as stored. Re-export of the same event yields identical bytes (determinism from PS-085-04 R03). | MVP |
+| PS-085-10.R02 | Import verifies each event through PS-085-02 before storing. Stored `signature` bytes are kept verbatim (CTR-SCH-001 R07, R08). | MVP |
+| PS-085-10.R03 | Key projection backup: RPO ≤ 5 min (ASSUMPTION), RTO ≤ 4 h (ASSUMPTION). Private keys are backed up only as KMS-wrapped material under F16 procedure. Public projection restore is followed by re-verifying a sample of 100 events per key. | MVP |
+| PS-085-10.R04 | Compromise markings and revocations are not rolled back. They are irreversible, like tombstones (CTR-FED-001 R07). A restore that would remove a marking is refused. | MVP |
+| PS-085-10.R05 | Signing-input version change is MAJOR (CTR-SCH-001). `v1` verification stays available for all historical events. New version is gated by a feature flag (CTR-FED-001 R01). | MVP |
+| PS-085-10.R06 | Rollback of a key rotation restores the previous key's `valid_until` only if that key is not revoked or compromised. | MVP |
 
-## Requirements to specify
-- [ ] PS-085-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-085-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-085-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export package fields: `envelope` (JCS-canonical bytes), `signature`, `key_id`, `audience`, `schema_version`. No `idempotency_key`, no `correlation_id` (CTR-FED-001 R08). Backup set: key projection rows, outbox state, verification audit records.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Export and import run through `fed.send_batch` and `fed.receive_batch` (CTR-FED-001). Restore runs through F15 backup tooling (PENDING F15 runbook).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Import failures return per-event results (PS-085-02). Restore validation errors block the restore and name the failing table only.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Restore and rollback require `federation_key.administer` with dual control (PS-085-05).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+- Partial import: each event commits or is rejected on its own (PS-085-06 R04).
+- Restore is idempotent: running it twice yields the same projection.
+- Rollback during active export: outbox held rows are not released until re-verified.
+- Hash chain (CTR-EVT-001 R08): a restore that breaks the chain is refused and triggers review.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-085-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Backups follow CTR-PRV-001 R06. Private key backups are encrypted under KMS. Holds (R07) can extend retention of compromise evidence; they never extend private key retention.
+
+## Observability & budgets
+`fed_restore_verify_sample_failures_total`. Restore timing recorded per run.
+
+## Tests
+- TEST-PS-085-10-01 (integration): export → import round trip keeps bytes identical and verifies.
+- TEST-PS-085-10-02 (integration): restore from backup, then re-verify a 100-event sample per key; zero failures.
+- TEST-PS-085-10-03 (integration): rollback attempt on a compromised marking is refused.
+- TEST-PS-085-10-04 (contract): `v2` signing-input flag off → only `v1` signatures produced; historical `v1` events verify.
+- TEST-PS-085-10-05 (integration): rotation rollback with compromised prior key refused.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Round trip is byte-identical; TEST-PS-085-10-01 passes.
+2. No compromise marking is removed by any restore; TEST-PS-085-10-03 and -05 pass.
+3. Historical signatures remain verifiable after a version change; TEST-PS-085-10-04 passes.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- ASSUMPTION: RPO and RTO above (F15 to confirm).
+- PROVISIONAL (D07 default, unapproved): retention classes per PS-085-07.
+- OPEN (D10): recovery and rotation for user-controlled keys, if in scope.

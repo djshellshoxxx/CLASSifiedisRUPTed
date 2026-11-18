@@ -1,35 +1,56 @@
 # PS-079-01 — domain schema
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-079-01. **Owner:** [10_Privacy/01_data_controls/mod_retention](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_retention. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_retention (Privacy Lead, F10). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (retention classes RET-*, R06, R07), CTR-SCH-001 (R01, R10), CTR-ID-001 (`cas_` for holds, `aud_` for audit), CTR-EVT-001.
 
-## Purpose and scope
-Define the domain schema process for retention within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-079-01.R01 | Exactly one `retention_policy` row per (`retention_class`, `version`). `retention_class` is one of the ten RET-* values in CTR-PRV-001 (RET-EPH, RET-OPS, RET-AUD, RET-ACC, RET-PRIV, RET-LOC, RET-EVD, RET-SEC, RET-FED, RET-LEGAL). | MVP |
+| PS-079-01.R02 | Each registered schema field maps to exactly one retention class via CTR-SCH-001 registry; unmapped field fails CI. | MVP |
+| PS-079-01.R03 | `retention_hold` rows reference one `cas_` ID, a selector (`record_type`, `subject_acc_id` or `case_scope`), `applied_at`, `ends_at` and two distinct approver IDs. | MVP |
+| PS-079-01.R04 | `ends_at` is mandatory and ≤ `applied_at` + 365 days (ASSUMPTION). | MVP |
+| PS-079-01.R05 | Published policy rows are immutable; changes create a new version. | MVP |
 
-## Requirements to specify
-- [ ] PS-079-01.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-079-01.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-079-01.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+```json
+{
+  "retention_policy": {"retention_class": "RET-PRIV", "version": "1.0.0", "max_duration": "P365D", "effective_from": "timestamp", "approved_by": ["ope_<ULID>", "ope_<ULID>"], "data_class_scope": ["PRIVATE_PERSONAL"]},
+  "retention_hold": {"id": "cas_<ULID>", "selector": {"record_type": "string", "subject_acc_id": "acc_<ULID> | null"}, "applied_at": "timestamp", "ends_at": "timestamp", "approvers": ["ope_<ULID>", "ope_<ULID>"], "state": "applied | released | auto_released"}
+}
+```
+Duration values are ISO 8601. Legal period values are PENDING jurisdiction review (R07).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+See PS-079-04.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See PS-079-03.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See PS-079-02.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Policy rows and holds are administered only through capabilities in PS-079-05.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-079-01`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Policy publish is idempotent on (class, version). Hold application is idempotent on `cas_` plus selector digest.
+
+## Privacy, retention, abuse
+Policy rows: RET-AUD. Hold rows: RET-LEGAL while active, then RET-AUD. Holds store no content.
+
+## Observability & budgets
+`retention_holds_active` gauge; row write p95 ≤ 100 ms (ASSUMPTION).
+
+## Tests
+- TEST-PS-079-01-01 (lint): every registered field maps to one class (CTR-PRV-001 R01).
+- TEST-PS-079-01-02 (schema): hold without two distinct approvers is rejected at storage level.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Policy table covers all ten RET-* classes.
+2. No unmapped field passes CI.
+3. Hold row cannot be inserted without `ends_at`.
+
+## Assumptions & open decisions
+- PROVISIONAL (D07 default, unapproved): minimal per-category retention with legal-hold exceptions.
+- ASSUMPTION: 365-day maximum hold without re-approval.
+- OPEN (R07): legal periods for RET-EVD and RET-LEGAL.

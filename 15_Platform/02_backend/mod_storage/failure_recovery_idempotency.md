@@ -1,35 +1,53 @@
-# PS-119-06 — failure recovery idempotency
+# PS-119-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-06. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_storage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R03), CTR-EVT-001 (R03), CTR-PRV-001 (R06).
 
-## Purpose and scope
-Define the failure recovery idempotency process for storage within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-119-06.R01 | Object write is durable (fsync or provider ack) before the row becomes PENDING_SCAN. | MVP |
+| PS-119-06.R02 | Orphan objects (no row after 24 h, ASSUMPTION) are removed by sweeper; rows without object are marked QUARANTINED. | MVP |
+| PS-119-06.R03 | Object store timeouts: write 15 s, read 5 s (ASSUMPTION). | MVP |
+| PS-119-06.R04 | Upload retried by client with same `client_upload_id` is idempotent (PS-119-04). | MVP |
 
-## Requirements to specify
-- [ ] PS-119-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+No new fields. Sweeper uses `created_at` and state.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None new.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Write path: REQUESTED → OBJECT_WRITTEN → ROW_COMMITTED (PENDING_SCAN). Failure after object write but before row commit leaves an orphan, reclaimed by sweeper.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Situation | Code | Category | Retryable |
+|---|---|---|---|
+| Object store unavailable | STO.STORE_UNAVAILABLE | unavailable | true (retry_after_ms) |
+| Write timeout | STO.STORE_TIMEOUT | unavailable | true |
+| Checksum mismatch on read | STO.CHECKSUM_MISMATCH | internal | false (alert) |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Sweeper and repair are `sys_` actions; manual repair is `ope_` with dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Concurrent uploads with same key: unique index on (owner_ref, client_upload_id) decides; loser gets the winner's blob_id. Read checksum verified against `sha256` on each cache miss.
+
+## Privacy, retention, abuse
+Orphan cleanup deletes bytes without logging content identifiers beyond counts.
+
+## Observability & budgets
+Metrics `stored_orphans_reclaimed_total`, `stored_checksum_mismatch_total`. Alert on any checksum mismatch.
+
+## Tests
+- TEST-PS-119-06-01 (chaos): kill process after object write; sweeper reclaims orphan within 24 h test clock.
+- TEST-PS-119-06-02 (integration): object store timeout returns STO.STORE_TIMEOUT.
+- TEST-PS-119-06-03 (integration): corrupt object triggers checksum mismatch and quarantine.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero orphan objects older than 24 h after sweep.
+2. Checksum mismatch never served to clients.
+3. Duplicate concurrent upload yields one row.
+
+## Assumptions & open decisions
+- ASSUMPTION: timeouts and orphan window.
+- D08 PROVISIONAL (unapproved): offline upload retries follow client queue rules.

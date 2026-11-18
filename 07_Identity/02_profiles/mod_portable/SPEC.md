@@ -1,44 +1,41 @@
 # F07.S02.M01 — portable
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F07.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Identity&Trust Lead (F07). **Parent:** [F07.S02 profiles](../SPEC.md).
 
 ## Purpose and business behavior
-Provide portable as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Let an account holder export their own profile data as a signed bundle and import a bundle into a node, so a profile can move between nodes without the platform holding recoverable keys (D10). Exports carry only the owner's data at permitted classes. Imports verify signature, schema and expiry before any write, and apply at most once per bundle. Reputation, moderation and evidence are not portable.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As an account holder, I export my profile as a file and keep it.
+- As an account holder moving to another node, I import my profile bundle and review what will be created before I confirm.
+- As an account holder, I can see that an import was rejected and why, without seeing my data in the message.
 
 ## Scope
-- Required process spec: `portable_domain_model.md` (not yet authored)
-- Required process spec: `portable_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `portable_validation_and_authorization.md` (not yet authored)
-- Required process spec: `portable_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `portable_interfaces_and_events.md` (not yet authored)
-- Required process spec: `portable_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `portable_acceptance_and_property_tests.md` (not yet authored)
+Ten canonical process specifications listed in the inventory below. Out of scope: federation transport (11_Federation/01_protocol/mod_portable) and live profile editing ([mod_profiles](../mod_profiles/SPEC.md)).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `portable.export.generate`, `portable.import.stage`, `portable.import.apply`, `portable.import.cancel`; query `portable.export.download`. Events `portable_bundle.*`, `portable_import.*` (CTR-EVT-001). Error prefix `MOD_PORTABLE.`. Prefixes `bnd_` and `imj_` are PENDING CTR-ID-001 registry entries.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: mod_profiles (source data), mod_sessions (step-up), D10 key model. Downstream: 11_Federation/01_protocol/mod_portable consumes `bnd_` IDs under CTR-FED-001 and does not own bundle records. Canonical contracts: CTR-SCH-001, CTR-PRV-001, CTR-CAP-001, CTR-EVT-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Canonical owner of portable profile bundle and import-job records: `07_Identity/02_profiles/mod_portable` (F07.S02.M01). Slug shared with `11_Federation/01_protocol/mod_portable`; that module owns federation transport only and references `bnd_` by full ID (REVIEW B-06).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Bundle exfiltration (contains personal data), replayed or forged bundles, import of a bundle that re-creates a profile from a compromised key, decompression or parsing abuse, and leakage of counterparty data inside an owner's bundle. Signature validity proves integrity and origin of the signing key, not the truth of profile content.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs at SPEC-DRAFT-COMPLETE; TEST-PS-055-01 to -23 mapped; Privacy Lead (F10) review of field classes and Security Lead (F16) review of signing design pending.
 
 ## Required process specification inventory
-- [ ] `portable_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `portable_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `portable_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `portable_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `portable_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `portable_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `portable_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-055-01
+- [x] `validation_rules.md` — PS-055-02
+- [x] `workflow_state_machine.md` — PS-055-03
+- [x] `commands_queries_events.md` — PS-055-04
+- [x] `authorization_capabilities.md` — PS-055-05
+- [x] `failure_recovery_idempotency.md` — PS-055-06
+- [x] `privacy_retention_abuse.md` — PS-055-07
+- [x] `observability_performance.md` — PS-055-08
+- [x] `contract_and_acceptance_tests.md` — PS-055-09
+- [x] `import_export_backup_rollback.md` — PS-055-10

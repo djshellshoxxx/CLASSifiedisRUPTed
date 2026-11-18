@@ -1,44 +1,41 @@
 # F07.S01.M03 — recovery
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F07.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Identity&Trust Lead (F07). **Parent:** [F07.S01 accounts](../SPEC.md).
 
 ## Purpose and business behavior
-Provide recovery as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Let an `acc_` holder regain access after losing every session and credential, using only proofs enrolled in advance: saved recovery codes or a verified contact address. Recovery never discloses the account's contact address, region cell or home location, never gives support staff access to credentials (CTR-CAP-001 R12), and never completes before a 24 h cooldown (ASSUMPTION) during which the holder can cancel. Trusted-contact quorum recovery is deferred (Future).
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As an account holder who lost my device, I start recovery with a code I saved earlier and regain access after the cooldown.
+- As an account holder, I get a notice on every verified contact and active session when recovery starts, and I can cancel it.
+- As a support operator, I see that a recovery exists for a case without seeing codes or contact addresses.
 
 ## Scope
-- Required process spec: `recovery_domain_model.md` (not yet authored)
-- Required process spec: `recovery_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `recovery_validation_and_authorization.md` (not yet authored)
-- Required process spec: `recovery_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `recovery_interfaces_and_events.md` (not yet authored)
-- Required process spec: `recovery_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `recovery_acceptance_and_property_tests.md` (not yet authored)
+Ten canonical process specifications listed in the inventory below. Out of scope: session token lifecycle ([mod_sessions](../mod_sessions/SPEC.md)), pseudonym management ([mod_pseudonyms](../mod_pseudonyms/SPEC.md)).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `recovery.start`, `recovery.submit_proof`, `recovery.complete`, `recovery.cancel`, `recovery.method.enroll`, `recovery.method.revoke`. Events `recovery_request.*` and `recovery_method.*` (CTR-EVT-001). Error prefix `MOD_RECOVERY.`. Prefixes `rec_` and `rmt_` are PENDING CTR-ID-001 registry entries.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: mod_sessions (step-up and session revocation), mod_pseudonyms (`acc_` lookup), identity credential store (contact addresses by ID). Downstream: generic notifications (CTR-PRV-001 R10), F12 moderation (case-scoped read only), observability. Canonical contracts: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-PRV-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Canonical owner of account-recovery request and recovery-method records: `07_Identity/01_accounts/mod_recovery` (F07.S01.M03). The slug is shared with `02_LocalMutiny/03_cycle_execution/mod_recovery` (cycle recovery) and `15_Platform/03_operations/mod_recovery` (platform recovery). Those own different record classes. Consumers reference `F07.S01.M03` by full ID only (REVIEW B-06). Contact addresses stay owned by the identity credential store.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Account takeover through recovery is the main threat: social engineering of contact channels, replay of consumed codes, enumeration of valid accounts, and brute force of short codes. Mis-scoped recovery can bypass MFA (CTR-CAP-001 R12 cites S3-01). Legitimate holders can be locked out if they never saved codes. Masking limits contact exposure to the contact provider but cannot remove it. Pseudonyms do not guarantee anonymity.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs at SPEC-DRAFT-COMPLETE; TEST-PS-053-01 to -23 mapped; approval by Identity&Trust Lead and Security Lead (F16) pending; D10 resolved or PROVISIONAL default accepted.
 
 ## Required process specification inventory
-- [ ] `recovery_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `recovery_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `recovery_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `recovery_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `recovery_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `recovery_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `recovery_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-053-01
+- [x] `validation_rules.md` — PS-053-02
+- [x] `workflow_state_machine.md` — PS-053-03
+- [x] `commands_queries_events.md` — PS-053-04
+- [x] `authorization_capabilities.md` — PS-053-05
+- [x] `failure_recovery_idempotency.md` — PS-053-06
+- [x] `privacy_retention_abuse.md` — PS-053-07
+- [x] `observability_performance.md` — PS-053-08
+- [x] `contract_and_acceptance_tests.md` — PS-053-09
+- [x] `import_export_backup_rollback.md` — PS-053-10

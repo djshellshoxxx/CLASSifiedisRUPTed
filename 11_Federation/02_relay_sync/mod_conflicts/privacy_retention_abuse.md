@@ -1,35 +1,55 @@
-# PS-086-07 — privacy retention abuse
+# PS-086-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-086-07. **Owner:** [11_Federation/02_relay_sync/mod_conflicts](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_conflicts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_conflicts. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01 classes, R06 retention, R09 logs), CTR-FED-001 (R03 never-federated classes, R07 tombstones, R08 per-audience pseudonyms, peer states), CTR-EVT-001 (R06 no names or coordinates), CTR-SCH-001 (R08).
 
-## Purpose and scope
-Define the privacy retention abuse process for conflicts within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-086-07.R01 | Conflict records and evidence bytes hold only classes allowed for federation: `PUBLIC`, `PSEUDONYMOUS`, `LOCATION_COARSE` as a registered cell (CTR-FED-001 R02). Any envelope with a never-federated class is refused at step 11 before storage. | MVP |
+| PS-086-07.R02 | Raw evidence is kept under RET-EVD: 24 months after the conflict is `closed` (ASSUMPTION; jurisdiction review OPEN). After 12 months, personal fields are redacted and hashes retained (CTR-COM-001 pattern, ASSUMPTION). | MVP |
+| PS-086-07.R03 | Evidence is not deleted before the conflict is `closed`, even if the origin tombstones the target. The tombstone and the conflict are both retained. | MVP |
+| PS-086-07.R04 | Peer abuse: a peer that produces ≥ 3 equivocations in 30 days is `revoked` by automated rule (ASSUMPTION). Equivocation by any peer otherwise moves it to `quarantined` (CTR-FED-001). | MVP |
+| PS-086-07.R05 | Logs and metrics carry IDs, kind and codes only. Evidence bytes never appear in logs. | MVP |
 
-## Requirements to specify
-- [ ] PS-086-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-086-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-086-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+| Data | Class | Retention |
+|---|---|---|
+| Conflict record (IDs, digests, status) | PSEUDONYMOUS | RET-EVD, 24 months after `closed` |
+| Raw evidence bytes | max class of the envelope (≤ PSEUDONYMOUS in practice) | RET-EVD; redaction at 12 months |
+| Hold queue bytes | as above | until release, rejection or expiry (≤ 24 h) |
+| Operation logs | PSEUDONYMOUS | RET-OPS, 30 days |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Validation & errors
+Error diagnostics carry code and field path only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Authorization
+Evidence reads are privileged and audited (PS-086-05 R04).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Failure, idempotency, concurrency, offline
+Deletion or redaction propagates to replicas within 24 h (CTR-PRV-001 R06). Legal holds (CTR-PRV-001 R07) can extend RET-EVD for a named matter.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Privacy, retention, abuse
+- Threats: deliberate forking to cause confusion (quarantine and evidence); evidence used as a mass store for third-party payloads (no bytes beyond the two conflicting envelopes); metadata inferred from `delivered_by_fpr` (pseudonymous; visible to stewards only).
+- Per-audience pseudonyms on export (CTR-FED-001 R08) mean conflict records do not link one user across nodes.
+- Restore of a quarantined peer requires review (PS-086-03 R04), which blocks an abuse loop.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-086-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Observability & budgets
+`fed_conflict_redaction_due_total`. Budgets in PS-086-08.
+
+## Tests
+- TEST-PS-086-07-01 (unit): envelope with never-federated class refused at step 11, not stored.
+- TEST-PS-086-07-02 (integration): tombstone arrives while conflict is open; evidence retained until `closed`.
+- TEST-PS-086-07-03 (integration): redaction at 12 months keeps hashes; personal fields absent.
+- TEST-PS-086-07-04 (abuse): third equivocation in 30 days revokes the peer.
+- TEST-PS-086-07-05 (negative): evidence bytes absent from logs and metrics in a full run.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No never-federated class stored; TEST-PS-086-07-01 passes.
+2. Evidence retained until close and redacted on schedule; TEST-PS-086-07-02 and -03 pass.
+3. Automated revocation rule holds; TEST-PS-086-07-04 passes.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- ASSUMPTION: RET-EVD 24 months; 12-month redaction; 3-in-30-days revocation (F10 to confirm).
+- OPEN: jurisdiction review for RET-EVD (R07, RISK_REGISTER.md).
+- PROVISIONAL (D07 default, unapproved): minimal per-category retention with legal-hold exceptions.

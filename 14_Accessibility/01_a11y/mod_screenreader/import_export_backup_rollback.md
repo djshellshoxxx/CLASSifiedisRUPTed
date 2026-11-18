@@ -1,35 +1,47 @@
-# PS-110-10 — import export backup rollback
+# PS-110-10 — import, export, backup and rollback
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_screenreader. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-PRV-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-10. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-110-10.R01 | Templates are exported as versioned catalog files for translation review; no user data is exported. | MVP |
+| PS-110-10.R02 | Template rollback restores the previous published revision within one release. | MVP |
+| PS-110-10.R03 | Backups include the template catalog; restore does not republish deprecated templates. | MVP |
 
-## Purpose and scope
-Define the import export backup rollback process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Catalog file: `{"catalog_version":"1.0.0","templates":[{template_id, revision, event_key, text_key, politeness}]}`.
 
-## Requirements to specify
-- [ ] PS-110-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Rollback performed by `scr.template.publish` of the earlier revision, with the same two-person control.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Rollback creates a new revision; history is append-only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Imported catalog files validated by [PS-110-02](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Export by QA and a11y roles; rollback per [PS-110-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Import is idempotent by (template_id, revision). Partial import rolls back as a unit.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Catalog contains PUBLIC data only.
+
+## Observability & budgets
+Import and rollback counts emitted.
+
+## Tests
+- TEST-PS-110-10-01 integration: export then import yields identical catalog.
+- TEST-PS-110-10-02 rollback: revision 2 rolled back to 1; announcements change accordingly.
+- TEST-PS-110-10-03 negative: catalog file with a forbidden placeholder is rejected as a whole.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export round trip is byte-identical after canonical ordering.
+2. Rollback takes effect in the next release in test.
+3. Partial import never leaves a mixed catalog.
+
+## Assumptions & open decisions
+- ASSUMPTION: catalog file is canonical JSON with sorted keys.
+- No Dxx decision directly affects this process.

@@ -1,35 +1,48 @@
-# PS-015-04 — commands queries events
+# PS-015-04 — commands, queries and events
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_two. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001, CTR-SCH-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-015-04. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_two](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_two. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-015-04.R01 | Mutating commands carry `idempotency_key` (UUIDv4) and `expected_revision`. | MVP |
+| PS-015-04.R02 | Events carry IDs, size, status and counts only. | MVP |
+| PS-015-04.R03 | Schema version `1.0.0`; unknown major → `SCH.UNKNOWN_VERSION`. | MVP |
 
-## Purpose and scope
-Define the commands queries events process for two within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+- `cycle.propose` `{par_ids[2..6], expires_at, origin, candidate_ref?, idempotency_key}` → `{cyc_id, status: "proposed", revision: 1}`.
+- `cycle.withdraw` `{cyc_id, expected_revision, idempotency_key}`.
+- `cycle.lock` and `cycle.close`: system-only, `{cyc_id, expected_revision}`.
+- Query `cycle.get` `{cyc_id}`; query `cycle.list_mine` `{cursor, limit ≤ 50}`.
 
-## Requirements to specify
-- [ ] PS-015-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-015-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-015-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Event example `cycle.fully_accepted`: `{"cyc_id","size","revision","confirm_until","max_data_class":"PSEUDONYMOUS"}`. `aggregate_type` = `cycle`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Effects per PS-015-03.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+PS-015-02 codes; `SYS.IDEMPOTENCY_KEY_REUSED` on digest mismatch.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+PS-015-05.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Same key and digest returns original result. Concurrent withdraw and lock: PS-015-03.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-015-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+`actor_ref` carries `acc_` of the acting party only.
+
+## Observability & budgets
+Command p95 ≤ 300 ms; list p95 ≤ 150 ms.
+
+## Tests
+- TEST-PS-015-04-01 (contract): schema snapshot for all commands and events.
+- TEST-PS-015-04-02 (contract): replay returns original; no duplicate events.
+- TEST-PS-015-04-03 (contract): event payloads contain no item or account fields.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All commands and events pass CTR-SCH-001 tests.
+2. Zero forbidden fields in event fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: `origin = matched` commands are accepted only from the system principal of F02.S02.M03.

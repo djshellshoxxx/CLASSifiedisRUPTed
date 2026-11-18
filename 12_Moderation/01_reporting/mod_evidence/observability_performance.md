@@ -1,35 +1,60 @@
-# PS-093-08 — observability performance
+# PS-093-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-093-08. **Owner:** [12_Moderation/01_reporting/mod_evidence](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_evidence. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_evidence (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the observability performance process for evidence within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-093-08.R01 | Metrics published for every capture outcome, scan outcome and content read. | MVP |
+| PS-093-08.R02 | Logs carry `evidence_id`, `report_id`, codes and timings only. Zero content, zero GPS. | MVP |
+| PS-093-08.R03 | Alerts fire within 5 min of breach. | MVP |
 
-## Requirements to specify
-- [ ] PS-093-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-093-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-093-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Metrics
+| Metric | Type | Labels |
+|---|---|---|
+| evidence_captures_total | counter | outcome (captured, rejected, expired) |
+| evidence_validation_rejections_total | counter | code |
+| evidence_scan_latency_ms | histogram | verdict |
+| evidence_gps_stripped_total | counter | none (count only) |
+| evidence_reads_total | counter | purpose, outcome |
+| evidence_staging_orphans | gauge | none |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Budgets
+| Operation | p95 target | Basis |
+|---|---|---|
+| Capture (5 MiB, excl. upload) | ≤ 2.5 s | ASSUMPTION |
+| Scan (5 MiB) | ≤ 2 s | ASSUMPTION |
+| evidence.get | ≤ 150 ms | ASSUMPTION |
+| Redaction propagation | ≤ 24 h | CTR-PRV-001 R06 |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Alerts
+- Scanner unavailable > 5 min.
+- Any GPS tag detected after strip step (must be 0).
+- Staging orphans > 0 after TTL + 5 min.
+- Content read outside an active case (CTR-CAP-001 alerts).
+- Redaction propagation lag > 24 h.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Log redaction
+Redaction tests run over application logs, reverse-proxy logs and crash reports (CTR-PRV-001 BT-08). Image bytes and filenames are never logged.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Privacy, retention, abuse
+Metrics use counts and coarse labels only; no per-reporter labels. Dashboards are case-agnostic.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-093-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Telemetry emission failure never blocks capture. Client-side offline counters are sent on reconnect with dedupe by counter epoch.
+
+## Authorization
+Dashboards readable by `ope` role with `global` scope; no content access.
+
+## Tests
+- TEST-PS-093-08-01 (log capture): synthetic capture produces logs with IDs and codes only.
+- TEST-PS-093-08-02 (alert): forced scanner outage fires alert within 5 min.
+- TEST-PS-093-08-03 (budget): load test at 50 concurrent 5 MiB captures meets p95 targets.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All metrics in the table exist with stated labels.
+2. Log capture contains no GPS, no image bytes, no message text.
+
+## Assumptions & open decisions
+- ASSUMPTION: budgets above; validated in F15 load test.
+- PROVISIONAL (D07 default, unapproved): log retention RET-OPS 30 days.

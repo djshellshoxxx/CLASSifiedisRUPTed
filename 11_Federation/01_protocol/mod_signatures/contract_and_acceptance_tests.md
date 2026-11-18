@@ -1,35 +1,52 @@
 # PS-085-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-085-09. **Owner:** [11_Federation/01_protocol/mod_signatures](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_signatures. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R05 signing input), CTR-FED-001 (verification order, R04, R06, R09), CTR-SCH-001 (R09 golden fixtures), CTR-ERR-001 (R03 retryable), CTR-PRV-001 (R08).
 
-## Purpose and scope
-Define the contract and acceptance tests process for signatures within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-085-09.R01 | At least 10 golden vectors are committed with the implementation: valid; tampered payload; wrong prefix version; key revoked; key compromised at boundary −1 ms and at boundary; unknown `key_id`; origin mismatch; non-canonical base64url; malleated scalar; not-yet-valid key. Each has an expected code or result. | MVP |
+| PS-085-09.R02 | Signing input bytes for each vector equal the golden bytes from two independent implementations (ASSUMPTION: second implementation in test harness only). | MVP |
+| PS-085-09.R03 | Each step 1–13 of CTR-FED-001 verification order has at least one failing fixture that returns the documented code. | MVP |
+| PS-085-09.R04 | Tests run in CI on every change to the signing path. No test in this list may be skipped or marked expected-fail at release. | MVP |
+| PS-085-09.R05 | No copies of foreign schemas. Contract tests reference CTR IDs only (PS-089-09 R05 pattern). | MVP |
 
-## Requirements to specify
-- [ ] PS-085-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-085-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-085-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixtures are stored with the implementation (future prompt). Each fixture file records: vector ID, input envelope, key row, expected result, expected code, source contract clause.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Tests exercise `signing.sign_event`, `signing.verify_event`, `key.lookup` (PS-085-04) and the batch path in `fed.receive_batch` (CTR-FED-001).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Every error code in PS-085-02 has one fixture. Unlisted codes fail the build.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Test principals are `sys_` and `fpr_` fixtures only. No operator principal is used in contract tests.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Fault injection: sign timeout, key cache stale, KMS unavailable. Expected behavior per PS-085-06.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-085-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Test fixtures use synthetic keys only. No real node keys are committed.
+
+## Observability & budgets
+Test run time budget: full signature suite ≤ 3 min on CI runner (ASSUMPTION).
+
+## Tests
+- TEST-PS-085-09-01 (contract): golden signing-input bytes for all vectors (R01, R02).
+- TEST-PS-085-09-02 (integration): one failing fixture per CTR-FED-001 step 1–13 (R03).
+- TEST-PS-085-09-03 (contract): compromise boundary vectors match CTR-FED-001 R09.
+- TEST-PS-085-09-04 (property): JCS-equivalent envelopes (key order, whitespace) yield identical signing input.
+- TEST-PS-085-09-05 (abuse): replay after `expires_at`; tampered payload; malleated scalar.
+- TEST-PS-085-09-06 (negative): private key bytes absent from every response, log and export in the suite.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All ten golden vectors pass with two implementations; TEST-PS-085-09-01 passes.
+2. Each verification step has a failing fixture; TEST-PS-085-09-02 passes.
+3. No private key material appears anywhere; TEST-PS-085-09-06 passes.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- ASSUMPTION: second independent implementation available for cross-check (F16 to confirm).
+- PROVISIONAL (D01 default, unapproved): wire rules as in CTR-FED-001.
+- PENDING CTR-SCH-001: fixture schema ID.

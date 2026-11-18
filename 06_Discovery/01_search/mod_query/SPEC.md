@@ -1,44 +1,53 @@
 # F06.S01.M02 — query
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F06.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Marketplace Lead. **Parent:** F06.S01.
 
 ## Purpose and business behavior
-Provide query as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Accept a buyer's text search over local listings, validate it, scope it to registered region cells, run it against the index (F06.S01.M01 index), and return a paged, privacy-filtered result set. Query text is never stored. Results expose only PUBLIC and LOCATION_COARSE fields and never carry a precise centre or distance.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a buyer, I type a search and get relevant listings from my chosen local cells, one page at a time.
+- As a buyer who is not signed in, I can still search public listings within a fair-use budget.
+- As a buyer on a flaky connection, I see my last results marked "last updated" instead of a blank screen.
+- As an operator, I can tune token limits and budgets without a code deploy.
 
 ## Scope
-- Required process spec: `query_domain_model.md` (not yet authored)
-- Required process spec: `query_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `query_validation_and_authorization.md` (not yet authored)
-- Required process spec: `query_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `query_interfaces_and_events.md` (not yet authored)
-- Required process spec: `query_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `query_acceptance_and_property_tests.md` (not yet authored)
+Text parsing, token limits, cell scoping, paging with snapshot cursors, query budgets, aggregate counters. Not in scope: index maintenance (M01 index), filter predicates (M03 filter), proximity expansion (F06.S02.M03), ranking (F06.S03).
+
+- [domain_schema.md](domain_schema.md) — PS-046-01
+- [validation_rules.md](validation_rules.md) — PS-046-02
+- [workflow_state_machine.md](workflow_state_machine.md) — PS-046-03
+- [commands_queries_events.md](commands_queries_events.md) — PS-046-04
+- [authorization_capabilities.md](authorization_capabilities.md) — PS-046-05
+- [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-046-06
+- [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-046-07
+- [observability_performance.md](observability_performance.md) — PS-046-08
+- [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-046-09
+- [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-046-10
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Query `discovery.search` and aggregate event `discovery.search.aggregate`. Signatures and error codes in [commands_queries_events.md](commands_queries_events.md). Error prefix `QUERY.`.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: mod_index (read model), mod_filter (predicates), F16 capabilities, F10 K_MIN and disclosure rules. Downstream: UI in F14 accessibility surfaces, observability (F15). Discovery index contract PENDING CTR-DSC-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns no persisted query data. Owns rate-counter and aggregate-counter definitions. Listing and index data owned by F01 and mod_index.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Inference of user interests from query text; enumeration of cells and listings through paging or error differences; scraping; query-driven denial of service via long or token-heavy text; stale results presented as current; trilateration via location-scoped searches. No platform custody of money involved. Pseudonymous searching does not guarantee anonymity against operators with logs.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Process specs at SPEC-DRAFT-COMPLETE; PENDING CTR-DSC-001 resolved; F10 review of budgets and aggregates; F14 review of live-region behavior; test IDs mapped.
 
 ## Required process specification inventory
-- [ ] `query_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `query_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `query_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `query_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `query_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `query_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `query_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-046-01, SPEC-DRAFT-COMPLETE
+- [x] [validation_rules.md](validation_rules.md) — PS-046-02, SPEC-DRAFT-COMPLETE
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-046-03, SPEC-DRAFT-COMPLETE
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-046-04, SPEC-DRAFT-COMPLETE
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-046-05, SPEC-DRAFT-COMPLETE
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-046-06, SPEC-DRAFT-COMPLETE
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-046-07, SPEC-DRAFT-COMPLETE
+- [x] [observability_performance.md](observability_performance.md) — PS-046-08, SPEC-DRAFT-COMPLETE
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-046-09, SPEC-DRAFT-COMPLETE
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-046-10, SPEC-DRAFT-COMPLETE

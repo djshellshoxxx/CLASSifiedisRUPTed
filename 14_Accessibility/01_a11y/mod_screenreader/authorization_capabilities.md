@@ -1,35 +1,52 @@
-# PS-110-05 — authorization capabilities
+# PS-110-05 — authorization and capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 14_Accessibility/01_a11y/mod_screenreader. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ERR-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-110-05. **Owner:** [14_Accessibility/01_a11y/mod_screenreader](SPEC.md). **Implementing module:** 14_Accessibility/01_a11y/mod_screenreader. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-110-05.R01 | Only the a11y change-control role may publish or deprecate templates. | MVP |
+| PS-110-05.R02 | Template reads are public. | MVP |
+| PS-110-05.R03 | No principal may use a template to read data it could not otherwise read; rendering uses only the viewer's already-authorized fields. | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for screenreader within 01_a11y. Do not assume implementation or successful external settlement.
+## Data / schema
+Capabilities: `announcement_template.read`, `announcement_template.publish`, `announcement_template.deprecate`.
 
-## Requirements to specify
-- [ ] PS-110-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-110-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-110-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Maps to [PS-110-04](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Not applicable.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Unauthorized publish returns `SYS.NOT_FOUND`-equivalent for the template resource (CTR-ERR-001 R08) only when the template is not readable; otherwise an authorization denial.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+| Actor | Action | Resource | Decision |
+|---|---|---|---|
+| ope_ with a11y change-control grant | publish, deprecate | ann_ | ALLOW (global scope, two-person review per CTR-CAP-001 R07 for publish) |
+| acc_ | publish, deprecate | ann_ | DENY |
+| any | read | published ann_ | ALLOW |
+| sys_ | read | published ann_ | ALLOW |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Grant revocation takes effect at next decision (CTR-CAP-001 R09).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-110-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Publishers cannot publish templates that reference fields outside their own grant.
+
+## Observability & budgets
+Grant use recorded as `aud_` for publish and deprecate.
+
+## Tests
+- TEST-PS-110-05-01 unit: decision table outcomes.
+- TEST-PS-110-05-02 integration: publish by a single approver is refused (two-person review).
+- TEST-PS-110-05-03 negative: account principal cannot deprecate a template.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Publish and deprecate require the capability and, for publish, two distinct approvers.
+2. Every publish and deprecate writes an `aud_` record.
+3. Read path requires no authentication.
+
+## Assumptions & open decisions
+- ASSUMPTION: two-person review applies to templates as a dual-control action.
+- No Dxx decision directly affects authorization.

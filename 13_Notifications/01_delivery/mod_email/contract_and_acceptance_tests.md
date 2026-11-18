@@ -1,35 +1,61 @@
 # PS-102-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-102-09. **Owner:** [13_Notifications/01_delivery/mod_email](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_email. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_email (Platform Lead). **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001 (R09 golden fixtures), CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for email within 01_delivery. Do not assume implementation or successful external settlement.
+**Decision labels:** Test thresholds inherit PROVISIONAL values from PS-102-07 (D07 and D10 defaults, unapproved).
 
-## Requirements to specify
-- [ ] PS-102-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-102-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-102-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-102-09.R01 | Every error code and event in PS-102-02 to PS-102-08 has at least one test. | MVP |
+| PS-102-09.R02 | Golden fixtures per template version and per event schema version (CTR-SCH-001 R09). | MVP |
+| PS-102-09.R03 | Provider contract tests run against a sandbox or recorded fixtures; live provider calls are not part of CI. | MVP |
+| PS-102-09.R04 | Consumer contract tests run for F07.S01.M03 (`mod_recovery`) and F13.S02.M03 (`mod_opt`). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Fixtures under the module test directory: `fixtures/email_delivery.sent/1.0.0/*.json`, `fixtures/templates/<id>/<version>/*.json`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Contract tests for five commands, one query and seven events (PS-102-04).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Transition tests in PS-102-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Negative fixture per code (PS-102-02).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-102-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Access tests in PS-102-05.
+
+## Failure, idempotency, concurrency, offline
+Fault-injection tests in PS-102-06.
+
+## Privacy, retention, abuse
+Privacy tests in PS-102-07.
+
+## Observability and budgets
+Observability tests in PS-102-08.
+
+## Tests
+- TEST-PS-102-01 (unit): binding limit and duplicate normalized address.
+- TEST-PS-102-02 (negative): storage dump has no plaintext address.
+- TEST-PS-102-03 to -05 (unit/negative): address length boundary, header injection, template variable rejection.
+- TEST-PS-102-06 to -08 (unit/integration): binding transitions, bounce cap, verification TTL.
+- TEST-PS-102-09 to -11 (contract/negative): event fixture, webhook HMAC, status masking.
+- TEST-PS-102-12 to -14 (integration): access rules and recovery boundary.
+- TEST-PS-102-15 to -18 (integration/property): crash recovery, concurrent verify, breaker, expiry.
+- TEST-PS-102-19 to -22 (negative/integration): log scan, deletion, enumeration, rate limit.
+- TEST-PS-102-23 to -25 (integration/load): metrics, log scan, throughput.
+- TEST-PS-102-26 (e2e): bind → verify → recovery mail → send counted; address visible only to owner.
+- Accessibility: not applicable to the sending service; accessibility of email HTML templates is tested under F14 (TEST-PS-102-27, a11y, template lint).
+- TEST-PS-102-28 to -31 (integration): owner export, deleted-account restore, template rollback, provider failover (PS-102-10).
+- Offline: not applicable.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-102-01 to -31 pass in CI, with the e2e and a11y tests run in staging.
+2. Consumer contract tests pass against registry versions.
+3. Each requirement in PS-102-01 to PS-102-08 is referenced by at least one test ID.
+
+## Assumptions & open decisions
+- ASSUMPTION: a sandbox mailbox provider is available in staging.
+- D07 and D10 (PROVISIONAL, unapproved).

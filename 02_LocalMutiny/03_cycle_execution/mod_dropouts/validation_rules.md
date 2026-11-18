@@ -1,35 +1,59 @@
-# PS-022-02 — validation rules
+# PS-022-02 — Validation rules
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-022-02. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_dropouts](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_dropouts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_dropouts. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-ERR-001, CTR-CAP-001, CTR-EVT-001.
 
-## Purpose and scope
-Define the validation rules process for dropouts within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-022-02.R01 | Dropout detection accepted only when cycle state ∈ {CONSENTED, LOCKED, ATTESTING}; otherwise `CYC_DROPOUT.NOT_ELIGIBLE` (409). | MVP |
+| PS-022-02.R02 | `WITHDREW` accepted only while cycle state is CONSENTING or CONSENTED (before lock). After lock, withdrawal is recorded as `LOCK_TIMEOUT`-class request and routed to resolution. | MVP |
+| PS-022-02.R03 | `LOCK_TIMEOUT` requires `now ≥ lock_confirm_deadline` (default 30 min after CONSENTED). Earlier → `CYC_DROPOUT.WINDOW_OPEN` (422). | MVP |
+| PS-022-02.R04 | `ATTEST_TIMEOUT` requires `now ≥ attest_deadline` (default 72 h after LOCKED; ASSUMPTION). | MVP |
+| PS-022-02.R05 | Resolution `RESOLVED_RESOLVE_AGAIN` requires a successor proposal version created by F02.S02 within 2 h; else `CYC_DROPOUT.SUCCESSOR_MISSING` (422). | MVP |
+| PS-022-02.R06 | Cancel or partial resolution requires all locks in the case to be released or marked consumed by mod_lock. | MVP |
+| PS-022-02.R07 | `reason_code` must be from the closed enum; free text rejected (`SYS.REQUEST_MALFORMED`). | MVP |
 
-## Requirements to specify
-- [ ] PS-022-02.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-022-02.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-022-02.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Validates fields in [domain_schema.md](domain_schema.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Guards run before transitions in [workflow_state_machine.md](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Validation failure leaves state unchanged.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Class / HTTP | User message key |
+|---|---|---|---|
+| CYC_DROPOUT.NOT_ELIGIBLE | false | conflict / 409 | dropout.not_eligible |
+| CYC_DROPOUT.WINDOW_OPEN | true | precondition_failed / 412 | dropout.window_open |
+| CYC_DROPOUT.SUCCESSOR_MISSING | false | unprocessable_state / 422 | dropout.successor_missing |
+| CYC_DROPOUT.LOCKS_ACTIVE | true | precondition_failed / 412 | dropout.locks_active |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Diagnostics contain `cycle_id` and state only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-022-02`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Actor checks precede validation (see [authorization_capabilities.md](authorization_capabilities.md)).
+
+## Failure, idempotency, concurrency, offline
+Deadline checks use server time only; client clocks are ignored. Offline clients can not submit timeouts.
+
+## Privacy, retention, abuse
+Rate limit: one `WITHDREW` per party per cycle version (second is idempotent replay). Deadlines are not disclosed before they pass, to avoid timing games.
+
+## Observability & budgets
+Counts of each code; validation p95 ≤ 5 ms excluding database.
+
+## Tests
+- TEST-PS-022-02-01 (unit): each guard passes and fails on boundary (deadline minus 1 s, plus 1 s).
+- TEST-PS-022-02-02 (unit): free-text reason rejected.
+- TEST-PS-022-02-03 (integration): cancel with active lock → LOCKS_ACTIVE.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. R01–R07 each have a passing and failing test.
+2. Deadline checks use server clock; skew test passes at ±5 min.
+3. No code reveals another party's identity.
+
+## Assumptions & open decisions
+- ASSUMPTION: 30 min lock-confirm and 72 h attest windows.
+- [DECISIONS.md](../../../DECISIONS.md) D02 — PROVISIONAL (D02 default, unapproved): successor proposal produced by bounded search only.

@@ -1,35 +1,56 @@
 # PS-063-09 — contract and acceptance tests
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_offers. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-COM-001 (R02, R03, R04), CTR-EVT-001, CTR-ERR-001, CTR-SCH-001, CTR-CAP-001
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-063-09. **Owner:** [08_Communications/02_negotiation/mod_offers](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_offers. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-063-09.R01 | Contract tests for `offer.v1` and `offer.*` events in CI. | MVP |
+| PS-063-09.R02 | Money fixtures include minor-unit exponents 0, 2, 6 and 18 and the boundary 39-digit value. | MVP |
+| PS-063-09.R03 | Every requirement in PS-063-01 to -08 maps to a test ID below. | MVP |
+| PS-063-09.R04 | Accessibility: amounts read with currency name, not code alone; counter form labelled; 200% zoom. | MVP |
 
-## Purpose and scope
-Define the contract and acceptance tests process for offers within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Fixtures in `fixtures/offers/`: valid listing offer; barter with item compensation; cross-currency with pinned quote; float amount; leading-zero amount; 21 rapid offers.
 
-## Requirements to specify
-- [ ] PS-063-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-063-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-063-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Replay of [PS-063-04](commands_queries_events.md).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Matrix from [PS-063-03](workflow_state_machine.md).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Each code in [PS-063-02](validation_rules.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Matrix from [PS-063-05](authorization_capabilities.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Scenarios from [PS-063-06](failure_recovery_idempotency.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-063-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Assertions from [PS-063-07](privacy_retention_abuse.md).
+
+## Observability & budgets
+Checks from [PS-063-08](observability_performance.md).
+
+## Tests
+| Test ID | Type | Covers |
+|---|---|---|
+| TEST-PS-063-09-01 | contract | command and event shapes |
+| TEST-PS-063-09-02 | unit | money format and exponent rules |
+| TEST-PS-063-09-03 | unit | validation codes |
+| TEST-PS-063-09-04 | integration | transition table and expiry race |
+| TEST-PS-063-09-05 | property | version chain append-only; digest stable |
+| TEST-PS-063-09-06 | e2e | listing offer → counter → accept → consent given |
+| TEST-PS-063-09-07 | e2e | barter with mixed compensation pinned quote |
+| TEST-PS-063-09-08 | offline | queued accept after expiry rejected |
+| TEST-PS-063-09-09 | a11y | money input and counter form |
+| TEST-PS-063-09-10 | negative | probing, third-party reads, float amounts |
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. TEST-PS-063-09-01 to -10 and PS-063-01 to -08 IDs pass in CI.
+2. Money contract tests pass for all four exponent fixtures.
+
+## Assumptions & open decisions
+- ASSUMPTION: fixtures synthetic.
+- Future-phase execution only.

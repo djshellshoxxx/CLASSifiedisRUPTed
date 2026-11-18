@@ -1,35 +1,61 @@
-# PS-013-05 — authorization capabilities
+# PS-013-05 — authorization and capabilities
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-013-05. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_offer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-013-05.R01 | Default deny (CTR-CAP-001 R01). Capabilities listed below are the only grants this module declares. | MVP |
+| PS-013-05.R02 | Only the slot's `acc_` may create, submit or withdraw revisions for that slot. Authorization uses `acc_`, never `prf_`. | MVP |
+| PS-013-05.R03 | `note` is visible to the owner only. Give and want lines are visible to cycle participants (`participant` scope) only. | MVP |
+| PS-013-05.R04 | No operator grant reads `note` content without a `case:` scope and dual control (CTR-CAP-001 R07). | MVP |
 
-## Purpose and scope
-Define the authorization capabilities process for offer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Capability IDs: `offer.create`, `offer.submit`, `offer.withdraw`, `offer.read`, `offer.lock` (system), `offer.moderate` (case scope). Field visibility per CTR-CAP-001 R10:
 
-## Requirements to specify
-- [ ] PS-013-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-013-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-013-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+| Field | Visibility |
+|---|---|
+| ofr_id, revision_no, status, par_id, cyc_id | participant |
+| give_lines, want_lines | participant |
+| valuation.qte_id | participant |
+| note | owner |
+| content_digest, schema_version | participant |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Action | Actor | Resource scope | Rule |
+|---|---|---|---|
+| offer.create / offer.submit | acc_ owning slot | self | slot status = accepted |
+| offer.withdraw | acc_ owning slot | self | status = submitted |
+| offer.read | cycle participant | participant | cycle not closed for non-owners |
+| offer.lock | sys_ (F02.S01.M01) | global | system principal only |
+| offer.moderate | mod_ | case:cas_ | case open; purpose recorded |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Authorization is re-evaluated at each transition (CTR-CAP-001 R05). Loss of participation (slot removed) ends `offer.read` for that party at the next decision.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Unauthorized or nonexistent objects both return `SYS.NOT_FOUND` (CTR-ERR-001 R08). No `OFFER.*` code reveals existence to non-participants.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Decision records in CTR-CAP-001 `dec_` store outcome and reason code only. Decision cache TTL 0 for writes and for `note` reads (CTR-CAP-001 R09).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-013-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Grant or revoke is effective at next decision. Offline clients hold no grants; queued writes re-authorize on replay (PS-013-06).
+
+## Privacy, retention, abuse
+Privileged reads of `note` write an `aud_` record with resource ID and purpose, no content (CTR-CAP-001 R08).
+
+## Observability & budgets
+Count of denials per action; alert when denials for one `acc_` exceed 50 per hour (ASSUMPTION; probing signal).
+
+## Tests
+- TEST-PS-013-05-01 (unit): matrix of actor × action × scope; default deny for all unlisted pairs.
+- TEST-PS-013-05-02 (integration): removed slot loses `offer.read` on next request.
+- TEST-PS-013-05-03 (security): non-participant gets identical response for existing and nonexistent `ofr_id`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix test covers 100% of declared actions; zero allowed pairs outside the matrix.
+2. `note` is absent from every non-owner response in fixture corpus.
+
+## Assumptions & open decisions
+- ASSUMPTION: owner may read own revisions after cycle closure.
+- D10 PROVISIONAL (Dxx default, unapproved): `acc_` key rotation does not change slot authorization; recovery follows F07 proofs.

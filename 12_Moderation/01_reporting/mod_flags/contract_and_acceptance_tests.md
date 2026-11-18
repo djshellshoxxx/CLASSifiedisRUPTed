@@ -1,35 +1,48 @@
 # PS-094-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-094-09. **Owner:** [12_Moderation/01_reporting/mod_flags](SPEC.md). **Implementing module:** 12_Moderation/01_reporting/mod_flags. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/01_reporting/mod_flags (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-CAP-001, CTR-ERR-001, CTR-PRV-001, CTR-SCH-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for flags within 01_reporting. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-094-09.R01 | Every row in PS-094-02 to PS-094-08 maps to at least one test ID. | MVP |
+| PS-094-09.R02 | Reporter-identity leak tests run on every endpoint, notice and event. | MVP |
 
-## Requirements to specify
-- [ ] PS-094-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-094-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-094-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Test map
+| Test ID | Level | Scope |
+|---|---|---|
+| TEST-PS-094-01-01 | lint | classes; no dedupe_hmac in events |
+| TEST-PS-094-01-02 | visibility | reported party response shape |
+| TEST-PS-094-02-01 | unit | error codes and conditions |
+| TEST-PS-094-02-02 | boundary | 500 vs 501 characters after NFC |
+| TEST-PS-094-02-03 | negative | self, unreadable, restricted |
+| TEST-PS-094-03-01 | property | state sequences |
+| TEST-PS-094-03-02 | integration | withdraw after triage |
+| TEST-PS-094-03-03 | threshold | priority only |
+| TEST-PS-094-04-01 | contract | schema 1.0.0 |
+| TEST-PS-094-04-02 | idempotency | single report |
+| TEST-PS-094-04-03 | lint | event payload fields |
+| TEST-PS-094-05-01 | matrix | action matrix |
+| TEST-PS-094-05-02 | negative | identical 404 for owner |
+| TEST-PS-094-05-03 | scope | triage queue fields |
+| TEST-PS-094-06-01 | retry | duplicate submits |
+| TEST-PS-094-06-02 | offline | queue survives restart |
+| TEST-PS-094-06-03 | fault | crash after insert |
+| TEST-PS-094-07-01 | privacy | reporter identity absence |
+| TEST-PS-094-07-02 | abuse | brigading cap |
+| TEST-PS-094-07-03 | redaction | doxxing text redaction |
+| TEST-PS-094-08-01 | logs | no content in logs |
+| TEST-PS-094-08-02 | alert | brigading alert |
+| TEST-PS-094-08-03 | load | submit budget |
+| TEST-PS-094-10-01 | export | own status export only |
+| TEST-PS-094-10-02 | rollback | intake off, reads on |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
-
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
-
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
-
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
-
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-094-09`; scenarios and fixtures to be detailed in Prompt 3.
+Accessibility: report form and status screens pass WCAG 2.1 AA (F14), TEST-PS-094-09-01.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All test IDs pass in CI before implementation sign-off (future phase).
+2. Zero reporter-identity leaks in negative and privacy suites.
+
+## Assumptions & open decisions
+- ASSUMPTION: synthetic fixtures only.
+- OPEN: F14 accessibility scope.

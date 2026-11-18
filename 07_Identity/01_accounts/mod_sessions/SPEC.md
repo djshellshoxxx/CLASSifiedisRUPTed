@@ -1,44 +1,41 @@
 # F07.S01.M02 — sessions
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F07.S01.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Identity&Trust Lead (F07). **Parent:** [F07.S01 accounts](../SPEC.md).
 
 ## Purpose and business behavior
-Provide sessions as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Issue, rotate, expire and revoke the authenticated sessions that let an `acc_` holder act on the platform from one or more devices. Users see their active devices and can end any of them. Sessions are short-lived for access and single-use for refresh, with family-wide revocation when a refresh secret is reused.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As an account holder, I see every device signed in to my account and can end any of them.
+- As an account holder, I am told when a new device signs in, and I can end that session with one action.
+- As an account holder on a mobile connection, I stay signed in without re-entering credentials until the absolute timeout.
 
 ## Scope
-- Required process spec: `sessions_domain_model.md` (not yet authored)
-- Required process spec: `sessions_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `sessions_validation_and_authorization.md` (not yet authored)
-- Required process spec: `sessions_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `sessions_interfaces_and_events.md` (not yet authored)
-- Required process spec: `sessions_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `sessions_acceptance_and_property_tests.md` (not yet authored)
+Ten canonical process specifications listed in the inventory below. Out of scope: credential enrolment and recovery ([mod_recovery](../mod_recovery/SPEC.md)).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+Commands `session.create`, `session.refresh`, `session.revoke`, `session.revoke_others`, `session.step_up`; query `session.list`. Events `session.*` (CTR-EVT-001). Error prefix `MOD_SESSIONS.`. Prefixes `ses_` and `rfm_` are PENDING CTR-ID-001 registry entries.
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: identity credential store (password, passkey proofs). Downstream: every module that validates a session (edge cache), mod_recovery (session revocation on completion), notifications (generic new-device notice), F12 signals. Canonical contracts: CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-SCH-001, CTR-PRV-001.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Canonical owner of session and refresh-family records: `07_Identity/01_accounts/mod_sessions` (F07.S01.M02). No other module stores session secrets. Consumers use `ses_` IDs only.
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Session theft (bearer tokens on shared or stolen devices), refresh replay, stale revocation at edge caches, session fixation, credential stuffing against login and step-up, and over-collection of device and network data. Store outage must fail closed. Token lifetime trades usability against exposure; defaults are provisional.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+All 10 process specs at SPEC-DRAFT-COMPLETE; TEST-PS-054-01 to -23 mapped; Security Lead (F16) review of token design pending; D10 and D08 interactions resolved or default accepted.
 
 ## Required process specification inventory
-- [ ] `sessions_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sessions_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sessions_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sessions_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sessions_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sessions_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `sessions_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] `domain_schema.md` — PS-054-01
+- [x] `validation_rules.md` — PS-054-02
+- [x] `workflow_state_machine.md` — PS-054-03
+- [x] `commands_queries_events.md` — PS-054-04
+- [x] `authorization_capabilities.md` — PS-054-05
+- [x] `failure_recovery_idempotency.md` — PS-054-06
+- [x] `privacy_retention_abuse.md` — PS-054-07
+- [x] `observability_performance.md` — PS-054-08
+- [x] `contract_and_acceptance_tests.md` — PS-054-09
+- [x] `import_export_backup_rollback.md` — PS-054-10

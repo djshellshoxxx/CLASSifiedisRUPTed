@@ -1,35 +1,61 @@
 # PS-086-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-086-03. **Owner:** [11_Federation/02_relay_sync/mod_conflicts](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_conflicts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_conflicts. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (peer states and transitions; R06 quarantine; R13 per-event results), CTR-EVT-001 (R02 revision), CTR-CAP-001 (R07 dual control, R08 audit), CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for conflicts within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-086-03.R01 | Conflict record states: `open`, `reviewed`, `closed`. `closed` is terminal. | MVP |
+| PS-086-03.R02 | No stored aggregate is overwritten or deleted by a conflict. Local state changes are limited to quarantine of the peer and the conflict record. | MVP |
+| PS-086-03.R03 | A held revision-gap event expires after 24 h (ASSUMPTION) → rejected with `CONFLICTS.REVISION_GAP`. Held events are released in revision order when the gap fills. | MVP |
+| PS-086-03.R04 | Restoring a `quarantined` peer requires a review record that names the reviewer, decision and time, and two distinct `ope_` approvers (ASSUMPTION). Without it → `CONFLICTS.REVIEW_REQUIRED`. | MVP |
+| PS-086-03.R05 | Quarantine and conflict-record creation commit in one transaction. A conflict never exists without the peer state change for `equivocation`. | MVP |
 
-## Requirements to specify
-- [ ] PS-086-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-086-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-086-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+State is `status` on the conflict record and the peer `trust_state` (CTR-FED-001). Each change increments the conflict record `revision` (CTR-EVT-001 R02).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | equivocation detected | R02 true; not already recorded | open | insert conflict; peer → quarantined; emit `conflict.opened` |
+| (none) | revision gap detected | R03 true | open | hold event; emit `conflict.opened` |
+| open (gap) | gap filled | predecessor stored | closed | release held events in order; emit `conflict.closed` |
+| open (gap) | hold expires | now ≥ hold start + 24 h | closed | reject held event with `CONFLICTS.REVISION_GAP`; emit `conflict.closed` |
+| open (equivocation) | review recorded | R04 review record and approvals | reviewed | emit `conflict.reviewed` |
+| reviewed | close | decision recorded | closed | emit `conflict.closed` |
+| quarantined peer | peer.restored | R04 satisfied; no open equivocation for peer | (peer) trusted or restricted | emit `peer.restored` (CTR-FED-001) |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Invalid transitions return `CONFLICTS.REVIEW_REQUIRED` (for restore) or `EVT.REVISION_CONFLICT` (for stale `expected_revision`, CTR-EVT-001).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Actor rules in PS-086-05.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+- Equivocation transaction: conflict insert, peer quarantine and both event references are atomic.
+- Two concurrent detections for one pair: one row (PS-086-01 R03); both arrivals keep their evidence.
+- Gap-hold expiry job is idempotent; repeats are no-ops.
+- Offline: not applicable (server-side).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-086-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Transition events carry IDs, kind, status and codes only.
+
+## Observability & budgets
+`conflict_transitions_total{from,to}`. Page on any new equivocation. Warn when a gap hold exceeds 1 h.
+
+## Tests
+- TEST-PS-086-03-01 (unit): every from × event pair is in the table or refused.
+- TEST-PS-086-03-02 (integration): equivocation insert, quarantine and evidence commit together; forced failure mid-transaction leaves no partial state.
+- TEST-PS-086-03-03 (integration): gap event released in order when predecessor arrives.
+- TEST-PS-086-03-04 (integration): gap event rejected after 24 h with `CONFLICTS.REVISION_GAP`.
+- TEST-PS-086-03-05 (negative): restore without review record returns `CONFLICTS.REVIEW_REQUIRED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Transition table is exhaustive; TEST-PS-086-03-01 passes.
+2. No partial equivocation state after injected failure; TEST-PS-086-03-02 passes.
+3. Restore requires review; TEST-PS-086-03-05 passes.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- ASSUMPTION: 24 h gap hold; two-approver review for restore (F11 to confirm).
+- PROVISIONAL (D01 default, unapproved): equivocation is a quarantine trigger.

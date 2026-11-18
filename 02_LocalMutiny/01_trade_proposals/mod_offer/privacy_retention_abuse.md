@@ -1,35 +1,47 @@
-# PS-013-07 — privacy retention abuse
+# PS-013-07 — privacy, retention and abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001, CTR-EVT-001, CTR-CAP-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-013-07. **Owner:** [02_LocalMutiny/01_trade_proposals/mod_offer](SPEC.md). **Implementing module:** 02_LocalMutiny/01_trade_proposals/mod_offer. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-013-07.R01 | Record data class is PSEUDONYMOUS; no field of class LOCATION_* or PRIVATE_PERSONAL exists in this module. | MVP |
+| PS-013-07.R02 | `note` is never published, federated or included in analytics (CTR-PRV-001 disclosure matrix). | MVP |
+| PS-013-07.R03 | A party may create ≤ 20 new offer revisions per 24 h and hold ≤ 5 open offers per `lst_` (ASSUMPTION). | MVP |
+| PS-013-07.R04 | When a give `lst_` changes price, title or availability after submit, the offer is flagged for re-validation before lock. | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for offer within 01_trade_proposals. Do not assume implementation or successful external settlement.
+## Data / schema
+Retention classes: active offer revisions kept while the cycle is open plus 90 days after `closed` (D07 PROVISIONAL); drafts purged after 30 days; `note` purged with its revision. Legal hold per CTR-PRV-001 R07.
 
-## Requirements to specify
-- [ ] PS-013-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-013-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-013-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Deletion emits an event carrying IDs and counts only (CTR-PRV-001 R12). No event carries `note`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Expiry or closure starts the retention clock. Deletion of `acc_` (account closure) withdraws open offers first, then deletes notes.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Contact-channel scan per PS-013-02 R03. Scan hits never stored in logs.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Owner export and deletion per CTR-PRV-001 R11. Counterparty visibility ends on removal from the cycle.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Retention sweep is idempotent per `ofr_id`; re-run after failure removes nothing new.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-013-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Abuse controls: rate limits (R03), flood detection by `acc_` (alert, then throttle), offers used to probe others' holdings are limited because line visibility is participant-scoped. Reports go to F12 by `rpt_` ID; this module does not decide moderation outcomes.
+
+## Observability & budgets
+Retention sweep lag ≤ 24 h (CTR-PRV-001 R06). Rate-limit hits counted per rule, never per content.
+
+## Tests
+- TEST-PS-013-07-01 (unit): PSEUDONYMOUS-only schema check passes.
+- TEST-PS-013-07-02 (abuse): 21st revision in 24 h is refused.
+- TEST-PS-013-07-03 (integration): account closure removes notes within 24 h and leaves IDs and counts.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero `note` text in analytics, federation and log fixtures.
+2. Retention purge matches the class table for 100% of fixture records.
+
+## Assumptions & open decisions
+- ASSUMPTION: rate limits in R03 are initial values, tuned after pilot.
+- D07 PROVISIONAL (Dxx default, unapproved): minimal per-category retention with legal-hold exceptions.

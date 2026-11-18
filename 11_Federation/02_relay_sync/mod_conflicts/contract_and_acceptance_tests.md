@@ -1,35 +1,51 @@
 # PS-086-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-086-09. **Owner:** [11_Federation/02_relay_sync/mod_conflicts](SPEC.md). **Implementing module:** 11_Federation/02_relay_sync/mod_conflicts. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/02_relay_sync/mod_conflicts. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-FED-001 (verification steps 12–14, R05, R06, R07, R13), CTR-EVT-001 (R02, R03), CTR-SCH-001 (R09 golden fixtures), CTR-ERR-001 (R03 retryable), CTR-PRV-001 (R06).
 
-## Purpose and scope
-Define the contract and acceptance tests process for conflicts within 02_relay_sync. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-086-09.R01 | Golden fixtures for: duplicate (same ID, same digest); equivocation by ID; equivocation by digest; revision gap fills; gap expires; tombstone on arrival with open conflict; restore without review; restore with review. Each has an expected status and code. | MVP |
+| PS-086-09.R02 | Each code in PS-086-02 and each conflict transition in PS-086-03 has at least one fixture. | MVP |
+| PS-086-09.R03 | Two-implementation check (ASSUMPTION) for detection result on the R01 set. | MVP |
+| PS-086-09.R04 | No test in this list is skipped at release. | MVP |
+| PS-086-09.R05 | Contract tests reference CTR IDs only. No copies of foreign schemas. | MVP |
 
-## Requirements to specify
-- [ ] PS-086-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-086-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-086-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixture record: ID, input events (metadata and synthetic bytes), stored state before, expected state after, expected code, source clause.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Exercises `conflict.open`, `conflict.review`, `conflict.close`, `conflict.list`, `conflict.get` (PS-086-04) and `fed.receive_batch` steps 12–14.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+One fixture per code in PS-086-02. Unlisted codes fail the build.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+Fixtures use `sys_`, `ope_` (two distinct), `mod_` (with and without case) and `fpr_` principals only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Fault injection: crash in equivocation transaction; hold queue overflow; restart with held events.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-086-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Synthetic envelopes only. No real node or user identifiers in fixtures.
+
+## Observability & budgets
+Full conflict suite ≤ 3 min on CI runner (ASSUMPTION).
+
+## Tests
+- TEST-PS-086-09-01 (contract): R01 fixture set passes with expected status and code.
+- TEST-PS-086-09-02 (contract): every PS-086-02 code and PS-086-03 transition is covered.
+- TEST-PS-086-09-03 (contract): two implementations agree on R01 results.
+- TEST-PS-086-09-04 (integration): concurrency fixture from PS-086-06 passes 100 consecutive runs.
+- TEST-PS-086-09-05 (negative): error responses contain no payload bytes or digests of the second version.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. All R01 fixtures pass; TEST-PS-086-09-01 passes.
+2. Coverage of codes and transitions is 100%; TEST-PS-086-09-02 passes.
+3. No payload leakage in errors; TEST-PS-086-09-05 passes.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- ASSUMPTION: second implementation for cross-check (F17 QA to confirm).
+- PENDING CTR-SCH-001: fixture schema ID.
+- PROVISIONAL (D01 default, unapproved): wire rules per CTR-FED-001.

@@ -1,35 +1,50 @@
 # PS-062-07 — privacy retention abuse
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 08_Communications/02_negotiation/mod_consent. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (RET-EVD, R12), CTR-CAP-001 (R13 decision records), CTR-EVT-001 (R06)
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-062-07. **Owner:** [08_Communications/02_negotiation/mod_consent](SPEC.md). **Implementing module:** 08_Communications/02_negotiation/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-062-07.R01 | Consent records are RET-EVD: 24 months after final state; personal fields (party `acc_` linkage kept as hash) redacted after 12 months. | MVP |
+| PS-062-07.R02 | Consent is an explicit action with the full terms visible on the same screen; no pre-checked controls (dark-pattern ban). | MVP |
+| PS-062-07.R03 | Consent records never enter push previews, analytics or federation. | MVP |
+| PS-062-07.R04 | Rate limit: ≤ 30 consent commands per account per hour (ASSUMPTION) to limit scripted acceptance. | MVP |
+| PS-062-07.R05 | Coercion risk: a party cannot give consent on another party's behalf; the proposal owner cannot pre-fill consent. | MVP |
 
-## Purpose and scope
-Define the privacy retention abuse process for consent within 02_negotiation. Do not assume implementation or successful external settlement.
+## Data / schema
+Classes: `party`, `slot`, `proposal_ref` PSEUDONYMOUS; `terms_digest` PSEUDONYMOUS; `quote_id` FINANCIAL_EVIDENCE (referenced, not copied).
 
-## Requirements to specify
-- [ ] PS-062-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-062-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-062-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+Events carry IDs and states only (see [PS-062-04](commands_queries_events.md)).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## States & transitions
+Retention: `active` → `final` (terminal consent state) → `redacted_personal` (12 months) → `expired` (24 months). `legal_hold` overrides (CTR-PRV-001 R07).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+Rate-limit error: `CONSENT.RATE_LIMITED` (rate_limited / 429, retryable, `retry_after_ms`).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization
+See [PS-062-05](authorization_capabilities.md). Data export gives each party their own consent history only.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Redaction job is idempotent; re-run leaves digests in place.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-062-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Threats: (1) proposal owner pressuring acceptance; (2) scripted mass acceptance; (3) consent records used to link a party's pseudonym to a specific proposal in public views (not displayed, R03); (4) forged consent via replay (version and digest binding, PS-062-02). Residual risk: an observer with access to terms can infer participation; documented, not mitigated in MVP.
+
+## Observability & budgets
+Metrics: `consent_rate_limited_total`. No per-party labels.
+
+## Tests
+- TEST-PS-062-07-01 (UI, a11y): consent control unchecked by default; terms and action on one screen; keyboard operable.
+- TEST-PS-062-07-02 (privacy): push and analytics fixtures contain no consent records.
+- TEST-PS-062-07-03 (retention): at 12 months personal link redacted; digest unchanged.
+- TEST-PS-062-07-04 (abuse): 31st command in an hour → `CONSENT.RATE_LIMITED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No consent record appears in non-owner-visible or analytics data (TEST-PS-062-07-02).
+2. Redaction schedule holds (TEST-PS-062-07-03).
+
+## Assumptions & open decisions
+- D07 (retention): PROVISIONAL (D07 default, unapproved).
+- ASSUMPTION: consent evidence RET-EVD (not RET-PRIV) because it evidences agreement.
+- Privacy consent under F10.S01.M01 is out of scope here (different record class).

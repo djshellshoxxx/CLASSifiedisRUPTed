@@ -1,35 +1,54 @@
-# PS-095-05 — authorization capabilities
+# PS-095-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-095-05. **Owner:** [12_Moderation/02_policy/mod_abuse](SPEC.md). **Implementing module:** 12_Moderation/02_policy/mod_abuse. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 12_Moderation/02_policy/mod_abuse (Trust&Safety Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-PRV-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the authorization capabilities process for abuse within 02_policy. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-095-05.R01 | Capabilities used: `finding.read`, `abuse.scan`, `abuse.moderate`, `account.restrict`, `abuse.govern`. | MVP |
+| PS-095-05.R02 | Review queue exposes category, severity and rule only. Matched text is reachable only under case grant and purpose `abuse_review`. | MVP |
+| PS-095-05.R03 | Governance (`abuse.govern`) needs two `ope` principals who are not on the rule's test fixtures as authors. | MVP |
+| PS-095-05.R04 | Scanner `sys_` may scan and record findings; it may not review, restrict or read matched text. | MVP |
 
-## Requirements to specify
-- [ ] PS-095-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-095-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-095-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Action matrix
+| Principal | Action | Resource | Outcome |
+|---|---|---|---|
+| sys (scanner) | abuse.scan | source in scope | ALLOW |
+| sys (scanner) | abuse.moderate | any | DENY → `SYS.FORBIDDEN` |
+| mod (triage grant) | abuse.moderate | open finding | ALLOW |
+| mod (no case grant) | finding.read (text) | any | DENY → `SYS.NOT_FOUND` |
+| mod (case grant) | finding.read (text) | finding in `cas_` | ALLOW (purpose `abuse_review`) |
+| mod | account.restrict | acc_ > 7 days | DENY without ope co-approval, `CAP.DUAL_APPROVAL_REQUIRED` |
+| ope (two) | abuse.govern | rule bundle | ALLOW |
+| user (subject) | finding.read | own finding | DENY → `SYS.NOT_FOUND` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+`match_digest` = `never`. `subject_ref`, `reviewer_ref` = `case`. Reporter-misuse counters = `ope` aggregate only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Validation & errors
+`CAP.SCOPE_INVALID`, `CAP.DUAL_APPROVAL_REQUIRED`, `CAP.SELF_APPROVAL_FORBIDDEN`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Authorization (this module)
+Default deny. Rule authors cannot approve their own rules.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Failure, idempotency, concurrency, offline
+Decision store down → deny. Scanner grants are short-lived service credentials (F16).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-095-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Privacy, retention, abuse
+Text access is logged in `aud_` with finding ID and purpose. Repeated denials from one `mod` raise a CAP alert.
+
+## Observability & budgets
+`abuse_authz_denials_total`; alert on any `mod` text read outside an active case.
+
+## Tests
+- TEST-PS-095-05-01 (matrix): every row returns stated outcome.
+- TEST-PS-095-05-02 (scanner): scanner principal denied on review and restrict endpoints.
+- TEST-PS-095-05-03 (governance): one ope approving a rule bundle → `CAP.DUAL_APPROVAL_REQUIRED`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matched text unreachable without case grant (TEST-01).
+2. Subject cannot see findings about self (TEST-02 identical 404).
+
+## Assumptions & open decisions
+- OPEN: purpose registry (F16).
+- ASSUMPTION: grants for text access capped at 72 h.

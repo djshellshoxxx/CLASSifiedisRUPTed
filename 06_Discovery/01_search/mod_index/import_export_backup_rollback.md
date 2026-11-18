@@ -1,35 +1,52 @@
-# PS-045-10 — import export backup rollback
+# PS-045-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-045-10. **Owner:** [06_Discovery/01_search/mod_index](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_index. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_index. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R11), CTR-SCH-001 (R07, R08), CTR-FED-001 (R08); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the import export backup rollback process for index within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** Index is excluded from user export and backups is PROVISIONAL (D07 default, unapproved). Shadow-index rollback is ASSUMPTION.
 
-## Requirements to specify
-- [ ] PS-045-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-045-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-045-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-10.R01 | Index docs are never included in user data export (derived data; source listings are exported instead). | MVP |
+| PS-045-10.R02 | Index is excluded from backups; restore triggers a full rebuild from the event log. | MVP |
+| PS-045-10.R03 | Schema change to index doc requires shadow rebuild and alias swap; rollback = swap back to previous alias while previous index is retained 7 days (ASSUMPTION). | MVP |
+| PS-045-10.R04 | Restore replays deletions and withdrawals before query exposure (CTR-PRV-001 R06). | MVP |
+| PS-045-10.R05 | No federation export of index docs; federated export uses source events only (CTR-FED-001 R08). | Future |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Migration hooks for index docs are pure, deterministic and idempotent (CTR-SCH-001 R07). Stored docs are rebuilt, not rewritten in place. Previous alias metadata: `alias_prev`, `alias_current`, `retained_until`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+`index.rebuild` (PS-045-04) is the only import path. Export path: none for index.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Rebuild states from PS-045-06 apply; `swapped` → `rolled_back` on operator command with dual control.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Rollback when previous alias is past `retained_until` → `INDEX.ROLLBACK_UNAVAILABLE` (retryable false).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-045-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Rollback requires `index.rebuild` capability with dual control (PS-045-05).
+
+## Failure, idempotency, concurrency, offline
+Rollback is idempotent per `rebuild_request_id`. Backup restore is blocked from exposing index until verification passes.
+
+## Privacy, retention, abuse
+Retained previous index honors the same purge deadlines (24 h for removed docs) so rollback cannot resurrect deleted listings: rollback replays the deletion log before alias swap.
+
+## Observability & budgets
+Metric `index_alias_swaps_total` and `index_rollbacks_total`; alert on any rollback (page ope_ on-call).
+
+## Tests
+- TEST-PS-045-10-01 (integration): exported user data contains no index doc.
+- TEST-PS-045-10-02 (integration): restore from backup without index yields rebuilt index equal to source counts.
+- TEST-PS-045-10-03 (integration): rollback after schema change resurrects no deleted listing.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export fixtures contain zero index-doc keys.
+2. Rebuild verification count equals source count before every swap.
+3. Rollback test proves deletions honored.
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day retention of previous index for rollback (F15 to validate).
+- D07 PROVISIONAL.

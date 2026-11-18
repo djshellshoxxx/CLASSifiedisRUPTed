@@ -1,35 +1,57 @@
-# PS-070-07 — privacy retention abuse
+# PS-070-07 — privacy, retention and abuse
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-070-07. **Owner:** [09_Commerce/02_settlement/mod_disputes](SPEC.md). **Implementing module:** 09_Commerce/02_settlement/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 09_Commerce/02_settlement/mod_disputes (Commerce Lead). **Parent:** [SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R01, R06, R07, R12; RET-EVD; RET-PRIV), CTR-CAP-001 (R06, R08), CTR-FED-001 (R03). **Decisions:** D07 (PROVISIONAL default, unapproved).
 
-## Purpose and scope
-Define the privacy retention abuse process for disputes within 02_settlement. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-070-07.R01 | Dispute record retained RET-EVD: 24 months after `RESOLVED` or `WITHDRAWN`; `statement` and personal fields redacted at 12 months, hashes kept (CTR-PRV-001). | MVP |
+| PS-070-07.R02 | `statement` and evidence content are PRIVATE_PERSONAL; never federated, never in analytics or push previews. | MVP |
+| PS-070-07.R03 | Legal hold on a `cas_` suspends redaction and deletion for its disputes only (CTR-PRV-001 R07). | MVP |
+| PS-070-07.R04 | Max 3 open disputes per `acc_` at once and 5 raised per 30 days (ASSUMPTION) to limit frivolous or retaliatory disputes. | MVP |
+| PS-070-07.R05 | Deletion of an account does not delete a dispute held as evidence; personal fields are redacted and a completion record is written (CTR-PRV-001 R12). | MVP |
 
-## Requirements to specify
-- [ ] PS-070-07.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-070-07.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-070-07.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Retention classes referenced by name (RET-EVD, RET-PRIV, RET-LEGAL). No new class.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Redaction is a `sys_` job emitting `dispute.redacted` with IDs and counts only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Redaction does not change `status`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Rate-limit breach returns `SYS.RATE_LIMITED` (retryable true, retry-after header). Limit breach on open disputes returns `DISPUTE.OPEN_LIMIT` (not retryable until one closes).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Redaction job has no read access to content beyond what it deletes.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-070-07`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Redaction is idempotent on `dispute_id` and redaction stage; restore from backup replays redactions (CTR-PRV-001 R06).
+
+## Privacy, retention, abuse
+| Threat | Control |
+|---|---|
+| Retaliatory or frivolous disputes | Limits R04; pattern alert on reciprocal raises within 24 h |
+| Evidence fabrication | Digests and attestation (PS-071); moderator sees provenance |
+| Harassment in `statement` | Length limit; moderation case escalation; no public display |
+| Leak through logs | Canary scan in CI (PS-070-08) |
+| Deanonymization from reason and timing | Dispute details visible only to parties and case moderator |
+
+## Observability & budgets
+Count of redactions per day; limit-hit rate per 1000 raises (alert > 10).
+
+## Tests
+- TEST-PS-070-07-01 (integration): redaction at 12 months leaves hashes and removes `statement`.
+- TEST-PS-070-07-02 (integration): legal hold blocks redaction for its case only.
+- TEST-PS-070-07-03 (abuse): 4th concurrent open dispute refused with `DISPUTE.OPEN_LIMIT`.
+- TEST-PS-070-07-04 (negative): federation export of dispute is refused (`FED.DATA_CLASS_NOT_ALLOWED`).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Retention and redaction jobs match the table in 100% of fixtures.
+2. No `statement` text in logs, events, analytics (canary scan).
+3. Legal-hold scope tested with two overlapping cases.
+
+## Assumptions & open decisions
+- ASSUMPTION: open-dispute limit 3, raise limit 5 per 30 days.
+- D07 (PROVISIONAL default, unapproved). Legal retention periods require R07 jurisdiction review (OPEN).

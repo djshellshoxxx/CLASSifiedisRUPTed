@@ -1,35 +1,50 @@
-# PS-119-10 — import export backup rollback
+# PS-119-10 — import, export, backup and rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-119-10. **Owner:** [15_Platform/02_backend/mod_storage](SPEC.md). **Implementing module:** 15_Platform/02_backend/mod_storage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 15_Platform/02_backend/mod_storage. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R11, R12), CTR-SCH-001 (R07), CTR-FED-001 (R03).
 
-## Purpose and scope
-Define the import export backup rollback process for storage within 02_backend. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-119-10.R01 | Owner data export includes that owner's blobs at permitted classes, as files plus manifest (`blob_id`, `sha256`, `mime_type`, `byte_size`, `created_at`). | MVP |
+| PS-119-10.R02 | Blobs of counterparties are excluded from owner export (CTR-PRV-001 R11). | MVP |
+| PS-119-10.R03 | Blobs are never federated (PRIVATE_PERSONAL, FINANCIAL_EVIDENCE deferred, CTR-FED-001 R03). Public listing images may be referenced, not transferred, in federation (ASSUMPTION). | MVP |
+| PS-119-10.R04 | Backups of object store and metadata are taken together; restore verifies `sha256` for every row. | MVP |
 
-## Requirements to specify
-- [ ] PS-119-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-119-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-119-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Export manifest: `{ "schema_id": "storage.export_manifest", "schema_version": "1.0.0", "items": [ { "blob_id": "blb_…", "sha256": "…", "mime_type": "image/jpeg", "byte_size": 0 } ] }`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`blob.export` (acc_ owner, `export` action on own scope). Restore is `ope_` command with dual control.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore: RESTORED → VERIFYING (sha256 each row) → SERVING. Mismatched rows → QUARANTINED with `STO.RESTORE_MISMATCH`.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+`STO.RESTORE_MISMATCH` (internal, not retryable, alert). Export requests exceeding 1 GiB produce chunked jobs (ASSUMPTION).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner export requires own scope; operator restore requires `blob.administer` and dual control.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-119-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export job idempotent by `(owner_ref, export_request_id)`. Rollback of storage schema uses expand-then-contract.
+
+## Privacy, retention, abuse
+Exports delivered via authenticated download with 7-day expiry (ASSUMPTION). Deleted blobs are not restored: restore re-applies DELETED tombstones (CTR-PRV-001 R06).
+
+## Observability & budgets
+Restore drill quarterly; RTO ≤ 4 h for 1 TB (ASSUMPTION).
+
+## Tests
+- TEST-PS-119-10-01 (integration): export manifest digest verified on import.
+- TEST-PS-119-10-02 (integration): restore re-applies deletions, no deleted blob served.
+- TEST-PS-119-10-03 (e2e): owner export excludes counterparty blobs.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Export contains only owner-scope blobs (fixture audit).
+2. Restore drill verifies 100% of sha256 values.
+3. Deleted blobs absent after restore.
+
+## Assumptions & open decisions
+- ASSUMPTION: export expiry and RTO.
+- D07 PROVISIONAL (unapproved): retention and legal-hold interaction on restore.
+- D09 PROVISIONAL (unapproved): not applicable beyond storing external arrangement evidence as blobs with explicit class.

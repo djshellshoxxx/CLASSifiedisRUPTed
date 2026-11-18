@@ -1,35 +1,54 @@
 # PS-029-09 — contract and acceptance tests
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-029-09. **Owner:** [03_Services/01_service_catalog/mod_skills](SPEC.md). **Implementing module:** 03_Services/01_service_catalog/mod_skills. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/01_service_catalog/mod_skills. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-SCH-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001.
 
-## Purpose and scope
-Define the contract and acceptance tests process for skills within 01_service_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-029-09.R01 | Consumer contract tests for F06 search index: token set per listing ≤ 20, schema `service_listing.skill_tokens` v1. | MVP |
+| PS-029-09.R02 | Producer contract tests for CTR-EVT-001 envelope on all three events; payload ≤ 2 KiB. | MVP |
+| PS-029-09.R03 | Golden fixtures per schema version and migration path (CTR-SCH-001 R09). | MVP |
+| PS-029-09.R04 | Negative tests for every error code in [validation_rules.md](validation_rules.md). | MVP |
+| PS-029-09.R05 | Accessibility e2e: keyboard add/remove of skill chips, screen-reader announcement of count (≤ 20). | MVP |
+| PS-029-09.R06 | Offline e2e: attach queued offline, delivered once after reconnect. | MVP |
+| PS-029-09.R07 | Property tests for uniqueness and state invariants in [workflow_state_machine.md](workflow_state_machine.md). | MVP |
 
-## Requirements to specify
-- [ ] PS-029-09.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-029-09.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-029-09.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Fixture files stored under the module test directory, one per schema version; digests per CTR-SCH-001 R02.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Contract matrix: one row per command, query and event. Each row lists fixture ID, consumer, and expected error set.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+State invariants: no detached row is active; pending rows never in search tokens.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Error contract tests assert `code`, `retryable`, `message_key` and absence of input echo (CTR-ERR-001 R06–R07).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Contract tests for each capability in [authorization_capabilities.md](authorization_capabilities.md): allow and deny per row.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-029-09`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Contract tests for replay and conflict behavior in [failure_recovery_idempotency.md](failure_recovery_idempotency.md).
+
+## Privacy, retention, abuse
+Fixtures use synthetic accounts and labels only; no production data in fixtures.
+
+## Observability & budgets
+Contract suite runtime ≤ 10 min in CI (ASSUMPTION).
+
+## Tests
+- TEST-PS-029-09-01 contract: F06 token consumer fixture.
+- TEST-PS-029-09-02 contract: all event fixtures validate against CTR-SCH-001 registry.
+- TEST-PS-029-09-03 e2e: provider attaches three skills; buyer filters by code; pending label absent.
+- TEST-PS-029-09-04 a11y: skill chip keyboard flow and announcement.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every row in the command/query/event matrix has at least one passing test.
+2. Consumer fixture for F06 passes before F06 integration is accepted.
+3. No fixture contains real personal data.
+
+## Assumptions & open decisions
+- ASSUMPTION: contract suite CI budget 10 min.
+- F06 token schema `service_listing.skill_tokens` is PENDING CTR-SCH-001 registration by F06 owner.
+- No payment or receipt checklist applies.

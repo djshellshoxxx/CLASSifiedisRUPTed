@@ -1,35 +1,65 @@
 # PS-030-03 — workflow state machine
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-030-03. **Owner:** [03_Services/02_service_booking/mod_disputes](SPEC.md). **Implementing module:** 03_Services/02_service_booking/mod_disputes. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 03_Services/02_service_booking/mod_disputes. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-COM-001, CTR-EVT-001, CTR-ERR-001.
 
-## Purpose and scope
-Define the workflow state machine process for disputes within 02_service_booking. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-030-03.R01 | Local `link_state` ∈ {`requested`, `opened`, `refused`}. Canonical dispute state lives in F09 and is mirrored read-only. | MVP |
+| PS-030-03.R02 | Dispute lifecycle states (owned by F09): `OPEN`, `AWAITING_RESPONSE`, `UNDER_REVIEW`, `RESOLVED_AGREED`, `RESOLVED_DECIDED`, `WITHDRAWN`, `EXPIRED_NO_RESPONSE`. Mirror labels use the CTR-COM-001 catalog. | MVP |
+| PS-030-03.R03 | When subject is a settlement claim, a dispute moves that claim to `DISPUTED` (CTR-COM-001 R05, R16). No other claim state changes from this module. | MVP |
+| PS-030-03.R04 | Every transition emits one CTR-EVT-001 event; `revision` increments by 1. | MVP |
+| PS-030-03.R05 | `RESOLVED_*` and `WITHDRAWN` are terminal. A new dispute on the same subject requires a new subject transition. | MVP |
+| PS-030-03.R06 | No-response: if counterparty does not respond within 7 days (ASSUMPTION), state becomes `UNDER_REVIEW` (not resolved in favour of either party). | MVP |
 
-## Requirements to specify
-- [ ] PS-030-03.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-030-03.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-030-03.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+`link_state` field per [domain_schema.md](domain_schema.md). Mirror state is a cache; F09 is authoritative on conflict.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Events: `service_dispute.link_opened`, `service_dispute.link_refused`. F09 events are consumed, not re-emitted.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions (local link)
+| From | Event | Guard | To | Side effect |
+|---|---|---|---|---|
+| (none) | dispute.create submitted | validation passes | requested | F09 call with idempotency key |
+| requested | F09 ack | dispute_ref returned | opened | emit link_opened; set subject flag |
+| requested | F09 refusal | any code | refused | emit link_refused with code |
+| requested | timeout > 5 s | unknown outcome | requested | retry same key (max 3) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions (mirrored, read-only)
+| F09 state | Effect on subject |
+|---|---|
+| OPEN | subject frozen for milestone acceptance |
+| AWAITING_RESPONSE | acceptance blocked; auto-accept timer paused |
+| UNDER_REVIEW | no client or provider actions except evidence |
+| RESOLVED_* / WITHDRAWN | subject unfrozen per resolution |
+| EXPIRED_NO_RESPONSE | subject unfrozen; F09 marks outcome |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Invalid local transition → `DISPUTE.INVALID_TRANSITION` (retryable false).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-030-03`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Transitions require participant role, see [authorization_capabilities.md](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Unknown F09 outcome keeps `requested`; retries reuse the key. Concurrent opens: F09 returns the existing ref; local link set to `opened`. Offline: opening is refused offline (see failure file).
+
+## Privacy, retention, abuse
+Mirror state carries no party narrative. Terminal link rows follow F09 retention.
+
+## Observability & budgets
+Time-in-state histogram per `link_state`. Alert if any link stays `requested` > 60 s (ASSUMPTION).
+
+## Tests
+- TEST-PS-030-03-01 unit: each local transition row.
+- TEST-PS-030-03-02 integration: F09 timeout then success yields exactly one `link_opened`.
+- TEST-PS-030-03-03 integration: subject frozen while F09 state is `OPEN`.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. No local transition exists outside the table.
+2. Claim moves to `DISPUTED` only inside the 14-day window.
+3. No state label contains "paid", "payment received" or "settled" (CTR-COM-001 R15).
+
+## Assumptions & open decisions
+- ASSUMPTION: 7-day counterparty response window.
+- D04 (partial execution) PROVISIONAL: remedy is recorded as attestation, not as an atomic transfer.

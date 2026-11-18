@@ -1,44 +1,44 @@
 # F12.S02.M03 — abuse
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F12.S02.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** Trust&Safety Lead. **Parent:** F12.S02.
 
 ## Purpose and business behavior
-Provide abuse as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+Detects interpersonal abuse in platform text: harassment, threats, doxxing patterns (phone, email and address shapes posted about others) and hate terms from a governed lexicon. It also detects misuse of the reporting system itself (sustained invalid reporting). Output is a finding that a reviewer confirms or dismisses. Confirmed findings become enforcement proposals (PS-096). Findings never change visibility on their own.
 
 ## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+- As a participant, I am not exposed to threats or contact details posted about me without review.
+- As a reviewer, I see category, severity and rule for each finding and open text only under a case grant.
+- As a reporter whose reports are repeatedly invalid, I am told my reporting is limited and why, in general terms.
 
 ## Scope
-- Required process spec: `abuse_domain_model.md` (not yet authored)
-- Required process spec: `abuse_commands_and_state_transitions.md` (not yet authored)
-- Required process spec: `abuse_validation_and_authorization.md` (not yet authored)
-- Required process spec: `abuse_failure_recovery_and_idempotency.md` (not yet authored)
-- Required process spec: `abuse_interfaces_and_events.md` (not yet authored)
-- Required process spec: `abuse_privacy_security_and_abuse.md` (not yet authored)
-- Required process spec: `abuse_acceptance_and_property_tests.md` (not yet authored)
+Ten process specs, all SPEC-DRAFT-COMPLETE: PS-095-01 to PS-095-10 (see inventory below).
 
 ## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+- Commands: `abuse.scan` (sys), `abuse.review`, `abuse.restrict_reporter`, `abuse.rule.publish`.
+- Queries: `abuse.review_queue`, `abuse.finding`, `abuse.rule_precision`.
+- Events: `finding.recorded`, `finding.confirmed`, `finding.dismissed`, `account.reporting_restricted`, `account.reporting_restored`.
+- Identifier `abf_` (PENDING CTR-ID-001).
 
 ## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Upstream: content owners (F08 messages, F01–F05 listings and services), F12.S01.M01 flags (misuse counters), F16 governance. Downstream: F12.S02.M01 enforcement (proposals), F12.S01.M03 appeals, F12.S03.M02 signals (rule precision as signal). Rules are shared with F12.S02.M02 spam only through rule IDs.
 
 ## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+Owns: `abf_` findings, rule registry, reporter-misuse counters. Does not own: content, reports, sanctions. Canonical owner of abuse findings: this module (PROVISIONAL, unapproved).
 
 ## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
+Over-flagging of communities or dialects; rule probing; digest reversal; harassment through the review path; reporter retaliation through restriction abuse. Detection is probabilistic and never self-executing. No platform custody of money; no payment or delivery claim depends on findings.
 
 ## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+Ten process specs past approval gates (Privacy Lead F10, Security Lead F16, Trust&Safety sign-off); evasion corpus and bias gates defined.
 
 ## Required process specification inventory
-- [ ] `abuse_domain_model.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `abuse_commands_and_state_transitions.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `abuse_validation_and_authorization.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `abuse_failure_recovery_and_idempotency.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `abuse_interfaces_and_events.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `abuse_privacy_security_and_abuse.md` — developer-ready process contract to be written in Prompt 2
-- [ ] `abuse_acceptance_and_property_tests.md` — developer-ready process contract to be written in Prompt 2
+- [x] [domain_schema.md](domain_schema.md) — PS-095-01
+- [x] [validation_rules.md](validation_rules.md) — PS-095-02
+- [x] [workflow_state_machine.md](workflow_state_machine.md) — PS-095-03
+- [x] [commands_queries_events.md](commands_queries_events.md) — PS-095-04
+- [x] [authorization_capabilities.md](authorization_capabilities.md) — PS-095-05
+- [x] [failure_recovery_idempotency.md](failure_recovery_idempotency.md) — PS-095-06
+- [x] [privacy_retention_abuse.md](privacy_retention_abuse.md) — PS-095-07
+- [x] [observability_performance.md](observability_performance.md) — PS-095-08
+- [x] [contract_and_acceptance_tests.md](contract_and_acceptance_tests.md) — PS-095-09
+- [x] [import_export_backup_rollback.md](import_export_backup_rollback.md) — PS-095-10

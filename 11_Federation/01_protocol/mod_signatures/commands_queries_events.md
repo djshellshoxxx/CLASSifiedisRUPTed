@@ -1,35 +1,59 @@
-# PS-085-04 — commands queries events
+# PS-085-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-085-04. **Owner:** [11_Federation/01_protocol/mod_signatures](SPEC.md). **Implementing module:** 11_Federation/01_protocol/mod_signatures. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 11_Federation/01_protocol/mod_signatures. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001 (R03 idempotency, R05 signing, R13 export re-keying), CTR-FED-001 (verification order, `fed.*` errors), CTR-ERR-001, CTR-SCH-001 (R01 registry), CTR-CAP-001 (R08 audit).
 
-## Purpose and scope
-Define the commands queries events process for signatures within 01_protocol. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-085-04.R01 | All operations are internal. None is exposed on a public route. | MVP |
+| PS-085-04.R02 | Each operation has a version `1.0.0` in the registry and an explicit input and output schema. | MVP |
+| PS-085-04.R03 | `signing.sign_event` is deterministic: the same event bytes and key produce the same `value`. Its idempotency key is `event_id`. | MVP |
+| PS-085-04.R04 | `signing.verify_event` is pure. It performs no database write. | MVP |
+| PS-085-04.R05 | Every error returned by these operations is in the CTR-FED-001 table or the PS-085-02 table. No new code is minted here. | MVP |
 
-## Requirements to specify
-- [ ] PS-085-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-085-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-085-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+| Operation | Signature (logical) | Idempotency key | Version | Errors |
+|---|---|---|---|---|
+| `signing.sign_event` | `(event_id, envelope_without_signature, key_id) → signature` | `event_id` | 1.0.0 | `EVT.SIGNATURE_REQUIRED` if signing fails (producer side); event is not exported |
+| `signing.verify_event` | `(envelope, key_projection_row) → {valid, marker?}` or one FED code | none (pure) | 1.0.0 | `FED.ENVELOPE_MALFORMED`, `FED.VERSION_UNSUPPORTED`, `FED.KEY_REVOKED`, `FED.SIGNATURE_INVALID` |
+| `key.lookup` | `(key_id) → key_projection_row` | none (read) | 1.0.0 | `FED.KEY_UNKNOWN` |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Events: this module emits none on the event bus. Key lifecycle events are emitted by F16 (PENDING F16 registry). When a historical event is accepted with the compromised marker, an `aud_` record is written (CTR-CAP-001 R08 pattern) with `event_id`, `key_id` and the marker. No content.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Example (shape)
+Request to `signing.sign_event`: `{"event_id":"evt_<26>","key_id":"key_<26>","envelope":{...}}`. Response: `{"signature":{"alg":"ed25519","key_id":"key_<26>","value":"<86>"}}`. Values are placeholders.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Not applicable to operations. Key states in PS-085-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Input validation follows PS-085-02. Output schema validation is run before return.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-085-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Capabilities per PS-085-05.
+
+## Failure, idempotency, concurrency, offline
+A repeat `signing.sign_event` with the same `event_id` returns the identical signature. A different envelope under the same `event_id` returns `EVT.IDEMPOTENCY_KEY_REUSED` (CTR-EVT-001 R03). See PS-085-06.
+
+## Privacy, retention, abuse
+Operation logs carry operation name, event ID, key ID and code only.
+
+## Observability & budgets
+Latency per operation in PS-085-08.
+
+## Tests
+- TEST-PS-085-04-01 (contract): sign then verify round-trip for every `alg` in the enum.
+- TEST-PS-085-04-02 (contract): sign twice with the same `event_id` yields byte-identical signatures.
+- TEST-PS-085-04-03 (integration): `verify_event` causes zero database writes (write-spy).
+- TEST-PS-085-04-04 (contract): every operation's error set is a subset of the CTR-FED-001 and PS-085-02 tables.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Operation schemas are published at version 1.0.0; TEST-PS-085-04-01 passes.
+2. Determinism holds; TEST-PS-085-04-02 passes.
+3. Verification is side-effect free; TEST-PS-085-04-03 passes.
+
+## Assumptions & open decisions
+Decision register: [DECISIONS.md](../../../DECISIONS.md).
+- PENDING CTR-SCH-001: operation schema IDs `signing.sign_event`, `signing.verify_event`, `key.lookup`.
+- OPEN: whether `event_type` is a registry entry (CTR-EVT-001 open item).
+- PROVISIONAL (D01 default, unapproved): signed envelopes.

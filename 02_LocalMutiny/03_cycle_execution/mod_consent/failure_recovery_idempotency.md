@@ -1,35 +1,56 @@
-# PS-021-06 — failure recovery idempotency
+# PS-021-06 — Failure, recovery, idempotency and concurrency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-021-06. **Owner:** [02_LocalMutiny/03_cycle_execution/mod_consent](SPEC.md). **Implementing module:** 02_LocalMutiny/03_cycle_execution/mod_consent. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 02_LocalMutiny/03_cycle_execution/mod_consent. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-ERR-001, CTR-ID-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for consent within 03_cycle_execution. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority MVP/Future |
+|---|---|---|
+| PS-021-06.R01 | Duplicate consent command with same `idempotency_key` returns the original result; no second row or event. | MVP |
+| PS-021-06.R02 | Concurrent ACCEPT and proposal revision: exactly one outcome applies; the other returns `SYS.CONFLICT`. | MVP |
+| PS-021-06.R03 | Server timeout on consent write: client retries with the same key for up to 24 h; after that the key is rejected with `SYS.GONE`. | MVP |
+| PS-021-06.R04 | Expiry timer fires at-least-once; EXPIRED transition is idempotent. | MVP |
+| PS-021-06.R05 | Offline consent is queued locally and sent only after relay acknowledgment (D08); the UI shows "pending", never "accepted". | MVP |
 
-## Requirements to specify
-- [ ] PS-021-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-021-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-021-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Uses `idempotency_key` and `revision` columns from [domain_schema.md](domain_schema.md). Idempotency table `cns_idem` (key, response_digest, created_at) retained 24 h (ASSUMPTION).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+Retries reuse the same envelope and `idempotency_key`; events carry `correlation_id` of the original command.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Recovery never creates a new decision. Recovery to a previous state is forbidden; corrections are a new proposal version.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+| Code | Retryable | Class | Notes |
+|---|---|---|---|
+| SYS.CONFLICT | false | conflict / 409 | client re-reads proposal |
+| SYS.PRECONDITION_FAILED | true | precondition_failed / 412 | revision not yet visible; retry after 1 s backoff |
+| SYS.UNAVAILABLE | true | unavailable / 503 | exponential backoff 1 s to 60 s, jitter ±20 % |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Timeouts: client 5 s per request; server database statement 2 s.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-021-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Retries re-run authorization at commit (CTR-CAP-001 R09).
+
+## Failure, idempotency, concurrency, offline
+Partial failure: if the event append fails after the row insert, both are in one transaction; no orphan row. Relay outage: pending queue retained up to 7 days, then surfaced as expired locally.
+
+## Privacy, retention, abuse
+Idempotency cache stores digests only, not bodies.
+
+## Observability & budgets
+Metrics: replay rate, conflict rate, timer lag. Alert when conflict rate > 5 % for 15 min (ASSUMPTION).
+
+## Tests
+- TEST-PS-021-06-01 (integration): 100 duplicate sends → one row, one event.
+- TEST-PS-021-06-02 (concurrency): ACCEPT vs revision race, 1000 trials, one winner.
+- TEST-PS-021-06-03 (offline): queued consent sent after reconnect; rejected if proposal revised meanwhile.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Zero duplicate rows under replay tests.
+2. Race outcome deterministic per revision check.
+3. Pending offline consents never displayed as accepted.
+
+## Assumptions & open decisions
+- ASSUMPTION: 24 h idempotency window; 7-day offline queue.
+- [DECISIONS.md](../../../DECISIONS.md) D08 — PROVISIONAL (D08 default, unapproved): local pending queue until authenticated relay acknowledgment.

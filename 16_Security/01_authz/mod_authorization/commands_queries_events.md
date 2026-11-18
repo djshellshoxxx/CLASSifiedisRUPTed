@@ -1,35 +1,61 @@
-# PS-126-04 — commands queries events
+# PS-126-04 — commands, queries and events
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-126-04. **Owner:** [16_Security/01_authz/mod_authorization](SPEC.md). **Implementing module:** 16_Security/01_authz/mod_authorization. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** [mod_authorization](SPEC.md) (Security Lead). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-EVT-001, CTR-ERR-001, CTR-ID-001.
 
-## Purpose and scope
-Define the commands queries events process for authorization within 01_authz. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-126-04.R01 | `authz.decide` returns within 5 ms p95 and always returns a `dec_` ID. | MVP |
+| PS-126-04.R02 | `grant.*` and `policy.*` mutations carry `idempotency_key` and `expected_revision`. | MVP |
+| PS-126-04.R03 | `authz.decide` is callable only by service identities; never by clients. | MVP |
+| PS-126-04.R04 | `authz.explain` returns reason codes and policy version only, never object content. | MVP |
 
-## Requirements to specify
-- [ ] PS-126-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-126-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-126-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Command and event payloads use CTR-CAP-001 grant and decision shapes. `policy.publish` payload: `policy_version`, `rules_hash`, `approvals[]`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+| Command | Input | Idempotency | Emits | Errors |
+|---|---|---|---|---|
+| `authz.decide` (internal) | principal, action, resource, context | none (new `dec_` each call) | decision record | SYS.UNAVAILABLE |
+| `grant.create` | grant body | key | `grant.granted` | CAP.* |
+| `grant.approve` | grant_id, approver | key | `grant.approved` | CAP.SELF_APPROVAL_FORBIDDEN, CAP.GRANT_NOT_ACTIVE |
+| `grant.revoke` | grant_id, reason | key | `grant.revoked` | CAP.GRANT_NOT_ACTIVE |
+| `policy.draft` | rules | key | none | AUTHZ.RULESET_TOO_LARGE |
+| `policy.publish` | policy_version, approvals[2] | key | `policy.published`, `policy.superseded` | AUTHZ.ACTION_NOT_DECLARED, CAP.DUAL_APPROVAL_REQUIRED |
+| `policy.rollback` | to_version | key | `policy.published` | AUTHZ.POLICY_NOT_FOUND |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Queries: `authz.explain(decision_id)` (ope with purpose), `grant.list(subject_ref)` (own grants for `acc_`; ope with purpose).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Events (aggregate `grant` or `policy`): `grant.granted`, `grant.approved`, `grant.revoked`, `grant.expired`, `policy.published`, `policy.superseded`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Mapping in [PS-126-03](workflow_state_machine.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-126-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Codes in [PS-126-02](validation_rules.md) and CTR-CAP-001.
+
+## Authorization
+Actions in [PS-126-05](authorization_capabilities.md).
+
+## Failure, idempotency, concurrency, offline
+Key scope = (actor, command, key) per CTR-EVT-001 R03. `grant.approve` appends under revision check so two approvers racing do not overwrite each other.
+
+## Privacy, retention, abuse
+Event payloads carry IDs and reason codes. `grant.list` returns only grants where the subject is the caller.
+
+## Observability & budgets
+`authz_commands_total{command,outcome}`; decide latency p95 ≤ 5 ms.
+
+## Tests
+- TEST-PS-126-04-01 (contract): `authz.decide` output validates against the decision record schema.
+- TEST-PS-126-04-02 (idempotency): replayed `grant.create` returns the same `grt_` and one event.
+- TEST-PS-126-04-03 (negative): client token calling `authz.decide` receives SYS.FORBIDDEN.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Every mutation emits exactly one event on success.
+2. No event payload contains object content.
+3. `authz.explain` output contains no field values.
+
+## Assumptions & open decisions
+- ASSUMPTION: `authz.explain` available to ope with purpose only.
+- PROVISIONAL (D10 default, unapproved): portability export of grants is a subject request, not an operator query.

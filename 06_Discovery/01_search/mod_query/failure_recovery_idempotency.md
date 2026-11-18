@@ -1,35 +1,51 @@
-# PS-046-06 — failure recovery idempotency
+# PS-046-06 — failure, recovery and idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-046-06. **Owner:** [06_Discovery/01_search/mod_query](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_query. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_query. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-ERR-001 (R03), CTR-PRV-001 (R05); PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the failure recovery idempotency process for query within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** Degraded results mode is PROVISIONAL (D08 read-side default, unapproved).
 
-## Requirements to specify
-- [ ] PS-046-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-046-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-046-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-046-06.R01 | Index unavailable → `SYS.UNAVAILABLE` (retryable true); no stale result served as current without `stale: true` flag. | MVP |
+| PS-046-06.R02 | Retries of identical requests are safe and return equivalent results within the same snapshot TTL. | MVP |
+| PS-046-06.R03 | Rate-limit state uses fixed windows in RET-EPH stores; loss of the store fails open for guest budget only for 60 s (ASSUMPTION) and closed for `acc_` budgets. | MVP |
+| PS-046-06.R04 | Circuit breaker opens after 50% errors over 30 s; half-open probes 1 request per 5 s. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Rate counters: key (`principal_or_guest_hash`, `window_start`), TTL 24 h (RET-EPH).
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Read path only. Retry budget for clients: 3 attempts, exponential backoff with jitter, 0.5 s base.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Breaker: `closed → open → half_open → closed`. See PS-046-03 for request states.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+`SYS.UNAVAILABLE` retryable true; `QUERY.TIMEOUT` retryable true; `SYS.RATE_LIMITED` retryable true after retry-after.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-046-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Breaker state does not change authorization decisions.
+
+## Failure, idempotency, concurrency, offline
+Offline clients show last cached result set labelled "last updated" and never claim freshness. Cached results cleared on logout and account switch (CTR-PRV-001 R11 context).
+
+## Privacy, retention, abuse
+Cached results on device follow LOCATION_COARSE and PUBLIC classes only; no query text cached beyond the session.
+
+## Observability & budgets
+Metrics: `query_breaker_state`, `query_stale_served_total`, `query_rate_limit_fail_open_total`.
+
+## Tests
+- TEST-PS-046-06-01 (chaos): kill index replica; requests get SYS.UNAVAILABLE within 2 s.
+- TEST-PS-046-06-02 (unit): breaker transitions per table.
+- TEST-PS-046-06-03 (offline): cached results show "last updated" and clear on logout.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Breaker opens within 30 s of 50% error rate in load test.
+2. No response marked current when served from stale cache.
+3. Fail-open guest budget capped at 60 s window (test verified).
+
+## Assumptions & open decisions
+- ASSUMPTION: fail-open limited to guest budget.
+- D08 PROVISIONAL: offline search is read-only cache.

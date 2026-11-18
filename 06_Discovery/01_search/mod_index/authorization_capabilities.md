@@ -1,35 +1,59 @@
-# PS-045-05 — authorization capabilities
+# PS-045-05 — authorization and capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-045-05. **Owner:** [06_Discovery/01_search/mod_index](SPEC.md). **Implementing module:** 06_Discovery/01_search/mod_index. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/01_search/mod_index. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-CAP-001, CTR-ID-001, CTR-ERR-001; PENDING CTR-DSC-001.
 
-## Purpose and scope
-Define the authorization capabilities process for index within 01_search. Do not assume implementation or successful external settlement.
+**Decision labels:** Capability grant model is PROVISIONAL (ASSUMPTION, unapproved). Default-deny is required (CTR-CAP-001 R01).
 
-## Requirements to specify
-- [ ] PS-045-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-045-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-045-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-045-05.R01 | Index writes are allowed only for principal `sys_` with grant `index.consume` scoped `global` (consumer service). | MVP |
+| PS-045-05.R02 | `index.suppress` requires `moderate` on `case:<cas_>` (F12). | MVP |
+| PS-045-05.R03 | `index.rebuild` requires `administer` by `ope_` with dual control; `scope: all` requires two distinct `ope_` approvers. | MVP |
+| PS-045-05.R04 | No principal other than the index consumer can write index docs directly. | MVP |
+| PS-045-05.R05 | Denied requests return `SYS.NOT_FOUND` where the object is unreadable (CTR-ERR-001 R08). | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Capability grants are `grt_` records (CTR-ID-001 prefix `grt`). Required grants:
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+| Capability | Resource scope | Verb (CTR-CAP-001 R03) | Holder |
+|---|---|---|---|
+| `index.consume` | global | execute | `sys_` consumer |
+| `index.suppress` | case:`cas_` | moderate | `mod_` |
+| `index.lift` | case:`cas_` | moderate | `mod_` plus `ope_` approval |
+| `index.rebuild` | global | administer | `ope_` (dual) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Commands / queries / events
+Authorization is evaluated before any command in PS-045-04 executes. Each decision writes a `dec_` record (CTR-ID-001 prefix `dec`).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## States & transitions
+Grant revocation takes effect for new commands immediately; in-flight consumer batches finish under the grant they started with (ASSUMPTION).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-045-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Validation & errors
+Missing grant → `SYS.FORBIDDEN` for writes on visible resources, `SYS.NOT_FOUND` for hidden ones (CTR-ERR-001 R08).
+
+## Authorization
+Actor × action × resource matrix above. Field visibility: index query results expose only PUBLIC and LOCATION_COARSE fields (CTR-CAP-001 field visibility).
+
+## Failure, idempotency, concurrency, offline
+Authorization is re-checked on retry; a revoked grant turns a retry into `SYS.FORBIDDEN` (non-retryable).
+
+## Privacy, retention, abuse
+Decision records follow RET-AUD (12 months). Operator access to rebuild logs is limited to IDs.
+
+## Observability & budgets
+Metric `index_authz_denied_total{capability}`. Alert on any denial of `index.consume` (indicates misconfigured consumer).
+
+## Tests
+- TEST-PS-045-05-01 (unit): default deny for each capability without grant.
+- TEST-PS-045-05-02 (integration): `scope: all` rebuild with one approver is refused.
+- TEST-PS-045-05-03 (security, future): direct write attempt by `mod_` principal is denied and logged.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Matrix above implemented as code-level policy table with one test per row.
+2. Dual-control rebuild enforced in integration test.
+3. No index field exposed to a principal lacking CTR-CAP-001 field visibility.
+
+## Assumptions & open decisions
+- ASSUMPTION: capability names above are proposals pending F16 registry approval.
+- D10 PROVISIONAL (user-controlled keys out of scope for index).

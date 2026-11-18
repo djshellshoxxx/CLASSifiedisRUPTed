@@ -1,35 +1,49 @@
-# PS-079-08 — observability performance
+# PS-079-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-079-08. **Owner:** [10_Privacy/01_data_controls/mod_retention](SPEC.md). **Implementing module:** 10_Privacy/01_data_controls/mod_retention. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 10_Privacy/01_data_controls/mod_retention (Privacy Lead, F10; platform metrics via F15). **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (metrics `prv_*`, zero-tolerance alerts), CTR-ERR-001 (R10), CTR-EVT-001.
 
-## Purpose and scope
-Define the observability performance process for retention within 01_data_controls. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-079-08.R01 | Metrics: `retention_records_expired_total{class}`, `retention_records_purged_total{class}`, `retention_holds_active`, `retention_sweep_backlog_seconds`, `prv_class_violations_total` (CTR-PRV-001). | MVP |
+| PS-079-08.R02 | Labels enum-only (class, store, outcome). | MVP |
+| PS-079-08.R03 | Alert when `prv_class_violations_total` > 0 in production. | MVP |
+| PS-079-08.R04 | Alert when any sweep backlog > 24 h. | MVP |
+| PS-079-08.R05 | Logs: run IDs, class, counts; no record IDs or subject IDs. | MVP |
 
-## Requirements to specify
-- [ ] PS-079-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-079-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-079-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Label allowlist: `retention_class` (10 values), `store_class`, `outcome`.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+None.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Not applicable.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Metric label validation.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Dashboards for Privacy Lead and on-call; hold counts visible to case scope only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-079-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Metric failure does not block sweeps.
+
+## Privacy, retention, abuse
+Logs RET-OPS.
+
+## Observability & budgets
+Hold query p95 ≤ 250 ms; sweep throughput ≥ 5,000 records/min per class (ASSUMPTION).
+
+## Tests
+- TEST-PS-079-08-01 (unit): label allowlist.
+- TEST-PS-079-08-02 (alert): injected class violation fires alert within 1 min.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Metrics present in staging.
+2. Alert tests pass.
+3. Log scan: zero record IDs in sweep logs.
+
+## Assumptions & open decisions
+- ASSUMPTION: throughput target.
+- PROVISIONAL (D07 default).

@@ -1,35 +1,50 @@
-# PS-047-08 — observability performance
+# PS-047-08 — observability and performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-047-08. **Owner:** [06_Discovery/02_geoprivacy/mod_coarse](SPEC.md). **Implementing module:** 06_Discovery/02_geoprivacy/mod_coarse. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 06_Discovery/02_geoprivacy/mod_coarse. **Parent:** [SPEC.md](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R04, R09), CTR-ERR-001 (R10).
 
-## Purpose and scope
-Define the observability performance process for coarse within 02_geoprivacy. Do not assume implementation or successful external settlement.
+**Decision labels:** Budgets ASSUMPTION (F15 to validate).
 
-## Requirements to specify
-- [ ] PS-047-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-047-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-047-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-047-08.R01 | Metrics: `coarse_recompute_duration_s`, `coarse_last_success_age_s`, `coarse_cells_by_state`, `coarse_publication_flips_total`. | MVP |
+| PS-047-08.R02 | Recompute p95 ≤ 60 s for 100 000 indexed items. | MVP |
+| PS-047-08.R03 | Labels never include item counts or cell codes with counts below K_MIN. | MVP |
+| PS-047-08.R04 | Alert when last successful recompute > 15 min old. | MVP |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Data / schema
+Metric labels: `state`, `outcome` only. Cell code appears only as aggregate, not per-cell label.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Commands / queries / events
+Trace per recompute window.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## States & transitions
+Not applicable beyond PS-047-03.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Validation & errors
+Error counter by code.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-047-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Authorization
+Dashboards restricted to Platform Lead and F10 roles.
+
+## Failure, idempotency, concurrency, offline
+Metrics outage does not block recompute.
+
+## Privacy, retention, abuse
+Metrics 30 days (RET-OPS). Flip counts aggregated daily.
+
+## Observability & budgets
+Recompute p95 ≤ 60 s at 100 000 items; query path unaffected (read cached flags).
+
+## Tests
+- TEST-PS-047-08-01 (load): recompute at 100 000 items within budget.
+- TEST-PS-047-08-02 (unit): metric label allowlist.
+- TEST-PS-047-08-03 (integration): alert at 15 min stale.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Four metrics defined and documented.
+2. Load budget met on reference profile (PENDING F15).
+3. No metric label contains a count.
+
+## Assumptions & open decisions
+- ASSUMPTION: reference profile undefined (PENDING F15).

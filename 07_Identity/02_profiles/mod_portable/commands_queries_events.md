@@ -1,35 +1,51 @@
-# PS-055-04 — commands queries events
+# PS-055-04 — commands, queries and events
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 07_Identity/02_profiles/mod_portable. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-EVT-001, CTR-SCH-001, CTR-ERR-001.
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-055-04. **Owner:** [07_Identity/02_profiles/mod_portable](SPEC.md). **Implementing module:** 07_Identity/02_profiles/mod_portable. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-055-04.R01 | All state-changing commands require `Idempotency-Key` and, where a `bnd_`/`imj_` exists, `expected_revision`. | MVP |
+| PS-055-04.R02 | Export and import are online-only; excluded from D08 offline queue. | MVP |
+| PS-055-04.R03 | Event payloads: IDs, counts, codes. No profile values, no digest content beyond 8-hex prefix. | MVP |
 
-## Purpose and scope
-Define the commands queries events process for portable within 02_profiles. Do not assume implementation or successful external settlement.
+## Data / schema
+Import upload is a multipart body with the bundle as `application/vnd.classrupt.bundle+json`, ≤ 25 MiB.
 
-## Requirements to specify
-- [ ] PS-055-04.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-055-04.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-055-04.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Commands / queries / events
+| Command | Route | Result | Errors |
+|---|---|---|---|
+| portable.export.generate | POST /v1/profile/exports | 202 {bundle_id} | STEP_UP_REQUIRED, SYS.RATE_LIMITED |
+| portable.export.download | GET /v1/profile/exports/{bnd_id}/file?token= | 200 bytes | SYS.GONE |
+| portable.import.stage | POST /v1/profile/imports | 201 {imj_id, preview} | BUNDLE_TOO_LARGE, SCHEMA_INVALID, SIGNATURE_INVALID, BUNDLE_EXPIRED |
+| portable.import.apply | POST /v1/profile/imports/{imj_id}/apply | 200 {prf_id} | ALREADY_APPLIED, SYS.CONFLICT |
+| portable.import.cancel | DELETE /v1/profile/imports/{imj_id} | 204 | SYS.CONFLICT |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Events (`aggregate_type` `portable_bundle` / `portable_import`): `portable_bundle.generated`, `.downloaded`, `.expired`; `portable_import.staged`, `.applied`, `.rejected`. `max_data_class` = PSEUDONYMOUS.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+See [workflow_state_machine](workflow_state_machine.md).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+See [validation_rules](validation_rules.md).
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+See [authorization_capabilities](authorization_capabilities.md).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-055-04`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export generate idempotent per (owner, day, key). Import apply idempotent by `bundle_digest`.
+
+## Privacy, retention, abuse
+Preview returned on stage shows counts only, not values.
+
+## Observability & budgets
+`portable_commands_total{command,code}`; import apply p95 ≤ 2 s for 25 MiB.
+
+## Tests
+TEST-PS-055-07 (route contracts), TEST-PS-055-08 (idempotent export and apply).
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Route fixtures validate against schemas.
+2. Replayed apply returns the original `prf_` and creates no second profile.
+
+## Assumptions & open decisions
+- ASSUMPTION: export limit 3 per 24 h.

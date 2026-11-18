@@ -237,7 +237,7 @@ identify main's own execution without assuming rolling runner versions are fixed
 | Contribution or feature | What remains | Dependency / next action |
 |---|---|---|
 | Draft #8 after the registry extraction | Public-ID privacy boundary, canonical signatures, optional relay secret adapters, storage/dead-letter/blob redesign and unfinished platform configuration | Keep draft open. Port accepted pieces into current interfaces. The partial Tenants/LocalSettings schema imports missing ./text.ts and depends on future relay configuration/rules; it is not a ready independent feature. |
-| Concurrent draft #51, `claude/haiku-classrupted-features-cc9qmr` at `7b729df38dddf59c4e60e245bdf1ca43546b1e7b` | Compatible test/helper/tooling maintenance created after the runtime merge | Preserve the active draft for its own exact-head qualification. Source review found no confirmed defect; its Alpha/platform runs were queued at the recorded snapshot. Author-claimed local results are not independent hosted evidence. See the [concurrent review](../reviews/20261117-exhaustive-consolidation/concurrent-pr51-review.md). |
+| Concurrent draft #51, `claude/haiku-classrupted-features-cc9qmr` at `7b729df38dddf59c4e60e245bdf1ca43546b1e7b` | Compatible test/helper/tooling maintenance created after the runtime merge | Preserve the active draft for its own exact-head qualification. Source review found no confirmed defect; its Alpha/platform runs were queued at the 09:51 UTC source-review snapshot. Author-claimed local results are not independent hosted evidence. See the [concurrent review](../reviews/20261117-exhaustive-consolidation/concurrent-pr51-review.md). |
 | `claude/busy-cerf-vg3hz3` | Alternate comms/federation/recovery implementation | Requires an architecture port from synchronous collections, prefixed IDs and relay accounts to current scoped vault authority. Preserve current image validation. |
 | `claude/happy-newton-4yttpa` live head `8d5f66f75411` | 150 documentation paths beyond the archived PR #18 snapshot | Reconcile selected requirements into canonical module YAML before regeneration. |
 | `claude/wonderful-cori-ynhlsb` live head `c9bd8933ff51` | 1,770 documentation/CSV paths beyond PR #36's preserved snapshot | Review unresolved proposal decisions against accepted contracts; do not overwrite live specifications. |
@@ -252,7 +252,7 @@ history rewrite or approval bypass was performed. No user-vault migration or
 existing signed-record format changed. Every original source branch remains
 available with an explicit disposition.
 
-## Integration outcome — main verification pending
+## Integration outcome — main verification completed
 
 ### Contributions already integrated
 
@@ -297,7 +297,7 @@ retains exact source/artifact provenance and the unresolved native import
 limitation. The two raw probes remain failed evidence; passing product journeys
 do not repair the browser engine.
 
-### Pending verification and documentation delivery
+### Completed main verification and documentation delivery
 
 At **2026-11-18 10:05:16 UTC**, re-reading both post-merge main workflow attempts
 and their check-runs still showed the main workflows
@@ -305,19 +305,40 @@ and their check-runs still showed the main workflows
 and [CLI 44275307098](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098)
 **queued**. They were created for a `push` to the exact runtime merge SHA above.
 The [main CI queue checkpoint](../reviews/20261117-exhaustive-consolidation/main-ci-queue-checkpoint.json)
-preserves the pending-state evidence separately from completed PR qualification.
-No successful post-merge main result is claimed.
+preserves that historical pending-state evidence separately from completed PR
+qualification. Its later 10:12:13 UTC observation also remains unchanged.
+
+The continuation re-read the same first-attempt push workflows after completion.
+Main [Alpha 44275307064](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064)
+completed successfully at **12:53:11 UTC**. Its domain job `134745437853` executed
+**695 passing domain assertions, 27 passing tooling tests and all 72 browser
+journeys** across Chromium, Firefox and WebKit. Domain and tooling counts contain
+zero failures, pending or skipped assertions. Typecheck, strict specifications,
+dependency boundaries, registry freshness, 331 independent money vectors and the
+2,355-byte gzip money bundle check also passed.
+
+Main [CLI 44275307098](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098)
+completed successfully at **13:20:58 UTC**. All six Ubuntu/Windows/macOS ×
+Node 22.18.0/24.x jobs executed **18 passing CLI tests each, without skips**, and
+passed real development/production browser startup, reload and offline smoke.
+The [completed main qualification record](../reviews/20261117-exhaustive-consolidation/main-qualification-20261118.json)
+contains exact source, attempt and job identities, parsed log counts, decoded-log
+SHA-256 digests and the refreshed branch/PR snapshot. These are actual main push
+executions, not reused PR results. This closes the pending main-verification gate
+for `5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`; broader release and native-import
+compatibility requirements remain open.
 
 This audit/status continuation has been published as the actual
 [draft PR #52](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52), with
-observed head `a1c676760e3f4c9a74f37124e7724348edb33415` and tree
-`1d35b32ceff657b5e1dfa14f3bc095f8e5fb9e27`, based on runtime main
-`5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`. Its final qualification record and
-main outcome remain gated on completed successful main executions. These source
-references describe the observed draft; they do not claim this update's own
-future commit SHA.
+observed head `78a88d8276e67e7a07cd32e34cbe2a59eb01f2c1` and tree
+`9595b6a281489932c19c7af6a482a24b2fbaaf2d`, based on runtime main
+`5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`. Its earlier published checkpoint was
+`a1c676760e3f4c9a74f37124e7724348edb33415`. This continuation records the now
+completed prerequisite for final documentation review. These source references
+describe observed drafts; they do not claim this update's own future commit SHA
+or merge outcome.
 
-The refreshed remote snapshot at **2026-11-18 10:04:38 UTC** contains
+The refreshed remote reads completed before **2026-11-18 13:55:41 UTC** contain
 **57 branches and 52 PRs**. Branch accounting is the original 52, four branches
 created by this consolidation, and the concurrent draft #51 branch. PR accounting
 is the original 47 plus #48, #49, #50, concurrent #51 and the actual audit draft
@@ -327,13 +348,13 @@ is the original 47 plus #48, #49, #50, concurrent #51 and the actual audit draft
 |---|---|---|
 | [#8](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8) | `a403614bb34d3d176d4693730e512e14959718b8` | Keep its unported work separate; the bounded registry contribution is integrated through #48. A [cleanup comment](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8#issuecomment-6975235188) has been posted. |
 | [#51](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51) | `7b729df38dddf59c4e60e245bdf1ca43546b1e7b` | Preserve the compatible concurrent test/tooling contribution for its own qualification; it is outside #48's integrated runtime. |
-| [#52](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52) | `a1c676760e3f4c9a74f37124e7724348edb33415` | Publish the reviewed documentation as a draft while exact-main verification remains queued. |
+| [#52](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52) | `78a88d8276e67e7a07cd32e34cbe2a59eb01f2c1` | Complete final documentation review with the successful exact-main execution evidence supplied by this continuation. |
 
 The three incompatible/unreconciled historical live heads retain their separate
 documented deferrals. The [complete branch disposition table](CONSOLIDATION_BRANCH_DISPOSITIONS_20261118.md)
 preserves the original sources and distinguishes later execution and concurrent
-branches. Final observed counts and outcomes will be refreshed after main
-qualification; the historical inventory is not rewritten.
+branches. The completed-main JSON records the refreshed snapshot separately;
+the historical inventory and queue observations are not rewritten.
 
 Two registry integration defects were repaired: partial-write retry cleanup
 and checkout line-ending staleness. Bounded generation recovery is an additional

@@ -4,22 +4,26 @@
 
 Runtime main is `5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`, merged through
 [PR #48](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/48) from
-`e331e56165304c98a1c2bdd26692772b586e499d`. **Post-merge main verification remains
-incomplete:** both main workflows were still queued when their attempts and
-check-runs were re-read at **2026-11-18 10:05:16 UTC**. The source-qualified runtime
-and the pending main executions are recorded separately below.
+`e331e56165304c98a1c2bdd26692772b586e499d`. **Post-merge main verification passed:**
+the two first-attempt push workflows completed successfully by
+**2026-11-18 13:20:58 UTC**. The continuation re-read their actual jobs and decoded
+logs, independently of the earlier PR runs, before the **13:55:41 UTC** checkpoint.
+Earlier queued observations remain preserved as historical evidence.
 
 | Evidence | Observed result |
 |---|---|
 | Exact-source PR [Alpha 44271649063](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649063) | Completed successfully: **695 domain assertions, 27 tooling tests and 72 browser journeys**; includes six new native-generation recovery cases across Chromium, Firefox and WebKit |
 | Exact-source PR [CLI 44271649100](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100) | All **six** Ubuntu/Windows/macOS × Node 22.18.0/24.x jobs passed, including real development/production browser smoke |
-| Main [Alpha 44275307064](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064) | **Queued**, for a push to runtime main `5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`; no successful main execution claimed |
-| Main [CLI 44275307098](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098) | **Queued**, for the same runtime main; no successful main execution claimed |
+| Main [Alpha 44275307064](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064) | Completed successfully on the exact runtime merge: **695 domain assertions, 27 tooling tests and all 72 Chromium/Firefox/WebKit journeys**, with zero failed/pending/skipped domain assertions |
+| Main [CLI 44275307098](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098) | All **six** Ubuntu/Windows/macOS × Node 22.18.0/24.x jobs passed on the exact runtime merge; each executed 18 CLI tests without skips and passed development/production browser smoke |
 
 The [completed PR qualification record](../reviews/20261117-exhaustive-consolidation/pr48-qualification.json)
-pins the actual PR jobs, source and log digests. The separate
+pins the actual PR jobs, source and log digests. The new
+[completed main qualification record](../reviews/20261117-exhaustive-consolidation/main-qualification-20261118.json)
+pins main's own run/job identities, executed counts and decoded-log digests. The
 [main CI queue checkpoint](../reviews/20261117-exhaustive-consolidation/main-ci-queue-checkpoint.json)
-preserves pending-state observations; it is not qualification evidence.
+retains the earlier pending-state observations unchanged; those observations do
+not describe the later completed runs.
 
 The registry supplies deterministic generation, immutable metadata and four
 opt-in read-only query definitions for 18 features, 148 modules and 565 dependency
@@ -43,10 +47,12 @@ merged the audit and adapted future CLI specification at
 its contribution was compared and preserved. Domain CLI commands remain planned.
 The current audit/status continuation is the actual
 [draft PR #52](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52), observed
-at `a1c676760e3f4c9a74f37124e7724348edb33415`; its final outcome remains gated on
-successful main verification.
+at `78a88d8276e67e7a07cd32e34cbe2a59eb01f2c1` before this continuation. Its pending
+main-verification prerequisite is satisfied. This update supplies the completed
+evidence for final documentation review; it does not pre-claim its own merge.
 
-The **2026-11-18 10:04:38 UTC** remote snapshot contains **57 branches and 52 PRs**:
+The remote re-read completed before **2026-11-18 13:55:41 UTC** still contains
+**57 branches and 52 PRs**:
 the original 52 branches, four branches created by this consolidation and one
 concurrent branch. All 51 original non-main heads retain their starting SHAs.
 The [original 52-branch / 47-PR inventory](BRANCH_CONSOLIDATION_20261117.md) stays

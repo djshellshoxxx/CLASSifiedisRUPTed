@@ -62,6 +62,7 @@ corepack pnpm run test:browser
 
 Trace coverage requires executed passing results; source comments never establish passing coverage. The non-strict report is not a release gate. Browser tests require Playwright's browser installations.
 
+- [Completed main qualification](docs/reviews/20261117-exhaustive-consolidation/main-qualification-20261118.json): main `5a502aa` passed its own 695 domain assertions, 27 tooling tests, 72 browser journeys and all six platform jobs. Later sources require their own qualification.
 - [Consolidation execution and current outcome](docs/status/CONSOLIDATION_EXECUTION_20261117.md) · [All 57 branch dispositions](docs/status/CONSOLIDATION_BRANCH_DISPOSITIONS_20261118.md)
 - [52-branch / 47-PR starting inventory](docs/status/BRANCH_CONSOLIDATION_20261117.md) · [Inventory JSON](docs/status/BRANCH_CONSOLIDATION_20261117.json)
 - [Earlier 25-PR review](docs/status/PR_CONSOLIDATION_20261117.md) · [Future domain CLI specification](docs/future-cli-spec.md)

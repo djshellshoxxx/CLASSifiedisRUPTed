@@ -27,6 +27,11 @@ describe what is integrated into main, with the pull request that introduced eac
   WebKit evidence and adapted client-owned future CLI specification. Domain CLI
   commands remain planned. Stacked draft #49 was closed as superseded after the
   independent documentation merge.
+- Runtime main `5a502aa` passed its own first-attempt push workflows: 695 domain
+  assertions, 27 tooling tests, 72 browser journeys and all six platform jobs.
+  The [completed main record](docs/reviews/20261117-exhaustive-consolidation/main-qualification-20261118.json)
+  preserves actual main job/log evidence separately from earlier PR qualification
+  and the historical queued checkpoint.
 - The pre-existing high Picomatch development-toolchain advisory remains unresolved;
   the dependency audit exits 1. The product remains a development alpha. See the
   [dated security review](docs/reviews/20261117-exhaustive-consolidation/security-review.md).

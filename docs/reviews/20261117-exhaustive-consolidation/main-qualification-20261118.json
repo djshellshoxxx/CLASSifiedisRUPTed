@@ -1,0 +1,1376 @@
+{
+  "schemaVersion": 1,
+  "qualificationScope": "Completed first-attempt push executions of the exact main merge. This does not establish complete-product readiness or repair the separately recorded native WebKit import defect.",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "observation": {
+    "completed": "2026-11-18T13:55:41Z",
+    "note": "Run, job, branch and pull-request reads completed before this clock reading during the continuation review. Earlier queue observations remain in the unchanged historical record."
+  },
+  "runtimeMerge": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+  "runtimeTree": "12fd6bc887a1091310491f85435278ad39aecb2f",
+  "priorPullRequestSource": "e331e56165304c98a1c2bdd26692772b586e499d",
+  "observedAuditDraftHead": "78a88d8276e67e7a07cd32e34cbe2a59eb01f2c1",
+  "observedAuditDraftTree": "9595b6a281489932c19c7af6a482a24b2fbaaf2d",
+  "earlierQueueRecord": "main-ci-queue-checkpoint.json",
+  "earlierPullRequestQualification": "pr48-qualification.json",
+  "summary": {
+    "mainGate": "passed",
+    "domainAssertions": 695,
+    "toolingAssertions": 27,
+    "browserJourneys": 72,
+    "platformJobs": 6,
+    "cliAssertionsPerPlatformJob": 18,
+    "platformBrowserSmokesPerJob": 2,
+    "domainFailed": 0,
+    "domainPending": 0,
+    "domainSkipped": 0
+  },
+  "workflows": [
+    {
+      "id": 44275307064,
+      "name": "Alpha verification",
+      "event": "push",
+      "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+      "head_branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "created_at": "2026-11-18T09:22:29Z",
+      "updated_at": "2026-11-18T12:53:11Z",
+      "run_started_at": "2026-11-18T09:22:29Z",
+      "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064",
+      "path": ".github/workflows/alpha-checks.yml",
+      "jobs": [
+        {
+          "id": 134701799342,
+          "name": "plan",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T10:42:36Z",
+          "completed_at": "2026-11-18T10:42:43Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064/job/134701799342",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Decide which browser engines this change needs",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 134745437853,
+          "name": "domain",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T12:37:53Z",
+          "completed_at": "2026-11-18T12:53:10Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064/job/134745437853",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm install --frozen-lockfile",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm typecheck",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm spec:check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm deps:check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm registry:check",
+              "conclusion": "success"
+            },
+            {
+              "name": "Verify money vectors against the independent Python reference",
+              "conclusion": "success"
+            },
+            {
+              "name": "Enforce the money browser bundle size budget",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm run test:tooling",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm test --reporter=json --outputFile=test-results/domain.json",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report executed domain assertion counts",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report executed requirement coverage (not a release gate)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Report feature status (not a release gate)",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm run setup --non-interactive",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run corepack pnpm build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Locate the browser cache",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore the pinned browser downloads",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install browsers",
+              "conclusion": "success"
+            },
+            {
+              "name": "Browser journeys",
+              "conclusion": "success"
+            },
+            {
+              "name": "Keep failure screenshots",
+              "conclusion": "skipped"
+            },
+            {
+              "name": "Post Restore the pinned browser downloads",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "executionLog": {
+            "jobId": 134745437853,
+            "downloadEndpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/134745437853/logs",
+            "sha256DecodedUtf8": "c3f98982c3d166dc44ffa12fa449504936fe5ed2b1becae48446a4a6e9b15f5e",
+            "bytesDecodedUtf8": 144537,
+            "digestMethod": "SHA-256 of the exact UTF-8 encoded decoded log returned by the GitHub connector, preserving line endings.",
+            "nodeTestRunnerCounts": {
+              "tests": 27,
+              "suites": 0,
+              "pass": 27,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0
+            },
+            "domainAssertions": {
+              "passed": 695,
+              "failed": 0,
+              "pending": 0,
+              "skipped": 0,
+              "todo": 0
+            },
+            "excerpts": [
+              "2026-11-18T12:38:07.4346364Z 331 money vectors verified with Python Fraction; format v1; seed 740016",
+              "2026-11-18T12:38:07.5011245Z {\"gzipBytes\":2355,\"gzipBudgetBytes\":12288}",
+              "2026-11-18T12:38:13.4004594Z ℹ tests 27",
+              "2026-11-18T12:38:13.4005134Z ℹ suites 0",
+              "2026-11-18T12:38:13.4005799Z ℹ pass 27",
+              "2026-11-18T12:38:13.4006493Z ℹ fail 0",
+              "2026-11-18T12:38:13.4007021Z ℹ cancelled 0",
+              "2026-11-18T12:38:13.4007639Z ℹ skipped 0",
+              "2026-11-18T12:38:13.4008357Z ℹ todo 0",
+              "2026-11-18T12:39:32.0024697Z Executed domain assertions: {\"passed\":695,\"failed\":0,\"pending\":0,\"skipped\":0,\"todo\":0}",
+              "2026-11-18T12:40:18.1918188Z ##[group]Run corepack pnpm exec playwright test --project=chromium --project=firefox --project=webkit --trace off",
+              "2026-11-18T12:40:19.7245170Z Running 72 tests using 1 worker",
+              "2026-11-18T12:53:06.5050076Z   72 passed (12.8m)"
+            ],
+            "browserJourneys": {
+              "passed": 72,
+              "failed": 0,
+              "requestedProjects": [
+                "chromium",
+                "firefox",
+                "webkit"
+              ],
+              "observedDuration": "12.8m"
+            },
+            "moneyReferenceVectors": 331,
+            "moneyBundle": {
+              "gzipBytes": 2355,
+              "gzipBudgetBytes": 12288
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 44275307098,
+      "name": "CLI setup",
+      "event": "push",
+      "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+      "head_branch": "main",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "created_at": "2026-11-18T09:22:29Z",
+      "updated_at": "2026-11-18T13:20:58Z",
+      "run_started_at": "2026-11-18T09:22:29Z",
+      "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098",
+      "path": ".github/workflows/cli-setup.yml",
+      "jobs": [
+        {
+          "id": 134701799721,
+          "name": "plan",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T10:42:39Z",
+          "completed_at": "2026-11-18T10:42:45Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134701799721",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Decide which operating systems this change needs",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 134745452976,
+          "name": "clean-install (windows-latest, 22.18.0)",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T12:48:48Z",
+          "completed_at": "2026-11-18T12:52:28Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134745452976",
+          "labels": [
+            "windows-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned toolchain dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "CLI negative and repeat-setup tests",
+              "conclusion": "success"
+            },
+            {
+              "name": "Non-interactive setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Repeat setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Diagnose local prerequisites",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Locate the browser cache",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install browser",
+              "conclusion": "success"
+            },
+            {
+              "name": "Real development and production browser smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tracked files remain unchanged",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "executionLog": {
+            "jobId": 134745452976,
+            "downloadEndpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/134745452976/logs",
+            "sha256DecodedUtf8": "cec3e9aae71a02933ff5201c2182cba033de822001b60719d515e054b8b14753",
+            "bytesDecodedUtf8": 29330,
+            "digestMethod": "SHA-256 of the exact UTF-8 encoded decoded log returned by the GitHub connector, preserving line endings.",
+            "nodeTestRunnerCounts": {
+              "tests": 18,
+              "suites": 0,
+              "pass": 18,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0
+            },
+            "excerpts": [
+              "2026-11-18T12:49:27.0632247Z # tests 18",
+              "2026-11-18T12:49:27.0632645Z # suites 0",
+              "2026-11-18T12:49:27.0633363Z # pass 18",
+              "2026-11-18T12:49:27.0633786Z # fail 0",
+              "2026-11-18T12:49:27.0634535Z # cancelled 0",
+              "2026-11-18T12:49:27.0634901Z # skipped 0",
+              "2026-11-18T12:49:27.0635580Z # todo 0",
+              "2026-11-18T12:52:20.4469283Z dev: Chromium real-app startup, reload and offline shell passed",
+              "2026-11-18T12:52:21.9490639Z preview: Chromium real-app startup, reload and offline shell passed"
+            ],
+            "browserSmoke": {
+              "dev": true,
+              "preview": true
+            }
+          }
+        },
+        {
+          "id": 134745452982,
+          "name": "clean-install (macos-latest, 22.18.0)",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T10:57:15Z",
+          "completed_at": "2026-11-18T10:57:47Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134745452982",
+          "labels": [
+            "macos-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned toolchain dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "CLI negative and repeat-setup tests",
+              "conclusion": "success"
+            },
+            {
+              "name": "Non-interactive setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Repeat setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Diagnose local prerequisites",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Locate the browser cache",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install browser",
+              "conclusion": "success"
+            },
+            {
+              "name": "Real development and production browser smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tracked files remain unchanged",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "executionLog": {
+            "jobId": 134745452982,
+            "downloadEndpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/134745452982/logs",
+            "sha256DecodedUtf8": "e5f116c31d8ab22cd2262f4f0757b873e66057c77b5bbde9a7fc5c6fe688dfcf",
+            "bytesDecodedUtf8": 29525,
+            "digestMethod": "SHA-256 of the exact UTF-8 encoded decoded log returned by the GitHub connector, preserving line endings.",
+            "nodeTestRunnerCounts": {
+              "tests": 18,
+              "suites": 0,
+              "pass": 18,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0
+            },
+            "excerpts": [
+              "2026-11-18T10:57:28.9720440Z # tests 18",
+              "2026-11-18T10:57:28.9720630Z # suites 0",
+              "2026-11-18T10:57:28.9720780Z # pass 18",
+              "2026-11-18T10:57:28.9720940Z # fail 0",
+              "2026-11-18T10:57:28.9721100Z # cancelled 0",
+              "2026-11-18T10:57:28.9721300Z # skipped 0",
+              "2026-11-18T10:57:28.9721450Z # todo 0",
+              "2026-11-18T10:57:39.3251100Z dev: Chromium real-app startup, reload and offline shell passed",
+              "2026-11-18T10:57:40.9137350Z preview: Chromium real-app startup, reload and offline shell passed"
+            ],
+            "browserSmoke": {
+              "dev": true,
+              "preview": true
+            }
+          }
+        },
+        {
+          "id": 134745452986,
+          "name": "clean-install (ubuntu-latest, 24.x)",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T12:50:46Z",
+          "completed_at": "2026-11-18T12:51:20Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134745452986",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned toolchain dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "CLI negative and repeat-setup tests",
+              "conclusion": "success"
+            },
+            {
+              "name": "Non-interactive setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Repeat setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Diagnose local prerequisites",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Locate the browser cache",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install browser",
+              "conclusion": "success"
+            },
+            {
+              "name": "Real development and production browser smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tracked files remain unchanged",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "executionLog": {
+            "jobId": 134745452986,
+            "downloadEndpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/134745452986/logs",
+            "sha256DecodedUtf8": "270905adccaa910b6723f59c77dae2151237fdaadb870ec8bbe32cb754b623bb",
+            "bytesDecodedUtf8": 37992,
+            "digestMethod": "SHA-256 of the exact UTF-8 encoded decoded log returned by the GitHub connector, preserving line endings.",
+            "nodeTestRunnerCounts": {
+              "tests": 18,
+              "suites": 0,
+              "pass": 18,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0
+            },
+            "excerpts": [
+              "2026-11-18T12:50:54.1327455Z ℹ tests 18",
+              "2026-11-18T12:50:54.1328110Z ℹ suites 0",
+              "2026-11-18T12:50:54.1328520Z ℹ pass 18",
+              "2026-11-18T12:50:54.1328905Z ℹ fail 0",
+              "2026-11-18T12:50:54.1329538Z ℹ cancelled 0",
+              "2026-11-18T12:50:54.1329977Z ℹ skipped 0",
+              "2026-11-18T12:50:54.1330387Z ℹ todo 0",
+              "2026-11-18T12:51:13.6590742Z dev: Chromium real-app startup, reload and offline shell passed",
+              "2026-11-18T12:51:15.1396778Z preview: Chromium real-app startup, reload and offline shell passed"
+            ],
+            "browserSmoke": {
+              "dev": true,
+              "preview": true
+            }
+          }
+        },
+        {
+          "id": 134745453045,
+          "name": "clean-install (windows-latest, 24.x)",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T10:47:48Z",
+          "completed_at": "2026-11-18T10:51:32Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134745453045",
+          "labels": [
+            "windows-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned toolchain dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "CLI negative and repeat-setup tests",
+              "conclusion": "success"
+            },
+            {
+              "name": "Non-interactive setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Repeat setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Diagnose local prerequisites",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Locate the browser cache",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install browser",
+              "conclusion": "success"
+            },
+            {
+              "name": "Real development and production browser smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tracked files remain unchanged",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "executionLog": {
+            "jobId": 134745453045,
+            "downloadEndpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/134745453045/logs",
+            "sha256DecodedUtf8": "6704c10bf44506831b582e0577121989968358780c3b3a9b88e4801088aafb00",
+            "bytesDecodedUtf8": 24178,
+            "digestMethod": "SHA-256 of the exact UTF-8 encoded decoded log returned by the GitHub connector, preserving line endings.",
+            "nodeTestRunnerCounts": {
+              "tests": 18,
+              "suites": 0,
+              "pass": 18,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0
+            },
+            "excerpts": [
+              "2026-11-18T10:48:30.1715665Z ℹ tests 18",
+              "2026-11-18T10:48:30.1715943Z ℹ suites 0",
+              "2026-11-18T10:48:30.1716165Z ℹ pass 18",
+              "2026-11-18T10:48:30.1716396Z ℹ fail 0",
+              "2026-11-18T10:48:30.1716629Z ℹ cancelled 0",
+              "2026-11-18T10:48:30.1716811Z ℹ skipped 0",
+              "2026-11-18T10:48:30.1716980Z ℹ todo 0",
+              "2026-11-18T10:51:23.3991208Z dev: Chromium real-app startup, reload and offline shell passed",
+              "2026-11-18T10:51:24.8942561Z preview: Chromium real-app startup, reload and offline shell passed"
+            ],
+            "browserSmoke": {
+              "dev": true,
+              "preview": true
+            }
+          }
+        },
+        {
+          "id": 134745453146,
+          "name": "clean-install (macos-latest, 24.x)",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T13:20:24Z",
+          "completed_at": "2026-11-18T13:20:58Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134745453146",
+          "labels": [
+            "macos-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned toolchain dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "CLI negative and repeat-setup tests",
+              "conclusion": "success"
+            },
+            {
+              "name": "Non-interactive setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Repeat setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Diagnose local prerequisites",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Locate the browser cache",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install browser",
+              "conclusion": "success"
+            },
+            {
+              "name": "Real development and production browser smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tracked files remain unchanged",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "executionLog": {
+            "jobId": 134745453146,
+            "downloadEndpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/134745453146/logs",
+            "sha256DecodedUtf8": "60f0a74d5bfec9e2827417e9a408f3b72e9f9a2497043f70df5c24979eff7a3c",
+            "bytesDecodedUtf8": 24278,
+            "digestMethod": "SHA-256 of the exact UTF-8 encoded decoded log returned by the GitHub connector, preserving line endings.",
+            "nodeTestRunnerCounts": {
+              "tests": 18,
+              "suites": 0,
+              "pass": 18,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0
+            },
+            "excerpts": [
+              "2026-11-18T13:20:35.0291180Z ℹ tests 18",
+              "2026-11-18T13:20:35.0299600Z ℹ suites 0",
+              "2026-11-18T13:20:35.0299880Z ℹ pass 18",
+              "2026-11-18T13:20:35.0300250Z ℹ fail 0",
+              "2026-11-18T13:20:35.0300680Z ℹ cancelled 0",
+              "2026-11-18T13:20:35.0301070Z ℹ skipped 0",
+              "2026-11-18T13:20:35.0307430Z ℹ todo 0",
+              "2026-11-18T13:20:49.0977710Z dev: Chromium real-app startup, reload and offline shell passed",
+              "2026-11-18T13:20:50.6697390Z preview: Chromium real-app startup, reload and offline shell passed"
+            ],
+            "browserSmoke": {
+              "dev": true,
+              "preview": true
+            }
+          }
+        },
+        {
+          "id": 134745453158,
+          "name": "clean-install (ubuntu-latest, 22.18.0)",
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "run_attempt": 1,
+          "status": "completed",
+          "conclusion": "success",
+          "started_at": "2026-11-18T13:01:55Z",
+          "completed_at": "2026-11-18T13:02:43Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134745453158",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install pinned toolchain dependencies",
+              "conclusion": "success"
+            },
+            {
+              "name": "CLI negative and repeat-setup tests",
+              "conclusion": "success"
+            },
+            {
+              "name": "Non-interactive setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Repeat setup",
+              "conclusion": "success"
+            },
+            {
+              "name": "Diagnose local prerequisites",
+              "conclusion": "success"
+            },
+            {
+              "name": "Production build",
+              "conclusion": "success"
+            },
+            {
+              "name": "Locate the browser cache",
+              "conclusion": "success"
+            },
+            {
+              "name": "Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Install browser",
+              "conclusion": "success"
+            },
+            {
+              "name": "Real development and production browser smoke",
+              "conclusion": "success"
+            },
+            {
+              "name": "Tracked files remain unchanged",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Restore the pinned browser download",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+              "conclusion": "success"
+            },
+            {
+              "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+              "conclusion": "success"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success"
+            }
+          ],
+          "executionLog": {
+            "jobId": 134745453158,
+            "downloadEndpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/134745453158/logs",
+            "sha256DecodedUtf8": "8a832b17cf95ffd938144db1ee8acbe6635b5272ba970d4f08ada1a18606dc2e",
+            "bytesDecodedUtf8": 43286,
+            "digestMethod": "SHA-256 of the exact UTF-8 encoded decoded log returned by the GitHub connector, preserving line endings.",
+            "nodeTestRunnerCounts": {
+              "tests": 18,
+              "suites": 0,
+              "pass": 18,
+              "fail": 0,
+              "cancelled": 0,
+              "skipped": 0,
+              "todo": 0
+            },
+            "excerpts": [
+              "2026-11-18T13:02:06.7880195Z # tests 18",
+              "2026-11-18T13:02:06.7880461Z # suites 0",
+              "2026-11-18T13:02:06.7880711Z # pass 18",
+              "2026-11-18T13:02:06.7880957Z # fail 0",
+              "2026-11-18T13:02:06.7881203Z # cancelled 0",
+              "2026-11-18T13:02:06.7881471Z # skipped 0",
+              "2026-11-18T13:02:06.7881718Z # todo 0",
+              "2026-11-18T13:02:34.8005326Z dev: Chromium real-app startup, reload and offline shell passed",
+              "2026-11-18T13:02:36.2227557Z preview: Chromium real-app startup, reload and offline shell passed"
+            ],
+            "browserSmoke": {
+              "dev": true,
+              "preview": true
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "repositorySnapshot": {
+    "branchCount": 57,
+    "pullRequestCount": 52,
+    "openPullRequests": [
+      {
+        "number": 52,
+        "state": "open",
+        "draft": true,
+        "head": "78a88d8276e67e7a07cd32e34cbe2a59eb01f2c1",
+        "branch": "integration/classrupted-audit-record-20261117",
+        "merged_at": null,
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52"
+      },
+      {
+        "number": 51,
+        "state": "open",
+        "draft": true,
+        "head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+        "branch": "claude/haiku-classrupted-features-cc9qmr",
+        "merged_at": null,
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51"
+      },
+      {
+        "number": 8,
+        "state": "open",
+        "draft": true,
+        "head": "a403614bb34d3d176d4693730e512e14959718b8",
+        "branch": "claude/bold-mccarthy-qklhl6",
+        "merged_at": null,
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8"
+      }
+    ],
+    "originalNonMainHeads": 51,
+    "originalNonMainHeadsChangedOrMissing": [],
+    "branches": [
+      {
+        "name": "agents/ci/trim-workflows",
+        "sha": "3f41b81accf062b2031504bd2e98d2913fb17fb8"
+      },
+      {
+        "name": "agents/discovery/coarse-filters",
+        "sha": "4f60ff9fa121435b962801d6594d9fca413d5bb7"
+      },
+      {
+        "name": "agents/discovery/ranking",
+        "sha": "de8f44d52cfccf4f1496a885cd4ac70894ff3847"
+      },
+      {
+        "name": "agents/governance/taxonomy-prohibited",
+        "sha": "997249164e4b32df443dbbe2e07f729311c9cdeb"
+      },
+      {
+        "name": "agents/i18n/languages-currencies",
+        "sha": "a0f9422d91b91d147405c17730d49350e87fc3ce"
+      },
+      {
+        "name": "agents/moderation/rate-limits-signals",
+        "sha": "c098f1bf91759afd8ab0519ba04fa27671605de5"
+      },
+      {
+        "name": "agents/notify/prefs-inapp",
+        "sha": "d6076d18621e16ec5b6a87e210f99bd305cf6243"
+      },
+      {
+        "name": "agents/orchestration/wave1-handoff",
+        "sha": "6406a0369098fdb7aa58b5a4e85325560857815f"
+      },
+      {
+        "name": "agents/privacy/classification-metadata-consent",
+        "sha": "2752f04dd27c6df90ffa5d22d479e77ae2688a86"
+      },
+      {
+        "name": "chatgpt/zero-codex/audit-observability-20261110",
+        "sha": "1ee040492345e607b431707fd7f08528bbf2db77"
+      },
+      {
+        "name": "chatgpt/zero-codex/barter-discovery-status-20261110",
+        "sha": "e0f153fd9185eaa5b52882931eac1c694d54abc5"
+      },
+      {
+        "name": "chatgpt/zero-codex/cli-nested-assets-20261110",
+        "sha": "3a66e440847d7e1234e5a82674decdacb3efb954"
+      },
+      {
+        "name": "chatgpt/zero-codex/cli-public-symlink-20261110",
+        "sha": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f"
+      },
+      {
+        "name": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+        "sha": "9bb03390b2692d8fad80dbf653c28e36bef76c28"
+      },
+      {
+        "name": "chatgpt/zero-codex/docs-wiki-20261110",
+        "sha": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806"
+      },
+      {
+        "name": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+        "sha": "20691f1cce36b1254644ea16bb438ca91221a872"
+      },
+      {
+        "name": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+        "sha": "968d63d8aebac1055ffc911fcceec519f30c8855"
+      },
+      {
+        "name": "chatgpt/zero-codex/outbox-isolation-20261110",
+        "sha": "a294dd21715edf501aac75bee69f785951985cd5"
+      },
+      {
+        "name": "chatgpt/zero-codex/qualify-pr10-20261110",
+        "sha": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2"
+      },
+      {
+        "name": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+        "sha": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f"
+      },
+      {
+        "name": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+        "sha": "12558435a307415ba0332777f87b1603abba5268"
+      },
+      {
+        "name": "chatgpt/zero-codex-continuation-spec-20261109",
+        "sha": "d52b29369271f39a4873ace47c76b1b92d0750b3"
+      },
+      {
+        "name": "claude/bold-mccarthy-qklhl6",
+        "sha": "a403614bb34d3d176d4693730e512e14959718b8"
+      },
+      {
+        "name": "claude/busy-cerf-vg3hz3",
+        "sha": "34a6892cff8babb01c41f42d04df85bf6860fa34"
+      },
+      {
+        "name": "claude/classifiedisrupted-continue-lcuuwg",
+        "sha": "ab6541552827b82c7bbbcbba282b2836f92cdd37"
+      },
+      {
+        "name": "claude/difficult-project-parts-dcqlup",
+        "sha": "566778cdf72399df4696e1d6f6675412813e6d5a"
+      },
+      {
+        "name": "claude/gallant-goodall-9cc7yb",
+        "sha": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b"
+      },
+      {
+        "name": "claude/haiku-classrupted-features-cc9qmr",
+        "sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b"
+      },
+      {
+        "name": "claude/happy-newton-4yttpa",
+        "sha": "8d5f66f75411debbfe9377679005cfadb6b679c0"
+      },
+      {
+        "name": "claude/pensive-mendel-30x81m",
+        "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58"
+      },
+      {
+        "name": "claude/vigilant-newton-nva2l6",
+        "sha": "59028d1d962e6c4f113e19d77abf73a045a2318d"
+      },
+      {
+        "name": "claude/wonderful-cori-ynhlsb",
+        "sha": "c9bd8933ff519e97ed97bb132432103a2ad29fe4"
+      },
+      {
+        "name": "codex/classrup-completion-20261116",
+        "sha": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc"
+      },
+      {
+        "name": "codex/classrup-consolidation-audit-20261104",
+        "sha": "59324a42e2ddf933eeef8c9363e33ef41690a31a"
+      },
+      {
+        "name": "codex/classrup-features-20261116",
+        "sha": "560b328dd335aebdc12de01ec339c43ebd164be3"
+      },
+      {
+        "name": "codex/consolidate-keyboard-focus-20261117",
+        "sha": "0c2e9e2992c359fd60f827983bd5e3f432bc8771"
+      },
+      {
+        "name": "codex/encrypted-domain-storage-20261116",
+        "sha": "afa6952b50d97e46e8e54d950db92a3593f1e5bd"
+      },
+      {
+        "name": "codex/listing-history-20261116",
+        "sha": "3f814c03a8c09652c79312959d0225ee0742457b"
+      },
+      {
+        "name": "codex/local-alpha-20261109",
+        "sha": "429fcfca9735a323a6ce709d8605429d6c850fdb"
+      },
+      {
+        "name": "codex/parallel-completion-20261116",
+        "sha": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05"
+      },
+      {
+        "name": "codex/verified-status-20261116",
+        "sha": "edcb583afc2cba40f32b0cbdbce765d65febbd21"
+      },
+      {
+        "name": "continuation/classrup-20261101",
+        "sha": "fa0cf0c33c80e71787539b964a03c0e8a561c718"
+      },
+      {
+        "name": "diagnostic/webkit-keygen-20261118",
+        "sha": "764557187d51903630d3f864c4ee2fa56c3b7c6a"
+      },
+      {
+        "name": "docs/client-owned-foundations-20261024",
+        "sha": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a"
+      },
+      {
+        "name": "docs/pr-consolidation-results-20261117",
+        "sha": "f75baf6240d2c6eb4fb2261b91148152451db2fb"
+      },
+      {
+        "name": "docs/prompt3-foundations-20261022",
+        "sha": "39ac847870746e14b466d5706ebe5b00dddbaadb"
+      },
+      {
+        "name": "integration/classrup-completion",
+        "sha": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+      },
+      {
+        "name": "integration/classrupted-audit-record-20261117",
+        "sha": "78a88d8276e67e7a07cd32e34cbe2a59eb01f2c1"
+      },
+      {
+        "name": "integration/classrupted-consolidation-20261117",
+        "sha": "ccff8d8aab9640163d143a470e6e5e2eee04926f"
+      },
+      {
+        "name": "integration/feature-registry-20261117",
+        "sha": "e331e56165304c98a1c2bdd26692772b586e499d"
+      },
+      {
+        "name": "integration/pr-docs-consolidation-20261117",
+        "sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb"
+      },
+      {
+        "name": "integration/qualified-listing-vault-stack-20261116",
+        "sha": "d020237d6acf7180c2ccea9681a01ff4d700d1bb"
+      },
+      {
+        "name": "main",
+        "sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54"
+      },
+      {
+        "name": "milestone/framework-browser-verification",
+        "sha": "25fa6f0a997253aedb53e0d106b2c0a08b050228"
+      },
+      {
+        "name": "planning/future-cli-specs-20261110",
+        "sha": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3"
+      },
+      {
+        "name": "work/classrup-framework",
+        "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58"
+      },
+      {
+        "name": "work/classrup-haiku-framework",
+        "sha": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108"
+      }
+    ]
+  },
+  "concurrentPr51Observation": {
+    "head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+    "scope": "Separate source review; main workflow success does not qualify this pull request.",
+    "sourceReview": "All 11 changed files reviewed. No blocking source defect found. No product-runtime change; shared stubs preserve the exercised paths; base64url tests add canonical/size cases; CI symlink-denial behavior is tightened; removed discovery globs match absent directories.",
+    "alphaJobs": [
+      {
+        "id": 134713535984,
+        "name": "plan",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-18T10:44:20Z",
+        "completed_at": "2026-11-18T10:44:25Z"
+      },
+      {
+        "id": 134746329827,
+        "name": "domain",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "started_at": "2026-11-18T10:57:13Z",
+        "completed_at": "2026-11-18T11:17:30Z"
+      }
+    ],
+    "cliJobs": [
+      {
+        "id": 134713536726,
+        "name": "plan",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-18T10:46:12Z",
+        "completed_at": "2026-11-18T10:46:19Z"
+      },
+      {
+        "id": 134747338659,
+        "name": "clean-install (macos-latest, 24.x)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-18T13:09:54Z",
+        "completed_at": "2026-11-18T13:10:34Z"
+      },
+      {
+        "id": 134747338677,
+        "name": "clean-install (ubuntu-latest, 24.x)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-18T12:53:37Z",
+        "completed_at": "2026-11-18T12:54:07Z"
+      },
+      {
+        "id": 134747338685,
+        "name": "clean-install (windows-latest, 22.18.0)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-18T11:45:02Z",
+        "completed_at": "2026-11-18T11:48:36Z"
+      },
+      {
+        "id": 134747338708,
+        "name": "clean-install (macos-latest, 22.18.0)",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-11-18T10:46:19Z",
+        "completed_at": null
+      },
+      {
+        "id": 134747338748,
+        "name": "clean-install (windows-latest, 24.x)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-18T13:02:45Z",
+        "completed_at": "2026-11-18T13:06:09Z"
+      },
+      {
+        "id": 134747338832,
+        "name": "clean-install (ubuntu-latest, 22.18.0)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-11-18T12:55:13Z",
+        "completed_at": "2026-11-18T12:55:46Z"
+      }
+    ],
+    "remainingGateAtObservation": "Alpha attempt 1 was cancelled during browser installation after prior steps passed; browser journeys were skipped. Five CLI matrix jobs passed and macOS/Node 22 was queued. This is not a completed PR qualification."
+  },
+  "remainingLimits": [
+    "The earlier failed native crypto probes remain failed evidence; bounded fresh-key generation recovery does not fix deterministic private-key import.",
+    "The previously recorded Picomatch toolchain advisory is unresolved in this unchanged dependency snapshot.",
+    "The wider product, manual accessibility, target devices, remaining draft #8 work and deferred architecture/specification contributions are not completed by this qualification.",
+    "Documentation readiness is a separate review. This record does not pre-claim its own commit, pull-request merge or release."
+  ]
+}

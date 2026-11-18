@@ -276,6 +276,10 @@ also passed. The expected-head merge was conflict-free, preserved the audit
 documents and produced the reviewed prospective tree. No new runtime differences
 from the qualified candidate appeared in the merge.
 
+The [completed PR qualification record](../reviews/20261117-exhaustive-consolidation/pr48-qualification.json)
+pins the source, actual job outcomes, six new browser-case evidence and decoded-log
+digests. It explicitly makes no post-merge main qualification claim.
+
 ### Native failure and mitigation evidence
 
 The initial registry candidate `336839cdf5fb912e3f2eb84c2fecba12243b26ec`
@@ -295,22 +299,41 @@ do not repair the browser engine.
 
 ### Pending verification and documentation delivery
 
-At this draft-record checkpoint, the post-merge main workflows
+At **2026-11-18 10:05:16 UTC**, re-reading both post-merge main workflow attempts
+and their check-runs still showed the main workflows
 [Alpha 44275307064](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064)
 and [CLI 44275307098](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098)
-are pending. They were created for a `push` to the exact runtime merge SHA above.
-No successful post-merge main result is claimed. This reviewed documentation is
-being published as a draft; its final qualification record and main outcome
-remain gated on completed successful executions.
+**queued**. They were created for a `push` to the exact runtime merge SHA above.
+The [main CI queue checkpoint](../reviews/20261117-exhaustive-consolidation/main-ci-queue-checkpoint.json)
+preserves the pending-state evidence separately from completed PR qualification.
+No successful post-merge main result is claimed.
 
-The remote snapshot before this draft's publication contained 57 branches and
-51 PRs: the original 52 branches, four execution branches, and the concurrent
-draft #51 branch created after the runtime merge. All 51 original non-main heads
-remained unchanged. Draft #8 remains open for its unported work; draft #51 retains
-its own pending test/tooling qualification. The three incompatible/unreconciled
-historical live heads retain their separate documented deferrals. The final
-report will refresh observed counts after main qualification and will identify
-this documentation PR using its actual returned number.
+This audit/status continuation has been published as the actual
+[draft PR #52](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52), with
+observed head `a1c676760e3f4c9a74f37124e7724348edb33415` and tree
+`1d35b32ceff657b5e1dfa14f3bc095f8e5fb9e27`, based on runtime main
+`5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`. Its final qualification record and
+main outcome remain gated on completed successful main executions. These source
+references describe the observed draft; they do not claim this update's own
+future commit SHA.
+
+The refreshed remote snapshot at **2026-11-18 10:04:38 UTC** contains
+**57 branches and 52 PRs**. Branch accounting is the original 52, four branches
+created by this consolidation, and the concurrent draft #51 branch. PR accounting
+is the original 47 plus #48, #49, #50, concurrent #51 and the actual audit draft
+#52. All 51 original non-main heads remain unchanged. The open PRs are:
+
+| Open draft | Observed source head | Current disposition |
+|---|---|---|
+| [#8](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8) | `a403614bb34d3d176d4693730e512e14959718b8` | Keep its unported work separate; the bounded registry contribution is integrated through #48. A [cleanup comment](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8#issuecomment-6975235188) has been posted. |
+| [#51](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51) | `7b729df38dddf59c4e60e245bdf1ca43546b1e7b` | Preserve the compatible concurrent test/tooling contribution for its own qualification; it is outside #48's integrated runtime. |
+| [#52](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52) | `a1c676760e3f4c9a74f37124e7724348edb33415` | Publish the reviewed documentation as a draft while exact-main verification remains queued. |
+
+The three incompatible/unreconciled historical live heads retain their separate
+documented deferrals. The [complete branch disposition table](CONSOLIDATION_BRANCH_DISPOSITIONS_20261118.md)
+preserves the original sources and distinguishes later execution and concurrent
+branches. Final observed counts and outcomes will be refreshed after main
+qualification; the historical inventory is not rewritten.
 
 Two registry integration defects were repaired: partial-write retry cleanup
 and checkout line-ending staleness. Bounded generation recovery is an additional

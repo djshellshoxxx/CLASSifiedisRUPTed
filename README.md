@@ -11,7 +11,7 @@ Requires Node >=22.18.0 and the pinned pnpm 10.28.0. See the [CLI setup guide](d
 ```sh
 git clone https://github.com/djshellshoxxx/CLASSifiedisRUPTed.git
 cd CLASSifiedisRUPTed
-git switch main   # qualified baseline; unmerged feature PRs are separate candidates
+git switch main   # canonical branch; see the execution report for current qualification
 corepack pnpm install --frozen-lockfile
 corepack pnpm run setup --non-interactive
 corepack pnpm run doctor

@@ -1,5 +1,82 @@
 # Project status
 
+## November 17–18, 2026 exhaustive consolidation
+
+Runtime main is `5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`, merged through
+[PR #48](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/48) from
+`e331e56165304c98a1c2bdd26692772b586e499d`. **Post-merge main verification remains
+incomplete:** both main workflows were still queued when their attempts and
+check-runs were re-read at **2026-11-18 10:05:16 UTC**. The source-qualified runtime
+and the pending main executions are recorded separately below.
+
+| Evidence | Observed result |
+|---|---|
+| Exact-source PR [Alpha 44271649063](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649063) | Completed successfully: **695 domain assertions, 27 tooling tests and 72 browser journeys**; includes six new native-generation recovery cases across Chromium, Firefox and WebKit |
+| Exact-source PR [CLI 44271649100](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44271649100) | All **six** Ubuntu/Windows/macOS × Node 22.18.0/24.x jobs passed, including real development/production browser smoke |
+| Main [Alpha 44275307064](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064) | **Queued**, for a push to runtime main `5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`; no successful main execution claimed |
+| Main [CLI 44275307098](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098) | **Queued**, for the same runtime main; no successful main execution claimed |
+
+The [completed PR qualification record](../reviews/20261117-exhaustive-consolidation/pr48-qualification.json)
+pins the actual PR jobs, source and log digests. The separate
+[main CI queue checkpoint](../reviews/20261117-exhaustive-consolidation/main-ci-queue-checkpoint.json)
+preserves pending-state observations; it is not qualification evidence.
+
+The registry supplies deterministic generation, immutable metadata and four
+opt-in read-only query definitions for 18 features, 148 modules and 565 dependency
+edges. Catalog defaults do not establish runtime implementation or enable user
+features. PWA controls, runtime flag adapters, relay mounting, backup diagnostics,
+unknown-module quarantine and target-device qualification remain incomplete.
+
+The first candidate failed one of 66 browser journeys at native generation. Raw
+native diagnostics then failed seven of 512 generation trials and rejected
+canonical leading-zero/all-zero private-key imports. The merged helper allows
+at most three native generation calls, retrying only genuine `DOMException`
+values named `OperationError`, before export or persistence. It does not retry
+existing-key import or repair the deterministic native import defect. Local
+bounded regressions passed 23 identity and three vault tests. The
+[native evidence review](../reviews/20261117-exhaustive-consolidation/native-keygen-review.md)
+preserves both failed probes and the mitigation's compatibility limits.
+
+[PR #50](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/50) independently
+merged the audit and adapted future CLI specification at
+`aca990e480a4ed586c1af5cf95a205e5adbfd84b`. Draft #49 was closed as superseded after
+its contribution was compared and preserved. Domain CLI commands remain planned.
+The current audit/status continuation is the actual
+[draft PR #52](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52), observed
+at `a1c676760e3f4c9a74f37124e7724348edb33415`; its final outcome remains gated on
+successful main verification.
+
+The **2026-11-18 10:04:38 UTC** remote snapshot contains **57 branches and 52 PRs**:
+the original 52 branches, four branches created by this consolidation and one
+concurrent branch. All 51 original non-main heads retain their starting SHAs.
+The [original 52-branch / 47-PR inventory](BRANCH_CONSOLIDATION_20261117.md) stays
+separate from the [later branch dispositions](CONSOLIDATION_BRANCH_DISPOSITIONS_20261118.md).
+The open PRs at this checkpoint are drafts **#8, #51 and #52**. Draft #51 at
+`7b729df38dddf59c4e60e245bdf1ca43546b1e7b` is compatible concurrent test/tooling work
+preserved for its own qualification, outside the runtime integrated through #48;
+see its [source review](../reviews/20261117-exhaustive-consolidation/concurrent-pr51-review.md).
+Draft #8 retains its unported work, including incomplete Tenants/LocalSettings
+configuration and a missing `./text.ts` dependency. Its
+[cleanup comment](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8#issuecomment-6975235188)
+has been posted; the draft remains open.
+
+Local limitations remain: the bounded baseline combined report had 624 passing
+assertions and eight unfinished assertions, all eight subsequently passing in
+the isolated 19-test security retry. A later candidate combined run was
+host-killed. Two mitigation-worktree installation attempts also exited 137;
+focused checks used unchanged copied dependencies with verified workspace links.
+Hosted qualification performed fresh frozen installs. No complete green candidate
+local combined-suite result is claimed; see the
+[execution record](CONSOLIDATION_EXECUTION_20261117.md) for exact commands and scope.
+
+One pre-existing high Picomatch advisory remains in the Vitest toolchain and the
+dependency audit exits 1. Zero affected tooling packages among 201 examined
+production bundle inputs is bounded exposure evidence, not remediation. The
+product remains an incomplete development alpha. The 51 historical planning/readiness
+findings, native-import compatibility, manual accessibility and target-device
+qualification remain open. The dated sections below retain their own source
+snapshots; their counts and pending states are not current status summaries.
+
 ## November 17, 2026 PR consolidation
 
 The runnable main now includes [PR #43](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/43), merged as `2b3193148029a4af64e8f3fe68373b6ca55620f9`. Consecutive queued location saves use the revision committed by the preceding save while preserving each submitted edit.

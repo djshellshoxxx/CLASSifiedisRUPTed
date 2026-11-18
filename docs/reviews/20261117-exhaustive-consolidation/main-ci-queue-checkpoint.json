@@ -1,0 +1,466 @@
+{
+  "schemaVersion": 1,
+  "recordType": "historical_ci_queue_checkpoint",
+  "repository": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed",
+  "qualificationEvidence": false,
+  "purpose": "Preserve a dated read-only queue observation. This record does not qualify any source head or assert a later workflow outcome.",
+  "freshSnapshot": {
+    "startedAt": "2026-11-18T10:04:53Z",
+    "completedAt": "2026-11-18T10:04:54Z",
+    "method": "Direct connected GitHub REST GETs for each exact run and its latest jobs; main-run approval/deployment endpoints and PR #51 metadata were also freshly read. Requests were batched, so this is an observation window rather than an atomic server snapshot.",
+    "runs": [
+      {
+        "classification": "post_merge_main",
+        "sourceEndpoints": {
+          "run": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064",
+          "jobs": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064/jobs?filter=latest&per_page=100"
+        },
+        "id": 44275307064,
+        "name": "Alpha verification",
+        "path": ".github/workflows/alpha-checks.yml",
+        "head_branch": "main",
+        "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null,
+        "run_attempt": 1,
+        "created_at": "2026-11-18T09:22:29Z",
+        "updated_at": "2026-11-18T09:22:29Z",
+        "run_started_at": "2026-11-18T09:22:29Z",
+        "workflow_id": 412015071,
+        "check_suite_id": 119850784891,
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064",
+        "head_commit": {
+          "id": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "tree_id": "12fd6bc887a1091310491f85435278ad39aecb2f",
+          "timestamp": "2026-11-18T09:22:25Z"
+        },
+        "job_total_count": 1,
+        "jobs": [
+          {
+            "id": 134701799342,
+            "run_id": 44275307064,
+            "workflow_name": "Alpha verification",
+            "head_branch": "main",
+            "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+            "run_attempt": 1,
+            "name": "plan",
+            "status": "queued",
+            "conclusion": null,
+            "created_at": "2026-11-18T09:22:29Z",
+            "started_at": "2026-11-18T09:22:29Z",
+            "completed_at": null,
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": "",
+            "steps": [],
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064/job/134701799342",
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/134701799342"
+          }
+        ],
+        "freshApprovalAndDeploymentReads": {
+          "pendingDeployments": {
+            "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064/pending_deployments",
+            "response": []
+          },
+          "approvalHistory": {
+            "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064/approvals",
+            "response": []
+          }
+        }
+      },
+      {
+        "classification": "post_merge_main",
+        "sourceEndpoints": {
+          "run": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098",
+          "jobs": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/jobs?filter=latest&per_page=100"
+        },
+        "id": 44275307098,
+        "name": "CLI setup",
+        "path": ".github/workflows/cli-setup.yml",
+        "head_branch": "main",
+        "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null,
+        "run_attempt": 1,
+        "created_at": "2026-11-18T09:22:29Z",
+        "updated_at": "2026-11-18T09:22:29Z",
+        "run_started_at": "2026-11-18T09:22:29Z",
+        "workflow_id": 412015070,
+        "check_suite_id": 119850785014,
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098",
+        "head_commit": {
+          "id": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "tree_id": "12fd6bc887a1091310491f85435278ad39aecb2f",
+          "timestamp": "2026-11-18T09:22:25Z"
+        },
+        "job_total_count": 1,
+        "jobs": [
+          {
+            "id": 134701799721,
+            "run_id": 44275307098,
+            "workflow_name": "CLI setup",
+            "head_branch": "main",
+            "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+            "run_attempt": 1,
+            "name": "plan",
+            "status": "queued",
+            "conclusion": null,
+            "created_at": "2026-11-18T09:22:29Z",
+            "started_at": "2026-11-18T09:22:29Z",
+            "completed_at": null,
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": "",
+            "steps": [],
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134701799721",
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/134701799721"
+          }
+        ],
+        "freshApprovalAndDeploymentReads": {
+          "pendingDeployments": {
+            "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/pending_deployments",
+            "response": []
+          },
+          "approvalHistory": {
+            "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/approvals",
+            "response": []
+          }
+        }
+      },
+      {
+        "classification": "concurrent_draft_pr51",
+        "sourceEndpoints": {
+          "run": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748900",
+          "jobs": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748900/jobs?filter=latest&per_page=100"
+        },
+        "id": 44278748900,
+        "name": "Alpha verification",
+        "path": ".github/workflows/alpha-checks.yml",
+        "head_branch": "claude/haiku-classrupted-features-cc9qmr",
+        "head_sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+        "event": "pull_request",
+        "status": "queued",
+        "conclusion": null,
+        "run_attempt": 1,
+        "created_at": "2026-11-18T09:44:27Z",
+        "updated_at": "2026-11-18T09:44:27Z",
+        "run_started_at": "2026-11-18T09:44:27Z",
+        "workflow_id": 412015071,
+        "check_suite_id": 119859809178,
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748900",
+        "head_commit": {
+          "id": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+          "tree_id": "9c033899e4b6ebfce41f173d4c25e4d2dd1f4084",
+          "timestamp": "2026-11-18T09:44:08Z"
+        },
+        "job_total_count": 1,
+        "jobs": [
+          {
+            "id": 134713535984,
+            "run_id": 44278748900,
+            "workflow_name": "Alpha verification",
+            "head_branch": "claude/haiku-classrupted-features-cc9qmr",
+            "head_sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+            "run_attempt": 1,
+            "name": "plan",
+            "status": "queued",
+            "conclusion": null,
+            "created_at": "2026-11-18T09:44:28Z",
+            "started_at": "2026-11-18T09:44:28Z",
+            "completed_at": null,
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": "",
+            "steps": [],
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748900/job/134713535984",
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/134713535984"
+          }
+        ]
+      },
+      {
+        "classification": "concurrent_draft_pr51",
+        "sourceEndpoints": {
+          "run": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748906",
+          "jobs": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748906/jobs?filter=latest&per_page=100"
+        },
+        "id": 44278748906,
+        "name": "CLI setup",
+        "path": ".github/workflows/cli-setup.yml",
+        "head_branch": "claude/haiku-classrupted-features-cc9qmr",
+        "head_sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+        "event": "pull_request",
+        "status": "queued",
+        "conclusion": null,
+        "run_attempt": 1,
+        "created_at": "2026-11-18T09:44:27Z",
+        "updated_at": "2026-11-18T09:44:27Z",
+        "run_started_at": "2026-11-18T09:44:27Z",
+        "workflow_id": 412015070,
+        "check_suite_id": 119859809225,
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748906",
+        "head_commit": {
+          "id": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+          "tree_id": "9c033899e4b6ebfce41f173d4c25e4d2dd1f4084",
+          "timestamp": "2026-11-18T09:44:08Z"
+        },
+        "job_total_count": 1,
+        "jobs": [
+          {
+            "id": 134713536726,
+            "run_id": 44278748906,
+            "workflow_name": "CLI setup",
+            "head_branch": "claude/haiku-classrupted-features-cc9qmr",
+            "head_sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+            "run_attempt": 1,
+            "name": "plan",
+            "status": "queued",
+            "conclusion": null,
+            "created_at": "2026-11-18T09:44:28Z",
+            "started_at": "2026-11-18T09:44:28Z",
+            "completed_at": null,
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": "",
+            "steps": [],
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748906/job/134713536726",
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/134713536726"
+          }
+        ]
+      }
+    ],
+    "concurrentPR51": {
+      "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls/51",
+      "number": 51,
+      "title": "Consolidate test helpers and harden test gaps",
+      "state": "open",
+      "draft": true,
+      "merged": false,
+      "created_at": "2026-11-18T09:44:24Z",
+      "updated_at": "2026-11-18T09:44:24Z",
+      "merged_at": null,
+      "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51",
+      "commits": 1,
+      "changed_files": 11,
+      "additions": 101,
+      "deletions": 44,
+      "mergeable": true,
+      "mergeable_state": "unstable",
+      "head": {
+        "ref": "claude/haiku-classrupted-features-cc9qmr",
+        "sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b"
+      },
+      "base": {
+        "ref": "main",
+        "sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54"
+      }
+    },
+    "observations": {
+      "allFourRunsQueued": true,
+      "allRunConclusionsNull": true,
+      "allJobsAreUnassignedQueuedPlans": true,
+      "allJobsHaveNoReportedSteps": true,
+      "pendingDeploymentsExposedForMain": 0,
+      "approvalHistoryEntriesExposedForMain": 0,
+      "approvalInterpretation": "Both main-run pending-deployments endpoints returned empty arrays, so no pending deployment hold was exposed. Both approval-history endpoints also returned empty arrays; absence of history is not proof that every possible approval or account restriction is absent.",
+      "timestampInterpretation": "The API populates run_started_at and job started_at even while these records remain queued. Those timestamps are preserved verbatim and are not treated as proof that a runner or test executed."
+    }
+  },
+  "priorObservations": {
+    "observationWindow": {
+      "startedAt": "2026-11-18T10:00:59Z",
+      "completedAt": "2026-11-18T10:01:45Z"
+    },
+    "freshness": "The observations in this section were made during the earlier investigation and were not repeated in the fresh snapshot above, except for the explicitly fresh run/job, main approval/deployment and PR metadata reads.",
+    "mainCheckRuns": {
+      "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/commits/5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54/check-runs",
+      "observedCount": 2,
+      "jobIds": [
+        134701799342,
+        134701799721
+      ],
+      "observation": "Both checks were queued with null conclusions, no explanatory title/summary/text and zero annotations."
+    },
+    "repositoryRunCollections": {
+      "inProgress": {
+        "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs?status=in_progress&per_page=100",
+        "reportedTotalCount": 0
+      },
+      "waiting": {
+        "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs?status=waiting&per_page=100",
+        "reportedTotalCount": 0
+      },
+      "queued": {
+        "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs?status=queued&per_page=100",
+        "reportedTotalCount": 3,
+        "returnedRunIds": [
+          44278748906,
+          44275307064,
+          44275307098
+        ]
+      },
+      "limitation": "The queued collection omitted PR #51 Alpha run 44278748900 despite direct run/job and exact-head check reads confirming it. The discrepancy's cause was not established. Collection counts are not a complete proof of repository activity or account-wide runner capacity."
+    },
+    "workflowConfiguration": {
+      "sourceHead": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+      "paths": [
+        ".github/workflows/alpha-checks.yml",
+        ".github/workflows/cli-setup.yml"
+      ],
+      "planningRunner": "ubuntu-latest",
+      "concurrencyGroupExpression": "${{ github.workflow }}-${{ github.head_ref || github.ref_name }}",
+      "cancelInProgress": true,
+      "environmentGateDeclared": false,
+      "customRunnerLabelsDeclared": false,
+      "interpretation": "The two main workflows and the concurrent PR use distinct configured workflow/branch groups. No conflict among those groups or custom-runner requirement was established from the pinned configuration."
+    },
+    "publicServiceStatus": {
+      "endpoint": "https://www.githubstatus.com/api/v2/summary.json",
+      "pageUpdatedAt": "2026-11-18T09:34:15.909Z",
+      "observedActionsStatus": "operational",
+      "observedIncidentCount": 0,
+      "freshness": "Read during the earlier 10:01 investigation, not refreshed for this checkpoint.",
+      "interpretation": "The public summary did not report an Actions incident at that observation. It does not rule out an unreported, repository-specific or account-specific issue."
+    },
+    "unsupportedSettingsReads": {
+      "endpoints": [
+        "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/permissions",
+        "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/workflows/412015071",
+        "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/workflows/412015070"
+      ],
+      "result": "The connector rejected these URLs with HTTPError 400 / INVALID_ARGUMENT because the endpoints were not exposed by its allowed fetch routes.",
+      "interpretation": "This is a connector visibility limit, not evidence that GitHub Actions is disabled, access is denied by the repository, or a workflow has failed."
+    }
+  },
+  "visibilityLimits": {
+    "accountActionsSettings": "Not observed; no supported account-settings read was available in this assessment.",
+    "billingOrAccountRestrictions": "Not observed.",
+    "internalRunnerAllocationAndCapacity": "Not observable from the retrieved run/job records.",
+    "browserAndPublicPageFallback": {
+      "provenance": "Reported by the integration owner in the task for this checkpoint; not independently repeated by this reviewer.",
+      "cloudBrowser": "Two attempts failed at the browser transport before opening any page.",
+      "publicRunPages": "Public web opening of both main run URLs also failed.",
+      "interpretation": "No settings or UI state was observed. These access/transport failures are not GitHub Actions job failures and do not establish a queue cause."
+    },
+    "reviewAndCommentRefresh": "PR #51 metadata was freshly read. Its review/comment/thread collections were not refreshed for this checkpoint; earlier review counts are not presented as fresh evidence here."
+  },
+  "assessment": {
+    "confirmedCondition": "All four directly queried runs remain queued at unassigned planning jobs with no reported steps.",
+    "blockingReason": "unknown",
+    "establishedQueueCause": null,
+    "conclusion": "No completed execution, pass, failure, cancellation or approval requirement is inferred. The fresh API conclusions remain null. This historical checkpoint cannot replace exact-source qualification after execution completes."
+  },
+  "actionsTaken": {
+    "remoteOperations": "Read-only GETs only; no reruns, cancellations, approvals, dispatches or settings changes.",
+    "localChanges": [
+      "docs/reviews/20261117-exhaustive-consolidation/main-ci-queue-checkpoint.json"
+    ],
+    "testsExecuted": false,
+    "commitsCreated": false
+  },
+  "followUpSnapshots": [
+    {
+      "observedAt": "2026-11-18T10:05:16Z",
+      "observer": "integration owner",
+      "scope": "Both exact run attempts and main commit check-runs reread; all still queued.",
+      "attemptEndpoints": [
+        "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064/attempts/1",
+        "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/attempts/1"
+      ],
+      "checkRunsEndpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/commits/5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54/check-runs?per_page=100&filter=latest",
+      "checks": [
+        {
+          "id": 134701799721,
+          "name": "plan",
+          "status": "queued",
+          "conclusion": null,
+          "started_at": "2026-11-18T09:22:29Z",
+          "completed_at": null,
+          "details_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098/job/134701799721"
+        },
+        {
+          "id": 134701799342,
+          "name": "plan",
+          "status": "queued",
+          "conclusion": null,
+          "started_at": "2026-11-18T09:22:29Z",
+          "completed_at": null,
+          "details_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064/job/134701799342"
+        }
+      ]
+    },
+    {
+      "observedAt": "2026-11-18T10:09:35Z",
+      "observer": "integration owner",
+      "scope": "Exact run records reread; jobs, approvals and account settings were not reread in this follow-up.",
+      "runs": [
+        {
+          "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064",
+          "id": 44275307064,
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "event": "push",
+          "status": "queued",
+          "conclusion": null,
+          "run_attempt": 1,
+          "created_at": "2026-11-18T09:22:29Z",
+          "updated_at": "2026-11-18T09:22:29Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307064"
+        },
+        {
+          "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098",
+          "id": 44275307098,
+          "head_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+          "event": "push",
+          "status": "queued",
+          "conclusion": null,
+          "run_attempt": 1,
+          "created_at": "2026-11-18T09:22:29Z",
+          "updated_at": "2026-11-18T09:22:29Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44275307098"
+        },
+        {
+          "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748900",
+          "id": 44278748900,
+          "head_sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+          "event": "pull_request",
+          "status": "queued",
+          "conclusion": null,
+          "run_attempt": 1,
+          "created_at": "2026-11-18T09:44:27Z",
+          "updated_at": "2026-11-18T09:44:27Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748900"
+        },
+        {
+          "endpoint": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748906",
+          "id": 44278748906,
+          "head_sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+          "event": "pull_request",
+          "status": "queued",
+          "conclusion": null,
+          "run_attempt": 1,
+          "created_at": "2026-11-18T09:44:27Z",
+          "updated_at": "2026-11-18T09:44:27Z",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44278748906"
+        }
+      ],
+      "qualificationEvidence": false
+    }
+  ]
+}

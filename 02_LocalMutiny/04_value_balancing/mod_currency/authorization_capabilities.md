@@ -35,7 +35,7 @@ Unauthorised reads return SYS.NOT_FOUND; unauthorised pins return SYS.FORBIDDEN.
 Grant revocation takes effect at next decision.
 
 ## Privacy, retention, abuse
-Amounts are FINANCIAL_EVIDENCE; access by privileged roles audited (CTR-CAP-001 R08).
+Amounts are FINANCIAL_EVIDENCE; access by privileged roles recorded as aud_ records (CTR-CAP-001 R08).
 
 ## Observability & budgets
 Denials counted without amounts.

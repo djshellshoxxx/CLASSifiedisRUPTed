@@ -46,7 +46,7 @@ Denied-write count per actor class is emitted without actor IDs (PS-009-08).
 ## Tests
 - TEST-PS-009-05-01 (unit): each row of the authorization table.
 - TEST-PS-009-05-02 (integration): archived variant absent from a buyer's response, present for owner.
-- TEST-PS-009-05-03 (negative): `sys_` write attempt is denied and audited.
+- TEST-PS-009-05-03 (negative): `sys_` write attempt is denied and recorded as an aud_ record.
 
 ## Acceptance criteria
 1. Every table row is covered by a test ID.

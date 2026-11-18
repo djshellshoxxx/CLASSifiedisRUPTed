@@ -1,35 +1,76 @@
 # PS-146-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-146-05. **Owner:** [18_Governance/01_policy/mod_prohibited](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_prohibited. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — Stage 3 draft, pending review. **Requirement ID:** PS-146-05. **Owner:** [18_Governance/01_policy/mod_prohibited](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_prohibited. **Consumers:** publish, offer, proposal and cycle-inclusion owners in [01_LocalBazaar](../../../01_LocalBazaar), [02_LocalMutiny](../../../02_LocalMutiny), [03_Services](../../../03_Services), [04_Auctions](../../../04_Auctions) and [05_Rentals](../../../05_Rentals); [12_Moderation](../../../12_Moderation). Dependency rows: [dependency matrix](../../../DEPENDENCY_MATRIX.md).
 
 ## Purpose and scope
-Define the authorization capabilities process for prohibited within 01_policy. Do not assume implementation or successful external settlement.
+- PS-146-05.R01: Business outcome. Every action on catalogue, decision, hold and evidence records is allowed only for an actor holding the named capability on that resource, with separation of duties between authoring, approving and reviewing. Participants can learn why their subject was held without learning how the rule matches.
+- Exclusions: identity proofing and credential issuance (F07); capability registry, revocation and role assignment (CTR-CAP-001, owner F16 with F07). This spec consumes those and does not define them.
+- Assumption A-prohibited-03: capability names below are module-proposed for CTR-CAP-001 and are not yet registered.
 
-## Requirements to specify
-- [ ] PS-146-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-146-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-146-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Actors
+| Code | Actor | Identified by |
+|---|---|---|
+| P | Participant (subject owner) | account credential; subject ownership checked by owner service and passed as `owner_actor_id` in snapshot only for display |
+| S | Owner service principal | service credential bound to `caller_service_id` |
+| A | Policy author | role grant `prohibited.policy.author` |
+| V | Approver | role grant `prohibited.policy.approver`; never the same actor as author for one version |
+| R | Reviewer | role grant `prohibited.hold.reviewer` |
+| D | Auditor | role grant `prohibited.audit.reader` |
+| X | Anonymous | no credential |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Capability matrix (actor x action x resource)
+| Action | Resource | P | S | A | V | R | D | X |
+|---|---|---|---|---|---|---|---|---|
+| Read public policy summary | PolicyVersion (ACTIVE) | Y | Y | Y | Y | Y | Y | Y |
+| Read version metadata | PolicyVersion | N | N | Y | Y | Y | Y | N |
+| Create EDITING version | PolicyVersion | N | N | Y | N | N | N | N |
+| Edit EDITING version | PolicyVersion | N | N | Y (author only) | N | N | N | N |
+| Approve version | PolicyVersion | N | N | N | Y (not author) | N | N | N |
+| Discard EDITING version | PolicyVersion | N | N | Y (author only) | N | N | N | N |
+| Read internal rules (terms, flags) | ProhibitionRule | N | N | Y | Y | Y | N | N |
+| Evaluate subject | PolicyDecision | N | Y (own service) | N | N | N | N | N |
+| Read own decision | PolicyDecision | Y (own subject) | N | N | N | N | N | N |
+| Read any decision | PolicyDecision | N | N | N | N | Y | Y | N |
+| Assign hold | PolicyHold | N | N | N | N | Y (scheduler assigns) | N | N |
+| Resolve hold | PolicyHold | N | N | N | N | Y (not owner, not author) | N | N |
+| Escalate hold | PolicyHold | N | N | N | N | Y | N | N |
+| Withdraw hold | PolicyHold | N | Y (for its own subject only) | N | N | N | N | N |
+| Read open hold queue | PolicyHold | N | N | N | N | Y | N | N |
+| Read audit log | PolicyAuditEntry | N | N | N | N | N | Y | N |
+| Export evidence | PolicyDecision, PolicyAuditEntry | N | N | N | N | N | Y (with EVIDENCE_EXPORT audit entry) | N |
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+Y means allowed by capability; "(...)" narrows scope; N means denied with PROHIBITED_FORBIDDEN (or PROHIBITED_UNAUTHENTICATED for X).
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Capability names (A-prohibited-03)
+| Capability | Grants |
+|---|---|
+| `prohibited.policy.read_public` | get_active_public |
+| `prohibited.policy.draft.create` | create and edit EDITING versions, own versions only |
+| `prohibited.policy.approve` | approve versions authored by others |
+| `prohibited.policy.discard` | discard own EDITING versions |
+| `prohibited.rule.internal.read` | read match_terms and structured_flag values |
+| `prohibited.decision.evaluate` | evaluate, for the calling service principal only |
+| `prohibited.decision.read.own` | read decisions where subject owner equals caller |
+| `prohibited.decision.read.any` | read any decision |
+| `prohibited.hold.review` | list, assign, resolve |
+| `prohibited.hold.escalate` | escalate |
+| `prohibited.hold.withdraw.service` | withdraw holds for own subject |
+| `prohibited.audit.read` | read audit log and export |
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Separation of duties
+- PS-146-05.R02: Approver != author on approve (PROHIBITED_APPROVER_NOT_INDEPENDENT).
+- PS-146-05.R03: Reviewer != subject owner and != policy author for the subject's active rule set (PROHIBITED_HOLD_REVIEWER_CONFLICT).
+- PS-146-05.R04: A service principal may evaluate only snapshots whose `caller_service_id` matches its credential. Mismatch returns PROHIBITED_FORBIDDEN.
+- PS-146-05.R05: Capabilities are checked at the server for every request. Client hints (UI visibility) are not authorization.
+- PS-146-05.R06: Revocation of a role takes effect on the next request; cached grants live at most 60 seconds (per CTR-CAP-001, pending).
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-146-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Abuse and disclosure controls
+- PS-146-05.R07: Participants cannot read internal match terms. This prevents probing for prohibited wording.
+- PS-146-05.R08: Public summary lists category titles and public_title_key only.
+- PS-146-05.R09: Decisions visible to a participant exclude hold resolution reviewer identity; reviewer identity is visible to auditors only.
+- PS-146-05.R10: Every grant or denial on decision, hold and version resources writes a PolicyAuditEntry for administrative actions (not for each denied read, which is rate-limited instead).
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Open decisions
+- A-prohibited-03 (capability names pending CTR-CAP-001 registration; roles may be merged by F16).
+- A-prohibited-11 (two-person activation; a single-admin deployment in MVP would require a documented exception, none defined here).
+- Mapping of role grants to existing identity roles is owned by F07 and is not defined here.

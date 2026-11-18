@@ -1,35 +1,69 @@
 # PS-039-08 — observability performance
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-039-08. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — Stage 3 draft, pending review. **Requirement ID:** PS-039-08. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** 05_Rentals/02_rental_lifecycle (latency of commit), operations dashboards, observability (F15); shared F15 platform, F16 security per [dependency matrix](../../../DEPENDENCY_MATRIX.md).
 
-## Purpose and scope
-Define the observability performance process for availability within 01_rental_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+- PS-039-08.R01: Each command, query and job has a latency budget, an error-rate budget and a named metric. Budgets are measured, not assumed, in later phases.
+- PS-039-08.R02: Logs and traces use the field set below. No personal data, pseudonym, coordinates or free text is logged.
+- PS-039-08.R03: Alerts and dashboards are defined for conflict spikes, sweep lag and outbox backlog, with thresholds stated here.
 
-## Requirements to specify
-- [ ] PS-039-08.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-039-08.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-039-08.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Metrics
+| Metric | Type | Labels | Notes |
+|---|---|---|---|
+| avail_command_latency_ms | histogram | command, outcome_code | per command |
+| avail_query_latency_ms | histogram | query, range_bucket | range_bucket: <=7d, <=92d, <=366d |
+| avail_command_errors_total | counter | command, code | codes from validation_rules.md |
+| avail_claim_conflicts_total | counter | listing_bucket | conflicts per hour, no listing ID |
+| avail_hold_expired_total | counter | none | |
+| avail_sweep_lag_seconds | gauge | none | now minus oldest expired-but-held claim |
+| avail_outbox_backlog | gauge | none | rows not yet published |
+| avail_idempotent_replay_total | counter | command | |
+| avail_lock_wait_ms | histogram | none | per-listing lock wait |
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+Labels never include participant IDs, claim IDs or listing IDs. `listing_bucket` is a salted hash bucket of 64 values.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Budgets
+| Operation | p95 latency | p99 latency | Error budget (5xx or AVAIL_UNAVAILABLE) |
+|---|---|---|---|
+| avail.claim.hold | 300 ms | 800 ms | 0.5% of requests per 30 days |
+| avail.claim.commit | 300 ms | 800 ms | 0.5% |
+| avail.window.publish, avail.block.create | 300 ms | 800 ms | 0.5% |
+| avail.query.calendar (<=92 days) | 150 ms | 400 ms | 0.5% |
+| avail.query.calendar (<=366 days, owner) | 400 ms | 1000 ms | 0.5% |
+| Sweep job, per batch of 200 | 500 ms | 2 s | none |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Business-rule rejections (validation, conflict, authorization) are not counted against the error budget. Their rate is tracked separately to detect misuse.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Load targets for later verification: 50 hold requests per second sustained per deployment with budgets met; calendar reads at 500 per second with the query budget met.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-039-08`; scenarios and fixtures to be detailed in Prompt 3.
+## Log fields
+Each command log line contains: `timestamp_utc`, `request_id`, `command`, `actor_role` (anonymous, owner, requester, lifecycle, operator), `actor_key` (salted hash, rotated daily), `outcome_code`, `latency_ms`, `schema_version`, `replayed` (boolean), `revision` (integer).
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+Forbidden in logs: participant IDs, claim IDs, window IDs, listing IDs in clear text, dates of individual claims, timezone, free text, IP address, device identifiers, user agent. Correlation uses `request_id`, which carries no personal data.
+
+## Traces
+- One span per command with child spans for authorization, lock acquisition, database transaction and outbox write.
+- Span attributes follow the log field rules above.
+- Sampling: 100% of error and conflict spans, 10% of successful spans.
+
+## Alerts
+| Alert | Threshold | Window |
+|---|---|---|
+| Write p95 over budget | > 300 ms | 10 minutes |
+| Error budget burn | > 2% of requests returning 5xx | 15 minutes |
+| Conflict spike | conflicts > 3x 7-day median | 1 hour |
+| Sweep lag | > 120 s | 5 minutes |
+| Outbox backlog | > 10,000 rows or oldest row > 10 minutes | 5 minutes |
+| Lock wait p95 | > 250 ms | 10 minutes |
+
+Alerts go to the on-call operations rota. Alert payloads follow the same field rules.
+
+## Operational dashboards
+- Per-command latency and error codes.
+- Holds created, committed, released and expired per day (counts only).
+- Calendar query volume by range bucket.
+- Sweep lag and outbox backlog.
+
+## Open decisions
+- A-AVAIL-25: Latency budgets (p95 300 ms writes, 150 ms public calendar) are defaults chosen for a mobile-first PWA and are not measured figures.
+- A-AVAIL-26: Actor key is a salted hash rotated daily. Rotation prevents long-term linking of log lines to a participant.

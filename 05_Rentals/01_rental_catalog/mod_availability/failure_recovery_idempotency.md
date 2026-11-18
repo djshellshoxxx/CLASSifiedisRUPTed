@@ -1,35 +1,59 @@
 # PS-039-06 — failure recovery idempotency
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-039-06. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — Stage 3 draft, pending review. **Requirement ID:** PS-039-06. **Owner:** [05_Rentals/01_rental_catalog/mod_availability](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_availability. **Consumers:** 05_Rentals/02_rental_lifecycle (retry of commit and release), notifications, observability; shared F15 platform, F16 security per [dependency matrix](../../../DEPENDENCY_MATRIX.md).
 
-## Purpose and scope
-Define the failure recovery idempotency process for availability within 01_rental_catalog. Do not assume implementation or successful external settlement.
+## Requirements
+- PS-039-06.R01: Every state-changing command is idempotent for at least 7 days. A double-booking under any retry, replay or concurrent request is impossible by construction.
+- PS-039-06.R02: Timeouts, retries and backoff are defined for clients, for the lifecycle service and for internal jobs.
+- PS-039-06.R03: Concurrency conflicts, partial failures and crash recovery each have a defined outcome, and no outcome requires manual data repair.
 
-## Requirements to specify
-- [ ] PS-039-06.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-039-06.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-039-06.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Idempotency
+- Scope: `(actor_key, command_name, idempotency_key)`.
+- First success stores `request_hash` (SHA-256 of canonical body) and `result_ref`, in the same transaction as the state change.
+- Replay with the same key and hash returns the stored result with `replayed: true`. No second state change occurs.
+- Same key, different hash: `AVAIL_IDEMPOTENCY_KEY_REUSED`. Nothing changes.
+- Records are kept 7 days (A-AVAIL-13). Replay after expiry is treated as a new request, which is safe because the uniqueness rules below still hold.
+- Read commands are naturally idempotent and carry no key.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Concurrency and conflicts
+- Overlap checks for holds, commits and blocks run inside a transaction holding a per-listing lock. Two concurrent holds on overlapping periods cannot both succeed; the second receives `AVAIL_CLAIM_CONFLICT`.
+- Lock wait limit: 500 ms. On timeout the command returns `AVAIL_UNAVAILABLE` (retryable) and changes nothing.
+- Updates that carry `expected_revision` return `AVAIL_REVISION_CONFLICT` when the stored revision differs. The client re-reads and decides again; the server never merges.
+- Expiry check runs under the same lock, so a hold cannot expire and be committed in parallel. The commit then sees `expired` and returns `AVAIL_CLAIM_STATE_INVALID`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Timeouts
+| Operation | Server deadline | Client deadline | Notes |
+|---|---|---|---|
+| Write command | 2 s | 5 s | Deadline exceeded after commit is detected by replay |
+| Calendar query | 1 s | 3 s | Served from read model; may lag by up to 5 s |
+| Claim read | 1 s | 3 s | |
+| Sweep job | 30 s per batch | none | Batches of 200 claims |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Retries
+- Client retry on `AVAIL_UNAVAILABLE`, `AVAIL_RATE_LIMITED` and transport timeouts: at most 5 attempts, exponential backoff base 500 ms, factor 2, full jitter, cap 16 s (A-AVAIL-20). Retries reuse the same idempotency key.
+- Client does not retry validation or authorization codes.
+- Lifecycle service retries `avail.claim.commit` with the same key while the hold is unexpired. If the hold has expired, the lifecycle service stops and asks the requester to re-request.
+- Event delivery retries are owned by the outbox relay: exponential backoff, maximum 24 hours, then dead-letter with alert.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Partial failure outcomes
+| Failure point | Outcome | Recovery |
+|---|---|---|
+| Crash after hold insert, before response | Claim exists and is held | Client replays with same key and receives original claim |
+| Crash before commit of hold transaction | No claim, no event | Client retries as new request |
+| Lifecycle commit succeeds, response lost | Claim is committed | Lifecycle replays commit with same key |
+| Hold expires while lifecycle commit in flight | Commit rejected | Lifecycle abandons; requester re-requests |
+| Event publish fails | Event remains in outbox | Relay retries; state already correct |
+| Sweep job fails mid-batch | Some claims expired | Next sweep resumes; expiry is idempotent |
+| Lifecycle release fails after cancellation | Commitment remains | Lifecycle retries releaseCommitment; period stays blocked until released, never silently freed |
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-039-06`; scenarios and fixtures to be detailed in Prompt 3.
+## Compensation
+- A held claim that the lifecycle service cannot commit is released with reason `hold_expired` or `requester_withdrew`. No external money or item movement occurs in this module, so no financial compensation is defined here.
+- A window withdrawn while held claims exist releases those claims with `owner_declined` in the same transaction.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Recovery after restore
+- Restore from backup replays the event log from the backup point to the present, applying each event idempotently by `event_id`. Restored state is never accepted without this replay.
+
+## Open decisions
+- A-AVAIL-19: Server write deadline 2 s and lock wait 500 ms. Chosen to keep p95 well inside budgets in observability_performance.md.
+- A-AVAIL-20: Client retry policy of 5 attempts with exponential backoff, base 500 ms. Mirrors common mobile retry behavior; offline queue rules belong to the PWA sync spec.
+- A-AVAIL-21: Concurrency control uses a per-listing transactional lock rather than a global exclusion constraint. Implementation detail that must preserve the no-double-booking invariant.

@@ -31,7 +31,7 @@ Update is allowed in draft, published, paused and expired. An update never chang
 2. `title`, `category_code` and `discovery_region_code` are present and valid (`SKILLS_PUBLISH_INCOMPLETE` otherwise).
 3. Participant is not blocked (`SKILLS_PARTICIPANT_BLOCKED`).
 4. Published count for the owner is below 5, and non-retired count is below 20 (A-skills-10; `SKILLS_QUOTA_EXCEEDED`).
-5. No other non-retired offer by the same owner has the same `category_code` and normalized title (A-skills-14 in [validation rules](validation_rules.md); `SKILLS_DUPLICATE_OFFER`).
+5. No other non-retired offer by the same owner has the same `category_code` and normalized title (A-skills-26 in [validation rules](validation_rules.md); `SKILLS_DUPLICATE_OFFER`).
 6. Feature flag `skills.enabled` is on for the owner's region.
 
 ## Timeouts and sweeps

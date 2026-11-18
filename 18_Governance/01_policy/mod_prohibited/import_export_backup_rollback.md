@@ -1,35 +1,46 @@
 # PS-146-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-146-10. **Owner:** [18_Governance/01_policy/mod_prohibited](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_prohibited. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — Stage 3 draft, pending review. **Requirement ID:** PS-146-10. **Owner:** [18_Governance/01_policy/mod_prohibited](SPEC.md). **Implementing module:** 18_Governance/01_policy/mod_prohibited. **Consumers:** publish, offer, proposal and cycle-inclusion owners in [01_LocalBazaar](../../../01_LocalBazaar), [02_LocalMutiny](../../../02_LocalMutiny), [03_Services](../../../03_Services), [04_Auctions](../../../04_Auctions) and [05_Rentals](../../../05_Rentals); [10_Privacy](../../../10_Privacy); [11_Federation](../../../11_Federation). Dependency rows: [dependency matrix](../../../DEPENDENCY_MATRIX.md).
 
 ## Purpose and scope
-Define the import export backup rollback process for prohibited within 01_policy. Do not assume implementation or successful external settlement.
+- PS-146-10.R01: Business outcome. Catalogue versions can be exported for governance review, imported into a clean instance for staging, backed up, and restored; decision and hold evidence is never imported, overwritten or rolled back. Activation can be reversed only by a new activation of an earlier version.
+- Exclusions: federation of catalogue or decisions to other instances (F11; no federated export defined here, A-prohibited-16 scope); participant data portability (F10, which receives only the own-decision view from domain_schema via query).
 
-## Requirements to specify
-- [ ] PS-146-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-146-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-146-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Export
+- Formats: NDJSON (UTF-8, LF line endings), gzip-compressed, one file per record family, plus `manifest.json`.
+- Files: `policy_versions.ndjson.gz`, `rules.ndjson.gz`, `manifest.json`. Decision and hold exports are separate, restricted files, produced only for auditors (`EVIDENCE_EXPORT` audit entry), and contain pseudonymous ids and digests only.
+- Manifest fields: `schema_version: "1"`, `exported_at` (UTC ms), `source_instance_id`, `record_counts` per file, `sha256` per file, `policy_version_ids` included, `export_kind` in {CATALOGUE, EVIDENCE}.
+- Catalogue export includes match_terms and structured_flag values. Classification: PSEUDONYMOUS_OPERATIONAL (A-prohibited-04); requires `prohibited.rule.internal.read`; not shared with participants.
+- PS-146-10.R02: Export is read-only, consistent at a single transaction snapshot, and rate-limited to one catalogue export per instance per hour.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Import
+- PS-146-10.R03: Catalogue import creates new PolicyVersion rows in EDITING state with new version_number values (never reused, domain_schema.md). Imported status fields are ignored.
+- PS-146-10.R04: Imported rules are validated with validation_rules.md R11-R15. Any failure rejects the whole file; no partial import.
+- PS-146-10.R05: Imports never create ACTIVE, RETIRED or DISCARDED versions. Activation after import requires the normal approval (PS-146-05.R02).
+- PS-146-10.R06: Evidence files (decisions, holds, audit) are not importable into a running instance. Restoring evidence is a restore operation only (below).
+- PS-146-10.R07: Imports are idempotent by `content_sha256`: importing the same file twice creates one EDITING version and returns the existing id.
+- Import is refused unless manifest sha256 values match, and unless `schema_version` is `"1"`.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Backup
+- Scope: all five records (domain_schema.md) plus the idempotency table and outbox.
+- Backups: continuous WAL archiving with point-in-time recovery; daily full snapshot retained 35 days; encrypted at rest with platform KMS (F15).
+- Recovery point objective: 5 minutes. Recovery time objective: 2 hours for a single-instance restore; 4 hours for a region restore (proposed defaults, to validate in 17_Quality).
+- Hold keys (HMAC keys for input_digest) are backed up separately with restricted access. Without the key matching `hmac_key_id`, digests cannot be verified; the decisions remain valid.
+- Backups contain subject ids and digests; they inherit PSEUDONYMOUS_OPERATIONAL handling and retention limits (privacy_retention_abuse.md). A restored backup past its retention window is not restored; its evidence is deemed lapsed.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Restore
+- PS-146-10.R08: Restore to a new instance first, then reconcile. Restoring over a live instance requires a maintenance window and an auditor approval recorded in PolicyAuditEntry (EVIDENCE_EXPORT is not reused; a restore approval is recorded with `reason_code` = `RESTORE_APPROVED`).
+- PS-146-10.R09: Restore boundary: restoring to a point before an activation removes that activation and its later effects from the restored state. The events already emitted are not recalled; the owner reconciliation procedure applies (failure_recovery_idempotency.md R13).
+- PS-146-10.R10: Evidence rows are never overwritten by a restore. A restore into a live instance writes evidence created after the restore point to a side table for auditor review, and does not delete it.
+- Outbox replay after restore: events are re-emitted with their original event_id; consumers dedupe by event_id.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Rollback
+- Activation rollback: activate an earlier version as a new PolicyVersion (copy), with new version_number, through the normal approval flow. The rolled-back version becomes RETIRED. Rollback never deletes or edits the rolled-back version.
+- Decision rollback: not applicable. Decisions are evidence. A wrong decision is superseded by a new decision (workflow_state_machine.md R05) with an audit reason.
+- Hold rollback: not applicable. A wrong resolution is corrected by a new reviewer action with a reason_code; the earlier resolution stays in audit.
+- Migration rollback: schema migrations are forward-only; a failed migration is rolled back by restoring the pre-migration snapshot to a new instance.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-146-10`; scenarios and fixtures to be detailed in Prompt 3.
-
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Open decisions
+- A-prohibited-02 (manifest and event timestamp format), A-prohibited-04 (export classification), A-prohibited-09 (backup retention aligned with evidence retention), A-prohibited-10 (idempotency records excluded from export).
+- RPO and RTO values are proposed defaults and need platform confirmation (F15). Not in DECISIONS.md.
+- Federated import and export of catalogues to peer instances is deferred (A-prohibited-16 scope; D01 OPEN for envelopes).

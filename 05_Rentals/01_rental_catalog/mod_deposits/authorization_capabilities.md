@@ -1,35 +1,61 @@
 # PS-040-05 — authorization capabilities
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-040-05. **Owner:** [05_Rentals/01_rental_catalog/mod_deposits](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_deposits. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — Stage 3 draft, pending review. **Requirement ID:** PS-040-05. **Owner:** [05_Rentals/01_rental_catalog/mod_deposits](SPEC.md). **Implementing module:** 05_Rentals/01_rental_catalog/mod_deposits. **Consumers:** PWA client (hides unavailable actions), moderation (dispute scope), observability (denial counters).
 
 ## Purpose and scope
-Define the authorization capabilities process for deposits within 01_rental_catalog. Do not assume implementation or successful external settlement.
+Define which actor may perform which action on which deposit resource. The capability matrix is owned by CTR-CAP-001 (owner F16, identity by F07). This file supplies the deposit rows. Authorization is enforced by the server on every request. Client-side hiding is never a control.
 
-## Requirements to specify
-- [ ] PS-040-05.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-040-05.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-040-05.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Requirements
+- PS-040-05.R01: Business outcome: each action on a deposit is allowed only for the party or scoped role defined in the matrix, and every denial is logged without personal data. Exclusions: rental booking permissions, listing ownership rules, and federation trust (F11).
+- PS-040-05.R02: Case coverage: non-party read (NOT_FOUND), party with wrong role (FORBIDDEN_ROLE), revoked capability (FORBIDDEN_REVOKED), stale capability token replayed after revocation, moderator acting on a deposit outside dispute scope, and operator attempting to read records.
+- PS-040-05.R03: Access checks combine capability and relationship. Holding a capability alone is insufficient; the caller must be the depositor or receiver recorded on the deposit, or hold a dispute scope for that exact deposit.
+- PS-040-05.R04: Capability keys follow `deposits.<action>` and are registered with CTR-CAP-001. Revocation takes effect for the next request. Tokens are not trusted beyond their expiry.
+- PS-040-05.R05: Operators configure flags, timers and caps. Operators have no read access to deposit records or evidence. Aggregate counts only.
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Matrix
+Legend: Y = allowed; N = denied; S = allowed only in the state named in workflow_state_machine.md; D = dispute scope for this deposit only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+| Action (capability) | Depositor | Receiver | Dispute moderator | Operator | Non-party | System timer |
+|---|---|---|---|---|---|---|
+| deposits.create | N | Y (S: draft) | N | N | N (NOT_FOUND) | N |
+| deposits.propose | N | Y (S: draft) | N | N | N | N |
+| deposits.counter | Y (S: proposed, receiver proposed) | Y (S: proposed, depositor proposed) | N | N | N | N |
+| deposits.accept | Y (S: proposed, non-proposer) | Y (S: proposed, non-proposer) | N | N | N | N |
+| deposits.decline | Y (S: proposed, non-proposer) | Y (S: proposed, non-proposer) | N | N | N | N |
+| deposits.cancel | Y (S: agreed, proposed by depositor, or per state rules) | Y (S: draft, proposed by receiver, agreed) | N | N | N | N |
+| deposits.claim_paid | Y (S: agreed) | N | N | N | N | N |
+| deposits.confirm_received | N | Y (S: paid_claimed) | N | N | N | N |
+| deposits.claim_return | N | Y (S: received_claimed) | N | N | N | N |
+| deposits.claim_withhold | N | Y (S: received_claimed) | N | N | N | N |
+| deposits.confirm_return | Y (S: return_claimed) | N | N | N | N | N |
+| deposits.acknowledge_withhold | Y (S: withheld_claimed) | N | N | N | N | N |
+| deposits.open_dispute | Y (S: paid_claimed, received_claimed, return_claimed, withheld_claimed) | Y (S: same) | N | N | N | N |
+| deposits.attach_evidence | Y (S: paid_claimed to disputed) | Y (S: received_claimed to disputed) | N | N | N | N |
+| deposits.resolve_dispute | N | N | D (S: disputed) | N | N | N |
+| deposits.read | Y | Y | D | N (aggregate only) | N (NOT_FOUND) | N |
+| deposits.list_mine | Y | Y | N | N | N | N |
+| deposits.export_own | Y | Y | N | N | N | N |
+| deposits.configure | N | N | N | Y (flags, timers, caps) | N | N |
+| deposits.apply_timer | N | N | N | N | N | Y (system only) |
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Dispute scope rules
+- Dispute scope is `deposits.resolve_dispute:<deposit_id>`. It is granted through CTR-CAP-001 only when a dispute is open on that deposit. It expires 72 hours after grant or on resolution, whichever comes first (A-deposits-17).
+- The moderator may read the deposit, history and evidence for that deposit only.
+- Every grant and use is logged with the moderator's pseudonymous ID.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Revocation rules
+- A blocked participant (F07) is refused every state-changing action with DEPOSITS_FORBIDDEN_REVOKED.
+- A blocked participant keeps read access to their own records unless a moderation order restricts it. Restriction is a flag that CTR-CAP-001 owns.
+- Revocation of a moderator scope takes effect on the next request. In-flight transactions finish with the authority they had at lock time.
+- Timers are system actions and are not revocable by participant status.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-040-05`; scenarios and fixtures to be detailed in Prompt 3.
+## Assumptions and open decisions
+- A-deposits-17: Moderator access is per dispute through a scoped capability, not a standing role.
+- A-deposits-18: Non-parties receive DEPOSITS_NOT_FOUND, not FORBIDDEN, so existence is not disclosed.
+- A-deposits-30: rental_status checks used in guards are provisional until 02_rental_lifecycle publishes its contract.
+- Open: capability role names (depositor, receiver, dispute_moderator, operator) must be confirmed in CTR-CAP-001 (F16). Not yet in planning/CONTRACTS.md.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Test cases
+- TEST-PS-040-05-T01: Operator calls deposits.read. Pass: denied; no record fields returned. Fail: any field returned.
+- TEST-PS-040-05-T02: Moderator reads a deposit outside dispute scope. Pass: DEPOSITS_NOT_FOUND. Fail: data returned.
+- TEST-PS-040-05-T03: Depositor calls deposits.accept on a proposal they made. Pass: DEPOSITS_FORBIDDEN_ROLE. Fail: accepted.

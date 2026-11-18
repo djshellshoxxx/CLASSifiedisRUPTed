@@ -1,35 +1,55 @@
 # PS-041-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-041-10. **Owner:** [05_Rentals/02_rental_lifecycle/mod_damage](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_damage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPECIFIED — Stage 3 draft, pending review. **Requirement ID:** PS-041-10. **Owner:** [05_Rentals/02_rental_lifecycle/mod_damage](SPEC.md). **Implementing module:** 05_Rentals/02_rental_lifecycle/mod_damage. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); named in the Dependencies section of this file.
 
 ## Purpose and scope
-Define the import export backup rollback process for damage within 02_rental_lifecycle. Do not assume implementation or successful external settlement.
+Defines the portability export for a participant's own damage data, the absence of a claim import path, backup and restore boundaries, and rollback boundaries for schema and feature changes. The rule: committed events are never rewritten, and rollback never deletes history.
 
-## Requirements to specify
-- [ ] PS-041-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-041-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-041-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+Exclusions: federation (CTR-FED-001), payment records (F09), and moderation case records (F12).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Requirements
+- **PS-041-10.R01** Export scope. A participant can export every claim where they are the lender or renter, its evidence metadata, their own responses and attestations, and the claim timeline. Other participants' private text is excluded.
+- **PS-041-10.R02** Case coverage. Export handles: no claims (empty bundle), claims with purged text (tombstones shown), claims in progress, oversized histories (paging), and requests during a hold (allowed, marked).
+- **PS-041-10.R03** Budgets. Export generation is asynchronous. Bundle is ready within 10 minutes for up to 1000 claims. The download link is valid for 24 hours.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## Export format
+**Assumption A-damage-22:** The export is a ZIP archive named `damage-export-<claim-scope>-<yyyymmdd>.zip` with:
+- `manifest.json`: format identifier `damage-export/1.0`, generation time (UTC), requester role, counts per file, and SHA-256 of each file.
+- `claims.ndjson`: one damage_claim per line, with fields from domain_schema.md. Free text is included only for the requester's own text fields.
+- `responses.ndjson`, `attestations.ndjson`, `evidence_metadata.ndjson`, `events.ndjson`: one record per line, sorted by claim_id then sequence.
+- Media bytes are excluded by default. A separate media bundle may be requested later; it is delivered as files plus a digest manifest and is not part of v1.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+Encoding: UTF-8, NFC, LF line endings, no byte order mark. Dates in RFC 3339 UTC with `Z`. Amounts as integers in minor units with `currency_code`.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+Export excludes: `hold_remaining_ms`, moderation case references, moderator notes, other participants' free text, and any internal `actor_ref` hashes.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-041-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Import
+- There is no import path for damage claims in v1. Claims are created only through commands (PS-041-04).
+- Restoring a deployment from backup is an operator action, not a user import (see Backup and restore).
+- Importing an export into another system is out of scope and is not a supported path in v1.
 
-## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+## Backup and restore
+**Assumption A-damage-23:** Recovery point objective 24 hours and recovery time objective 4 hours for this module's tables and evidence metadata. These inherit F15 values until F15 publishes its own.
+
+- Backup scope: damage_claim, damage_response, damage_attestation, damage_evidence, damage_event, and outbox rows not yet published.
+- Evidence media is backed up by the shared evidence store, under its own spec. This module requires that the store's backup is at least as recent as the metadata backup at restore time.
+- Restore procedure:
+  1. Restore metadata to a consistent snapshot.
+  2. Verify that for every claim, event sequence is gap-free and the projection equals the replayed event log.
+  3. Verify that every evidence row with a `media_ref` resolves in the evidence store; unresolved references are marked, not deleted.
+  4. Re-emit outbox events after the snapshot point. Consumers deduplicate by `event_id`.
+  5. Re-run timers. Expiry is idempotent (PS-041-06).
+- Events emitted after the snapshot and before the restore are not recreated. The restore report lists the window so that consumers can reconcile.
+
+## Rollback boundaries
+- **Schema.** Migrations are additive only: new nullable columns, new tables, new indexes. No column is dropped or renamed in a release that is live. Destructive changes need a separate spec and a new schema_version.
+- **Feature flag.** Turning `damage_claims_enabled` off stops new commands (DAMAGE_FEATURE_DISABLED). Reads, exports and timers keep running so that open claims are not stranded. Turning it back on resumes normal operation.
+- **Code rollback.** Reverting code to a previous build is allowed if the schema is unchanged or additively extended. Events written by a newer build remain readable: unknown optional fields are ignored by older readers.
+- **Data rollback.** No command deletes or edits committed events. A bad transition is corrected by a new moderation outcome or by the external process in PS-041-03.
+- **Purge boundary.** Deletion under retention (PS-041-07) is a separate, logged operation. It is not a rollback mechanism.
+
+## Open decisions
+- **Assumption A-damage-22:** Export format `damage-export/1.0` and media exclusion.
+- **Assumption A-damage-23:** RPO 24 hours and RTO 4 hours until F15 publishes values.
+- D07 (retention) is OPEN; export and purge boundaries follow A-damage-19.
+- D10 (auth and portability) is OPEN; key rotation may affect who can request an export.

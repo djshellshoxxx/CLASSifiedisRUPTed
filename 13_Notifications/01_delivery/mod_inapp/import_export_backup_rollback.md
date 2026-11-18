@@ -1,35 +1,51 @@
 # PS-103-10 — import export backup rollback
 
-**Status:** DRAFT — structured placeholder only. **Requirement ID:** PS-103-10. **Owner:** [13_Notifications/01_delivery/mod_inapp](SPEC.md). **Implementing module:** 13_Notifications/01_delivery/mod_inapp. **Consumers:** declared via [dependency matrix](../../../DEPENDENCY_MATRIX.md); specific subscribers unresolved.
+**Status:** SPEC-DRAFT-COMPLETE (pending approval). **Owner:** 13_Notifications/01_delivery/mod_inapp. **Parent:** [module SPEC](SPEC.md). **Canonical contracts:** CTR-PRV-001 (R06, R11, R12), CTR-EVT-001 (R08), CTR-SCH-001 (template and schema migration).
 
-## Purpose and scope
-Define the import export backup rollback process for inapp within 01_delivery. Do not assume implementation or successful external settlement.
+## Requirements
+| ID | Requirement (measurable) | Priority |
+|---|---|---|
+| PS-103-10.R01 | In-app notifications are not importable or exportable to other nodes or products. | MVP |
+| PS-103-10.R02 | Owner export includes the owner's notifications (template keys, timestamps, states) without parameter values beyond labels the owner already sees. | MVP |
+| PS-103-10.R03 | Backups are encrypted; restore reproduces inbox states and revisions; expired `params` are not restored. | MVP |
+| PS-103-10.R04 | Template changes follow CTR-SCH-001: a new template version never changes the meaning of an existing key; rendering fallback is defined for retired keys. | MVP |
+| PS-103-10.R05 | No rollback command for notifications; corrections are new notifications. | MVP |
 
-## Requirements to specify
-- [ ] PS-103-10.R01: Describe observable business outcome, actors and exclusions.
-- [ ] PS-103-10.R02: Enumerate normal, invalid, expired, duplicate, concurrent, offline and adversarial cases.
-- [ ] PS-103-10.R03: Specify accessibility, localization, performance and operational budgets where applicable.
+## Data / schema
+Owner export: JSON, one object per notification, ≤ 1 000 per file, expires after 7 days. Backup scope: rows within retention windows (PS-103-07).
 
-## Dependencies and predecessor specifications
-Parent [module SPEC](SPEC.md), [project trust model](../../../PROJECT_SPEC.md); predecessor: domain_schema.md for non-schema specs. Shared identity F07, privacy F10, platform F15, security F16; domain-specific consumers to resolve in registry.
+## Commands / queries / events
+`inbox.export_owner` (acc_, self) → `inbox.exported` with count and digest only.
 
-## Data, interfaces and ownership
-- [ ] Define references to canonical entity IDs, schema versions, command/query contracts, permissions, capabilities, domain events and typed errors in planning/contracts; do not duplicate canonical schemas.
-- [ ] Define owner of persisted records, provenance, retention, import/export and rollback boundaries.
+## States & transitions
+Restore inserts historical rows and sets `inbox_revision` continuity; no events re-emitted.
 
-## Workflow and states
-- [ ] Describe preconditions, transitions, postconditions, timeouts, consent/revocation, compensation and terminal states.
-- [ ] Address retries, idempotency, concurrency conflicts and recovery after partial failure.
+## Validation & errors
+Export over 1 000 items → `INAPP.EXPORT_TOO_LARGE` (400, non-retryable; cursor). Restore revision gap → restore aborted, alert.
 
-## Security, privacy and failure scenarios
-- [ ] Threats: unauthorized access, replay, metadata leakage, fraud, abuse, forged evidence, network/relay failure and stale federated records.
-- [ ] Distinguish self-attested receipts from independently verified events; never assume atomic real-world handover or platform-held funds.
+## Authorization
+Owner only.
 
-## Testing expectations
-- [ ] Unit/property/contract/integration tests, negative and abuse tests, mobile accessibility, offline/reconnect and load tests as relevant.
-- [ ] Future test ID: `TEST-PS-103-10`; scenarios and fixtures to be detailed in Prompt 3.
+## Failure, idempotency, concurrency, offline
+Export idempotent by `export_id`; restore idempotent by backup ID; dead-letter rows are included in restore for replay by the owning producer (PS-103-06 R03).
+
+## Privacy, retention, abuse
+Owner export excludes operation logs and dead-letter rows (operational, not owner data).
+
+## Observability & budgets
+Restore ≤ 30 min per 100 000 items (ASSUMPTION). Metric `inapp_backup_last_success_timestamp`.
+
+## Tests
+- `TEST-PS-103-10-01` integration: backup → delete → restore → states and revisions equal.
+- `TEST-PS-103-10-02` negative: owner export excludes operation logs.
+- `TEST-PS-103-10-03` negative: notification import from peer refused.
+- `TEST-PS-103-10-04` migration: retired template key renders via fallback in restored inbox.
 
 ## Acceptance criteria
-- [ ] All requirements measurable and linked to canonical contracts, owners and consumers.
-- [ ] Failure paths and privacy controls reviewable; unresolved decisions linked to [DECISIONS.md](../../../DECISIONS.md).
-- [ ] Security and architecture review approval (future gate).
+1. Restore reproduces inbox states and revisions in test.
+2. Owner export contains no content beyond owner-visible labels.
+3. Template migration fallback verified.
+
+## Assumptions & open decisions
+- ASSUMPTION: RPO ≤ 15 min and RTO ≤ 4 h are shared defaults with F15.
+- D07 (retention), PROVISIONAL default: PS-103-07 windows apply to backups (unapproved).

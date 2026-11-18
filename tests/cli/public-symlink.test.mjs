@@ -5,6 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { build, setup } from '../../tools/cli/classrup.mjs';
 
+// Local runners without symlink rights may skip; CI must never silently skip.
+function skipOrFailInCi(t, reason) {
+  if (process.env.CI) {
+    throw new Error(`Symlink test "${t.name}" cannot run on this CI runner (${reason}). Skipping is forbidden when CI is set; provide a runner that can create symbolic links.`);
+  }
+  t.diagnostic(`SKIPPED locally: "${t.name}" needs symbolic links (${reason}). It is enforced in CI.`);
+  t.skip(reason);
+}
+
 test('CLI build rejects linked public assets before reading or modifying external targets', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'classrup-public-links-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
@@ -25,7 +34,7 @@ test('CLI build rejects linked public assets before reading or modifying externa
     await fs.symlink(external, path.join(root, 'apps/pwa/public/sw.js'));
   } catch (error) {
     if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) {
-      t.skip('This runner does not permit creating symbolic links');
+      skipOrFailInCi(t, 'This runner does not permit creating symbolic links');
       return;
     }
     throw error;

@@ -7,6 +7,7 @@ import { executeMatchingRequest, matchingRequest, parseMatchingResponse, prepare
 import { createMatchingWorkerClient, MATCH_WORKER_TIMEOUT_MS, type MatchingWorkerPort } from '../../apps/pwa/src/matching-worker-client.ts';
 import { mountBarter } from '../../apps/pwa/src/barter.ts';
 import type { UnlockedVault } from '../../packages/vault/src/index.ts';
+import { NodeStub } from '../support/node-stub.ts';
 
 const now = Date.parse('2026-11-16T20:00:00Z');
 const empty: MatchingInput = { listingStatements: [], wantStatements: [], options: { now, localPrincipal: 'local', optedIn: true } };
@@ -160,17 +161,6 @@ describe('worker matching admission and bounded protocol', () => {
 });
 
 it('reports explicit PWA matching cancellation as ordinary status instead of an operation failure', async () => {
-  class NodeStub {
-    textContent = ''; value = ''; type = ''; checked = false; disabled = false;
-    children: NodeStub[] = []; parent: NodeStub | undefined;
-    readonly listeners = new Map<string, () => void>();
-    setAttribute() {}
-    addEventListener(type: string, listener: () => void) { this.listeners.set(type, listener); }
-    append(...nodes: NodeStub[]) { for (const node of nodes) { this.children.push(node); node.parent = this; } }
-    replaceChildren(...nodes: NodeStub[]) { this.children = []; this.append(...nodes); }
-    remove() { if (this.parent) this.parent.children = this.parent.children.filter(n => n !== this); }
-    click() { this.listeners.get('click')?.(); }
-  }
   const nodes: NodeStub[] = [];
   vi.stubGlobal('document', {
     createElement() { const n = new NodeStub(); nodes.push(n); return n; },

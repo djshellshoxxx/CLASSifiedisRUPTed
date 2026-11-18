@@ -13,11 +13,15 @@ const HELP = `ClassRup local PWA tools
 Usage: pnpm run setup [--host HOST] [--port PORT] [--base /path/] [--non-interactive]
        pnpm run configure [--host HOST] [--port PORT] [--base /path/]
        pnpm run doctor | pnpm dev | pnpm build | pnpm preview
+       node tools/cli/classrup.mjs record verify --file FILE [--json]
        node tools/cli/classrup.mjs COMMAND --help
 Setup preserves existing configuration. Defaults: localhost, port 4173, base /.
 LAN binding requires explicit --host; HTTP on LAN is not a secure browser context.
 No relay, server account, secret or browser key is created. Dependencies must be
 installed explicitly: corepack pnpm install --frozen-lockfile.
+Record verification accepts signed listing/withdrawal files up to 1 MiB, without
+setup, private keys, persistence or network requests. Chain history and revocation
+are unchecked. Domain exits: 0 verified, 2 invalid input, 3 infrastructure failure.
 Note: 'pnpm setup' and 'pnpm doctor' are pnpm built-ins; use 'pnpm run setup' and 'pnpm run doctor'.`;
 
 export function assertRuntime(version = process.versions.node) {
@@ -241,6 +245,22 @@ export async function serve(root = ROOT) {
 export async function main(args = process.argv.slice(2)) {
   const [command, ...rest] = args;
   if (rest.includes('--help') || command === '--help') { console.log(HELP); return; }
+  if (command === 'record') {
+    const json = rest.includes('--json');
+    try {
+      assertRuntime(); assertPackageManager();
+      const { runRecordCommand, formatRecordResult } = await import('./records.mjs');
+      const { exitCode, result } = await runRecordCommand(rest);
+      (json || exitCode === 0 ? console.log : console.error)(formatRecordResult(result, json));
+      process.exitCode = exitCode;
+    } catch {
+      const message = 'Record verification is unavailable. Check Node >=22.18.0 and the installed pinned dependencies.';
+      if (json) console.log(JSON.stringify({ schemaVersion: 1, command: 'record.verify', ok: false, error: { code: 'INFRASTRUCTURE_FAILURE', message } }));
+      else console.error(`ClassRup: INFRASTRUCTURE_FAILURE: ${message}`);
+      process.exitCode = 3;
+    }
+    return;
+  }
   assertRuntime(); assertPackageManager();
   if (command === 'configure') {
     await configure(ROOT, parseOptions(rest));

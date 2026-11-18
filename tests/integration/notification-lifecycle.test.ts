@@ -1,23 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createActionQueue } from '../../apps/pwa/src/action-queue.ts';
 import { mountNotifications } from '../../apps/pwa/src/notifications.ts';
+import { NodeStub } from '../support/node-stub.ts';
 
 // Only event wiring and lifetime are under test here; browser journeys cover the real DOM.
-class NodeStub {
-  textContent = '';
-  id = '';
-  value = '';
-  children: unknown[] = [];
-  readonly listeners = new Map<string, (event: Event) => void>();
-  readonly tag: string;
-  constructor(tag: string) { this.tag = tag; }
-  setAttribute() {}
-  append(...children: unknown[]) { this.children.push(...children); }
-  prepend(...children: unknown[]) { this.children.unshift(...children); }
-  replaceChildren(...children: unknown[]) { this.children = children; }
-  addEventListener(type: string, listener: (event: Event) => void) { this.listeners.set(type, listener); }
-  fire(type: string) { this.listeners.get(type)?.(new Event(type, { cancelable: true })); }
-}
 
 afterEach(() => vi.unstubAllGlobals());
 

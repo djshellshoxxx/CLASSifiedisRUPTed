@@ -52,6 +52,19 @@ jobs:
         run: node packages/commerce/test/check_money_bundle.mjs
       - run: corepack pnpm run test:tooling
       - run: corepack pnpm test --reporter=json --outputFile=test-results/domain.json
+      - name: Report executed domain assertion counts
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('test-results/domain.json', 'utf8'));
+          const counts = { passed: 0, failed: 0, pending: 0, skipped: 0, todo: 0 };
+          for (const suite of report.testResults) {
+            for (const assertion of suite.assertionResults) {
+              counts[assertion.status] = (counts[assertion.status] ?? 0) + 1;
+            }
+          }
+          console.log(`Executed domain assertions: ${JSON.stringify(counts)}`);
+          NODE
       - name: Report executed requirement coverage (not a release gate)
         run: corepack pnpm trace --results test-results/domain.json
       - name: Report feature status (not a release gate)

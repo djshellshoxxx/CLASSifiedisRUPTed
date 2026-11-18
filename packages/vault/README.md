@@ -63,7 +63,22 @@ Failed closure is visible and requires reload before reopening.
 After three failed unlock attempts, local exponential backoff starts at one
 second and caps at one minute. It survives closing/reopening the same vault in
 one page, but resets on reload and is not an offline password-guessing defense.
-Native Ed25519 errors report only a fixed operation stage, without key bytes,
-native error details or retries. This diagnostic change does not fix the known
-upstream WebKit defect. Device recovery and the conflicting canonical F07 session
-policy remain separate unfinished contracts.
+Native Ed25519 errors report only a fixed operation stage, without key bytes or
+native error details. New identity generation permits at most three sequential
+native calls when the rejected value is a genuine `DOMException` named
+`OperationError`. Other errors stop immediately. Export, import, signing,
+verification, decryption and vault persistence are never retried by this policy.
+Generation completes before a DID or identity is persisted; failed creation does
+not rotate an existing identity or repeat a persistence transaction.
+
+This is a bounded creation-availability mitigation, not a repair of WebKit's
+native cryptography. The pinned Linux WebKit backend also deterministically
+rejects some valid existing PKCS#8 keys containing leading zero bytes. Unlock and
+restore preserve that identity and fail closed; they never generate a replacement
+key. The unchanged [native diagnostic](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44268543372)
+recorded seven generation `OperationError` failures in 512 trials, rejected the
+leading-zero/all-zero import vectors, and passed the nonzero control. Its strict
+assertions remain unchanged. A compatible browser build containing the reviewed
+upstream fixed-width repair is still needed for complete native compatibility.
+Device recovery and the conflicting canonical F07 session policy remain separate
+unfinished contracts.

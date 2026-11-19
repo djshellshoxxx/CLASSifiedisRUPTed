@@ -1,0 +1,57 @@
+{
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "integration_head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+  "original_main": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+  "tested_merge": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+  "actual_integration_merge": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+  "tree": "7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a",
+  "source_ancestry_verified": true,
+  "runtime_matches_tested_tree": true,
+  "pr_actions": [
+    {
+      "number": 54,
+      "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "merged": true,
+      "merged_at": "2026-11-19T07:30:13Z",
+      "merge_commit_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "action": "direct ordinary merge"
+    },
+    {
+      "number": 51,
+      "head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "merged": true,
+      "merged_at": "2026-11-19T07:30:16Z",
+      "merge_commit_sha": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "action": "automatically marked merged through preserved ancestry"
+    },
+    {
+      "number": 53,
+      "head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "merged": true,
+      "merged_at": "2026-11-19T07:30:15Z",
+      "merge_commit_sha": "098d970dd9515d6c43b779aee07cab6d696acd8d",
+      "action": "automatically marked merged through preserved ancestry"
+    }
+  ],
+  "initial_main_push_observation": [
+    {
+      "id": 44480107222,
+      "name": "CLI setup",
+      "event": "push",
+      "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222"
+    },
+    {
+      "id": 44480107217,
+      "name": "Alpha verification",
+      "event": "push",
+      "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217"
+    }
+  ],
+  "remaining_gate": "Actual main push workflows and documentation-only closeout remain outstanding at this checkpoint."
+}

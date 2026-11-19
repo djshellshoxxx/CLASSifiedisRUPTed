@@ -1,0 +1,31 @@
+PR54 Alpha verification — fresh attempt 1
+Source: a111eefb907a9f039f56777715e20b4976ea3d87
+Base: 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+Tested merge: 101265f1fa9dee9e59d177174e4b55bd3ce3bf26
+Tested tree: 7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a
+Log SHA256: f7e85e98995be7ca9886295c833f859cc3a81709315aec71f43e1957b1bfe95f
+
+2026-11-19T07:13:15.1873144Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+2026-11-19T07:13:22.4630003Z specified 148/148 modules; 0 errors; 0 warnings
+2026-11-19T07:13:22.8955404Z dependency check: 0 errors
+2026-11-19T07:13:22.9188148Z ##[group]Run corepack pnpm registry:check
+2026-11-19T07:13:22.9188767Z corepack pnpm registry:check
+2026-11-19T07:13:23.2312023Z > classrup@ registry:check /home/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T07:13:24.1090060Z registry: 18 features, 148 modules, 565 edges, acyclic, 0 specs missing, 66579 bytes, hash sha256-tTCcMiLdFtldMU8BIh3ooR6qsHOe4UE6OddOcSPQwWQ, generation_ms 645, up to date
+2026-11-19T07:13:24.1801555Z 331 money vectors verified with Python Fraction; format v1; seed 740016
+2026-11-19T07:13:24.2523178Z {"gzipBytes":2355,"gzipBudgetBytes":12288}
+2026-11-19T07:13:29.4584068Z ℹ tests 27
+2026-11-19T07:13:29.4585036Z ℹ pass 27
+2026-11-19T07:13:29.4585484Z ℹ fail 0
+2026-11-19T07:13:29.4586448Z ℹ cancelled 0
+2026-11-19T07:13:29.4586948Z ℹ skipped 0
+2026-11-19T07:13:29.4587412Z ℹ todo 0
+2026-11-19T07:14:52.7661189Z Executed domain assertions: {"passed":701,"failed":0,"pending":0,"skipped":0,"todo":0}
+2026-11-19T07:14:53.9977327Z modules with tests: 21/148; requirements covered: 487/4510; gaps in implemented MVP modules: 152
+2026-11-19T07:14:55.7194345Z modules with runtime: 36/148; interface: 15/688; requirements covered: 487/4510
+2026-11-19T07:14:56.1628226Z Created .classrup/local.json. Browser vault data is untouched.
+2026-11-19T07:14:57.4083968Z registry: 18 features, 148 modules, 565 edges, acyclic, 0 specs missing, 66579 bytes, hash sha256-tTCcMiLdFtldMU8BIh3ooR6qsHOe4UE6OddOcSPQwWQ, generation_ms 653, up to date
+2026-11-19T07:14:57.6182935Z Built dist/. Publish these public assets over HTTPS.
+2026-11-19T07:15:45.7750837Z ##[group]Run corepack pnpm exec playwright test --project=chromium --project=firefox --project=webkit --trace off
+2026-11-19T07:15:47.6053172Z Running 72 tests using 1 worker
+2026-11-19T07:28:41.0446591Z   72 passed (12.9m)

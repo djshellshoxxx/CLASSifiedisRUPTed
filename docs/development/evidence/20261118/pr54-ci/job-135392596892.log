@@ -1,0 +1,478 @@
+﻿2026-11-19T07:02:34.0322324Z Current runner version: '2.338.2'
+2026-11-19T07:02:34.0348329Z ##[group]Runner Image Provisioner
+2026-11-19T07:02:34.0349281Z Hosted Compute Agent
+2026-11-19T07:02:34.0349873Z Version: 20261103.629
+2026-11-19T07:02:34.0350514Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-19T07:02:34.0351208Z Build Date: 2026-11-03T17:26:59Z
+2026-11-19T07:02:34.0351871Z Worker ID: {4eb54a39-8448-4816-8b2e-d341e2736b14}
+2026-11-19T07:02:34.0352519Z Region: centralus
+2026-11-19T07:02:34.0352996Z Cloud: Azure
+2026-11-19T07:02:34.0353449Z ##[endgroup]
+2026-11-19T07:02:34.0354860Z ##[group]Operating System
+2026-11-19T07:02:34.0355659Z Microsoft Windows Server 2025
+2026-11-19T07:02:34.0356282Z 10.0.26100
+2026-11-19T07:02:34.0356737Z Datacenter
+2026-11-19T07:02:34.0357189Z ##[endgroup]
+2026-11-19T07:02:34.0357689Z ##[group]Runner Image
+2026-11-19T07:02:34.0358231Z Image: windows-2025-vs2026
+2026-11-19T07:02:34.0358775Z Version: 20261103.298.1
+2026-11-19T07:02:34.0360319Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261103.298/images/windows/Windows2025-VS2026-Readme.md
+2026-11-19T07:02:34.0361927Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261103.298
+2026-11-19T07:02:34.0362855Z ##[endgroup]
+2026-11-19T07:02:34.0363877Z ##[group]GITHUB_TOKEN Permissions
+2026-11-19T07:02:34.0366114Z Contents: read
+2026-11-19T07:02:34.0366694Z Metadata: read
+2026-11-19T07:02:34.0367202Z ##[endgroup]
+2026-11-19T07:02:34.0369288Z Secret source: Actions
+2026-11-19T07:02:34.0370139Z Cache mode: write
+2026-11-19T07:02:34.0370781Z Prepare workflow directory
+2026-11-19T07:02:34.0724916Z Prepare all required actions
+2026-11-19T07:02:34.0800720Z Getting action download info
+2026-11-19T07:02:34.3127371Z Download action repository 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' (SHA:11bd71901bbe5b1630ceea73d27597364c9af683)
+2026-11-19T07:02:34.4454508Z Download action repository 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-19T07:02:34.6269096Z Download action repository 'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-11-19T07:02:34.8877188Z Complete job name: clean-install (windows-latest, 22.18.0)
+2026-11-19T07:02:35.0558476Z ##[group]Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+2026-11-19T07:02:35.0559693Z with:
+2026-11-19T07:02:35.0560172Z   repository: djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T07:02:35.0564044Z   token: ***
+2026-11-19T07:02:35.0564472Z   ssh-strict: true
+2026-11-19T07:02:35.0564885Z   ssh-user: git
+2026-11-19T07:02:35.0565308Z   persist-credentials: true
+2026-11-19T07:02:35.0565767Z   clean: true
+2026-11-19T07:02:35.0566187Z   sparse-checkout-cone-mode: true
+2026-11-19T07:02:35.0566687Z   fetch-depth: 1
+2026-11-19T07:02:35.0567089Z   fetch-tags: false
+2026-11-19T07:02:35.0567517Z   show-progress: true
+2026-11-19T07:02:35.0568423Z   lfs: false
+2026-11-19T07:02:35.0568953Z   submodules: false
+2026-11-19T07:02:35.0569403Z   set-safe-directory: true
+2026-11-19T07:02:35.0570214Z ##[endgroup]
+2026-11-19T07:02:35.2059580Z Syncing repository: djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T07:02:35.2061425Z ##[group]Getting Git version info
+2026-11-19T07:02:35.2062243Z Working directory is 'D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed'
+2026-11-19T07:02:35.3086474Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-19T07:02:35.6054383Z git version 2.56.0.windows.4
+2026-11-19T07:02:35.6106647Z ##[endgroup]
+2026-11-19T07:02:35.6126436Z Temporarily overriding HOME='D:\a\_temp\93191ded-00cf-418b-8b1b-336f95b04457' before making global git config changes
+2026-11-19T07:02:35.6128357Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-19T07:02:35.6136887Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed
+2026-11-19T07:02:35.6731817Z Deleting the contents of 'D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed'
+2026-11-19T07:02:35.6737752Z ##[group]Initializing the repository
+2026-11-19T07:02:35.6746137Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed
+2026-11-19T07:02:35.7540350Z Initialized empty Git repository in D:/a/CLASSifiedisRUPTed/CLASSifiedisRUPTed/.git/
+2026-11-19T07:02:35.7585323Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T07:02:35.8273583Z ##[endgroup]
+2026-11-19T07:02:35.8275335Z ##[group]Disabling automatic garbage collection
+2026-11-19T07:02:35.8282431Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-11-19T07:02:35.8644458Z ##[endgroup]
+2026-11-19T07:02:35.8646120Z ##[group]Setting up auth
+2026-11-19T07:02:35.8655686Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T07:02:35.9022685Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-19T07:02:37.2756880Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T07:02:37.3123973Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-19T07:02:37.9033106Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-11-19T07:02:37.9419036Z ##[endgroup]
+2026-11-19T07:02:37.9420994Z ##[group]Fetching the repository
+2026-11-19T07:02:37.9433710Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +101265f1fa9dee9e59d177174e4b55bd3ce3bf26:refs/remotes/pull/54/merge
+2026-11-19T07:02:39.9199518Z From https://github.com/djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T07:02:39.9200469Z  * [new ref]         101265f1fa9dee9e59d177174e4b55bd3ce3bf26 -> pull/54/merge
+2026-11-19T07:02:39.9247501Z ##[endgroup]
+2026-11-19T07:02:39.9248352Z ##[group]Determining the checkout info
+2026-11-19T07:02:39.9249024Z ##[endgroup]
+2026-11-19T07:02:39.9263287Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-11-19T07:02:39.9789910Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-11-19T07:02:40.0151727Z ##[group]Checking out the ref
+2026-11-19T07:02:40.0160247Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/remotes/pull/54/merge
+2026-11-19T07:02:40.8751459Z Note: switching to 'refs/remotes/pull/54/merge'.
+2026-11-19T07:02:40.8752049Z 
+2026-11-19T07:02:40.8752321Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-19T07:02:40.8753515Z changes and commit them, and you can discard any commits you make in this
+2026-11-19T07:02:40.8754311Z state without impacting any branches by switching back to a branch.
+2026-11-19T07:02:40.8754763Z 
+2026-11-19T07:02:40.8755168Z If you want to create a new branch to retain commits you create, you may
+2026-11-19T07:02:40.8755664Z do so (now or later) by using -c with the switch command. Example:
+2026-11-19T07:02:40.8755929Z 
+2026-11-19T07:02:40.8756096Z   git switch -c <new-branch-name>
+2026-11-19T07:02:40.8756342Z 
+2026-11-19T07:02:40.8756437Z Or undo this operation with:
+2026-11-19T07:02:40.8756604Z 
+2026-11-19T07:02:40.8756678Z   git switch -
+2026-11-19T07:02:40.8756841Z 
+2026-11-19T07:02:40.8757067Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-19T07:02:40.8757384Z 
+2026-11-19T07:02:40.8757781Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+2026-11-19T07:02:40.8908856Z ##[endgroup]
+2026-11-19T07:02:40.9464407Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-11-19T07:02:40.9815313Z 101265f1fa9dee9e59d177174e4b55bd3ce3bf26
+2026-11-19T07:02:41.0317195Z ##[group]Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+2026-11-19T07:02:41.0317759Z with:
+2026-11-19T07:02:41.0317999Z   node-version: 22.18.0
+2026-11-19T07:02:41.0318314Z   always-auth: false
+2026-11-19T07:02:41.0318568Z   check-latest: false
+2026-11-19T07:02:41.0321817Z   token: ***
+2026-11-19T07:02:41.0322027Z ##[endgroup]
+2026-11-19T07:02:41.2182373Z Attempting to download 22.18.0...
+2026-11-19T07:02:41.2369640Z (node:10048) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-19T07:02:41.2370334Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T07:02:42.0145219Z Acquiring 22.18.0 - x64 from https://github.com/actions/node-versions/releases/download/22.18.0-16666198358/node-22.18.0-win32-x64.7z
+2026-11-19T07:02:42.4590727Z Extracting ...
+2026-11-19T07:02:45.5374746Z Adding to the cache ...
+2026-11-19T07:02:50.7573889Z ##[group]Environment details
+2026-11-19T07:02:52.0247170Z node: v22.18.0
+2026-11-19T07:02:52.0247497Z npm: 10.9.3
+2026-11-19T07:02:52.0247713Z yarn: 1.22.22
+2026-11-19T07:02:52.0248126Z ##[endgroup]
+2026-11-19T07:02:52.0555282Z ##[group]Run corepack pnpm install --frozen-lockfile
+2026-11-19T07:02:52.0555731Z [36;1mcorepack pnpm install --frozen-lockfile[0m
+2026-11-19T07:02:52.1203668Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:02:52.1204128Z ##[endgroup]
+2026-11-19T07:03:04.9893977Z Scope: all 20 workspace projects
+2026-11-19T07:03:05.0594664Z Lockfile is up to date, resolution step is skipped
+2026-11-19T07:03:05.0862776Z Progress: resolved 1, reused 0, downloaded 0, added 0
+2026-11-19T07:03:05.1058166Z Packages: +53
+2026-11-19T07:03:05.1061008Z +++++++++++++++++++++++++++++++++++++++++++++++++++++
+2026-11-19T07:03:06.1384766Z Progress: resolved 53, reused 0, downloaded 28, added 8
+2026-11-19T07:03:06.6263739Z Progress: resolved 53, reused 0, downloaded 53, added 53, done
+2026-11-19T07:03:07.0104218Z 
+2026-11-19T07:03:07.0104906Z devDependencies:
+2026-11-19T07:03:07.0107688Z + @classrup/discovery 0.1.0 <- packages\discovery
+2026-11-19T07:03:07.0108669Z + @classrup/i18n 0.1.0 <- packages\i18n
+2026-11-19T07:03:07.0109354Z + @playwright/test 1.64.1
+2026-11-19T07:03:07.0109940Z + @types/node 22.20.5
+2026-11-19T07:03:07.0110452Z + esbuild 0.27.0
+2026-11-19T07:03:07.0110947Z + fake-indexeddb 6.2.6
+2026-11-19T07:03:07.0111473Z + fast-check 4.10.2
+2026-11-19T07:03:07.0111980Z + typescript 7.0.2
+2026-11-19T07:03:07.0112442Z + vitest 5.1.0
+2026-11-19T07:03:07.0112879Z + yaml 2.9.1
+2026-11-19T07:03:07.0113196Z 
+2026-11-19T07:03:07.0636854Z ╭ Warning ─────────────────────────────────────────────────────────────────────╮
+2026-11-19T07:03:07.0637458Z │                                                                              │
+2026-11-19T07:03:07.0638071Z │   Ignored build scripts: esbuild@0.27.0.                                     │
+2026-11-19T07:03:07.0638708Z │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+2026-11-19T07:03:07.0639603Z │   to run scripts.                                                            │
+2026-11-19T07:03:07.0640486Z │                                                                              │
+2026-11-19T07:03:07.0641400Z ╰──────────────────────────────────────────────────────────────────────────────╯
+2026-11-19T07:03:07.0729270Z Done in 2.5s using pnpm v10.28.0
+2026-11-19T07:03:07.2205698Z ##[group]Run node --test tests/cli/*.test.mjs
+2026-11-19T07:03:07.2206072Z [36;1mnode --test tests/cli/*.test.mjs[0m
+2026-11-19T07:03:07.2274788Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:03:07.2275125Z ##[endgroup]
+2026-11-19T07:03:07.5823669Z TAP version 13
+2026-11-19T07:03:07.8133060Z # Subtest: CLI rejects a symbolic link nested in the public asset tree without reading the external file
+2026-11-19T07:03:07.8134523Z ok 1 - CLI rejects a symbolic link nested in the public asset tree without reading the external file
+2026-11-19T07:03:07.8138270Z   ---
+2026-11-19T07:03:07.8139734Z   duration_ms: 126.2574
+2026-11-19T07:03:07.8147210Z   type: 'test'
+2026-11-19T07:03:07.8147963Z   ...
+2026-11-19T07:03:07.9236105Z # Subtest: CLI rejects a linked public directory before touching existing dist output
+2026-11-19T07:03:07.9239460Z ok 2 - CLI rejects a linked public directory before touching existing dist output
+2026-11-19T07:03:07.9240990Z   ---
+2026-11-19T07:03:07.9241542Z   duration_ms: 111.7177
+2026-11-19T07:03:07.9242150Z   type: 'test'
+2026-11-19T07:03:07.9242689Z   ...
+2026-11-19T07:03:07.9510099Z # Subtest: CLI build rejects linked public assets before reading or modifying external targets
+2026-11-19T07:03:07.9533243Z ok 3 - CLI build rejects linked public assets before reading or modifying external targets
+2026-11-19T07:03:07.9617496Z   ---
+2026-11-19T07:03:07.9655830Z   duration_ms: 189.16
+2026-11-19T07:03:07.9681890Z   type: 'test'
+2026-11-19T07:03:07.9711850Z   ...
+2026-11-19T07:03:08.6670743Z # Subtest: independent Ed25519 listing fixture verifies without configuration, persistence or payload disclosure
+2026-11-19T07:03:08.6672688Z ok 4 - independent Ed25519 listing fixture verifies without configuration, persistence or payload disclosure
+2026-11-19T07:03:08.6673840Z   ---
+2026-11-19T07:03:08.6674308Z   duration_ms: 509.2419
+2026-11-19T07:03:08.6674657Z   type: 'test'
+2026-11-19T07:03:08.6674941Z   ...
+2026-11-19T07:03:09.1104446Z # Subtest: human output contains only verified metadata and explicit evidence limits
+2026-11-19T07:03:09.1105709Z ok 5 - human output contains only verified metadata and explicit evidence limits
+2026-11-19T07:03:09.1106450Z   ---
+2026-11-19T07:03:09.1106764Z   duration_ms: 443.2152
+2026-11-19T07:03:09.1107113Z   type: 'test'
+2026-11-19T07:03:09.1107885Z   ...
+2026-11-19T07:03:09.5341922Z # Subtest: standalone signed withdrawal verifies without claiming its target or sequence history is known
+2026-11-19T07:03:09.5344512Z ok 6 - standalone signed withdrawal verifies without claiming its target or sequence history is known
+2026-11-19T07:03:09.5345455Z   ---
+2026-11-19T07:03:09.5345748Z   duration_ms: 423.8302
+2026-11-19T07:03:09.5346153Z   type: 'test'
+2026-11-19T07:03:09.5346507Z   ...
+2026-11-19T07:03:11.1673973Z # Subtest: subprocess rejects tampering, wrong CID, invalid signature and unknown envelope fields
+2026-11-19T07:03:11.1675669Z ok 7 - subprocess rejects tampering, wrong CID, invalid signature and unknown envelope fields
+2026-11-19T07:03:11.1676968Z   ---
+2026-11-19T07:03:11.1677283Z   duration_ms: 1632.9313
+2026-11-19T07:03:11.1677618Z   type: 'test'
+2026-11-19T07:03:11.1677887Z   ...
+2026-11-19T07:03:15.2263807Z # Subtest: subprocess rejects correctly signed unsupported types, substituted owners, private fields and expired records
+2026-11-19T07:03:15.2266024Z ok 8 - subprocess rejects correctly signed unsupported types, substituted owners, private fields and expired records
+2026-11-19T07:03:15.2267359Z   ---
+2026-11-19T07:03:15.2267670Z   duration_ms: 4047.6837
+2026-11-19T07:03:15.2268058Z   type: 'test'
+2026-11-19T07:03:15.2268434Z   ...
+2026-11-19T07:03:15.2688591Z # Subtest: shared validation preserves PWA retain acceptance and exact rejection codes
+2026-11-19T07:03:15.2693563Z ok 9 - shared validation preserves PWA retain acceptance and exact rejection codes
+2026-11-19T07:03:15.2694805Z   ---
+2026-11-19T07:03:15.2695108Z   duration_ms: 53.998
+2026-11-19T07:03:15.2698218Z   type: 'test'
+2026-11-19T07:03:15.2698491Z   ...
+2026-11-19T07:03:16.9244075Z # Subtest: malformed JSON, invalid UTF-8, empty input and private input errors are redacted
+2026-11-19T07:03:16.9245706Z ok 10 - malformed JSON, invalid UTF-8, empty input and private input errors are redacted
+2026-11-19T07:03:16.9246873Z   ---
+2026-11-19T07:03:16.9247557Z   duration_ms: 1654.8753
+2026-11-19T07:03:16.9247899Z   type: 'test'
+2026-11-19T07:03:16.9248189Z   ...
+2026-11-19T07:03:17.7614171Z # Subtest: input size is bounded and overcomplex signed-domain JSON fails without disclosure
+2026-11-19T07:03:17.7615895Z ok 11 - input size is bounded and overcomplex signed-domain JSON fails without disclosure
+2026-11-19T07:03:17.7616521Z   ---
+2026-11-19T07:03:17.7616802Z   duration_ms: 837.1413
+2026-11-19T07:03:17.7617129Z   type: 'test'
+2026-11-19T07:03:17.7617395Z   ...
+2026-11-19T07:03:17.7686884Z # Subtest: actual descriptor read cap rejects a file that grows after both metadata checks
+2026-11-19T07:03:17.7689452Z ok 12 - actual descriptor read cap rejects a file that grows after both metadata checks
+2026-11-19T07:03:17.7690424Z   ---
+2026-11-19T07:03:17.7690737Z   duration_ms: 7.346
+2026-11-19T07:03:17.7691062Z   type: 'test'
+2026-11-19T07:03:17.7691348Z   ...
+2026-11-19T07:03:18.9661543Z # Subtest: directories, final symlinks and missing files fail with stable exits
+2026-11-19T07:03:18.9663023Z ok 13 - directories, final symlinks and missing files fail with stable exits
+2026-11-19T07:03:18.9663996Z   ---
+2026-11-19T07:03:18.9664441Z   duration_ms: 1196.881
+2026-11-19T07:03:18.9664928Z   type: 'test'
+2026-11-19T07:03:18.9665362Z   ...
+2026-11-19T07:03:18.9667520Z # Subtest: FIFO and device inputs fail promptly without opening a stream
+2026-11-19T07:03:18.9672293Z ok 14 - FIFO and device inputs fail promptly without opening a stream # SKIP
+2026-11-19T07:03:18.9673181Z   ---
+2026-11-19T07:03:18.9673681Z   duration_ms: 0.2013
+2026-11-19T07:03:18.9674645Z   type: 'test'
+2026-11-19T07:03:18.9675160Z   ...
+2026-11-19T07:03:24.2098846Z # Subtest: unknown, repeated, missing, network and stdin options never echo supplied values
+2026-11-19T07:03:24.2100039Z ok 15 - unknown, repeated, missing, network and stdin options never echo supplied values
+2026-11-19T07:03:24.2100726Z   ---
+2026-11-19T07:03:24.2100998Z   duration_ms: 5243.5881
+2026-11-19T07:03:24.2101309Z   type: 'test'
+2026-11-19T07:03:24.2101479Z   ...
+2026-11-19T07:03:24.2874213Z # Subtest: runtime dependency failures use the fixed domain infrastructure error
+2026-11-19T07:03:24.2875402Z ok 16 - runtime dependency failures use the fixed domain infrastructure error
+2026-11-19T07:03:24.2876145Z   ---
+2026-11-19T07:03:24.2876449Z   duration_ms: 77.5281
+2026-11-19T07:03:24.2876785Z   type: 'test'
+2026-11-19T07:03:24.2877084Z   ...
+2026-11-19T07:03:24.8030878Z # Subtest: record verification performs no network connection and help needs no setup
+2026-11-19T07:03:24.8032391Z ok 17 - record verification performs no network connection and help needs no setup
+2026-11-19T07:03:24.8033072Z   ---
+2026-11-19T07:03:24.8033395Z   duration_ms: 515.3478
+2026-11-19T07:03:24.8034192Z   type: 'test'
+2026-11-19T07:03:24.8034489Z   ...
+2026-11-19T07:03:24.8271028Z # Subtest: worker pre-caches only fixed public assets without credentials
+2026-11-19T07:03:24.8293338Z ok 18 - worker pre-caches only fixed public assets without credentials
+2026-11-19T07:03:24.8294498Z   ---
+2026-11-19T07:03:24.8294875Z   duration_ms: 48.6268
+2026-11-19T07:03:24.8295241Z   type: 'test'
+2026-11-19T07:03:24.8295557Z   ...
+2026-11-19T07:03:24.8296339Z # Subtest: failed precache rejects installation and deletes only the incomplete new cache
+2026-11-19T07:03:24.8297592Z ok 19 - failed precache rejects installation and deletes only the incomplete new cache
+2026-11-19T07:03:24.8298366Z   ---
+2026-11-19T07:03:24.8298675Z   duration_ms: 2.6543
+2026-11-19T07:03:24.8299025Z   type: 'test'
+2026-11-19T07:03:24.8299333Z   ...
+2026-11-19T07:03:24.8301503Z # Subtest: activation only removes old versions owned by the same application scope
+2026-11-19T07:03:24.8302729Z ok 20 - activation only removes old versions owned by the same application scope
+2026-11-19T07:03:24.8303457Z   ---
+2026-11-19T07:03:24.8304037Z   duration_ms: 1.4581
+2026-11-19T07:03:24.8304395Z   type: 'test'
+2026-11-19T07:03:24.8304692Z   ...
+2026-11-19T07:03:24.8306556Z # Subtest: private paths, queries, other origins and writes never enter worker handling
+2026-11-19T07:03:24.8307690Z ok 21 - private paths, queries, other origins and writes never enter worker handling
+2026-11-19T07:03:24.8308343Z   ---
+2026-11-19T07:03:24.8308649Z   duration_ms: 1.7771
+2026-11-19T07:03:24.8308947Z   type: 'test'
+2026-11-19T07:03:24.8309208Z   ...
+2026-11-19T07:03:24.8309701Z # Subtest: runtime and package manager compatibility fail closed
+2026-11-19T07:03:24.8310477Z ok 22 - runtime and package manager compatibility fail closed
+2026-11-19T07:03:24.8310980Z   ---
+2026-11-19T07:03:24.8311329Z   duration_ms: 2.0853
+2026-11-19T07:03:24.8311727Z   type: 'test'
+2026-11-19T07:03:24.8312026Z   ...
+2026-11-19T07:03:24.8312515Z # Subtest: setup accepts validated explicit flags only
+2026-11-19T07:03:24.8313228Z ok 23 - setup accepts validated explicit flags only
+2026-11-19T07:03:24.8313748Z   ---
+2026-11-19T07:03:24.8314034Z   duration_ms: 1.9753
+2026-11-19T07:03:24.8314435Z   type: 'test'
+2026-11-19T07:03:24.8314732Z   ...
+2026-11-19T07:03:24.8315382Z # Subtest: setup preserves config byte-for-byte and unrelated data on repeat
+2026-11-19T07:03:24.8316435Z ok 24 - setup preserves config byte-for-byte and unrelated data on repeat
+2026-11-19T07:03:24.8317109Z   ---
+2026-11-19T07:03:24.8317410Z   duration_ms: 38.8263
+2026-11-19T07:03:24.8317758Z   type: 'test'
+2026-11-19T07:03:24.8318050Z   ...
+2026-11-19T07:03:24.8318761Z # Subtest: concurrent setups and interrupted temporary files never corrupt config
+2026-11-19T07:03:24.8319915Z ok 25 - concurrent setups and interrupted temporary files never corrupt config
+2026-11-19T07:03:24.8320652Z   ---
+2026-11-19T07:03:24.8320950Z   duration_ms: 98.2963
+2026-11-19T07:03:24.8321300Z   type: 'test'
+2026-11-19T07:03:24.8321596Z   ...
+2026-11-19T07:03:24.8322279Z # Subtest: invalid existing config is preserved and missing config is actionable
+2026-11-19T07:03:24.8323366Z ok 26 - invalid existing config is preserved and missing config is actionable
+2026-11-19T07:03:24.8324387Z   ---
+2026-11-19T07:03:24.8324684Z   duration_ms: 15.9878
+2026-11-19T07:03:24.8325029Z   type: 'test'
+2026-11-19T07:03:24.8325333Z   ...
+2026-11-19T07:03:24.8325902Z # Subtest: setup fails clearly when config path is not a directory
+2026-11-19T07:03:24.8326780Z ok 27 - setup fails clearly when config path is not a directory
+2026-11-19T07:03:24.8327338Z   ---
+2026-11-19T07:03:24.8327640Z   duration_ms: 5.3723
+2026-11-19T07:03:24.8327988Z   type: 'test'
+2026-11-19T07:03:24.8328287Z   ...
+2026-11-19T07:03:24.8328745Z # Subtest: occupied port is a blocking diagnostic
+2026-11-19T07:03:24.8329421Z ok 28 - occupied port is a blocking diagnostic
+2026-11-19T07:03:24.8329870Z   ---
+2026-11-19T07:03:24.8330130Z   duration_ms: 15.0056
+2026-11-19T07:03:24.8330447Z   type: 'test'
+2026-11-19T07:03:24.8330736Z   ...
+2026-11-19T07:03:24.8331473Z # Subtest: preview serves only public output with security headers, correct base and methods
+2026-11-19T07:03:24.8332581Z ok 29 - preview serves only public output with security headers, correct base and methods
+2026-11-19T07:03:24.8333274Z   ---
+2026-11-19T07:03:24.8333545Z   duration_ms: 64.0009
+2026-11-19T07:03:24.8333855Z   type: 'test'
+2026-11-19T07:03:24.8334134Z   ...
+2026-11-19T07:03:24.8334697Z # Subtest: CLI failures exit nonzero and help is available without setup
+2026-11-19T07:03:24.8335546Z ok 30 - CLI failures exit nonzero and help is available without setup
+2026-11-19T07:03:24.8336103Z   ---
+2026-11-19T07:03:24.8336364Z   duration_ms: 336.5139
+2026-11-19T07:03:24.8336684Z   type: 'test'
+2026-11-19T07:03:24.8336947Z   ...
+2026-11-19T07:03:24.8337829Z # Subtest: explicit configure changes only validated fields and preserves on failure
+2026-11-19T07:03:24.8338884Z ok 31 - explicit configure changes only validated fields and preserves on failure
+2026-11-19T07:03:24.8339510Z   ---
+2026-11-19T07:03:24.8339773Z   duration_ms: 39.1816
+2026-11-19T07:03:24.8340084Z   type: 'test'
+2026-11-19T07:03:24.8340511Z   ...
+2026-11-19T07:03:24.8340862Z # X [ERROR] Expected ";" but found "is"
+2026-11-19T07:03:24.8341822Z #     C:/Users/RUNNER~1/AppData/Local/Temp/classrup setup with spaces P40SaA/apps/pwa/src/main.ts:1:5:
+2026-11-19T07:03:24.8343010Z #       1 │ this is invalid typescript !
+2026-11-19T07:03:24.8343511Z #         │      ~~
+2026-11-19T07:03:24.8344238Z #         ╵      ;
+2026-11-19T07:03:24.8344995Z # Subtest: build failure preserves prior output and successful build removes stale assets
+2026-11-19T07:03:24.8346135Z ok 32 - build failure preserves prior output and successful build removes stale assets
+2026-11-19T07:03:24.8346859Z   ---
+2026-11-19T07:03:24.8347122Z   duration_ms: 118.8022
+2026-11-19T07:03:24.8347457Z   type: 'test'
+2026-11-19T07:03:24.8347720Z   ...
+2026-11-19T07:03:24.8347984Z 1..32
+2026-11-19T07:03:24.8349098Z # tests 32
+2026-11-19T07:03:24.8350750Z # suites 0
+2026-11-19T07:03:24.8351117Z # pass 31
+2026-11-19T07:03:24.8351403Z # fail 0
+2026-11-19T07:03:24.8351705Z # cancelled 0
+2026-11-19T07:03:24.8352866Z # skipped 1
+2026-11-19T07:03:24.8353138Z # todo 0
+2026-11-19T07:03:24.8353420Z # duration_ms 17278.3141
+2026-11-19T07:03:24.9568510Z ##[group]Run corepack pnpm run setup --non-interactive
+2026-11-19T07:03:24.9568972Z [36;1mcorepack pnpm run setup --non-interactive[0m
+2026-11-19T07:03:24.9638230Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:03:24.9638596Z ##[endgroup]
+2026-11-19T07:03:25.6467140Z 
+2026-11-19T07:03:25.6467677Z > classrup@ setup D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed
+2026-11-19T07:03:25.6468272Z > node tools/cli/classrup.mjs setup "--non-interactive"
+2026-11-19T07:03:25.6468552Z 
+2026-11-19T07:03:25.7290750Z Created .classrup/local.json. Browser vault data is untouched.
+2026-11-19T07:03:25.8987091Z ##[group]Run corepack pnpm run setup --non-interactive
+2026-11-19T07:03:25.8987529Z [36;1mcorepack pnpm run setup --non-interactive[0m
+2026-11-19T07:03:25.9058642Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:03:25.9058999Z ##[endgroup]
+2026-11-19T07:03:26.5904019Z 
+2026-11-19T07:03:26.5904737Z > classrup@ setup D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed
+2026-11-19T07:03:26.5905355Z > node tools/cli/classrup.mjs setup "--non-interactive"
+2026-11-19T07:03:26.5905649Z 
+2026-11-19T07:03:26.6719698Z Preserved .classrup/local.json. Browser vault data is untouched.
+2026-11-19T07:03:26.8120792Z ##[group]Run corepack pnpm run doctor
+2026-11-19T07:03:26.8121355Z [36;1mcorepack pnpm run doctor[0m
+2026-11-19T07:03:26.8191669Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:03:26.8192023Z ##[endgroup]
+2026-11-19T07:03:27.4843626Z 
+2026-11-19T07:03:27.4844561Z > classrup@ doctor D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed
+2026-11-19T07:03:27.4845605Z > node tools/cli/classrup.mjs doctor
+2026-11-19T07:03:27.4846211Z 
+2026-11-19T07:03:27.6565604Z Local prerequisites ready. Relay: optional; no relay required or configured.
+2026-11-19T07:03:27.7949776Z ##[group]Run corepack pnpm build
+2026-11-19T07:03:27.7950093Z [36;1mcorepack pnpm build[0m
+2026-11-19T07:03:27.8025935Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:03:27.8026283Z ##[endgroup]
+2026-11-19T07:03:28.4637769Z 
+2026-11-19T07:03:28.4638763Z > classrup@ build D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed
+2026-11-19T07:03:28.4640053Z > node packages/platform/scripts/gen-registry.mjs --check --strict && node tools/cli/classrup.mjs build
+2026-11-19T07:03:28.4640852Z 
+2026-11-19T07:03:29.6246889Z registry: 18 features, 148 modules, 565 edges, acyclic, 0 specs missing, 66579 bytes, hash sha256-tTCcMiLdFtldMU8BIh3ooR6qsHOe4UE6OddOcSPQwWQ, generation_ms 764, up to date
+2026-11-19T07:03:29.8895873Z Built dist/. Publish these public assets over HTTPS.
+2026-11-19T07:03:30.0324820Z ##[group]Run echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/pw-browsers" >> "$GITHUB_ENV"
+2026-11-19T07:03:30.0325639Z [36;1mecho "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/pw-browsers" >> "$GITHUB_ENV"[0m
+2026-11-19T07:03:30.0345516Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-11-19T07:03:30.0346042Z ##[endgroup]
+2026-11-19T07:03:30.3459769Z ##[group]Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+2026-11-19T07:03:30.3460298Z with:
+2026-11-19T07:03:30.3460617Z   path: D:\a\_temp/pw-browsers
+2026-11-19T07:03:30.3461545Z   key: playwright-Windows-chromium-b3cb9c31c7bba74ffdd241483a9aba96e4dfac6c07ec560aa0d27089bf5831c5
+2026-11-19T07:03:30.3462088Z   enableCrossOsArchive: false
+2026-11-19T07:03:30.3462314Z   fail-on-cache-miss: false
+2026-11-19T07:03:30.3462522Z   lookup-only: false
+2026-11-19T07:03:30.3462704Z   save-always: false
+2026-11-19T07:03:30.3462870Z env:
+2026-11-19T07:03:30.3463073Z   PLAYWRIGHT_BROWSERS_PATH: D:\a\_temp/pw-browsers
+2026-11-19T07:03:30.3463346Z ##[endgroup]
+2026-11-19T07:03:30.4821075Z (node:9800) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-19T07:03:30.4822536Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T07:03:30.8003245Z Cache hit for: playwright-Windows-chromium-b3cb9c31c7bba74ffdd241483a9aba96e4dfac6c07ec560aa0d27089bf5831c5
+2026-11-19T07:03:30.8121978Z (node:9800) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-19T07:03:32.1287572Z Received 134217728 of 324356947 (41.4%), 110.9 MBs/sec
+2026-11-19T07:03:33.1364586Z Received 268435456 of 324356947 (82.8%), 118.4 MBs/sec
+2026-11-19T07:03:33.4640166Z Received 324356947 of 324356947 (100.0%), 124.3 MBs/sec
+2026-11-19T07:03:33.4645164Z Cache Size: ~309 MB (324356947 B)
+2026-11-19T07:03:33.4729623Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/d55ebcd9-a218-40bd-a0ed-aaafeef86f51/cache.tzst -P -C D:/a/CLASSifiedisRUPTed/CLASSifiedisRUPTed --force-local --use-compress-program "zstd -d"
+2026-11-19T07:03:34.9892655Z Cache restored successfully
+2026-11-19T07:03:35.0199061Z Cache restored from key: playwright-Windows-chromium-b3cb9c31c7bba74ffdd241483a9aba96e4dfac6c07ec560aa0d27089bf5831c5
+2026-11-19T07:03:35.0495863Z ##[group]Run corepack pnpm exec playwright install --with-deps chromium
+2026-11-19T07:03:35.0496448Z [36;1mcorepack pnpm exec playwright install --with-deps chromium[0m
+2026-11-19T07:03:35.0569614Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:03:35.0569961Z env:
+2026-11-19T07:03:35.0570181Z   PLAYWRIGHT_BROWSERS_PATH: D:\a\_temp/pw-browsers
+2026-11-19T07:03:35.0570474Z ##[endgroup]
+2026-11-19T07:06:42.3103566Z 
+2026-11-19T07:06:42.3114839Z Success Restart Needed Exit Code      Feature Result                               
+2026-11-19T07:06:42.3119319Z ------- -------------- ---------      --------------                               
+2026-11-19T07:06:42.3123117Z True    No             Success        {Media Foundation}                           
+2026-11-19T07:06:42.3126237Z 
+2026-11-19T07:06:42.3126384Z 
+2026-11-19T07:06:42.5460674Z ##[group]Run node tests/cli/browser-smoke.mjs
+2026-11-19T07:06:42.5461163Z [36;1mnode tests/cli/browser-smoke.mjs[0m
+2026-11-19T07:06:42.5538061Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:06:42.5538484Z env:
+2026-11-19T07:06:42.5538787Z   PLAYWRIGHT_BROWSERS_PATH: D:\a\_temp/pw-browsers
+2026-11-19T07:06:42.5539193Z ##[endgroup]
+2026-11-19T07:06:45.6612759Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:06:47.2566365Z preview: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:06:50.4590606Z ##[group]Run git diff --exit-code
+2026-11-19T07:06:50.4591272Z [36;1mgit diff --exit-code[0m
+2026-11-19T07:06:50.4665058Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-11-19T07:06:50.4665470Z env:
+2026-11-19T07:06:50.4665754Z   PLAYWRIGHT_BROWSERS_PATH: D:\a\_temp/pw-browsers
+2026-11-19T07:06:50.4666299Z ##[endgroup]
+2026-11-19T07:06:51.3253173Z Post job cleanup.
+2026-11-19T07:06:51.4754390Z Cache hit occurred on the primary key playwright-Windows-chromium-b3cb9c31c7bba74ffdd241483a9aba96e4dfac6c07ec560aa0d27089bf5831c5, not saving cache.
+2026-11-19T07:06:51.4757009Z (node:4136) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-19T07:06:51.4758420Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T07:06:51.5052623Z Post job cleanup.
+2026-11-19T07:06:51.6607069Z (node:7260) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-19T07:06:51.6608032Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T07:06:51.6936238Z Post job cleanup.
+2026-11-19T07:06:51.8808862Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-11-19T07:06:51.9154259Z git version 2.56.0.windows.4
+2026-11-19T07:06:51.9228118Z Temporarily overriding HOME='D:\a\_temp\bb220fa3-895e-4fb0-937b-d68b158a9f9f' before making global git config changes
+2026-11-19T07:06:51.9229167Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-19T07:06:51.9237927Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\CLASSifiedisRUPTed\CLASSifiedisRUPTed
+2026-11-19T07:06:51.9614765Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T07:06:52.0128426Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-11-19T07:06:52.5832971Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T07:06:52.6163359Z http.https://github.com/.extraheader
+2026-11-19T07:06:52.6210171Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-11-19T07:06:52.6581774Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-11-19T07:06:53.2163965Z Cleaning up orphan processes
+2026-11-19T07:06:53.2928683Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830, actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683, actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

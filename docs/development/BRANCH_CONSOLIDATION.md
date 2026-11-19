@@ -2,35 +2,47 @@
 
 ## Latest qualification checkpoint — November 18, 2026
 
-This checkpoint supersedes the initial publication-state observations below;
-it does not claim that the pending Alpha workflow or main merge has completed.
+PR [#54](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/54) merged into
+main at **2026-11-19 07:30:13 UTC**, as
+`d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8`. The actual merge preserves parents
+`044c213d90d62f1f06edb8ca1b9c2141d3991c27` and
+`a111eefb907a9f039f56777715e20b4976ea3d87`; its tree
+`7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a` exactly matches the tested candidate.
+This checkpoint supersedes the initial publication-state observations below.
+Actual post-merge main qualification and the documentation closeout are still
+pending; completion is not yet claimed.
 
-- Public consolidation PR: [#54](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/54), source `a111eefb907a9f039f56777715e20b4976ea3d87`, target main initially `044c213d90d62f1f06edb8ca1b9c2141d3991c27`.
-- Remote source merge: `098d970dd9515d6c43b779aee07cab6d696acd8d`, with parents initial main and PR #53 `d810946`. Its runtime tree is `85265ab572a4980fd95b080237677f5e60b314e9`, identical to PR #53.
-- Public documentation/source tree: `7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a`, identical to local publication commit `5d8c789`. Local merge `2401a6cc` and remote merge `098d970d` are distinct commits with the same source tree and parents; the original PR #53/#51 histories are preserved.
-- Fresh [CLI workflow 44474363663](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663): **success**, first attempt. All six platform jobs passed on tested merge `101265f1fa9dee9e59d177174e4b55bd3ce3bf26`. Actual total: **190 repeated platform assertions passed, zero failed, two intentional Windows POSIX-only skips**. All six jobs passed setup, repeat setup, doctor, production build, real development/preview browser smoke, and unchanged tracked-file checks. See [job identities, counts and log digests](evidence/20261118/pr54-cli-qualification.json) and [decoded excerpts](evidence/20261118/pr54-cli-excerpts.txt).
-- Fresh [Alpha workflow 44474363888](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363888): as of `2026-11-19 07:22:20 UTC`, planner, domain test command, tooling, typecheck, specification/dependency/registry/money checks, setup and build passed in job `135396843144`. All three pinned engines installed; browser journeys were running. Overall Alpha qualification remains pending.
+- Source PR [#53](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/53) at `d81094688ac116c84c09f3105c7b3f6b4c472793` and its PR [#51](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51) ancestor `7b729df38dddf59c4e60e245bdf1ca43546b1e7b` are verified ancestors of actual main. GitHub automatically marked #53 merged at `07:30:15 UTC` and #51 at `07:30:16 UTC`. These are two incorporated source heads and two automatic PR resolutions, from one explicit consolidation merge action.
+- Dedicated integration head: `a111eefb907a9f039f56777715e20b4976ea3d87`. Remote source merge `098d970dd9515d6c43b779aee07cab6d696acd8d` retains the original source parents. Local source merge `2401a6cc` is a distinct commit with the same source tree and parents.
+- Fresh [CLI workflow 44474363663](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663): **success**, first attempt, all six OS/Node jobs. **190 repeated platform assertions passed, zero failed, two intentional Windows POSIX-only skips**. Setup, repeat setup, doctor, production build, real development/preview browser smoke and tracked-file checks passed everywhere.
+- Fresh [Alpha workflow 44474363888](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363888): **success**, first attempt. **701 domain assertions, 27 tooling tests and 72 Chromium/Firefox/WebKit journeys passed**, with zero failed/skipped tests. Typecheck, all 148 specifications, dependency/registry checks, 331 independent money vectors, bundle budget, setup and build passed. Both workflows tested `101265f1fa9dee9e59d177174e4b55bd3ce3bf26`, whose tree is identical to actual main.
+- [Complete combined qualification and nine raw job logs](evidence/20261118/pr54-ci/final-qualification.json) preserve exact checkouts, job identities, counts, byte sizes and SHA-256 digests. [Alpha excerpts](evidence/20261118/pr54-ci/alpha-excerpts.txt) and [CLI excerpts](evidence/20261118/pr54-ci/cli-excerpts.txt) provide concise output. The prior CLI-only checkpoint remains archived separately.
+- Actual main push runs [Alpha 44480107217](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217) and [CLI 44480107222](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222) were queued at the first post-merge observation. Their own results remain required. [Merge and initial post-main state](evidence/20261118/post-integration-state.json) records the boundary.
 - [Local qualification](evidence/20261118/LOCAL_QUALIFICATION.md): typecheck, 148 specifications, boundaries, registry, vectors/bundle budget, dependency audit, setup/build, 27 tooling tests, 32 CLI tests and ten independent probes passed. The complete domain invocation had 699 passes and two timeouts; both cases subsequently passed individually at the original limits. All 24 local browser cases failed at launch because the command sandbox denied Chromium's socket; zero app journeys ran locally. The standard escalation request was rejected by the environment policy. Initial unsuccessful/incomplete observations remain archived.
 
 ### Dispositions at this checkpoint
 
-The two initial A source histories are fully incorporated into the dedicated
-integration branch and **not yet claimed merged into main**. The initial 50 D,
-four C and one E classifications remain unchanged. No new partial recovery or
-source repair is counted; prior registry extraction and the prior macOS rerun
-are historical work. All pre-existing remote branches are preserved.
+The two initial A source histories are now fully incorporated into main. The
+initial 50 D, four C and one E classifications remain immutable discovery
+observations. No new partial recovery or source repair is counted; prior
+registry extraction and the prior macOS rerun are historical work. All
+pre-existing remote branches are preserved.
 
-The initial cleanup list still has 50 candidates. Add the two A source branches
-only after main ancestry, their PR dispositions and unchanged heads are
-confirmed. The expected eventual count of 52 is conditional, not a completed
-cleanup claim. No branches have been deleted. This task adds the dedicated
-integration branch and a separate documentation/evidence branch,
-`docs/consolidation-qualification-20261118`; these are outside the original
-58-branch discovery denominator.
+The [completed ref/PR reconciliation](evidence/20261118/final-reconciliation.md)
+confirms **52 original cleanup candidates**: the 50 initial D histories plus
+the two newly incorporated A source heads. All 57 original non-main refs
+remain unchanged and no candidate is needed as an open PR source or base.
+**34 original non-main heads are now ancestors of main**, comprising 32 prior
+heads plus the two newly integrated sources. Four unfinished product/specification
+heads and one diagnostic head remain preserved. No branches have been deleted. The two new task branches,
+`integration/comprehensive-consolidation` and
+`docs/consolidation-qualification-20261118`, are outside the original 58-branch
+discovery denominator. Documentation PR [#55](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/55)
+now targets main and awaits post-main evidence before closeout.
 
 The remaining execution steps and exact merge guards are in the
-[continuation handoff](CONSOLIDATION_HANDOFF.md). The remaining product priorities
-stay in [REMAINING_WORK.md](REMAINING_WORK.md). No deployment or release occurred.
+[continuation handoff](CONSOLIDATION_HANDOFF.md). Product priorities remain in
+[REMAINING_WORK.md](REMAINING_WORK.md). No deployment or release occurred.
 
 ## Scope and initial publication checkpoint
 

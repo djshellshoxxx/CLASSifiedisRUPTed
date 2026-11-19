@@ -12,13 +12,14 @@ Canonical repository: `djshellshoxxx/CLASSifiedisRUPTed`.
 The `classrupted` shorthand URL is not a separate repository.
 
 - Discovery and semantic branch audit are complete: 58 original refs and 53 historical PRs. Do not restart that entire audit unless refs have changed.
-- PR #54: `integration/comprehensive-consolidation` into `main`.
-- Candidate: `a111eefb907a9f039f56777715e20b4976ea3d87`; originally tested base: `044c213d90d62f1f06edb8ca1b9c2141d3991c27`; tested GitHub merge: `101265f1fa9dee9e59d177174e4b55bd3ce3bf26`.
-- Candidate tree: `7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a`.
-- Preserved source heads: PR #53 `d81094688ac116c84c09f3105c7b3f6b4c472793` and its PR #51 ancestor `7b729df38dddf59c4e60e245bdf1ca43546b1e7b`.
-- Fresh CLI run `44474363663` completed successfully on all six OS/Node jobs; qualified counts, exact checkouts and digests are in `evidence/20261118/pr54-cli-qualification.json`.
-- Fresh Alpha run `44474363888`: as of `2026-11-19 07:22:20 UTC`, plan, domain test command, tooling, typecheck, 148-specification gate, dependency/registry checks, money checks, setup and build had passed in job `135396843144`; all three pinned engines installed and browser journeys were running. Overall Alpha qualification remains pending.
-- Follow-up evidence branch: `docs/consolidation-qualification-20261118`. Its PR is initially stacked on the integration branch to preserve the current CI candidate. Resolve the exact PR by this head name, then retarget it to main only after #54 integrates.
+- PR #54 merged into main at `2026-11-19 07:30:13 UTC`; actual merge `d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8`.
+- Integration head: `a111eefb907a9f039f56777715e20b4976ea3d87`; original base: `044c213d90d62f1f06edb8ca1b9c2141d3991c27`; tested GitHub merge: `101265f1fa9dee9e59d177174e4b55bd3ce3bf26`.
+- Tested and actual main tree: `7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a`; byte-identical, with original main and integration head as parents.
+- Preserved source heads PR #53 `d81094688ac116c84c09f3105c7b3f6b4c472793` and PR #51 `7b729df38dddf59c4e60e245bdf1ca43546b1e7b` are verified ancestors of main. GitHub automatically marked both PRs merged; no separate source-PR merge calls were made.
+- Fresh combined PR checks passed on their first attempts: CLI `44474363663` (all six jobs; 190 pass, two intentional Windows POSIX skips) and Alpha `44474363888` (701 domain, 27 tooling, 72 browser passes, zero failures/skips). Nine complete job logs and exact digests are in `evidence/20261118/pr54-ci/`.
+- Actual main push workflows: Alpha `44480107217` and CLI `44480107222`, both for `d7c03a28`. They were queued in the first post-merge observation. Their own successful results are still required; do not substitute the passing PR runs.
+- Documentation PR #55: head `docs/consolidation-qualification-20261118`, already retargeted to main. Finish the actual post-main evidence and final disposition overlay, then merge the reviewed documentation-only diff. It remains a draft at this checkpoint.
+- A finite hourly consolidation continuation is configured. Pause that continuation once this scope is complete; leave the older paused general ClassRup continuation untouched.
 
 The [branch record](BRANCH_CONSOLIDATION.md) and [remaining work](REMAINING_WORK.md)
 contain the complete evidence and deferred scope. No additional safely usable
@@ -28,7 +29,7 @@ diagnostic histories.
 
 ## Execute the remaining work
 
-1. Refresh PR #54, source/base refs, required checks/rules and current worker activity. A successful old source run is not the final combined result. Re-read actual workflow runs/jobs and decoded logs for the current head. Preserve cancelled, timed-out and queued results as such.
+1. Resume at step 7 for the recorded merged state. Refresh PR #54, source/base refs, required checks/rules and current worker activity. A successful old source run is not the final combined result. Re-read actual workflow runs/jobs and decoded logs for the current head. Preserve cancelled, timed-out and queued results as such.
 2. If the Alpha/CLI jobs are queued or running, do not manufacture a source fix or reset the queue. Preserve the checkpoint and resume when results exist. Do not cancel unrelated jobs or workflows.
 3. Investigate any concrete failure before editing. Use a separate worktree per modifying worker, preserve all original assertions/security controls, make bounded integration repairs, commit on the integration branch without rewriting shared history, and require fresh checks at its new head.
 4. For the unchanged candidate, successful combined evidence must include the Alpha domain/tooling/static/build gates, all 72 product browser journeys, and all six CLI platform jobs. Expected domain count is 701 executed assertions with zero failed/pending/skipped; tooling is 27. CLI totals are 190 repeated passing assertions and two intentionally inapplicable Windows POSIX skips. Verify actual logs rather than assuming these counts.

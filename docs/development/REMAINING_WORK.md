@@ -75,10 +75,32 @@ runtime vulnerabilities. No release or deployment was performed.
 ## Recommended next bounded milestone
 
 The November 19 continuation implements the recommended explicit-file F1b
-slice. The next bounded storage milestone should establish complete supported
-backup coverage and restore diagnostics from an audited inventory of current
-record, blob and delivery stores, before promising complete recovery or key
-rotation. Native WebKit existing-key compatibility and the other P1 items
-remain release-readiness blockers. Choose the next milestone against the latest
-main and current worker activity; do not mutate another worker's branch or
-silently substitute a new identity to work around an import failure.
+slice. The next bounded storage change should make export run the record
+recovery checks already required by restore. In
+[vault.ts](../../packages/vault/src/vault.ts), export parses records, checks their
+canonical keys and runs optional validation; restore additionally runs
+`restoreData`, reparses the result, rebuilds indexes and rechecks keys. The
+[archive-backup test](../../tests/integration/archive-backup.test.ts) demonstrates
+a structurally valid foreign-owner record that can be exported but is rejected
+by the [production restore codec](../../apps/pwa/src/archive-backup.ts).
+
+Extract a shared, non-mutating recovery preflight and apply it to detached
+copies of the same captured export snapshot before returning an artifact.
+Preserve the original signed records, existing
+`classrup.vault.alpha_backup/v1` format, protected identity and DID. Recovery
+normalization must not change live records or promote untrusted coordination
+state. This is planned work; the current continuation does not implement it.
+
+Acceptance should establish that invalid owner/key/normalized-data evidence
+fails before download; existing valid backups still restore; identity and
+deterministic signatures remain unchanged; lock/close during asynchronous
+preflight prevents a late artifact; and failed restore leaves the destination
+uninitialized after reopening. Reuse the current restore validation rather
+than maintaining a second set of rules.
+
+After that bounded change, inventory the supported record, blob, delivery and
+lease categories before expanding backup coverage. Current record backups omit
+blob/reference and delivery/queue state; preflight alone does not make them
+complete database recovery or define rotation and copied-vault semantics.
+Native WebKit existing-key compatibility and the other P1 items remain open.
+Choose subsequent work against the latest main and current worker activity.

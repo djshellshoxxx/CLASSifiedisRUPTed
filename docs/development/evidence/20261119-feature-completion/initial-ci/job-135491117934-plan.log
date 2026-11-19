@@ -1,0 +1,153 @@
+﻿2026-11-19T10:29:18.2122615Z Current runner version: '2.338.2'
+2026-11-19T10:29:18.2142869Z ##[group]Runner Image Provisioner
+2026-11-19T10:29:18.2143647Z Hosted Compute Agent
+2026-11-19T10:29:18.2144216Z Version: 20261103.629
+2026-11-19T10:29:18.2144837Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-19T10:29:18.2145408Z Build Date: 2026-11-03T17:26:59Z
+2026-11-19T10:29:18.2145924Z Worker ID: {f8841d04-9fe0-4efd-9dc1-a2364bf20e93}
+2026-11-19T10:29:18.2146521Z Region: centralus
+2026-11-19T10:29:18.2147258Z Cloud: Azure
+2026-11-19T10:29:18.2147695Z ##[endgroup]
+2026-11-19T10:29:18.2149162Z ##[group]Operating System
+2026-11-19T10:29:18.2149661Z Ubuntu
+2026-11-19T10:29:18.2150106Z 26.04.1
+2026-11-19T10:29:18.2150652Z LTS
+2026-11-19T10:29:18.2151076Z ##[endgroup]
+2026-11-19T10:29:18.2151510Z ##[group]Runner Image
+2026-11-19T10:29:18.2151976Z Image: ubuntu-26.04
+2026-11-19T10:29:18.2152446Z Version: 20261111.196.1
+2026-11-19T10:29:18.2153626Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261111.196/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-19T10:29:18.2154856Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261111.196
+2026-11-19T10:29:18.2155603Z ##[endgroup]
+2026-11-19T10:29:18.2156518Z ##[group]GITHUB_TOKEN Permissions
+2026-11-19T10:29:18.2158742Z Contents: read
+2026-11-19T10:29:18.2159418Z Metadata: read
+2026-11-19T10:29:18.2159939Z ##[endgroup]
+2026-11-19T10:29:18.2162343Z Secret source: Actions
+2026-11-19T10:29:18.2163400Z Cache mode: write
+2026-11-19T10:29:18.2164589Z Prepare workflow directory
+2026-11-19T10:29:18.2457447Z Prepare all required actions
+2026-11-19T10:29:18.2498707Z Getting action download info
+2026-11-19T10:29:18.4696681Z Download action repository 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' (SHA:11bd71901bbe5b1630ceea73d27597364c9af683)
+2026-11-19T10:29:18.6653056Z Complete job name: plan
+2026-11-19T10:29:18.7321673Z ##[group]Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+2026-11-19T10:29:18.7322485Z with:
+2026-11-19T10:29:18.7323020Z   repository: djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T10:29:18.7326087Z   token: ***
+2026-11-19T10:29:18.7326502Z   ssh-strict: true
+2026-11-19T10:29:18.7327190Z   ssh-user: git
+2026-11-19T10:29:18.7327630Z   persist-credentials: true
+2026-11-19T10:29:18.7328094Z   clean: true
+2026-11-19T10:29:18.7328515Z   sparse-checkout-cone-mode: true
+2026-11-19T10:29:18.7329038Z   fetch-depth: 1
+2026-11-19T10:29:18.7329474Z   fetch-tags: false
+2026-11-19T10:29:18.7329895Z   show-progress: true
+2026-11-19T10:29:18.7330341Z   lfs: false
+2026-11-19T10:29:18.7330736Z   submodules: false
+2026-11-19T10:29:18.7331145Z   set-safe-directory: true
+2026-11-19T10:29:18.7331782Z ##[endgroup]
+2026-11-19T10:29:18.9991811Z Syncing repository: djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T10:29:18.9994690Z ##[group]Getting Git version info
+2026-11-19T10:29:18.9996156Z Working directory is '/home/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed'
+2026-11-19T10:29:18.9998842Z [command]/usr/bin/git version
+2026-11-19T10:29:18.9999699Z git version 2.56.1
+2026-11-19T10:29:19.0008776Z ##[endgroup]
+2026-11-19T10:29:19.0023048Z Temporarily overriding HOME='/home/runner/work/_temp/ca222ace-1a24-4ecc-a25c-1eb05d165e51' before making global git config changes
+2026-11-19T10:29:19.0025138Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-19T10:29:19.0027344Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T10:29:19.0086095Z Deleting the contents of '/home/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed'
+2026-11-19T10:29:19.0093314Z ##[group]Initializing the repository
+2026-11-19T10:29:19.0100349Z [command]/usr/bin/git init /home/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T10:29:19.0203226Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-19T10:29:19.0206157Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-19T10:29:19.0207981Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-19T10:29:19.0209059Z hint: call:
+2026-11-19T10:29:19.0209646Z hint:
+2026-11-19T10:29:19.0210335Z hint: 	git config --global init.defaultBranch <name>
+2026-11-19T10:29:19.0211545Z hint:
+2026-11-19T10:29:19.0212257Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-19T10:29:19.0213678Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-19T10:29:19.0214947Z hint:
+2026-11-19T10:29:19.0215655Z hint: 	git branch -m <name>
+2026-11-19T10:29:19.0216683Z hint:
+2026-11-19T10:29:19.0218121Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-19T10:29:19.0219854Z Initialized empty Git repository in /home/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed/.git/
+2026-11-19T10:29:19.0227280Z [command]/usr/bin/git remote add origin https://github.com/djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T10:29:19.0279049Z ##[endgroup]
+2026-11-19T10:29:19.0280399Z ##[group]Disabling automatic garbage collection
+2026-11-19T10:29:19.0290127Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-19T10:29:19.0318078Z ##[endgroup]
+2026-11-19T10:29:19.0319307Z ##[group]Setting up auth
+2026-11-19T10:29:19.0322097Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T10:29:19.0369909Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-19T10:29:19.0794562Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T10:29:19.0832971Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-19T10:29:19.1079421Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-19T10:29:19.1127392Z ##[endgroup]
+2026-11-19T10:29:19.1128718Z ##[group]Fetching the repository
+2026-11-19T10:29:19.1135311Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +f68098cda9d3bd0c6904468acab9289dcea9d401:refs/remotes/pull/56/merge
+2026-11-19T10:29:20.4943630Z From https://github.com/djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T10:29:20.4945760Z  * [new ref]         f68098cda9d3bd0c6904468acab9289dcea9d401 -> pull/56/merge
+2026-11-19T10:29:20.4949450Z ##[endgroup]
+2026-11-19T10:29:20.4950718Z ##[group]Determining the checkout info
+2026-11-19T10:29:20.4952304Z ##[endgroup]
+2026-11-19T10:29:20.4953476Z [command]/usr/bin/git sparse-checkout disable
+2026-11-19T10:29:20.5003205Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-19T10:29:20.5029184Z ##[group]Checking out the ref
+2026-11-19T10:29:20.5031313Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/56/merge
+2026-11-19T10:29:20.6153656Z Note: switching to 'refs/remotes/pull/56/merge'.
+2026-11-19T10:29:20.6154650Z 
+2026-11-19T10:29:20.6155253Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-19T10:29:20.6156682Z changes and commit them, and you can discard any commits you make in this
+2026-11-19T10:29:20.6158636Z state without impacting any branches by switching back to a branch.
+2026-11-19T10:29:20.6159763Z 
+2026-11-19T10:29:20.6160571Z If you want to create a new branch to retain commits you create, you may
+2026-11-19T10:29:20.6162102Z do so (now or later) by using -c with the switch command. Example:
+2026-11-19T10:29:20.6163240Z 
+2026-11-19T10:29:20.6163686Z   git switch -c <new-branch-name>
+2026-11-19T10:29:20.6164457Z 
+2026-11-19T10:29:20.6164956Z Or undo this operation with:
+2026-11-19T10:29:20.6165773Z 
+2026-11-19T10:29:20.6166387Z   git switch -
+2026-11-19T10:29:20.6167250Z 
+2026-11-19T10:29:20.6168171Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-19T10:29:20.6169983Z 
+2026-11-19T10:29:20.6171618Z HEAD is now at f68098c Merge 2ddd951a04282a31a865b3bcb5372a9b6b4d2cca into b6d99d87e9f67e76791f2dfff3e85015154cd92f
+2026-11-19T10:29:20.6176362Z ##[endgroup]
+2026-11-19T10:29:20.6210420Z [command]/usr/bin/git log -1 --format=%H
+2026-11-19T10:29:20.6231807Z f68098cda9d3bd0c6904468acab9289dcea9d401
+2026-11-19T10:29:20.6467627Z ##[group]Run files=""
+2026-11-19T10:29:20.6468958Z [36;1mfiles=""[0m
+2026-11-19T10:29:20.6470261Z [36;1mif [ "$EVENT" = "pull_request" ] && git fetch --no-tags --depth=1 origin "$BASE_SHA"; then[0m
+2026-11-19T10:29:20.6471926Z [36;1m  files="$(git diff --name-only "$BASE_SHA" HEAD || true)"[0m
+2026-11-19T10:29:20.6473135Z [36;1mfi[0m
+2026-11-19T10:29:20.6474301Z [36;1mprintf '%s\n' "$files" | node tools/ci/plan.mjs "$EVENT" | tee -a "$GITHUB_OUTPUT"[0m
+2026-11-19T10:29:20.6508488Z shell: /usr/bin/bash -e {0}
+2026-11-19T10:29:20.6509526Z env:
+2026-11-19T10:29:20.6510253Z   EVENT: pull_request
+2026-11-19T10:29:20.6511208Z   BASE_SHA: b6d99d87e9f67e76791f2dfff3e85015154cd92f
+2026-11-19T10:29:20.6512312Z ##[endgroup]
+2026-11-19T10:29:20.9348068Z From https://github.com/djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T10:29:20.9348513Z  * branch            b6d99d87e9f67e76791f2dfff3e85015154cd92f -> FETCH_HEAD
+2026-11-19T10:29:21.1348892Z os=["ubuntu-latest","windows-latest","macos-latest"]
+2026-11-19T10:29:21.1353127Z browsers=chromium firefox webkit
+2026-11-19T10:29:21.1354081Z projects=--project=chromium --project=firefox --project=webkit
+2026-11-19T10:29:21.1354594Z key=chromium-firefox-webkit
+2026-11-19T10:29:21.1514291Z Post job cleanup.
+2026-11-19T10:29:21.2142254Z [command]/usr/bin/git version
+2026-11-19T10:29:21.2174149Z git version 2.56.1
+2026-11-19T10:29:21.2199392Z Temporarily overriding HOME='/home/runner/work/_temp/5684e94e-a156-44ff-825e-16bc1a577eba' before making global git config changes
+2026-11-19T10:29:21.2200654Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-19T10:29:21.2203415Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T10:29:21.2232438Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T10:29:21.2256621Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-19T10:29:21.2456769Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T10:29:21.2474239Z http.https://github.com/.extraheader
+2026-11-19T10:29:21.2483590Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-19T10:29:21.2520038Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-19T10:29:21.2823341Z Evaluate and set job outputs
+2026-11-19T10:29:21.2830841Z Set output 'browsers'
+2026-11-19T10:29:21.2832377Z Set output 'projects'
+2026-11-19T10:29:21.2833031Z Set output 'key'
+2026-11-19T10:29:21.2833578Z Cleaning up orphan processes
+2026-11-19T10:29:21.3099981Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "status": "awaiting-corrected-head-qualification",
+  "updatedAt": "2026-11-19T10:59:06Z",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "pullRequest": 56,
+  "baseline": "b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+  "sourceHead": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+  "sourceTree": "92a6452b4241fbcafe13b334a154765bbac63c3e",
+  "testMerge": "0e890e7ad2dffe10d65466f5f16f2595bb19f928",
+  "localCheckpoint": "b5e251c76159d262e3db46a70ff9bd2817220114",
+  "sourceTreeEqualityVerified": true,
+  "correction": {
+    "path": "tests/browser/listing-value.spec.ts",
+    "sourceCommit": "781a071c931d645271c7187debd017a6b91288da",
+    "changes": [
+      "Use actual combobox role and exact Listing type accessible name",
+      "Wait for completed vault unlocking",
+      "Assert exact unpublished revision 4 and published revision 5 instead of accepting substrings or empty refresh states"
+    ],
+    "runtimeChanged": false,
+    "testLimitsChanged": false,
+    "localTypecheck": {
+      "exitCode": 137,
+      "result": "killed; no passing claim"
+    }
+  },
+  "firstHead": {
+    "sourceHead": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+    "testMerge": "f68098cda9d3bd0c6904468acab9289dcea9d401",
+    "alphaRun": 44504114268,
+    "alphaConclusion": "failure",
+    "domain": {
+      "passed": 748,
+      "failed": 0,
+      "pending": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "tooling": {
+      "passed": 27,
+      "failed": 0
+    },
+    "browser": {
+      "total": 75,
+      "passed": 72,
+      "failed": 3,
+      "failedEngines": [
+        "chromium",
+        "firefox",
+        "webkit"
+      ],
+      "cause": "New journey exact getByLabel lookup did not match wrapped select label text; snapshots confirm combobox accessible name Listing type."
+    },
+    "cliRun": 44504114080,
+    "cliConclusion": "cancelled",
+    "cliPlatformJobs": {
+      "cancelled": 6,
+      "executed": 0,
+      "steps": 0,
+      "runnerId": 0
+    },
+    "evidence": "initial-ci/manifest.json"
+  },
+  "hosted": {
+    "alpha": {
+      "runId": 44510361239,
+      "attempt": 1,
+      "status": "queued"
+    },
+    "cli": {
+      "runId": 44510361244,
+      "attempt": 1,
+      "status": "queued"
+    },
+    "mainQualification": "not-started"
+  },
+  "mergeState": "draft PR; main unchanged; require fresh corrected-head qualification before merge",
+  "priorLocalQualification": "local-qualification.json",
+  "priorCheckpoint": "qualification-checkpoint.json",
+  "remaining": [
+    "native WebKit existing-key import compatibility",
+    "complete encrypted backup/recovery",
+    "canonical identity/device and federation authority",
+    "wider consent, commerce, messaging and later product workflows"
+  ]
+}

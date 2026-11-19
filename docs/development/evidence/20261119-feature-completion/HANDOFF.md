@@ -1,16 +1,35 @@
-# Feature continuation qualification handoff
+# Qualification handoff
 
-The owner's continuation is implemented and independently reviewed in PR #56. Main remains unchanged pending hosted qualification. The source head is `2ddd951a04282a31a865b3bcb5372a9b6b4d2cca`; source and test-merge trees both equal `38523662eafe9f86a5b3f6f746703916be96fc89`.
+Updated 2026-11-19T10:59:06Z. PR #56 remains draft and unmerged. The current source is
+`3aa7a17b28ee07ebec4336b49c3527743510bc16`, tree
+`92a6452b4241fbcafe13b334a154765bbac63c3e`; current test merge is
+`0e890e7ad2dffe10d65466f5f16f2595bb19f928`. The
+[correction checkpoint](correction-checkpoint.json) supersedes the original
+dated pending-state checkpoint for current status.
 
-See [qualification-checkpoint.json](qualification-checkpoint.json) for actual passing, failed and incomplete evidence. Do not substitute focused passes or previous main CI for this candidate. Two local full invocations failed under host resource pressure; the executor disconnected again after the source was published. No tests or limits were relaxed.
+The first source's Alpha run passed 748 domain assertions and 27 tooling tests,
+then failed all three new value-removal browser cases at an exact label lookup:
+72 existing browser journeys passed. The corrected test uses the combobox's
+actual accessible name and stronger unlock/revision assertions. Its local
+typecheck was killed with exit 137. Six original CLI platform jobs were cancelled
+before execution by the new push. Failed and cancelled attempts remain evidence,
+not qualification of the corrected source.
 
-## Resume from live state
+## Resume steps
 
-1. Re-read PR #56, its head/base, main, and both run IDs. Review any drift before modifying a ref.
-2. Complete Alpha run 44504114268 and CLI run 44504114080. Inspect the actual job checkout and raw logs. Require all nine jobs, all browser engines and all six OS/Node CLI jobs to succeed. Preserve any failed attempts and repair actual defects before retrying.
-3. If source and base remain the reviewed candidate and all checks pass, update the PR evidence, mark ready, and merge ordinarily with expected current head. Do not force-push or bypass gates. The owner's consolidation instruction authorizes this completion.
-4. Read the actual main merge result and qualify main's own push workflows. Do not report PR results as main results.
-5. Finalize the documentation/evidence branch against the qualified main, preserving exact source identity and execution counts; a documentation-only closeout does not require claiming nonexistent CI runs.
-6. Report completed features, test evidence, merge identity and remaining work. No deployment, release, historical branch deletion or changes to unrelated automations belong to this batch.
-
-Public CLI F1b is explicitly files-only; retained-vault/private CLI access remains unimplemented. Transaction lifetime repair does not complete backup recovery or fix native WebKit import compatibility. Preserve draft #8 and the older source/diagnostic branches.
+1. Refresh PR #56, main and both source/merge identities. Current expected main is
+   `b6d99d87e9f67e76791f2dfff3e85015154cd92f`.
+2. Inspect Alpha 44510361239 and CLI 44510361244 and their actual checked-out
+   commit/logs. Require both Alpha jobs and all seven CLI jobs, including all
+   three browsers and all six OS/Node configurations. Preserve any failed attempt.
+3. When the current source passes, mark ready and merge ordinarily with the
+   expected current PR head. Do not enable auto-merge while checks are pending;
+   main has no required-check protection.
+4. Record the actual main merge SHA/tree and inspect main's own push workflows.
+   PR success is not a main-workflow result.
+5. Finalize this documentation branch against qualified main, preserving earlier
+   snapshots and raw evidence; update the current report/status. Review the
+   docs-only diff and runtime-tree equality before a documentation closeout PR.
+6. Report completed features and exact evidence, with remaining alpha work.
+   Historical draft #8 and source branches stay preserved. No release or
+   deployment is included.

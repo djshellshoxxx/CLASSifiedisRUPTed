@@ -1,0 +1,1420 @@
+{
+  "as_of_utc": "2026-11-19 10:57:51 UTC",
+  "repo": "djshellshoxxx/CLASSifiedisRUPTed",
+  "pr": 56,
+  "source_head": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+  "actual_checkout": "f68098cda9d3bd0c6904468acab9289dcea9d401",
+  "tree": "38523662eafe9f86a5b3f6f746703916be96fc89",
+  "qualification": "Alpha failed; CLI cancelled before platform jobs executed",
+  "alpha_counts": {
+    "domain": {
+      "passed": 748,
+      "failed": 0,
+      "pending": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "tooling": {
+      "tests": 27,
+      "passed": 27,
+      "failed": 0
+    },
+    "browser": {
+      "tests": 75,
+      "passed": 72,
+      "failed": 3,
+      "failed_test": "tests/browser/listing-value.spec.ts:15:60",
+      "failed_engines": [
+        "chromium",
+        "firefox",
+        "webkit"
+      ],
+      "failure": "locator.selectOption timeout waiting for exact label 'Listing type'"
+    }
+  },
+  "logs": [
+    {
+      "job": 135491117934,
+      "saved": {
+        "chunk_id": "43353f",
+        "wall_time_seconds": 0.059964809,
+        "exit_code": 0,
+        "original_token_count": 53,
+        "output": "{\"path\": \"/workspace/scratch/b3afde5215ae/qualification/pr56-ci/job-135491117934-plan.log\", \"bytes\": 11904, \"sha256\": \"be1280989d890f3ef67feaa241effa76b8dcec14dc8fedf1e24c4e96469eb3f2\", \"crlf\": 0, \"bom\": true}\n"
+      }
+    },
+    {
+      "job": 135491117573,
+      "saved": {
+        "chunk_id": "cddba4",
+        "wall_time_seconds": 0.043188732,
+        "exit_code": 0,
+        "original_token_count": 53,
+        "output": "{\"path\": \"/workspace/scratch/b3afde5215ae/qualification/pr56-ci/job-135491117573-plan.log\", \"bytes\": 11799, \"sha256\": \"09c6939bbe34e4cac6fd16e38c112da157ae9ea8beffd3cf933f1bcc14c7843a\", \"crlf\": 0, \"bom\": true}\n"
+      }
+    },
+    {
+      "job": 135498101278,
+      "saved": {
+        "chunk_id": "181ca2",
+        "wall_time_seconds": 0.005707967,
+        "exit_code": 0,
+        "original_token_count": 54,
+        "output": "{\"path\": \"/workspace/scratch/b3afde5215ae/qualification/pr56-ci/job-135498101278-domain.log\", \"bytes\": 155381, \"sha256\": \"449db35680415834ce6c179ec47854ef2b590d20b8bf533bdf55b135ba4c02f2\", \"crlf\": 0, \"bom\": true}\n"
+      }
+    }
+  ],
+  "runs": [
+    {
+      "run": {
+        "id": 44504114268,
+        "name": "Alpha verification",
+        "node_id": "WFR_kwLOVTfRFs8AAAAKXKbkXA",
+        "head_branch": "codex/classrup-f1b-consolidation-20261119",
+        "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+        "path": ".github/workflows/alpha-checks.yml",
+        "display_title": "Complete public listing queries and explicit value editing; repair storage lifetime",
+        "run_number": 90,
+        "event": "pull_request",
+        "status": "completed",
+        "conclusion": "failure",
+        "workflow_id": 412015071,
+        "check_suite_id": 120466527402,
+        "check_suite_node_id": "CS_kwDOVTfRFs8AAAAcDF1Uqg",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268",
+        "pull_requests": [
+          {
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls/56",
+            "id": 5392957982,
+            "number": 56,
+            "head": {
+              "ref": "codex/classrup-f1b-consolidation-20261119",
+              "sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+              "repo": {
+                "id": 1429721366,
+                "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed",
+                "name": "CLASSifiedisRUPTed"
+              }
+            },
+            "base": {
+              "ref": "main",
+              "sha": "b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+              "repo": {
+                "id": 1429721366,
+                "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed",
+                "name": "CLASSifiedisRUPTed"
+              }
+            }
+          }
+        ],
+        "created_at": "2026-11-19T10:16:28Z",
+        "updated_at": "2026-11-19T10:51:47Z",
+        "actor": {
+          "login": "djshellshoxxx",
+          "id": 127660907,
+          "node_id": "U_kgDOB5vzaw",
+          "avatar_url": "https://avatars.githubusercontent.com/u/127660907?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/djshellshoxxx",
+          "html_url": "https://github.com/djshellshoxxx",
+          "followers_url": "https://api.github.com/users/djshellshoxxx/followers",
+          "following_url": "https://api.github.com/users/djshellshoxxx/following{/other_user}",
+          "gists_url": "https://api.github.com/users/djshellshoxxx/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/djshellshoxxx/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/djshellshoxxx/subscriptions",
+          "organizations_url": "https://api.github.com/users/djshellshoxxx/orgs",
+          "repos_url": "https://api.github.com/users/djshellshoxxx/repos",
+          "events_url": "https://api.github.com/users/djshellshoxxx/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/djshellshoxxx/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "run_attempt": 1,
+        "referenced_workflows": [],
+        "run_started_at": "2026-11-19T10:16:28Z",
+        "triggering_actor": {
+          "login": "djshellshoxxx",
+          "id": 127660907,
+          "node_id": "U_kgDOB5vzaw",
+          "avatar_url": "https://avatars.githubusercontent.com/u/127660907?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/djshellshoxxx",
+          "html_url": "https://github.com/djshellshoxxx",
+          "followers_url": "https://api.github.com/users/djshellshoxxx/followers",
+          "following_url": "https://api.github.com/users/djshellshoxxx/following{/other_user}",
+          "gists_url": "https://api.github.com/users/djshellshoxxx/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/djshellshoxxx/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/djshellshoxxx/subscriptions",
+          "organizations_url": "https://api.github.com/users/djshellshoxxx/orgs",
+          "repos_url": "https://api.github.com/users/djshellshoxxx/repos",
+          "events_url": "https://api.github.com/users/djshellshoxxx/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/djshellshoxxx/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "jobs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/jobs",
+        "logs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/logs",
+        "check_suite_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-suites/120466527402",
+        "artifacts_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/artifacts",
+        "cancel_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/cancel",
+        "rerun_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/rerun",
+        "previous_attempt_url": null,
+        "workflow_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/workflows/412015071",
+        "head_commit": {
+          "id": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+          "tree_id": "38523662eafe9f86a5b3f6f746703916be96fc89",
+          "message": "Complete public listing queries and explicit value editing\n\nAdd F1b public-file listing/list/show/search through shared PWA handlers, bounded deterministic pagination, fixed output contracts and negative tests.\n\nAdd explicit local listing value removal while preserving exact values, authorization, revisions, inventory holds, history and sale publication requirements.\n\nRevoke transaction and driver handles when callbacks settle, including synchronous microtasks and delayed blob writes. Reject malformed paired price bounds before bigint conversion.\n\nConsolidated local checkpoint: 48806f8faf7b9c78d61db6cea04cdc7c424bf7a4\nExact source tree: 38523662eafe9f86a5b3f6f746703916be96fc89\nIndependent source review recorded in docs/development/evidence/20261119-feature-completion/independent-review.md.\n\nFull combined CI qualification is required before main integration.",
+          "timestamp": "2026-11-19T10:16:08Z",
+          "author": {
+            "name": "sheldon",
+            "email": "127660907+djshellshoxxx@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "sheldon",
+            "email": "127660907+djshellshoxxx@users.noreply.github.com"
+          }
+        },
+        "repository": {
+          "id": 1429721366,
+          "node_id": "R_kgDOVTfRFg",
+          "name": "CLASSifiedisRUPTed",
+          "full_name": "djshellshoxxx/CLASSifiedisRUPTed",
+          "private": false,
+          "owner": {
+            "login": "djshellshoxxx",
+            "id": 127660907,
+            "node_id": "U_kgDOB5vzaw",
+            "avatar_url": "https://avatars.githubusercontent.com/u/127660907?v=4",
+            "gravatar_id": "",
+            "url": "https://api.github.com/users/djshellshoxxx",
+            "html_url": "https://github.com/djshellshoxxx",
+            "followers_url": "https://api.github.com/users/djshellshoxxx/followers",
+            "following_url": "https://api.github.com/users/djshellshoxxx/following{/other_user}",
+            "gists_url": "https://api.github.com/users/djshellshoxxx/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/djshellshoxxx/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/djshellshoxxx/subscriptions",
+            "organizations_url": "https://api.github.com/users/djshellshoxxx/orgs",
+            "repos_url": "https://api.github.com/users/djshellshoxxx/repos",
+            "events_url": "https://api.github.com/users/djshellshoxxx/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/djshellshoxxx/received_events",
+            "type": "User",
+            "user_view_type": "public",
+            "site_admin": false
+          },
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed",
+          "description": null,
+          "fork": false,
+          "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed",
+          "forks_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/forks",
+          "keys_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/keys{/key_id}",
+          "collaborators_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/collaborators{/collaborator}",
+          "teams_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/teams",
+          "hooks_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/hooks",
+          "issue_events_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues/events{/number}",
+          "events_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/events",
+          "assignees_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/assignees{/user}",
+          "branches_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/branches{/branch}",
+          "tags_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/tags",
+          "blobs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/blobs{/sha}",
+          "git_tags_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/tags{/sha}",
+          "git_refs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/refs{/sha}",
+          "trees_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/trees{/sha}",
+          "statuses_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/statuses/{sha}",
+          "languages_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/languages",
+          "stargazers_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/stargazers",
+          "contributors_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/contributors",
+          "subscribers_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/subscribers",
+          "subscription_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/subscription",
+          "commits_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/commits{/sha}",
+          "git_commits_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits{/sha}",
+          "comments_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/comments{/number}",
+          "issue_comment_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues/comments{/number}",
+          "contents_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/contents/{+path}",
+          "compare_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/compare/{base}...{head}",
+          "merges_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/merges",
+          "archive_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/{archive_format}{/ref}",
+          "downloads_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/downloads",
+          "issues_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues{/number}",
+          "pulls_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls{/number}",
+          "milestones_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/milestones{/number}",
+          "notifications_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/notifications{?since,all,participating}",
+          "labels_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/labels{/name}",
+          "releases_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/releases{/id}",
+          "deployments_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/deployments"
+        },
+        "head_repository": {
+          "id": 1429721366,
+          "node_id": "R_kgDOVTfRFg",
+          "name": "CLASSifiedisRUPTed",
+          "full_name": "djshellshoxxx/CLASSifiedisRUPTed",
+          "private": false,
+          "owner": {
+            "login": "djshellshoxxx",
+            "id": 127660907,
+            "node_id": "U_kgDOB5vzaw",
+            "avatar_url": "https://avatars.githubusercontent.com/u/127660907?v=4",
+            "gravatar_id": "",
+            "url": "https://api.github.com/users/djshellshoxxx",
+            "html_url": "https://github.com/djshellshoxxx",
+            "followers_url": "https://api.github.com/users/djshellshoxxx/followers",
+            "following_url": "https://api.github.com/users/djshellshoxxx/following{/other_user}",
+            "gists_url": "https://api.github.com/users/djshellshoxxx/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/djshellshoxxx/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/djshellshoxxx/subscriptions",
+            "organizations_url": "https://api.github.com/users/djshellshoxxx/orgs",
+            "repos_url": "https://api.github.com/users/djshellshoxxx/repos",
+            "events_url": "https://api.github.com/users/djshellshoxxx/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/djshellshoxxx/received_events",
+            "type": "User",
+            "user_view_type": "public",
+            "site_admin": false
+          },
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed",
+          "description": null,
+          "fork": false,
+          "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed",
+          "forks_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/forks",
+          "keys_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/keys{/key_id}",
+          "collaborators_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/collaborators{/collaborator}",
+          "teams_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/teams",
+          "hooks_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/hooks",
+          "issue_events_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues/events{/number}",
+          "events_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/events",
+          "assignees_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/assignees{/user}",
+          "branches_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/branches{/branch}",
+          "tags_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/tags",
+          "blobs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/blobs{/sha}",
+          "git_tags_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/tags{/sha}",
+          "git_refs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/refs{/sha}",
+          "trees_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/trees{/sha}",
+          "statuses_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/statuses/{sha}",
+          "languages_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/languages",
+          "stargazers_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/stargazers",
+          "contributors_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/contributors",
+          "subscribers_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/subscribers",
+          "subscription_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/subscription",
+          "commits_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/commits{/sha}",
+          "git_commits_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits{/sha}",
+          "comments_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/comments{/number}",
+          "issue_comment_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues/comments{/number}",
+          "contents_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/contents/{+path}",
+          "compare_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/compare/{base}...{head}",
+          "merges_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/merges",
+          "archive_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/{archive_format}{/ref}",
+          "downloads_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/downloads",
+          "issues_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues{/number}",
+          "pulls_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls{/number}",
+          "milestones_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/milestones{/number}",
+          "notifications_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/notifications{?since,all,participating}",
+          "labels_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/labels{/name}",
+          "releases_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/releases{/id}",
+          "deployments_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/deployments"
+        }
+      },
+      "jobs": {
+        "total_count": 2,
+        "jobs": [
+          {
+            "id": 135491117934,
+            "run_id": 44504114268,
+            "workflow_name": "Alpha verification",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfi-Zjbg",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135491117934",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/job/135491117934",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-11-19T10:16:29Z",
+            "started_at": "2026-11-19T10:29:17Z",
+            "completed_at": "2026-11-19T10:29:23Z",
+            "name": "plan",
+            "steps": [
+              {
+                "name": "Set up job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 1,
+                "started_at": "2026-11-19T10:29:18Z",
+                "completed_at": "2026-11-19T10:29:18Z"
+              },
+              {
+                "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 2,
+                "started_at": "2026-11-19T10:29:18Z",
+                "completed_at": "2026-11-19T10:29:20Z"
+              },
+              {
+                "name": "Decide which browser engines this change needs",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 3,
+                "started_at": "2026-11-19T10:29:20Z",
+                "completed_at": "2026-11-19T10:29:21Z"
+              },
+              {
+                "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 6,
+                "started_at": "2026-11-19T10:29:21Z",
+                "completed_at": "2026-11-19T10:29:21Z"
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 7,
+                "started_at": "2026-11-19T10:29:21Z",
+                "completed_at": "2026-11-19T10:29:21Z"
+              }
+            ],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135491117934",
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 1000065621,
+            "runner_name": "GitHub Actions 1000065621",
+            "runner_group_id": 0,
+            "runner_group_name": "GitHub Actions"
+          },
+          {
+            "id": 135498101278,
+            "run_id": 44504114268,
+            "workflow_name": "Alpha verification",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfjFDyHg",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135498101278",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/job/135498101278",
+            "status": "completed",
+            "conclusion": "failure",
+            "created_at": "2026-11-19T10:29:23Z",
+            "started_at": "2026-11-19T10:41:00Z",
+            "completed_at": "2026-11-19T10:51:47Z",
+            "name": "domain",
+            "steps": [
+              {
+                "name": "Set up job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 1,
+                "started_at": "2026-11-19T10:41:00Z",
+                "completed_at": "2026-11-19T10:41:01Z"
+              },
+              {
+                "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 2,
+                "started_at": "2026-11-19T10:41:01Z",
+                "completed_at": "2026-11-19T10:41:03Z"
+              },
+              {
+                "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 3,
+                "started_at": "2026-11-19T10:41:03Z",
+                "completed_at": "2026-11-19T10:41:03Z"
+              },
+              {
+                "name": "Run corepack pnpm install --frozen-lockfile",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 4,
+                "started_at": "2026-11-19T10:41:03Z",
+                "completed_at": "2026-11-19T10:41:05Z"
+              },
+              {
+                "name": "Run corepack pnpm typecheck",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 5,
+                "started_at": "2026-11-19T10:41:05Z",
+                "completed_at": "2026-11-19T10:41:07Z"
+              },
+              {
+                "name": "Run corepack pnpm spec:check",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 6,
+                "started_at": "2026-11-19T10:41:07Z",
+                "completed_at": "2026-11-19T10:41:08Z"
+              },
+              {
+                "name": "Run corepack pnpm deps:check",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 7,
+                "started_at": "2026-11-19T10:41:08Z",
+                "completed_at": "2026-11-19T10:41:08Z"
+              },
+              {
+                "name": "Run corepack pnpm registry:check",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 8,
+                "started_at": "2026-11-19T10:41:08Z",
+                "completed_at": "2026-11-19T10:41:09Z"
+              },
+              {
+                "name": "Verify money vectors against the independent Python reference",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 9,
+                "started_at": "2026-11-19T10:41:09Z",
+                "completed_at": "2026-11-19T10:41:09Z"
+              },
+              {
+                "name": "Enforce the money browser bundle size budget",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 10,
+                "started_at": "2026-11-19T10:41:09Z",
+                "completed_at": "2026-11-19T10:41:09Z"
+              },
+              {
+                "name": "Run corepack pnpm run test:tooling",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 11,
+                "started_at": "2026-11-19T10:41:09Z",
+                "completed_at": "2026-11-19T10:41:13Z"
+              },
+              {
+                "name": "Run corepack pnpm test --reporter=json --outputFile=test-results/domain.json",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 12,
+                "started_at": "2026-11-19T10:41:13Z",
+                "completed_at": "2026-11-19T10:42:03Z"
+              },
+              {
+                "name": "Report executed domain assertion counts",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 13,
+                "started_at": "2026-11-19T10:42:03Z",
+                "completed_at": "2026-11-19T10:42:03Z"
+              },
+              {
+                "name": "Report executed requirement coverage (not a release gate)",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 14,
+                "started_at": "2026-11-19T10:42:03Z",
+                "completed_at": "2026-11-19T10:42:04Z"
+              },
+              {
+                "name": "Report feature status (not a release gate)",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 15,
+                "started_at": "2026-11-19T10:42:04Z",
+                "completed_at": "2026-11-19T10:42:05Z"
+              },
+              {
+                "name": "Run corepack pnpm run setup --non-interactive",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 16,
+                "started_at": "2026-11-19T10:42:05Z",
+                "completed_at": "2026-11-19T10:42:05Z"
+              },
+              {
+                "name": "Run corepack pnpm build",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 17,
+                "started_at": "2026-11-19T10:42:05Z",
+                "completed_at": "2026-11-19T10:42:06Z"
+              },
+              {
+                "name": "Locate the browser cache",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 18,
+                "started_at": "2026-11-19T10:42:06Z",
+                "completed_at": "2026-11-19T10:42:06Z"
+              },
+              {
+                "name": "Restore the pinned browser downloads",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 19,
+                "started_at": "2026-11-19T10:42:06Z",
+                "completed_at": "2026-11-19T10:42:11Z"
+              },
+              {
+                "name": "Install browsers",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 20,
+                "started_at": "2026-11-19T10:42:11Z",
+                "completed_at": "2026-11-19T10:42:38Z"
+              },
+              {
+                "name": "Browser journeys",
+                "status": "completed",
+                "conclusion": "failure",
+                "number": 21,
+                "started_at": "2026-11-19T10:42:38Z",
+                "completed_at": "2026-11-19T10:51:43Z"
+              },
+              {
+                "name": "Keep failure screenshots",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 22,
+                "started_at": "2026-11-19T10:51:43Z",
+                "completed_at": "2026-11-19T10:51:45Z"
+              },
+              {
+                "name": "Post Restore the pinned browser downloads",
+                "status": "completed",
+                "conclusion": "skipped",
+                "number": 42,
+                "started_at": "2026-11-19T10:51:45Z",
+                "completed_at": "2026-11-19T10:51:45Z"
+              },
+              {
+                "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+                "status": "completed",
+                "conclusion": "skipped",
+                "number": 43,
+                "started_at": "2026-11-19T10:51:45Z",
+                "completed_at": "2026-11-19T10:51:45Z"
+              },
+              {
+                "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 44,
+                "started_at": "2026-11-19T10:51:45Z",
+                "completed_at": "2026-11-19T10:51:45Z"
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 45,
+                "started_at": "2026-11-19T10:51:45Z",
+                "completed_at": "2026-11-19T10:51:45Z"
+              }
+            ],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135498101278",
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 1000065686,
+            "runner_name": "GitHub Actions 1000065686",
+            "runner_group_id": 0,
+            "runner_group_name": "GitHub Actions"
+          }
+        ]
+      }
+    },
+    {
+      "run": {
+        "id": 44504114080,
+        "name": "CLI setup",
+        "node_id": "WFR_kwLOVTfRFs8AAAAKXKbjoA",
+        "head_branch": "codex/classrup-f1b-consolidation-20261119",
+        "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+        "path": ".github/workflows/cli-setup.yml",
+        "display_title": "Complete public listing queries and explicit value editing; repair storage lifetime",
+        "run_number": 90,
+        "event": "pull_request",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "workflow_id": 412015070,
+        "check_suite_id": 120466526876,
+        "check_suite_node_id": "CS_kwDOVTfRFs8AAAAcDF1SnA",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+        "pull_requests": [
+          {
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls/56",
+            "id": 5392957982,
+            "number": 56,
+            "head": {
+              "ref": "codex/classrup-f1b-consolidation-20261119",
+              "sha": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+              "repo": {
+                "id": 1429721366,
+                "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed",
+                "name": "CLASSifiedisRUPTed"
+              }
+            },
+            "base": {
+              "ref": "main",
+              "sha": "b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+              "repo": {
+                "id": 1429721366,
+                "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed",
+                "name": "CLASSifiedisRUPTed"
+              }
+            }
+          }
+        ],
+        "created_at": "2026-11-19T10:16:28Z",
+        "updated_at": "2026-11-19T10:57:11Z",
+        "actor": {
+          "login": "djshellshoxxx",
+          "id": 127660907,
+          "node_id": "U_kgDOB5vzaw",
+          "avatar_url": "https://avatars.githubusercontent.com/u/127660907?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/djshellshoxxx",
+          "html_url": "https://github.com/djshellshoxxx",
+          "followers_url": "https://api.github.com/users/djshellshoxxx/followers",
+          "following_url": "https://api.github.com/users/djshellshoxxx/following{/other_user}",
+          "gists_url": "https://api.github.com/users/djshellshoxxx/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/djshellshoxxx/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/djshellshoxxx/subscriptions",
+          "organizations_url": "https://api.github.com/users/djshellshoxxx/orgs",
+          "repos_url": "https://api.github.com/users/djshellshoxxx/repos",
+          "events_url": "https://api.github.com/users/djshellshoxxx/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/djshellshoxxx/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "run_attempt": 1,
+        "referenced_workflows": [],
+        "run_started_at": "2026-11-19T10:16:28Z",
+        "triggering_actor": {
+          "login": "djshellshoxxx",
+          "id": 127660907,
+          "node_id": "U_kgDOB5vzaw",
+          "avatar_url": "https://avatars.githubusercontent.com/u/127660907?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/djshellshoxxx",
+          "html_url": "https://github.com/djshellshoxxx",
+          "followers_url": "https://api.github.com/users/djshellshoxxx/followers",
+          "following_url": "https://api.github.com/users/djshellshoxxx/following{/other_user}",
+          "gists_url": "https://api.github.com/users/djshellshoxxx/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/djshellshoxxx/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/djshellshoxxx/subscriptions",
+          "organizations_url": "https://api.github.com/users/djshellshoxxx/orgs",
+          "repos_url": "https://api.github.com/users/djshellshoxxx/repos",
+          "events_url": "https://api.github.com/users/djshellshoxxx/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/djshellshoxxx/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "jobs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/jobs",
+        "logs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/logs",
+        "check_suite_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-suites/120466526876",
+        "artifacts_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/artifacts",
+        "cancel_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/cancel",
+        "rerun_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/rerun",
+        "previous_attempt_url": null,
+        "workflow_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/workflows/412015070",
+        "head_commit": {
+          "id": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+          "tree_id": "38523662eafe9f86a5b3f6f746703916be96fc89",
+          "message": "Complete public listing queries and explicit value editing\n\nAdd F1b public-file listing/list/show/search through shared PWA handlers, bounded deterministic pagination, fixed output contracts and negative tests.\n\nAdd explicit local listing value removal while preserving exact values, authorization, revisions, inventory holds, history and sale publication requirements.\n\nRevoke transaction and driver handles when callbacks settle, including synchronous microtasks and delayed blob writes. Reject malformed paired price bounds before bigint conversion.\n\nConsolidated local checkpoint: 48806f8faf7b9c78d61db6cea04cdc7c424bf7a4\nExact source tree: 38523662eafe9f86a5b3f6f746703916be96fc89\nIndependent source review recorded in docs/development/evidence/20261119-feature-completion/independent-review.md.\n\nFull combined CI qualification is required before main integration.",
+          "timestamp": "2026-11-19T10:16:08Z",
+          "author": {
+            "name": "sheldon",
+            "email": "127660907+djshellshoxxx@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "sheldon",
+            "email": "127660907+djshellshoxxx@users.noreply.github.com"
+          }
+        },
+        "repository": {
+          "id": 1429721366,
+          "node_id": "R_kgDOVTfRFg",
+          "name": "CLASSifiedisRUPTed",
+          "full_name": "djshellshoxxx/CLASSifiedisRUPTed",
+          "private": false,
+          "owner": {
+            "login": "djshellshoxxx",
+            "id": 127660907,
+            "node_id": "U_kgDOB5vzaw",
+            "avatar_url": "https://avatars.githubusercontent.com/u/127660907?v=4",
+            "gravatar_id": "",
+            "url": "https://api.github.com/users/djshellshoxxx",
+            "html_url": "https://github.com/djshellshoxxx",
+            "followers_url": "https://api.github.com/users/djshellshoxxx/followers",
+            "following_url": "https://api.github.com/users/djshellshoxxx/following{/other_user}",
+            "gists_url": "https://api.github.com/users/djshellshoxxx/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/djshellshoxxx/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/djshellshoxxx/subscriptions",
+            "organizations_url": "https://api.github.com/users/djshellshoxxx/orgs",
+            "repos_url": "https://api.github.com/users/djshellshoxxx/repos",
+            "events_url": "https://api.github.com/users/djshellshoxxx/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/djshellshoxxx/received_events",
+            "type": "User",
+            "user_view_type": "public",
+            "site_admin": false
+          },
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed",
+          "description": null,
+          "fork": false,
+          "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed",
+          "forks_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/forks",
+          "keys_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/keys{/key_id}",
+          "collaborators_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/collaborators{/collaborator}",
+          "teams_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/teams",
+          "hooks_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/hooks",
+          "issue_events_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues/events{/number}",
+          "events_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/events",
+          "assignees_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/assignees{/user}",
+          "branches_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/branches{/branch}",
+          "tags_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/tags",
+          "blobs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/blobs{/sha}",
+          "git_tags_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/tags{/sha}",
+          "git_refs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/refs{/sha}",
+          "trees_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/trees{/sha}",
+          "statuses_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/statuses/{sha}",
+          "languages_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/languages",
+          "stargazers_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/stargazers",
+          "contributors_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/contributors",
+          "subscribers_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/subscribers",
+          "subscription_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/subscription",
+          "commits_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/commits{/sha}",
+          "git_commits_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits{/sha}",
+          "comments_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/comments{/number}",
+          "issue_comment_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues/comments{/number}",
+          "contents_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/contents/{+path}",
+          "compare_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/compare/{base}...{head}",
+          "merges_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/merges",
+          "archive_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/{archive_format}{/ref}",
+          "downloads_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/downloads",
+          "issues_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues{/number}",
+          "pulls_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls{/number}",
+          "milestones_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/milestones{/number}",
+          "notifications_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/notifications{?since,all,participating}",
+          "labels_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/labels{/name}",
+          "releases_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/releases{/id}",
+          "deployments_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/deployments"
+        },
+        "head_repository": {
+          "id": 1429721366,
+          "node_id": "R_kgDOVTfRFg",
+          "name": "CLASSifiedisRUPTed",
+          "full_name": "djshellshoxxx/CLASSifiedisRUPTed",
+          "private": false,
+          "owner": {
+            "login": "djshellshoxxx",
+            "id": 127660907,
+            "node_id": "U_kgDOB5vzaw",
+            "avatar_url": "https://avatars.githubusercontent.com/u/127660907?v=4",
+            "gravatar_id": "",
+            "url": "https://api.github.com/users/djshellshoxxx",
+            "html_url": "https://github.com/djshellshoxxx",
+            "followers_url": "https://api.github.com/users/djshellshoxxx/followers",
+            "following_url": "https://api.github.com/users/djshellshoxxx/following{/other_user}",
+            "gists_url": "https://api.github.com/users/djshellshoxxx/gists{/gist_id}",
+            "starred_url": "https://api.github.com/users/djshellshoxxx/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/djshellshoxxx/subscriptions",
+            "organizations_url": "https://api.github.com/users/djshellshoxxx/orgs",
+            "repos_url": "https://api.github.com/users/djshellshoxxx/repos",
+            "events_url": "https://api.github.com/users/djshellshoxxx/events{/privacy}",
+            "received_events_url": "https://api.github.com/users/djshellshoxxx/received_events",
+            "type": "User",
+            "user_view_type": "public",
+            "site_admin": false
+          },
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed",
+          "description": null,
+          "fork": false,
+          "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed",
+          "forks_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/forks",
+          "keys_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/keys{/key_id}",
+          "collaborators_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/collaborators{/collaborator}",
+          "teams_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/teams",
+          "hooks_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/hooks",
+          "issue_events_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues/events{/number}",
+          "events_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/events",
+          "assignees_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/assignees{/user}",
+          "branches_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/branches{/branch}",
+          "tags_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/tags",
+          "blobs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/blobs{/sha}",
+          "git_tags_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/tags{/sha}",
+          "git_refs_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/refs{/sha}",
+          "trees_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/trees{/sha}",
+          "statuses_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/statuses/{sha}",
+          "languages_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/languages",
+          "stargazers_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/stargazers",
+          "contributors_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/contributors",
+          "subscribers_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/subscribers",
+          "subscription_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/subscription",
+          "commits_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/commits{/sha}",
+          "git_commits_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits{/sha}",
+          "comments_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/comments{/number}",
+          "issue_comment_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues/comments{/number}",
+          "contents_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/contents/{+path}",
+          "compare_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/compare/{base}...{head}",
+          "merges_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/merges",
+          "archive_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/{archive_format}{/ref}",
+          "downloads_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/downloads",
+          "issues_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/issues{/number}",
+          "pulls_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls{/number}",
+          "milestones_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/milestones{/number}",
+          "notifications_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/notifications{?since,all,participating}",
+          "labels_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/labels{/name}",
+          "releases_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/releases{/id}",
+          "deployments_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/deployments"
+        }
+      },
+      "jobs": {
+        "total_count": 7,
+        "jobs": [
+          {
+            "id": 135491117573,
+            "run_id": 44504114080,
+            "workflow_name": "CLI setup",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfi-ZiBQ",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135491117573",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/job/135491117573",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-11-19T10:16:29Z",
+            "started_at": "2026-11-19T10:32:31Z",
+            "completed_at": "2026-11-19T10:32:38Z",
+            "name": "plan",
+            "steps": [
+              {
+                "name": "Set up job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 1,
+                "started_at": "2026-11-19T10:32:32Z",
+                "completed_at": "2026-11-19T10:32:33Z"
+              },
+              {
+                "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 2,
+                "started_at": "2026-11-19T10:32:33Z",
+                "completed_at": "2026-11-19T10:32:35Z"
+              },
+              {
+                "name": "Decide which operating systems this change needs",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 3,
+                "started_at": "2026-11-19T10:32:35Z",
+                "completed_at": "2026-11-19T10:32:35Z"
+              },
+              {
+                "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 6,
+                "started_at": "2026-11-19T10:32:35Z",
+                "completed_at": "2026-11-19T10:32:36Z"
+              },
+              {
+                "name": "Complete job",
+                "status": "completed",
+                "conclusion": "success",
+                "number": 7,
+                "started_at": "2026-11-19T10:32:36Z",
+                "completed_at": "2026-11-19T10:32:36Z"
+              }
+            ],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135491117573",
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 1000065645,
+            "runner_name": "GitHub Actions 1000065645",
+            "runner_group_id": 0,
+            "runner_group_name": "GitHub Actions"
+          },
+          {
+            "id": 135499848287,
+            "run_id": 44504114080,
+            "workflow_name": "CLI setup",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfjGuaXw",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135499848287",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/job/135499848287",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "created_at": "2026-11-19T10:32:38Z",
+            "started_at": "2026-11-19T10:32:38Z",
+            "completed_at": "2026-11-19T10:57:10Z",
+            "name": "clean-install (macos-latest, 22.18.0)",
+            "steps": [],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135499848287",
+            "labels": [
+              "macos-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": ""
+          },
+          {
+            "id": 135499848452,
+            "run_id": 44504114080,
+            "workflow_name": "CLI setup",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfjGubBA",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135499848452",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/job/135499848452",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "created_at": "2026-11-19T10:32:38Z",
+            "started_at": "2026-11-19T10:32:38Z",
+            "completed_at": "2026-11-19T10:57:10Z",
+            "name": "clean-install (windows-latest, 22.18.0)",
+            "steps": [],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135499848452",
+            "labels": [
+              "windows-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": ""
+          },
+          {
+            "id": 135499848475,
+            "run_id": 44504114080,
+            "workflow_name": "CLI setup",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfjGubGw",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135499848475",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/job/135499848475",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "created_at": "2026-11-19T10:32:38Z",
+            "started_at": "2026-11-19T10:32:38Z",
+            "completed_at": "2026-11-19T10:57:10Z",
+            "name": "clean-install (ubuntu-latest, 22.18.0)",
+            "steps": [],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135499848475",
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": ""
+          },
+          {
+            "id": 135499848485,
+            "run_id": 44504114080,
+            "workflow_name": "CLI setup",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfjGubJQ",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135499848485",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/job/135499848485",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "created_at": "2026-11-19T10:32:38Z",
+            "started_at": "2026-11-19T10:32:38Z",
+            "completed_at": "2026-11-19T10:57:10Z",
+            "name": "clean-install (windows-latest, 24.x)",
+            "steps": [],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135499848485",
+            "labels": [
+              "windows-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": ""
+          },
+          {
+            "id": 135499848512,
+            "run_id": 44504114080,
+            "workflow_name": "CLI setup",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfjGubQA",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135499848512",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/job/135499848512",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "created_at": "2026-11-19T10:32:38Z",
+            "started_at": "2026-11-19T10:32:38Z",
+            "completed_at": "2026-11-19T10:57:10Z",
+            "name": "clean-install (macos-latest, 24.x)",
+            "steps": [],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135499848512",
+            "labels": [
+              "macos-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": ""
+          },
+          {
+            "id": 135499848610,
+            "run_id": 44504114080,
+            "workflow_name": "CLI setup",
+            "head_branch": "codex/classrup-f1b-consolidation-20261119",
+            "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+            "run_attempt": 1,
+            "node_id": "CR_kwDOVTfRFs8AAAAfjGubog",
+            "head_sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+            "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135499848610",
+            "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080/job/135499848610",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "created_at": "2026-11-19T10:32:38Z",
+            "started_at": "2026-11-19T10:32:38Z",
+            "completed_at": "2026-11-19T10:57:10Z",
+            "name": "clean-install (ubuntu-latest, 24.x)",
+            "steps": [],
+            "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135499848610",
+            "labels": [
+              "ubuntu-latest"
+            ],
+            "runner_id": 0,
+            "runner_name": "",
+            "runner_group_id": 0,
+            "runner_group_name": ""
+          }
+        ]
+      }
+    }
+  ],
+  "source_commit": {
+    "sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+    "node_id": "C_kwDOVTfRFtoAKDJkZGQ5NTFhMDQyODJhMzFhODY1YjNiY2I1MzcyYTliNmI0ZDJjY2E",
+    "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+    "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/commit/2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+    "author": {
+      "name": "sheldon",
+      "email": "127660907+djshellshoxxx@users.noreply.github.com",
+      "date": "2026-11-19T10:16:08Z"
+    },
+    "committer": {
+      "name": "sheldon",
+      "email": "127660907+djshellshoxxx@users.noreply.github.com",
+      "date": "2026-11-19T10:16:08Z"
+    },
+    "tree": {
+      "sha": "38523662eafe9f86a5b3f6f746703916be96fc89",
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/trees/38523662eafe9f86a5b3f6f746703916be96fc89"
+    },
+    "message": "Complete public listing queries and explicit value editing\n\nAdd F1b public-file listing/list/show/search through shared PWA handlers, bounded deterministic pagination, fixed output contracts and negative tests.\n\nAdd explicit local listing value removal while preserving exact values, authorization, revisions, inventory holds, history and sale publication requirements.\n\nRevoke transaction and driver handles when callbacks settle, including synchronous microtasks and delayed blob writes. Reject malformed paired price bounds before bigint conversion.\n\nConsolidated local checkpoint: 48806f8faf7b9c78d61db6cea04cdc7c424bf7a4\nExact source tree: 38523662eafe9f86a5b3f6f746703916be96fc89\nIndependent source review recorded in docs/development/evidence/20261119-feature-completion/independent-review.md.\n\nFull combined CI qualification is required before main integration.",
+    "parents": [
+      {
+        "sha": "b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/commit/b6d99d87e9f67e76791f2dfff3e85015154cd92f"
+      }
+    ],
+    "verification": {
+      "verified": false,
+      "reason": "unsigned",
+      "signature": null,
+      "payload": null,
+      "verified_at": null
+    }
+  },
+  "merge_commit": {
+    "sha": "f68098cda9d3bd0c6904468acab9289dcea9d401",
+    "node_id": "C_kwDOVTfRFtoAKGY2ODA5OGNkYTlkM2JkMGM2OTA0NDY4YWNhYjkyODlkY2VhOWQ0MDE",
+    "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/f68098cda9d3bd0c6904468acab9289dcea9d401",
+    "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/commit/f68098cda9d3bd0c6904468acab9289dcea9d401",
+    "author": {
+      "name": "sheldon",
+      "email": "127660907+djshellshoxxx@users.noreply.github.com",
+      "date": "2026-11-19T10:16:24Z"
+    },
+    "committer": {
+      "name": "GitHub",
+      "email": "noreply@github.com",
+      "date": "2026-11-19T10:16:24Z"
+    },
+    "tree": {
+      "sha": "38523662eafe9f86a5b3f6f746703916be96fc89",
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/trees/38523662eafe9f86a5b3f6f746703916be96fc89"
+    },
+    "message": "Merge 2ddd951a04282a31a865b3bcb5372a9b6b4d2cca into b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+    "parents": [
+      {
+        "sha": "b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/commit/b6d99d87e9f67e76791f2dfff3e85015154cd92f"
+      },
+      {
+        "sha": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/commit/2ddd951a04282a31a865b3bcb5372a9b6b4d2cca"
+      }
+    ],
+    "verification": {
+      "verified": true,
+      "reason": "valid",
+      "signature": "-----BEGIN PGP SIGNATURE-----\n\nwsFcBAABCAAQBQJq/sx4CRC1aQ7uu5UhlAAAFyQQACULy5bdXvx9PuwOV2wq9+ti\nzDjODFUvC2k0wSsrIZH+yDltY/jfZV+vhG6yLG9cX2TrR0TBOlM6GU1fbBiQxc4X\n//m8ZqaB1l/0MI/J/PU7Ot3wnf2YAPy9tJQ86JUjt88dxu4qFvWg3iRG6ninf1dB\nbtvxrDTmudgRTzQ6y0yAXfCDKlljLyw7ZXBwdswWUqA7kOmjVvD3cHsmpDi8MgxN\nEvbRlLdl7D4jh1FqxjJYo8E/76QVCfdXasDfBDbSZJlpGpGFOD3G+V4OqHcc6jBL\n0marOapn+tZgmdu1CeMcoI3GhWJUZ6eUmPKqCV5ou4xmGIPyNS/O6lVQPzfgqUMZ\nO8biA10rylVEUWfyKsJSw1p/3KD1nuqPzdODp8QhJNmg0tC56bPyUUGt7dDXC382\n5uGTJAjzmLxP11jRYzLqGCDaARi/atJOHNB91ltjTR6duiwwPbuBMeeZtknRrZdj\nlpo9/m4NiPQN/5f8i21RD66PcYKig+YvHZwK5gOZG7Qv4tUZbAno70ycH7lz0HqL\nKoToWbFpUnvHvPFlLEbir5/etB7QMnrC26CG0RupQK2ocPTmDe/c2IVSKbK4ImV/\nW4jdsWzT7VT/55VBi0Y2I2mG6KsjrAoBtM2vbOj/JK+ruwTrL9TFvHh0Y9Jq3RlJ\neOC0h9flMwPGLmh1dqHP\n=TFJq\n-----END PGP SIGNATURE-----\n",
+      "payload": "tree 38523662eafe9f86a5b3f6f746703916be96fc89\nparent b6d99d87e9f67e76791f2dfff3e85015154cd92f\nparent 2ddd951a04282a31a865b3bcb5372a9b6b4d2cca\nauthor sheldon <127660907+djshellshoxxx@users.noreply.github.com> 1795083384 -0800\ncommitter GitHub <noreply@github.com> 1795083384 -0800\n\nMerge 2ddd951a04282a31a865b3bcb5372a9b6b4d2cca into b6d99d87e9f67e76791f2dfff3e85015154cd92f\n",
+      "verified_at": "2026-11-19T10:16:25Z"
+    }
+  },
+  "failure_artifact": {
+    "id": 14521975297,
+    "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/artifacts/14521975297",
+    "zip_sha256": "dcc31c4447d830c41e81501c1443b15843cc98b8a73fa0d27794ee0cb9489f7f",
+    "files": [
+      {
+        "name": "listing-value-optional-dec-a50d0--absent-after-republication-chromium-error-context.md",
+        "bytes": 18152,
+        "sha256": "4082d9f8e101067c2fd2f15788b4887299463dfd8be1deba02adf5fd19944506"
+      },
+      {
+        "name": "listing-value-optional-dec-a50d0--absent-after-republication-chromium.png",
+        "bytes": 46262,
+        "sha256": "84289176e4aa20f79e27eb0f5f88dcb58c8828a5751803b1fe2d68f4a844dbf7"
+      },
+      {
+        "name": "listing-value-optional-dec-a50d0--absent-after-republication-firefox-error-context.md",
+        "bytes": 18152,
+        "sha256": "837b1ca9c7596b209689a86cd4fdcdec61dc74099d37309f3d2d4ae14beb5bcf"
+      },
+      {
+        "name": "listing-value-optional-dec-a50d0--absent-after-republication-firefox.png",
+        "bytes": 53351,
+        "sha256": "75352c0fde402db455c266734431ec03d0a6380ea44e248598dd170791494c2f"
+      },
+      {
+        "name": "listing-value-optional-dec-a50d0--absent-after-republication-webkit-error-context.md",
+        "bytes": 18135,
+        "sha256": "2aaccba2e3888686b7a8abe56720855bc23b3c506c585621e283dfc19e71624e"
+      },
+      {
+        "name": "listing-value-optional-dec-a50d0--absent-after-republication-webkit.png",
+        "bytes": 200868,
+        "sha256": "a6abe06ebeb374de86cc438b3135fd0c35e896f450fac96843a1769641b71eb8"
+      }
+    ],
+    "domain_json_in_artifact": false
+  },
+  "cancelled_cli_jobs": [
+    {
+      "job": 135499848287,
+      "name": "clean-install (macos-latest, 22.18.0)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "steps": [],
+      "runner_id": 0,
+      "runner_name": "",
+      "log_fetch": {
+        "id": 135499848287,
+        "resultKeys": [
+          "content",
+          "structuredContent",
+          "isError"
+        ],
+        "content": {
+          "error": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:4ea6d80b-501e-0003-4514-787a8e000000\nTime:2026-11-19T10:57:36.8478939Z</Message></Error>",
+          "error_code": "NOT_FOUND",
+          "error_data": {
+            "error_str": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:4ea6d80b-501e-0003-4514-787a8e000000\nTime:2026-11-19T10:57:36.8478939Z</Message></Error>"
+          }
+        },
+        "contentBlocks": [
+          {
+            "type": "text",
+            "text": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:4ea6d80b-501e-0003-4514-787a8e000000\nTime:2026-11-19T10:57:36.8478939Z</Message></Error>"
+          }
+        ]
+      },
+      "executed_test_count": null,
+      "qualification_claim": "unexecuted; no CLI test pass claim"
+    },
+    {
+      "job": 135499848452,
+      "name": "clean-install (windows-latest, 22.18.0)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "steps": [],
+      "runner_id": 0,
+      "runner_name": "",
+      "log_fetch": {
+        "id": 135499848452,
+        "resultKeys": [
+          "content",
+          "structuredContent",
+          "isError"
+        ],
+        "content": {
+          "error": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:1064693b-401e-0088-1b14-78c50b000000\nTime:2026-11-19T10:57:36.9415592Z</Message></Error>",
+          "error_code": "NOT_FOUND",
+          "error_data": {
+            "error_str": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:1064693b-401e-0088-1b14-78c50b000000\nTime:2026-11-19T10:57:36.9415592Z</Message></Error>"
+          }
+        },
+        "contentBlocks": [
+          {
+            "type": "text",
+            "text": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:1064693b-401e-0088-1b14-78c50b000000\nTime:2026-11-19T10:57:36.9415592Z</Message></Error>"
+          }
+        ]
+      },
+      "executed_test_count": null,
+      "qualification_claim": "unexecuted; no CLI test pass claim"
+    },
+    {
+      "job": 135499848475,
+      "name": "clean-install (ubuntu-latest, 22.18.0)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "steps": [],
+      "runner_id": 0,
+      "runner_name": "",
+      "log_fetch": {
+        "id": 135499848475,
+        "resultKeys": [
+          "content",
+          "structuredContent",
+          "isError"
+        ],
+        "content": {
+          "error": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:a3743655-801e-004d-5614-785406000000\nTime:2026-11-19T10:57:36.9700530Z</Message></Error>",
+          "error_code": "NOT_FOUND",
+          "error_data": {
+            "error_str": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:a3743655-801e-004d-5614-785406000000\nTime:2026-11-19T10:57:36.9700530Z</Message></Error>"
+          }
+        },
+        "contentBlocks": [
+          {
+            "type": "text",
+            "text": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:a3743655-801e-004d-5614-785406000000\nTime:2026-11-19T10:57:36.9700530Z</Message></Error>"
+          }
+        ]
+      },
+      "executed_test_count": null,
+      "qualification_claim": "unexecuted; no CLI test pass claim"
+    },
+    {
+      "job": 135499848485,
+      "name": "clean-install (windows-latest, 24.x)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "steps": [],
+      "runner_id": 0,
+      "runner_name": "",
+      "log_fetch": {
+        "id": 135499848485,
+        "resultKeys": [
+          "content",
+          "structuredContent",
+          "isError"
+        ],
+        "content": {
+          "error": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:ec2b69e0-301e-00e8-3614-78361a000000\nTime:2026-11-19T10:57:36.8544847Z</Message></Error>",
+          "error_code": "NOT_FOUND",
+          "error_data": {
+            "error_str": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:ec2b69e0-301e-00e8-3614-78361a000000\nTime:2026-11-19T10:57:36.8544847Z</Message></Error>"
+          }
+        },
+        "contentBlocks": [
+          {
+            "type": "text",
+            "text": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:ec2b69e0-301e-00e8-3614-78361a000000\nTime:2026-11-19T10:57:36.8544847Z</Message></Error>"
+          }
+        ]
+      },
+      "executed_test_count": null,
+      "qualification_claim": "unexecuted; no CLI test pass claim"
+    },
+    {
+      "job": 135499848512,
+      "name": "clean-install (macos-latest, 24.x)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "steps": [],
+      "runner_id": 0,
+      "runner_name": "",
+      "log_fetch": {
+        "id": 135499848512,
+        "resultKeys": [
+          "content",
+          "structuredContent",
+          "isError"
+        ],
+        "content": {
+          "error": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:690e4cd6-101e-00aa-2214-780014000000\nTime:2026-11-19T10:57:36.8714900Z</Message></Error>",
+          "error_code": "NOT_FOUND",
+          "error_data": {
+            "error_str": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:690e4cd6-101e-00aa-2214-780014000000\nTime:2026-11-19T10:57:36.8714900Z</Message></Error>"
+          }
+        },
+        "contentBlocks": [
+          {
+            "type": "text",
+            "text": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:690e4cd6-101e-00aa-2214-780014000000\nTime:2026-11-19T10:57:36.8714900Z</Message></Error>"
+          }
+        ]
+      },
+      "executed_test_count": null,
+      "qualification_claim": "unexecuted; no CLI test pass claim"
+    },
+    {
+      "job": 135499848610,
+      "name": "clean-install (ubuntu-latest, 24.x)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "steps": [],
+      "runner_id": 0,
+      "runner_name": "",
+      "log_fetch": {
+        "id": 135499848610,
+        "resultKeys": [
+          "content",
+          "structuredContent",
+          "isError"
+        ],
+        "content": {
+          "error": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:52d5f30a-801e-0062-0e14-7859cd000000\nTime:2026-11-19T10:57:36.8386239Z</Message></Error>",
+          "error_code": "NOT_FOUND",
+          "error_data": {
+            "error_str": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:52d5f30a-801e-0062-0e14-7859cd000000\nTime:2026-11-19T10:57:36.8386239Z</Message></Error>"
+          }
+        },
+        "contentBlocks": [
+          {
+            "type": "text",
+            "text": "GitHub API error 404: ﻿<?xml version=\"1.0\" encoding=\"utf-8\"?><Error><Code>BlobNotFound</Code><Message>The specified blob does not exist.\nRequestId:52d5f30a-801e-0062-0e14-7859cd000000\nTime:2026-11-19T10:57:36.8386239Z</Message></Error>"
+          }
+        ]
+      },
+      "executed_test_count": null,
+      "qualification_claim": "unexecuted; no CLI test pass claim"
+    }
+  ]
+}

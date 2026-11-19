@@ -1,0 +1,752 @@
+
+> classrup@ test /workspace/scratch/171008b2cfcc/classrupted
+> vitest run --pool=forks --maxWorkers=1 --reporter=verbose --reporter=json --outputFile=../evidence/domain-forks.json
+
+
+ RUN  v5.1.0 /workspace/scratch/171008b2cfcc/classrupted
+
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category authoring (PS-144) > TEST-PS-144-09.T01 create category with names and key: stable id, key unique for the publisher, en name required 148ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category authoring (PS-144) > TEST-PS-144-09.T02 violating each rule V01-V10 returns the documented code and nothing is staged or applied 591ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category authoring (PS-144) > TEST-PS-144-09.T03 random trees and moves keep depth <= 4, no cycles, child limit and restricted-implies-reason 2600ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category authoring (PS-144) > TEST-PS-144-09.T04 random status changes follow only declared transitions; retired needs mergedInto and never reverts 1815ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category packs (PS-144) > TEST-PS-144-09.T05 a pack with one invalid category is rejected as a whole; the previous version stays active 11ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category packs (PS-144) > TEST-PS-144-09.T06 release and apply: pack validates against taxonomy_pack/v1, signature verifies, changed events validate 22ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category packs (PS-144) > TEST-PS-144-09.T08 non-publisher authoring is FORBIDDEN; an untrusted publisher stays pending; tampered or mis-signed packs are rejected 13ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category packs (PS-144) > TEST-PS-144-09.T09 replaying release and apply of the same pack yields one packCid and no duplicate events 9ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category packs (PS-144) > TEST-PS-144-09.T10 offline vault keeps its last pack; a release stays prepared while the relay is down and is acknowledged only with a receipt 17ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category packs (PS-144) > TEST-PS-144-09.T11 no personal data beyond the publisher fingerprint is stored or logged; oversized packs are rejected before storage 115ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category behaviour from the spec edge cases > retired categories resolve to their merge target; deprecated ones are hidden for new listings 11ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category behaviour from the spec edge cases > restricted changes in a pack need a proposal verified by F18.S02.M01; the first pack from a publisher is the adoption baseline 6ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category behaviour from the spec edge cases > authoring: update, move (with subtree depth), deprecate then retire after 30 days, release and a second release 38ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category behaviour from the spec edge cases > keeps only the last three packs, and a vault applies at most 20 packs per day 43ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category behaviour from the spec edge cases > pending packs are discarded after 30 days; at most 10 publishers are trusted 14ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category behaviour from the spec edge cases > two publishers with the same key string coexist; ids, not keys, identify categories; id reuse across publishers is rejected 3ms
+ ✓ packages/governance/src/policy/goods/goods.test.ts > governance.category behaviour from the spec edge cases > adapter: categoryAllowed is true only for active categories of the active publisher and fails closed otherwise; seed pack is a valid tree 14ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > manual signals > TEST-PS-101-09.T01 records valid manual signals with expiry = observedAt + 5 half-lives and refuses invalid weight and kind 55ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > manual signals > TEST-PS-101-09.T03 a compensation referencing a missing signal, another subject or a compensation is NOT_FOUND 16ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > manual signals > a compensation cancels the original at every instant, both stay visible, and replays by Idempotency-Key 21ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > manual signals > TEST-PS-101-09.T07 the fourth signal from one source in 30 days is ignored for scoring and manual weight above the cap is refused 15ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > manual signals > limits one author to ten manual signals per day 55ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > decay math > TEST-PS-101-09.T02 decayed weight equals w x 0.5^(age/h) and totals do not depend on ingestion order 83ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > decay math > ignores expired and future signals in summaries and answers asOf in the past 1ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > consumed events > TEST-PS-101-09.T04 every consumed event delivered twice yields exactly one signal per source event with the documented weight 43ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > consumed events > applies the mapping rules: score threshold, both deal parties, before_commit drops, unresolved subjects and malformed payloads are ignored 8ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > consumed events > in a vault, relay-only actions and unsigned federated events are ignored while local events count 4ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > consumed events > observedAt uses the store clock; the claimed time is stored as advisory and does not affect decay 3ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > consumed events > TEST-PS-101-09.T05 definitions carry spec names, capabilities and module, outputs and the event validate, and every consumed event has a subscriber 8ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > access control and privacy > TEST-PS-101-09.T06 another member gets NOT_FOUND, a moderator without a case FORBIDDEN, and the subject reads own category counts only 13ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > access control and privacy > signals hold ids and categories only: no free text from events is stored 4ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > access control and privacy > lists with since, kind and cursor, and follows rotation links only when the root supplies them 12ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > purge, deletion, export and import > TEST-PS-101-09.T08 the purge removes expired rows and keeps counts per kind, expired rollups go after 365 days, and vault deletion removes signals immediately 11ms
+ ✓ packages/moderation/src/antifraud/signals/signals.test.ts > purge, deletion, export and import > exports unexpired signals with manual reasons and imports them into a fresh vault capped at +-20 with the original observedAt 13ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T01 opt in to push on R, withdraw, re-grant: first record terminal withdrawn, re-grant is a new record, statements signed 181ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T02 each rule V01 to V07 violated in turn returns its documented code and leaves state unchanged 332ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T02 V07: the 11th unsubscribe call in a minute is RATE_LIMITED 37ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T03 random opt-in, opt-out, expiry, unsubscribe, withdrawal and late-grant sequences: terminal states never change and withdrawal wins 444ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T04 each command and query executes and its outputs, statements and events validate against the schemas 15ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T05 privacy.consent.withdrawn and privacy.deletion.requested withdraw linked channels locally and queue relay withdrawals 12ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T06 forged opt-in from another key, unsubscribe attempting to grant and a relay creating a consent are all rejected 21ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T07 register twice, unsubscribe twice, and a vault offline during relay unsubscribe applies the relay withdrawal on the next sync 20ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T08 token guessing run of 10 000 attempts never succeeds and no token reaches the logs 5880ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > F13.S02.M03 channel opt-in/opt-out > TEST-PS-107-09.T09 a send gate on the exported consent check sends nothing with no consent, withdrawn consent or expired consent 50ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > consent statement boundary regressions > refuses future-dated grants without storing a relay consent 13ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > consent statement boundary regressions > binds relay withdrawal to the stored user and channel 12ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > keeps local and relay withdrawal available after the daily change budget is exhausted 91ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > withdraws active consents beyond 500 historical records for privacy.consent.withdrawn 56ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > withdraws active consents beyond 500 historical records for privacy.deletion.requested 37ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > rejects a verified channel signer with wrong seq without consent, event or sync writes 5ms
+ ✓ packages/notify/src/preferences/opt/opt.test.ts > rejects a verified channel signer with wrong prev without consent, event or sync writes 3ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > GCRA and token bucket engine > TEST-PS-099-09.T01 GCRA 20 per hour with burst 5 allows five immediate calls then denies with the remaining interval 16ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > GCRA and token bucket engine > TEST-PS-099-09.T01 through the port: the sixth call of a burst of five is denied with retryAfterMs equal to one interval minus elapsed time 10ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > GCRA and token bucket engine > TEST-PS-099-09.T02 matches exact reference models for random arrival sequences; tokens stay in [0, capacity] and tat never moves backward 429ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > GCRA and token bucket engine > TEST-PS-099-09.T02 a denied call becomes allowed exactly after retryAfterMs and not one millisecond earlier 16ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > GCRA and token bucket engine > TEST-PS-099-09.T02 concurrent requests never exceed burst plus rate times elapsed time 81ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > policy command, validation and authorization > TEST-PS-099-09.T03 rate 0, burst 2000 and fail-open relay.access are refused with the documented codes and store nothing 74ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > policy command, validation and authorization > refuses a GCRA burst above five times the rate, an unregistered class and an expectedRevision on create; locked classes default to closed 41ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > policy command, validation and authorization > sets, revises with expectedRevision and replays by idempotency key 22ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > policy command, validation and authorization > TEST-PS-099-09.T07 a member cannot set policy or reset buckets; anonymous consume is keyed by the IP prefix only 23ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > policy command, validation and authorization > resets a bucket by key hash for an operator and answers NOT_FOUND for an unknown hash 16ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > policy command, validation and authorization > shows a member the limit, remaining and reset time of their own bucket only 4ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > keys, privacy and salts > TEST-PS-099-09.T04 addresses of one /24 or /48 share a prefix bucket, the salt rotates after a day, and no raw IP or actor key is stored or logged 18ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > keys, privacy and salts > treats invalid input as denied without throwing and a malformed hash as an internal failure that follows the fail mode 1ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > keys, privacy and salts > does not refill gcra buckets while a rolled-back wall clock catches up 11ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > keys, privacy and salts > does not refill token_bucket buckets while a rolled-back wall clock catches up 3ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > keys, privacy and salts > applies the account multiplier from the limits module and drops it when moderation.limit.changed arrives 9ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > penalties, throttled events and bus integration > TEST-PS-099-09.T05 a spam throttle of two hours becomes factor 0.25 for one hour only, and a denial storm yields one rate.exceeded event per key per minute 119ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > penalties, throttled events and bus integration > emits at most one notice per key per minute across several minutes of denials 5ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > penalties, throttled events and bus integration > TEST-PS-099-09.T06 the registry accepts the definitions, the bus maps a denial to RATE_LIMITED with retryAfterMs, and the event payload validates 26ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > penalties, throttled events and bus integration > TEST-PS-099-09.T08 a policy change takes effect immediately without resetting buckets, and idle full-capacity buckets are evicted 19ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > store outages, restarts and abuse > TEST-PS-099-09.T09 with the store down reads fail open at half rate, relay.access fails closed for 30 s, and a restart loosens a limit by at most one burst 89ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > store outages, restarts and abuse > TEST-PS-099-09.T10 twenty keys on one /24 reach the prefix limit at five times the actor limit, and rotating keys does not beat the tenant cap 153ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > store outages, restarts and abuse > TEST-PS-099-09.T11 buckets older than 24 hours are purged and the module persists no bucket records 24ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > store outages, restarts and abuse > vault mode keeps a single local scope for UX throttles and never reports to anyone 1ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > rate enforcement observability isolation > does not grant a fresh degraded budget when the exceeded callback throws 6ms
+ ✓ packages/moderation/src/antifraud/rate/rate.test.ts > rate policy import boundary > rejects fail-open security classes and invalid numbers without dropping existing policy 2ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule authoring (PS-146) > TEST-PS-146-09.T01 drafting a valid rule stores an immutable version; a rule with 51 keywords is rejected with the documented code 162ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule authoring (PS-146) > TEST-PS-146-09.T02 violating each rule V01-V09 returns the documented code; nothing is released or applied 1043ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule authoring (PS-146) > TEST-PS-146-09.T03 verdicts are deterministic and stable under look-alike, zero-width, case and diacritic obfuscation; whole-word mode avoids substring matches 11ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule packs and evaluation (PS-146) > TEST-PS-146-09.T05 an emergency rule that passes its expiry is ignored by evaluation, retired by the sweep and announced 311ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule packs and evaluation (PS-146) > TEST-PS-146-09.T06 release, apply and evaluate: pack validates against rule_pack/v1, signature verifies, results carry no matched text, events validate 81ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule packs and evaluation (PS-146) > TEST-PS-146-09.T09 replaying a release yields one packCid; packs applied concurrently with evaluate are seen as the old or the new pack only 73ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule packs and evaluation (PS-146) > TEST-PS-146-09.T11 evaluation stores and logs no listing text or keywords; sensitive keywords appear only as hashes in the public pack and mirrors 46ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule behaviour from the spec edge cases > strictest action wins, all matches are reported up to 10, and an untrusted publisher stays pending 28ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule behaviour from the spec edge cases > a new version retires the previous one in the same transaction; activation needs a proposal verified by F18.S02.M01 31ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule behaviour from the spec edge cases > adapter: a category-only block rule removes the category for new listings; the taxonomy gate fails closed 10ms
+ ✓ packages/governance/src/policy/prohibited/prohibited.test.ts > governance.prohibited_rule behaviour from the spec edge cases > retire stages a retirement of an active rule and discards a draft; release then retires it 21ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > creates, publishes signed public data, unpublishes and archives with atomic revision events 161ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > rejects validly signed wrong sequences during publish without changing records or events 32ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > rejects validly signed wrong sequences during unpublish without changing records or events 86ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > rejects validly signed wrong sequences during reserve without changing records or events 38ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > rejects a correctly sequenced tombstone signed against the wrong parent 84ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > rejects unknown/private-location fields, foreign edits, and stale updates without additional events 14ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > single-item reservations reject races and expire without multiplying available stock 52ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > releases subject holds atomically and emits an inventory revision event 41ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > LocalBazaar persistent command path > signing failure leaves listing private and emits no publish event 10ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > verified retained discovery > freezes same-revision forks, excludes them from search and rejects later overwrite 44ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > verified retained discovery > rejects invalid signatures and reports expired records excluded after time advances 23ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > verified retained discovery > keeps owner-only public snapshots after publication without copying private notes 121ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > verified retained discovery > limits public history edits atomically and paginates immutable snapshots 81ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > verified retained discovery > caps history at 100 without blocking archive, and rolls back failed edits 294ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > verified retained discovery > keeps private-only edits out of history and marks changed declared values as material 28ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > verified retained discovery > rejects corrupt snapshot hashes on list and get instead of showing them as evidence 11ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > owner archive and restore lifecycle > archives a draft and restores it unpublished at the 90-day boundary, preserving private data 30ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > owner archive and restore lifecycle > archives a published listing with a verified chained tombstone, without republishing on restore 28ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > owner archive and restore lifecycle > rejects stale restore revisions and expired restore windows without mutation 6ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > owner archive and restore lifecycle > refuses archive while an active inventory hold exists, and rolls back invalid tombstone signatures 41ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > paginates all owner listings newest first, including beyond 50 archived records, without exposing another owner 238ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > replays an archive command exactly once and starts a fresh 90-day window only after restoration 9ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > uses one clock observation for an archive deadline while the clock advances between reads 11ms
+ ✓ packages/bazaar/src/listings/listings.test.ts > refuses ambiguous active archive records rather than restoring against conflicting evidence 7ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > tier table and effective values > TEST-PS-098-09.T01 derives the tier of keys A, B and C and answers the published value for all five limit keys 76ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > tier table and effective values > TEST-PS-098-09.T02 effective value follows the documented formula for random tiers, multipliers, overrides and restrictions 29ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > tier table and effective values > every tier value is monotone from new to trusted for each limit key 2ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > override and clear commands > TEST-PS-098-09.T03 refuses value 10001, a short reason, an expiry of 91 days and an override on the moderator own key, storing nothing 33ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > override and clear commands > applies an override with reason and expiry, shows it to the member without the moderator identity, and clears it 28ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > override and clear commands > refuses a stale expectedRevision on override 6ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > override and clear commands > a lowered limit keeps existing items and refuses new ones until the count drops 5ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > check and flow counters > TEST-PS-098-09.T07 refuses the sixth listing of a day with resetsAt, and a stock limit at 10 of 10 without resetsAt 7ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > check and flow counters > checks never mutate stock-limit state and do not create rows 3ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > check and flow counters > TEST-PS-098-09.T09 replays a repeated Idempotency-Key and applies the class fail mode when the flow counter is down 13ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > check and flow counters > the rolling window counter is deterministic and gives the time the oldest unit frees 1ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > events, sweeps and expiry > TEST-PS-098-09.T04 promotes a tier only when age and completed deals both hold, and emits limit.changed when an override expires 21ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > events, sweeps and expiry > a key never loses more than one tier per sweep and the first-seen record is not overwritten 25ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > events, sweeps and expiry > TEST-PS-098-09.T05 follows risk medium, high and recovery with one event per distinct effective value 29ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > events, sweeps and expiry > a restrict_feature action naming a limit key sets the value to 0 for the action duration and the sweep restores it 7ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > events, sweeps and expiry > deal completion counts both parties once per event and caps completedDeals at 1000 4ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > events, sweeps and expiry > purges every row of a deleted membership and nothing else 7ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > contracts and abuse > TEST-PS-098-09.T06 definitions carry the spec names, capabilities and module, and the event payload validates against its schema 36ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > contracts and abuse > TEST-PS-098-09.T08 a member cannot override a limit, the check is not reachable over HTTP, and a moderator cannot override their own key 5ms
+ ✓ packages/moderation/src/antifraud/limits/limits.test.ts > contracts and abuse > TEST-PS-098-09.T10 refuses the 31st override of a moderator in a day with RATE_LIMITED, and the weekly report lists all attempts 118ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects a mathematically valid statement when its signer lacks the expected role 19ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects signature, payload, author, type, and CID substitution 8ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > detaches input before asynchronous verification and returns immutable evidence 4ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects unsupported versions, broken chains, future claims and stale statements 2ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > does not unlock a private key under a substituted principal 1692ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects wrong recovery material and invalid KDF parameters 2265ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > revokes signing capability after lock 2863ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects ambiguous or excessive JSON before signing 7ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > discovery refuses a valid signature from somebody other than the listing owner and refuses private fields 62ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > freezes discovery on two signed listing versions at the same revision and preserves both evidence envelopes 68ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > retains the verified evidence snapshot when a caller mutates the input during asynchronous verification 25ms
+ × tests/integration/alpha-security.test.ts > independent signed-statement security > restores an encrypted signed backup and rejects a bad later record without initializing the target 20036ms
+   → Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > locking a vault during an awaited write rolls the write back before closing persistent storage 18174ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects a forged peer projection inside a correctly signed and encrypted local backup 6398ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > does not trust a restored feasibility boolean to mark authentic consent evidence committed 10995ms
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > does not commit after the local hold is released even when all signed consents and reservation statements exist 603ms
+ ✓ tests/integration/alpha-security.test.ts > independent alpha persistence security > rolls back an earlier restored record when a later revision conflicts, including after reopen 13ms
+ ✓ tests/integration/alpha-security.test.ts > independent alpha persistence security > keeps identical record IDs in separate principal databases isolated across reopen 26ms
+ ✓ tests/integration/alpha-security.test.ts > independent alpha persistence security > does not leave partial working-set changes after a persistence quota failure 2ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > classes and sink matrix > TEST-PS-081-09.T03 the class by sink matrix equals the CTR-PRV-001 table and P3/P4 never reach log, federation, notification or projection 16ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > classes and sink matrix > TEST-PS-081-09.T05 class order is total and flow is monotone: a lower class flows wherever a higher one does 32ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > classes and sink matrix > capLocation limits every public sink to L2 and keeps lower levels 6ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > classification maps > TEST-PS-081-09.T01 loads a map, classifies every path and raises PRIVACY_CLASSIFICATION_MISSING for a missing one 30ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > classification maps > rejects malformed maps and enforces the 10 000 path bound 176ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > classification maps > TEST-PS-081-09.T15 v1 maps load and a candidate with an added class requires a library major bump 10ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > classification maps > derives field paths from zod schemas and lints unclassified fields, event classes and projections 17ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > redacts the documented example for logs: address placeholder, typed email token, dropped path list 8ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > TEST-PS-081-09.T02 an unannotated field is treated as P3 and dropped from every sink 15ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > applies the sink matrix per sink to a mixed record 12ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > never lets P4 through any sink, even to the owner 58ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > federation needs an explicit opt-in and otherwise refuses without a copy 16ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > TEST-PS-081-09.T04 locations L0 to L4 for public sinks: L0 to L2 pass, L3 and L4 are snapped to the L2 cell or refused 22ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > an event mixing a P0 id with a P3 address is class P3 and cannot go to federation 1ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > strategies: truncate keeps network and hour only, hash needs a caller digest, drop removes 1ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > refuses hostile keys without copying them and leaves inputs unmodified 5ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > TEST-PS-081-09.T05 redaction is idempotent for every sink and never mutates its input 293ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > TEST-PS-081-09.T06 unknown paths in random nested structures default to P3 and never reach public sinks 121ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > redaction > TEST-PS-081-09.T11 a missing classification map fails closed with every field treated as P3 1ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > contract, assertions, abuse and static analysis > free-text scrubbing is linear on adversarial strings and keeps dates and IPs out of the phone pattern 422ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > contract, assertions, abuse and static analysis > TEST-PS-081-09.T07 the public API surface and error codes match the errors table 5ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > contract, assertions, abuse and static analysis > TEST-PS-081-09.T08 assertSinkSafe fails with a path list and no values in the message 2ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > contract, assertions, abuse and static analysis > TEST-PS-081-09.T09 the package has no network, fs, clock or randomness access and the default sink is the public log 3ms
+ ✓ packages/privacy/src/security_boundaries/model/model.test.ts > contract, assertions, abuse and static analysis > TEST-PS-081-09.T10 40-level nesting and a 5 MiB record are rejected quickly and no values appear in the error 637ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T01 routing bazaar.offer.made to seller U stores category offers, template notify.tpl.offers.made, ref offer and no text fields 75ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T02 each rule V01 to V08 violated in turn returns its documented code and stores nothing 54ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T03 random event, read and window sequences: count equals collapsed events, read never reopens, a new window creates a new row 948ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T04 create, mark_read, mark_all_read, list and unread_count outputs and event payloads validate against the schemas 17ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T05 every routed type is in modules.yaml emits, has a recipient rule and collapse key, and urgent is only on the 3 security templates 285ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T06 delivering each routed event type twice in shuffled order creates exactly one row per rule 91ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T07 events from a blocked user, an unverified relay event and a foreign actor creating or reading rows produce no row and no access 33ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T08 100 concurrent offer events for one listing give one collapsed row with count 100, and a template render failure falls back to generic text 564ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T09 a muted thread is flagged, an off category leaves no row but a hidden counter, and security is created even when its preference is attempted off 72ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > TEST-PS-103-09.T10 the 51st event from one actor in a day only bumps the hidden counter, the 501st row evicts read rows first, and diagnostics hold no content 2710ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > removes rows older than 30 days in the daily sweep, security rows included, and keeps counters 26ms
+ ✓ packages/notify/src/delivery/inapp/inapp.test.ts > F13.S01.M03 in-app notifications > never creates notifications for events older than 30 days when delivered late (app closed for a month) 11ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > ranking config publication > TEST-PS-051-09.T01 publish valid config: version 4 active, version 3 retired, exactly one active row 278ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > ranking config publication > TEST-PS-051-09.T02 invalid weights sum, boost, half-life and non-monotonic distance weights are rejected and nothing is stored 137ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > ranking config publication > rollback creates a new version copying an older one and never reactivates the retired row 39ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > ranking config publication > rollback to a version that never existed or to the active version is NOT_FOUND; stale expectedActiveVersion is CONFLICT_REVISION 23ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > scoring > TEST-PS-051-09.T03 golden score vectors for text, recency, distance and promotion match to six decimals; promoted multiplier never exceeds 1.25 71ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > scoring > rejects NaN, positive bm25, missing required terms and unknown fields 3ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > scoring > TEST-PS-051-09.T05 200 runs of the same ranking give identical order, ties by firstSeenAt then documentId 215ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > scoring > rankCandidates rejects duplicate document ids 1ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > scoring > TEST-PS-051-09.T09 future claimedPublishedAt gains nothing and an expired promotion gets no multiplier and no label 6ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > scoring > distance bucket helpers map kilometres through the injected region port 1ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > statements, authorization and idempotency > TEST-PS-051-09.T06 commands, query and event outputs validate against schemas and the statement signature verifies 38ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > statements, authorization and idempotency > TEST-PS-051-09.T07 member publish and operator of another relay are FORBIDDEN; anonymous read is allowed 51ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > statements, authorization and idempotency > rejects a statement signed by a key other than the relay key and statements that fail verification 28ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > statements, authorization and idempotency > rejects a correctly signed successor with the wrong sequence or previous CID 30ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > statements, authorization and idempotency > TEST-PS-051-09.T08 replayed Idempotency-Key returns the original response; an aborted activation leaves exactly one active version 25ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > statements, authorization and idempotency > TEST-PS-051-09.T10 the 11th publication in 24 h is RATE_LIMITED and a tampered statement is rejected by the client 103ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > statements, authorization and idempotency > TEST-PS-051-09.T04 random concurrent publish and rollback attempts keep exactly one active version and never reactivate a retired row 208ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > vault > always reads its bundled configuration even with relay publication records in its tenant 33ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > vault > protects the nested bundled ranking parameters from accidental changes by consumers 0ms
+ ✓ packages/discovery/src/ranking/relevance/relevance.test.ts > vault > TEST-PS-051-09.T12 a vault without relay config uses the bundled default and the explanation says default ranking 2ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T01 a new vault reads 7 records equal to the golden default table with security in-app on and locked 360ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T02 each rule V01 to V07 violated in turn returns the documented code and changes nothing 367ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T03 edits across categories and channels are in place with revision increments, no cell is deleted and the security lock holds 107ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T04 an edit while the relay is down then up shows local_committed, prepared, transport_acknowledged and peer_accepted in order, never ahead 180ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T05 each command and query executes and outputs, mirror statements and event payloads validate against the schemas 148ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T06 channel opted-in and opted-out events mark the channel active or inactive and the relay snapshot is sent on opt-in 59ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T07 a forged mirror from another key, a mirror without relay consent and a third-party read are rejected; the relay holds no in-app column 77ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T08 a replayed older mirror is ignored and edits of different cells from two devices are both kept in the merged mirror 115ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > F13.S02.M04 in-app notification preferences > TEST-PS-106-09.T10 the 61st edit in an hour is RATE_LIMITED and the next hour is open again 212ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > rolls back preferences when a verified mirror signer returns wrong seq 52ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > rolls back preferences when a verified mirror signer returns wrong prev 80ms
+ ✓ packages/notify/src/preferences/in/in.test.ts > rejects a signed mirror whose envelope sequence disagrees with its payload sequence 30ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > routes only newly verified peer evidence to the local inbox and resumes without duplicate alerts 745ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > 2 actual principals retain signed listings/wants, reserve, consent, commit and survive IndexedDB adapter restart 603ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > 3 actual principals retain signed listings/wants, reserve, consent, commit and survive IndexedDB adapter restart 2179ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > 4 actual principals retain signed listings/wants, reserve, consent, commit and survive IndexedDB adapter restart 1710ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > rejects unreserved local consent, stale optimistic revisions and mathematically valid outsider consent 144ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > cannot reserve a local item twice and expiry releases incomplete coordination holds 573ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > proposal revisions invalidate old consent and dropout persists with hold release 414ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > signed remote double-promises freeze both local subjects and survive restart 198ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > final consent cannot commit after the actual local inventory hold was released 1122ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > restore normalization never trusts forged cached commitment or feasibility 587ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > previously committed coordination freezes when its actual local reservation disappears 420ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > committed coordination freezes after signed reservations expire and releases its hold 376ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > a signed participant dropout after the consent deadline cancels committed coordination and releases holds 1322ms
+ × tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget 60072ms
+   → Test timed out in 60000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > a failure after hold release rolls back coordination and inventory together 967ms
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > actual Bazaar tombstone prevents matching after unpublish 193ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > formatMoney goldens > TEST-PS-112-09.T01 golden strings for the fixture amounts and specs in en, de, fr and es 56ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > formatMoney goldens > display modes, trimZeros, parts and idempotence 4ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > formatMoney goldens > TEST-PS-112-09.T03 amount 9007199254740993 formats exactly while a Number-based formatter differs 1ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > digit exactness (property) > TEST-PS-112-09.T02 digits of formatToParts without group separators equal the input digits for 1..78 digit amounts, exponents 0..18, all locales and both engines 1455ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > digit exactness (property) > 78-digit amounts format in every locale for ISO and crypto specs 3ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > validation V01 to V06 > TEST-PS-112-09.T04 each rule V01 to V06 violated returns its documented code and no string 22ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > validates quote calendar dates and hours before applying their UTC offset 3ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > engines and fallbacks > TEST-PS-112-09.T05 with exact decimal-string support stubbed away the BigInt substitution path gives identical output on 20 samples including negatives with zero whole part 37ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > engines and fallbacks > uses the amount to choose the currency name on the legacy engine 11ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > engines and fallbacks > on an engine without decimal strings uses exact supported names or signals a code fallback 20ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > engines and fallbacks > keeps supplementary-plane digits in their original groups on the legacy engine 9ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > engines and fallbacks > TEST-PS-112-09.T06 BTC, ETH, USDC and an unknown code use decimal style plus the code, never throw and are never blank; RTL isolates 5ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > engines and fallbacks > the formatter cache stays bounded and correct across more than 64 distinct keys 24ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > formatApprox > TEST-PS-112-09.T08 fresh quote, 25 h old quote, missing source and a source with bidi characters 16ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > formatApprox > an approximate label in an RTL locale isolates amount and source 2ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > parseMoneyInput > TEST-PS-112-09.T09 12,50 (de), 12.50 (en), 12,345 (de), 1.234,50 (de), 12.5.0, 41 characters and 31 digits 1ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > parseMoneyInput > uses locale grouping widths and rejects whitespace controls inside French amounts 4ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > parseMoneyInput > counts supplementary-plane input digits as one character each 1ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > parseMoneyInput > rejects ambiguous grouping, mixed separators, wrong characters and excess precision; accepts well-formed variants 2ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > parseMoneyInput > currencyName returns spoken-friendly, plural-aware names and the code for non-ISO assets 1ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > library contract > TEST-PS-112-09.T07 exports are pure typed functions and error data; no commands, events, network or authorization calls 10ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > library contract > formatting leaves no amount in the fallback hook and never mutates its input 0ms
+ ✓ packages/i18n/src/internationalization/currencies/currencies.test.ts > library contract > speed: warm formatMoney and parseMoneyInput average well under 0.05 ms over batches (not a spec claim) 612ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image stripping (corpus of generated files) > builds a corpus of 40 files 18ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image stripping (corpus of generated files) > removes all metadata from every corpus file, keeps pixel data byte-identical and reports dimensions 142ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image stripping (corpus of generated files) > flags every metadata kind on the unstripped corpus and nothing on the stripped output 234ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image stripping (corpus of generated files) > is idempotent: stripping a clean image returns identical bytes 227ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image stripping (corpus of generated files) > keeps PNG transparency and drops GPS found only in an XMP packet or a MakerNote thumbnail 3ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image error handling > rejects malformed PNG critical chunks even when their CRCs are valid 5ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image error handling > TEST-PS-080-09.T03 animated WebP, 12 MiB file, truncated file and polyglot give documented outcomes 10ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image error handling > rejects unsupported types, empty and non-binary input, bad CRC, oversized dimensions and zero dimensions 1ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image error handling > refuses images above maxSide without a codec and accepts them when a downscale port returns a smaller verified image 11ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > image error handling > verifyImageClean never calls undecodable, animated or oversized input clean 1ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > hostile input > survives 1000 deterministic mutations: never throws, never reads out of range, any accepted output is clean 335ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > hostile input > rejects headers with huge declared lengths without allocating or reading beyond the buffer 2ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > hostile input > TEST-PS-080-09.T06 stripping and the helpers are deterministic and idempotent over random inputs 159ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > network and time helpers > TEST-PS-080-09.T04 truncates IPv4, IPv6 and IPv4-mapped addresses and rejects invalid input 2ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > network and time helpers > TEST-PS-080-09.T05 floors hour-boundary timestamps and rejects invalid ones 1ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > network and time helpers > TEST-PS-080-09.T12 rate-limit keys are stable within a salt, differ across salts and /24s, and never contain the address 3ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > network and time helpers > reduces user agents to family and major version and bounds the input 3ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > integration and contract > TEST-PS-080-09.T07 the public surface and error codes match the errors table 2ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > integration and contract > TEST-PS-080-09.T08 a relay double re-encodes an unstripped image from an old client and stores no original bytes 2ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > integration and contract > TEST-PS-080-09.T17 import re-strips legacy images and quarantines failures; clean exports pass verification 2ms
+ ✓ packages/privacy/src/security_boundaries/metadata/metadata.test.ts > integration and contract > TEST-PS-080-09.T09 the package has no network, storage, clock, randomness or node: access 3ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T01 a filter with every key valid validates and its canonical form equals the golden 18ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T02 price without currency, min above max, distance without center and distance 3 km give the documented code and path 4ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T03 random key order and equivalent values canonicalize to identical bytes and cache keys 42ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T04 each key alone and all keys together compile to the golden SQL and parameter order 5ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T05 the same filter and clock give identical SQL and params 200 times without reading the system clock 38ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > against SQLite > TEST-PS-044-09.T06 compiled filters over 1000 documents return exactly the brute-force result 364ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > against SQLite > TEST-PS-044-09.T07 fuzz strings with SQL metacharacters never alter SQL, oversize lists are rejected and validation stays fast 4538ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T08 exports no commands, queries, events or capabilities and error codes map to the documented ones 1ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T09 filtering on a private column name is rejected as an unknown key 1ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T10 an unavailable taxonomy or currency port yields DEPENDENCY_UNAVAILABLE and a stale snapshot validates with a hint 2ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > rejects category expansion beyond 200 when a later root has no descendants 1ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > returns validation failure when postedWithin underflows the supported date range 1ms
+ ✓ packages/discovery/src/search/filter/filter.test.ts > PS-044 search filters > TEST-PS-044-09.T13 a v1 filter stored in a saved search export parses unchanged and an unknown key is rejected on import 1ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > requires the configured snapshot signer and exact immutable signed bytes; rejects duplicate or malformed assets 101ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > implements the EIP-55 primary-source vectors and rejects incorrect mixed-case checksums 2ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > TEST-PS-073-09.T07 seeds atomically, retries after rollback and preserves the exact allowed list across repeated bootstrap 88ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > TEST-PS-073-09.T01 TEST-PS-073-09.T06 TEST-PS-073-09.T10 registers local crypto with checksummed binding and payload-free audit 42ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > TEST-PS-073-09.T02 fails closed on unknown codes, chain/checksum conflicts, absent confirmation and unsupported flags 33ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > TEST-PS-073-09.T08 refuses peers, anonymous users and cross-vault reads even under allow-all capability policy 20ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > binds initialization, mutations and backup admission to the configured vault scope 28ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > TEST-PS-073-09.T04 TEST-PS-073-09.T05 distinguishes readable old money from enabled new use and permanently retires only without open references 69ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > fails closed when the usage adapter is absent, invalid or cannot resolve all open obligations 75ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > TEST-PS-073-09.T09 serializes concurrent duplicate registration, replays command IDs and enforces revisions 25ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > bounds successful new registrations at twenty per hour without blocking disable or retirement 85ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > persists registry rows and command responses across IndexedDB reopen and rejects concurrent writers 69ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > preserves canonical registry metadata ranges and rejects unsupported downstream precision 17ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > TEST-PS-073-09.T03 validates immutable backups and refuses reuse of retired or omitted codes 59ms
+ ✓ packages/commerce/src/valuation/currency/currency.test.ts > Currency registry authenticated-reference checkpoint > does not let backup admission enable an unconfigured chain while preserving disabled history 37ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > constraints on random corpora > TEST-PS-050-09.T01 no page exceeds 3 results per author (except flagged only-seller pages), no duplicates, no result dropped across pages 6555ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > constraints on random corpora > TEST-PS-050-09.T02 promoted results per page never exceed floor(0.2 * page size) and each carries a promoted explanation key 7392ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > constraints on random corpora > TEST-PS-050-09.T05 200 runs of the same input are identical and windowed paging never repeats or drops a result 18848ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > new-author slots > TEST-PS-050-09.T03 fills 2 slots at positions 5 and 12 with qualifying new authors and none when nobody reaches 50 percent of the top score 7ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > new-author slots > a new author who already ranks near the top keeps that position, and an old author is never given a slot 1ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > new-author slots > keeps the relevance order of already highly ranked new authors at 0 and 1 3ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > new-author slots > keeps the relevance order of already highly ranked new authors at 1 and 3 1ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > new-author slots > keeps the relevance order of already highly ranked new authors at 3 and 8 1ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > new-author slots > does not reserve a slot for a future first-seen timestamp or one exactly 30 days old 1ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > new-author slots > a promoted new-author item counts once for the promoted cap and does not consume a slot 5ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > new-author slots > TEST-PS-050-09.T09 a burst of 50 new authors with equal scores fills only 2 slots per page, and none below the 50 percent ratio 5ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > validation and inputs > TEST-PS-050-09.T04 NaN score, duplicate ids, limit 51, unsorted input and a promoted flag where promotion is off are rejected with typed errors and no partial page 4ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > validation and inputs > TEST-PS-050-09.T08 candidate objects with extra fields such as userId, reputation or bio are rejected; the clean ranking is unaffected 3ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > validation and inputs > a window with fewer than 20 items is returned as is, and only the top 200 candidates are windowed 83ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > page rules > TEST-PS-050-09.T06 a single-author page of 7 relaxes the cap with only_seller, with promoted cap 1 and 1 new-author slot 6ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > page rules > keeps the per-author cap on short multi-seller pages, then relaxes it when only one seller remains 1ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > page rules > demotes excess promoted results to the next page and rejects paid scores for a zero promotion quota 35ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > page rules > builds explanations from score components as message keys with parameters 1ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > page rules > ties on score fall back to firstSeenAt then documentId in the input contract 0ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > purity and exports > TEST-PS-050-09.T10 repeat and concurrent calls after an invalid request share no state and return the same result 48ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > purity and exports > TEST-PS-050-09.T07 exposes functions only: no commands, queries or events, and typed errors only 1ms
+ ✓ packages/discovery/src/ranking/fairness/fairness.test.ts > purity and exports > TEST-PS-050-09.T13 owns no persistence and its constants match the golden hash 6ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > catalog validation (V01 to V04) > TEST-PS-113-09.T01 shipped catalogs pass and each broken fixture fails with V01, V02, V03 or V04 29ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > catalog validation (V01 to V04) > uses English for invalid translated message shapes, blank forms or misplaced placeholders 49ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > catalog validation (V01 to V04) > checks individual plural forms while allowing a locale-specific form to use the English other contract 7ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > catalog validation (V01 to V04) > missing-allowed.json allowance counts only when it expires within 30 days and is not expired 1ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > catalog validation (V01 to V04) > catalog gzip size check passes for shipped catalogs and fails above 30 KiB 56ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > catalog validation (V01 to V04) > generated pseudolocales are valid against en, keep parameters and expand text 1ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > negotiation and direction > TEST-PS-113-09.T02 negotiateLocale maps de-AT to de, pt-BR, xx-YY, malformed and empty to en without throwing 1ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > negotiation and direction > dirOf marks ar-XB and Arabic scripts rtl and never throws 0ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > negotiation and direction > resolveLocaleSetting keeps a valid unshipped tag, negotiates the effective locale and rejects malformed tags 1ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > plural selection > TEST-PS-113-09.T03 tp() uses the Intl.PluralRules category for counts 0..1000000 in every shipped locale 270ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > plural selection > renders the same count used to select the plural when params also contain count 2ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > plural selection > the spec example renders German 1 Angebot and 3 Angebote 1ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > plural selection > a plural message lacking the needed category falls back to other at runtime 1ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > fallback, interpolation and diagnostics > TEST-PS-113-09.T04 a key removed from fr falls back to en with a dev warning and a diagnostic, and a corrupt de catalog keeps the UI in en 4ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > fallback, interpolation and diagnostics > production mode (dev false) records diagnostics but never warns 3ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > fallback, interpolation and diagnostics > a parameter mismatch against en or an over-long message is rejected per key and en is used 51ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > fallback, interpolation and diagnostics > a missing parameter renders empty with a warning and does not throw; an unknown key never returns blank 123ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > fallback, interpolation and diagnostics > TEST-PS-113-09.T07 params with script tags, parameter syntax and bidi overrides stay inert plain text and bidi is isolated 12ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > locale switching > switches through negotiate, load, lang and dir, announce; same locale is a no-op; lang/dir update for ar-XB 3ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > locale switching > catalog loads for the same locale share one in-flight promise and the last request wins 3ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > locale switching > a failed load keeps the previous locale; load retries once after 1 s; a hung load times out after 5 s 36ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > locale switching > Intl helpers format by active locale and never throw for bad input 23ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > library contract > TEST-PS-113-09.T06 exports are pure functions, data or Result values; t() performs no network call and no vault or relay command is exposed 7ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > library contract > TEST-PS-113-09.T09 logical-CSS lint flags margin-left, padding-right and text-align right and accepts logical equivalents 2ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > library contract > TEST-PS-113-09.T10 locale switch and diagnostics use no network API; diagnostics reach only the injected local sink 1ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > library contract > TEST-PS-113-09.T14 new keys fall back to en until translated; i18n.locale import keeps unshipped values; rollback lands on a shipped locale 1ms
+ ✓ packages/i18n/src/internationalization/languages/languages.test.ts > performance > t() averages well under 0.05 ms per call over 100000 calls in batches 211ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T09 stages run in order flag → authn → rate limit → validation → authorize → handler and short-circuit 59ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T10 same key and body replays the stored response; a different body returns IDEMPOTENCY_KEY_REUSED 14ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T11 handler err or exception rolls back records, outbox and idempotency; exceptions become INTERNAL 12ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T12 concurrent dispatches with one key run the handler once 6ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T13 idempotency records expire after 24 h, are ignored after expiry and purged 5ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T14 authorization: deny is FORBIDDEN or hidden as NOT_FOUND; anonymous is UNAUTHENTICATED; vault commands are not remote 5ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T15 audit records allow and deny with actor, capability, resource and decision, never payload 4ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T16 idempotent commands require a UUIDv7 Idempotency-Key 3ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T17 RATE_LIMITED carries retryAfterMs; only RATE_LIMITED, DEPENDENCY_UNAVAILABLE and INTERNAL are retryable 5ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T20 command metrics: classrup_command_total{module,outcome,code} and classrup_command_duration_ms 3ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T21 one log line per command with correlationId, module, code and durationMs and no input values 17ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T25 events are written to the outbox in the handler transaction and published only after commit 8ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T17 anonymous callers are rate limited per network prefix; prefixes do not share a bucket 5ms
+ ✓ packages/kernel/src/bus/bus.test.ts > command bus pipeline (PS-117) > TEST-PS-117-09.T25 a throwing EventSink after commit is logged; the committed command still returns its ok result once 5ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > matches a brute-force ordering oracle for arbitrary small directed graphs 73ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > normalizes duplicate dependency tokens, separates contracts and indexes reverse dependencies 1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid feature ID 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects duplicate feature ID 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid module ID 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects duplicate module ID 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects module of unknown feature 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects self or unknown module dependency F01.S01.M01 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects self or unknown module dependency F99.S01.M01 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects self or unknown module dependency F01 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects self or unknown module dependency unrecognized 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid relative POSIX code path  1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid relative POSIX code path /absolute/path 1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid relative POSIX code path ../outside 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid relative POSIX code path packages//test 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid relative POSIX code path packages/../test 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid relative POSIX code path packages/./test 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid relative POSIX code path C:\outside 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects invalid relative POSIX code path packages\test 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > derives surfaces from path segments and rejects declared mismatches 1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > keeps FUTURE and unknown-spec catalog entries off and rejects missing specifications in strict mode 1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > refuses enabled modules depending on disabled modules, and core modules defaulting off 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > feature catalog validation and dependency ordering > rejects malformed scope and dependency lists without silently dropping them 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry hashes, ownership and read-only views > hashes deterministic normalized catalog content using independently checked SHA-256 14ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry hashes, ownership and read-only views > detaches before asynchronous hashing and deeply freezes the final registry 3ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry hashes, ownership and read-only views > deep-freezes nested values even when a caller has already frozen only the root 0ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry hashes, ownership and read-only views > returns detached query views while preserving registry hashes and nested arrays 2ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry hashes, ownership and read-only views > filters surfaces and FUTURE modules and returns exact feature/module dependency closures 2ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry hashes, ownership and read-only views > reports drift and unknown remote modules without changing local policy 1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry hashes, ownership and read-only views > keeps the generated catalog immutable without mounting specification-only runtime features 7ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > executes all four queries locally and remotely with read transactions and no emitted events 66ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > requires the configured capability even for public queries and respects disabled-module gates 3ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > enforces an explicitly supplied host rate policy and recovers at the next window 56ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > rejects malformed query input for platform.feature.list_features 2ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > rejects malformed query input for platform.feature.list_features 4ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > rejects malformed query input for platform.feature.get_dependencies 1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > rejects malformed query input for platform.feature.get_order 1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > rejects malformed query input for platform.feature.verify_hash 1ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > keeps query success and expected errors when optional metrics histogram throws 9ms
+ ✓ packages/platform/src/configuration/feature/feature.test.ts > registry queries through the kernel authorization and read boundaries > keeps query success and expected errors when optional metrics observe throws 5ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > closes atomically with a chained withdrawal and private owner-asserted completion reference 208ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > rejects inappropriate giveaway close reason sold without a mutation 31ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > rejects inappropriate wanted close reason given without a mutation 27ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > rejects a forged verified completion, foreign owner and stale revision 26ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > requires explicit hold release and rolls it back when signing fails 45ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > explicitly releases local holds together with close 56ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > explicitly releases local holds together with archive 43ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > expires only at the signed deadline, remains ended after clock rollback, and replays without another tombstone 32ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > rolls back the entire sweep if an overdue publication cannot be signed 17ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > auto-archives after thirty days using one recovery window and preserves the first end date 24ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > catches up after an offline month, then repeats without duplicate events or archive records 9ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > paginates bounded sweep work and cannot change another owner’s listing 42ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > validates ended evidence without inventing recovery dates and rejects forged completion verification 4ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > exports the verified current owner publication and later its withdrawal without leaking private content 15ms
+ ✓ packages/bazaar/src/listings/lifecycle.test.ts > listing close and scheduled lifecycle > refuses corrupt publication bytes and a legacy archived listing that still points to a live publication 13ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > checks stored first-seen key validity on exact replay while rejecting new statements after key revocation 89ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > rolls back failed signing and detects altered stored signatures before reporting consent valid 21ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > retains distinct authenticated duplicate CIDs so a remote revocation can refer to the exact signed statement 43ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > binds exact consent bytes, content address, participant role, wording and revision; no text leaks into events 39ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > rejects stale or mismatched revisions, bad wording, missing confirmation and foreign users without writes 17ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > deduplicates signing despite clock changes and receiving the same content despite new idempotency keys 87ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > rejects tampered, foreign-participant, wrong protocol and unregistered-key statements before persistence 25ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > keeps revocation monotonic and never orders consent, decline or revocation by time claims 59ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > reports old consent stale after subject revision and rejects revocation after the owner commits 18ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > flags clock suspicion while keeping authenticated past/future claims and hides subject evidence from foreign users 20ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > rejects new-CID repeated revocations without consuming another consent withdrawal reserve 37ms
+ ✓ packages/comms/src/negotiation/consent/consent.test.ts > Explicit signed consent core > rejects mismatched revocation targets and reserves withdrawal capacity when normal evidence is full 125ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > encrypts row contents and indexes, restores them on unlock, and rejects a wrong passphrase without modifying storage 11459ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > migrates legacy plaintext only after identity verification and preserves revisions 6857ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > rejects swap tampering before exposing a session 8594ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > rejects ciphertext tampering before exposing a session 10636ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > rejects plaintext tampering before exposing a session 10001ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > rolls back a failed encryption without publishing any rows and allows a later write 10338ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > persists binary blobs and private delivery/idempotency rows with fresh ciphertext on every write 8819ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > keeps a legacy database intact when its migration commit fails and permits a clean retry 10239ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > rejects header deletion even if every domain row is replaced with valid legacy plaintext 5610ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > preserves the writer fence and rolls back a superseded encrypted writer 7854ms
+ ✓ packages/vault/src/encrypted-storage.test.ts > encrypted domain persistence > rejects deletion of one domain row instead of silently loading partial state 7674ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T01 matches published geohash vectors and decode centres lie within cell bounds 9ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T02 snap is idempotent, cells contain their points and points of one cell snap alike 854ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T03 neighbour relation is symmetric with 8 distinct neighbours except at poles and wraps at longitude 180 714ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T04 invalid coordinates, cells and precision return the documented code and no value 2ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T05 assertPublicCell accepts lengths 0, 4, 5 and rejects 6 and 11 0ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T06 radius 1, 3, 7 and 200 are rejected as too small, 100 is accepted within 512 cells 13ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T07 bucketBetween is symmetric, monotone in distance and never returns a number 227ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T08 cellsForRadius at the antimeridian, near a pole and at the equator gives sorted unique cells within 512 134ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T09 exports no command, query, event or capability and errors map to documented codes 4ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T10 the same call sequence 200 times is byte-identical and performs no I/O, clock or randomness 43ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T11 no function in the public API returns coordinates or public cells longer than 5 characters, and the contract helper fails a publisher without the guard 21ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > TEST-PS-047-09.T14 the package exports no persistence and the vectors file keeps the published vectors 1ms
+ ✓ packages/discovery/src/geoprivacy/coarse/coarse.test.ts > PS-047 coarse location regions > keeps exact boundaries stable and returns a bucket at exactly the edges 0ms
+ ✓ tests/integration/location-preferences.test.ts > persists encrypted owner preferences through reopen and signed encrypted backup without coordinates or foreign-owner admission 15312ms
+ ✓ tests/integration/location-preferences.test.ts > snaps GPS synchronously, returns only a coarse tile and requests no high-accuracy or cached position 4ms
+ ✓ tests/integration/location-preferences.test.ts > falls back on denied, invalid, thrown and timed-out device positions without revealing provider errors 5ms
+ ✓ tests/integration/location-preferences.test.ts > aborts an in-flight device request on lock and ignores any later position 1ms
+ ✓ tests/integration/location-preferences.test.ts > only copies a saved projection after explicit action, and never copies hidden location to a listing 6ms
+ ✓ tests/integration/location-preferences.test.ts > drops queued saves and late private refreshes after disposal 2ms
+ ✓ tests/integration/location-preferences.test.ts > withholds saved copy actions when the preview shows unsaved lower precision or another home 1ms
+ ✓ tests/integration/location-preferences.test.ts > manual input releases a pending GPS action and later device callbacks cannot replace the draft 1ms
+ ✓ tests/integration/location-preferences.test.ts > preserves edits made during a save and refreshes the revision used by the next save 2ms
+ ✓ tests/integration/location-preferences.test.ts > saves a second queued edit against the revision from the first save 1ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent cycle enumeration oracle > matches exhaustive enumeration for every directed graph on three vertices 85ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent cycle enumeration oracle > matches seeded four-vertex graphs and shuffled inputs, seed 42 630ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent cycle enumeration oracle > rotation preserves identity while directed reversal does not 3ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent cycle enumeration oracle > never joins duplicate items or incompatible currencies into a cycle 12ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent cycle enumeration oracle > caps retained candidates and explicitly reports incomplete results 70ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent cycle enumeration oracle > reports count and timing truncation without crossing the count cap 2ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent signed coordination attacks > rejects a mathematically valid statement from a nonparticipant and another party cancellation 50ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent signed coordination attacks > accepts reordered signed evidence, deduplicates replay, and requires unanimity 25ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent signed coordination attacks > new revisions invalidate old evidence and forks freeze coordination 28ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent signed coordination attacks > rejects nonfinite feasibility timestamps 9ms
+ ✓ tests/integration/mutiny-oracle.test.ts > independent signed coordination attacks > a local observation of expiry cannot be undone by moving the clock backwards 7ms
+ ✓ tests/integration/mutiny-oracle.test.ts > historical signed listing forks remain frozen regardless of projection delivery order 34ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > retains exactly the direct engine result for real signed public records 54ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > re-verifies signatures in the worker and applies blocks before searching 13ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > rejects oversized input, injected policy fields and malformed worker requests independently 136ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > yields bounded encoding batches and aborts preparation before starting a worker 7ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > yields by encoded bytes before a full count batch of large envelopes blocks cancellation 3ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > sends no vault, identity, storage, or private listing rows to the worker 8ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > terminates the previous generation and ignores its late response 2ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > cancels on session disposal and never reopens a disposed client 1ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > enforces a separate whole-worker deadline without extending engine budgets 8ms
+ ✓ tests/integration/matching-worker.test.ts > worker matching admission and bounded protocol > fails closed when worker startup, message transport, or result validation fails 6ms
+ ✓ tests/integration/matching-worker.test.ts > reports explicit PWA matching cancellation as ordinary status instead of an operation failure 61ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T01 parses canonical signed amounts and rejects malformed/overflow values 5ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > parses decimal values exactly, requires explicit rounding and preserves tiny negative signs 3ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T02 validates rates, allocation weights and throws on currency mismatch 4ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T03 exact fraction conversions use one rounding; seed=740016 runs=10000 416ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T04 conversion round-trip respects exact error bound; seed=740016 runs=10000 204ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T05 exact allocation sums and ideal-share bounds; seed=740016 runs=10000 906ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T06 half-even symmetry and ties; seed=740016 runs=10000 344ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T07 immutable arithmetic and final-result overflow handling 2ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T08 versioned shared vectors (331) match independently generated Fraction results 12ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T09 error codes match contract without embedding amounts 0ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T11 bounds pathological input before BigInt work 2ms
+ ✓ packages/commerce/src/valuation/precision/precision.test.ts > money precision F09.S03.M03 > TEST-PS-074-09.T10 TEST-PS-074-09.T14 exact-arithmetic source guard rejects float conversion 946ms
+ ✓ packages/kernel/src/bus/access.test.ts > relay access tokens (CTR-CAP-001 sessions, CAP-10) > TEST-PS-117-09.T26 challenge–response issues hashed opaque tokens; bad, replayed or expired proofs are UNAUTHENTICATED 54ms
+ ✓ packages/kernel/src/bus/access.test.ts > relay access tokens (CTR-CAP-001 sessions, CAP-10) > TEST-PS-117-09.T26 the same proofs through the relay commands: forged, reused after forgery, replayed and expired nonces stay consumed 20ms
+ ✓ packages/kernel/src/bus/access.test.ts > relay access tokens (CTR-CAP-001 sessions, CAP-10) > TEST-PS-117-09.T26 outstanding challenges are bounded and expired tokens are purged by the maintenance sweep 30ms
+ ✓ packages/kernel/src/bus/access.test.ts > relay access tokens (CTR-CAP-001 sessions, CAP-10) > TEST-PS-117-09.T26 login never re-enters relay storage: roles resolve per request and the verifier reads through the login transaction 5ms
+ ✓ packages/kernel/src/http/server.test.ts > relay HTTP adapter (PS-117, PS-121) > TEST-PS-117-09.T19 end to end: sample command, replay header, problem+json, limits, media type, methods, headers 130ms
+ ✓ packages/kernel/src/http/server.test.ts > relay HTTP adapter (PS-117, PS-121) > TEST-PS-117-09.T19 the rate limit sees only the caller network (/24 or /48), so one host cannot exhaust every login 65ms
+ ✓ packages/kernel/src/http/server.test.ts > relay HTTP adapter (PS-117, PS-121) > TEST-PS-121-09.T09 /healthz and /readyz expose only status booleans; draining turns readiness to 503 27ms
+ ✓ packages/kernel/src/http/server.test.ts > relay HTTP adapter (PS-117, PS-121) > TEST-PS-121-09.T10 /metrics requires a relay token holding platform.metrics.read 16ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > reports the exact failed native stage without retrying or exposing native exception data 12ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > recovers after 1 native generation failures and preserves the real identity through lock and unlock 3135ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > recovers after 2 native generation failures and preserves the real identity through lock and unlock 2514ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > fails closed after three generation attempts without exporting or importing any key 8ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: unsupported algorithm 7ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: invalid access 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: invalid syntax 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: invalid data 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: security policy 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: aborted operation 2ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: type error 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: renamed ordinary error 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: error-shaped object 6ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: string rejection 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: null rejection 0ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not retry an ineligible generation failure: undefined rejection 0ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > stops immediately when an eligible generation failure is followed by an ineligible failure 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not regenerate when raw export reports OperationError 6ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not regenerate when pkcs8 export reports OperationError 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > does not regenerate when private-key import reports OperationError and clears the exported bytes 1713ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > rejects an invalid passphrase before attempting generation 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > binds a did:key to the Ed25519 public key and canonical base64url 1ms
+ ✓ packages/identity/src/identity.test.ts > local identity key protection > persists only ciphertext and rejects wrong password, substituted principal and locked signing 4784ms
+ ✓ packages/kernel/src/storage/indexeddb.test.ts > IndexedDB vault adapter (PS-119) > TEST-PS-119-09.T08 commits persist across reopen; a failed IndexedDB commit restores the working set to the last commit 38ms
+ ✓ packages/kernel/src/storage/indexeddb.test.ts > IndexedDB vault adapter (PS-119) > TEST-PS-119-09.T08 one tab owns a vault: a second open while the vault lock is held fails with DEPENDENCY_UNAVAILABLE 6ms
+ ✓ packages/kernel/src/storage/indexeddb.test.ts > IndexedDB vault adapter (PS-119) > TEST-PS-119-09.T08 without an exclusive lock the newest connection owns the vault: an older one cannot commit and keeps its last committed state 8ms
+ ✓ packages/kernel/src/storage/indexeddb.test.ts > IndexedDB vault adapter (PS-119) > TEST-PS-119-09.T09 opening a vault runs the retention sweep for expired idempotency rows, old outbox events with their inbox rows and old dead letters 9ms
+ ✓ tests/integration/listing-maintenance.test.ts > limits a pass to five owner-scoped pages and resumes immediately to finish the same cycle 12ms
+ ✓ tests/integration/listing-maintenance.test.ts > shares concurrent runs and prevents a status callback from starting an overlapping pass 60ms
+ ✓ tests/integration/listing-maintenance.test.ts > keeps confirmed progress and retries the failed page rather than skipping or restarting it 1ms
+ ✓ tests/integration/listing-maintenance.test.ts > reports first-page failure as pending and validates untrusted response counts 6ms
+ ✓ tests/integration/listing-maintenance.test.ts > does not loop on a repeating cursor or erase earlier confirmed results 1ms
+ ✓ tests/integration/listing-maintenance.test.ts > stops late results and future dispatches after session dispose 52ms
+ ✓ tests/integration/listing-maintenance.test.ts > stops late results and future dispatches after session replace 52ms
+ ✓ tests/integration/listing-maintenance.test.ts > does no work before the owner session is active and does not publish or download envelopes 2ms
+ ✓ tests/integration/listing-maintenance.test.ts > runs real owner-authorized expiry and archive commands while retaining the signed withdrawal 992ms
+ ✓ packages/kernel/src/storage/sqlite.test.ts > SQLite relay adapter (PS-119) > TEST-PS-119-09.T07 WAL and busy_timeout are set; a database locked by another writer maps to DEPENDENCY_UNAVAILABLE 135ms
+ ✓ packages/kernel/src/storage/sqlite.test.ts > SQLite relay adapter (PS-119) > TEST-PS-119-09.T12 load: with 5 000 records, get+put p95 ≤ 5 ms and a 50-item index query p95 ≤ 20 ms 226ms
+ ✓ packages/kernel/src/storage/sqlite.test.ts > SQLite relay adapter (PS-119) > TEST-PS-119-09.T13 export by ordered scan and restore into another adapter keep IDs, revisions and data; conflicts are rejected 61ms
+ ✓ packages/kernel/src/storage/sqlite.test.ts > SQLite relay adapter (PS-119) > TEST-PS-119-09.T14 migrations are forward-only and recorded once; checksum drift stops startup 14ms
+ ✓ packages/kernel/src/outbox/dispatcher.test.ts > outbox dispatcher (PS-119) > TEST-PS-119-09.T04 delivery in (aggregate, revision) order, inbox dedupe, full-jitter backoff and dead letter after 8 attempts 71ms
+ ✓ packages/kernel/src/outbox/dispatcher.test.ts > outbox dispatcher (PS-119) > TEST-PS-119-09.T04 disabled consumer modules pause without consuming attempts (FLG-3) 5ms
+ ✓ packages/kernel/src/outbox/dispatcher.test.ts > outbox dispatcher (PS-119) > TEST-PS-119-09.T04 a sink failing after the consumer committed never reopens its done inbox row; side effects run once 13ms
+ ✓ packages/kernel/src/outbox/dispatcher.test.ts > outbox dispatcher (PS-119) > TEST-PS-119-09.T10 dead letters and logs carry consumer, event ID and error code only, never payloads 10ms
+ ✓ packages/kernel/src/outbox/dispatcher.test.ts > outbox dispatcher (PS-119) > TEST-PS-119-09.T11 classrup_outbox_lag_ms per consumer module and delivery outcome counters 8ms
+ ✓ packages/vault/src/vault.test.ts > vault composition > retains failed-unlock backoff when the application closes and reopens the same vault 3445ms
+ ✓ packages/vault/src/vault.test.ts > vault composition > survives IndexedDB close/reopen, gates locked storage, and atomically restores signed encrypted records 12601ms
+ ✓ packages/vault/src/vault.test.ts > vault composition > restores older backups after registering additional codecs but rejects unsupported types 8263ms
+ ✓ packages/vault/src/vault.test.ts > vault composition > rejects corrupt restores before creating an identity and rolls back a lock during an awaited write 1267ms
+ ✓ packages/vault/src/vault.test.ts > vault composition > rejects noncanonical record keys during backup restore without initializing the destination 6680ms
+ ✓ packages/vault/src/vault.test.ts > vault composition > rechecks canonical keys after restore normalization before any records commit 5660ms
+ ✓ packages/discovery/src/geoprivacy/location/location.test.ts > PS-048 local coarse location preferences > starts hidden, stores only the coarse home and emits only the chosen public precision 42ms
+ ✓ packages/discovery/src/geoprivacy/location/location.test.ts > PS-048 local coarse location preferences > rejects too-fine cells, public levels, coordinate fields and inconsistent GPS provenance atomically 11ms
+ ✓ packages/discovery/src/geoprivacy/location/location.test.ts > PS-048 local coarse location preferences > enforces actor and tenant ownership even under an allow-all capability harness 7ms
+ ✓ packages/discovery/src/geoprivacy/location/location.test.ts > PS-048 local coarse location preferences > requires exact revisions for updates, handles identical saves without new events and preserves idempotency 10ms
+ ✓ packages/discovery/src/geoprivacy/location/location.test.ts > PS-048 local coarse location preferences > enforces a sliding 24-hour limit while hiding and clearing remain available without resetting it 13ms
+ ✓ packages/discovery/src/geoprivacy/location/location.test.ts > PS-048 local coarse location preferences > does not clear the change window when the clock moves backward 5ms
+ ✓ packages/discovery/src/geoprivacy/location/location.test.ts > PS-048 local coarse location preferences > clears once with revision checks and never exports an old home in its new event 5ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > preserves default result order and existing query/block/availability filtering 185ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > filters exact category, kind, condition and arbitrary-precision declared price without currency conversion 40ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > uses coarse-cell overlap for radius filters, including less precise published cells 16ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > ranks matching records by local recency and optional coarse distance with deterministic ties 19ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > anchors seenWithinDays and rank recency across signed listing revisions 22ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > rejects missing centers, precise/private locations, invalid prices and unsupported query options 19ms
+ ✓ packages/kernel/src/sync/sender.test.ts > sync outbox sender (IDM-7) > TEST-PS-119-09.T05 sender: per-destination FIFO, transport ack, backoff on retryable errors, failed on fatal or 7-day expiry, peer ack 43ms
+ ✓ packages/kernel/src/sync/sender.test.ts > sync outbox sender (IDM-7) > TEST-PS-119-09.T05 entries older than 7 days fail with EXPIRED before any send, even when the transport would succeed or the head is backing off 8ms
+ ✓ tests/integration/privacy-notify.test.ts > exported local privacy and notification composition > routes through the bus, honors preferences, redacts output and queues no external delivery 53ms
+ ✓ tests/integration/privacy-notify.test.ts > exported local privacy and notification composition > round-trips owner preferences in an encrypted vault backup without restoring external channel authority 5498ms
+ ✓ tests/integration/privacy-notify.test.ts > exported local privacy and notification composition > rejects foreign owner records and security preferences disabled in a backup 6ms
+ ✓ packages/vault/src/session-policy.test.ts > vault automatic locking > locks once at the 15-minute idle boundary and cancels its timers 22ms
+ ✓ packages/vault/src/session-policy.test.ts > vault automatic locking > extends idle time on activity but not hidden-tab time 3ms
+ ✓ packages/vault/src/session-policy.test.ts > vault automatic locking > checks overdue deadlines before activity or tab visibility can reset them 5ms
+ ✓ packages/vault/src/session-policy.test.ts > vault automatic locking > cancels hidden deadline on timely return and applies changed idle duration to original activity 127ms
+ ✓ packages/vault/src/session-policy.test.ts > vault automatic locking > does not let a backwards clock extend the last observed inactivity window 3ms
+ ✓ packages/vault/src/session-policy.test.ts > vault automatic locking > supports disposal, enforces configuration bounds, and surfaces lock failures once 5ms
+ ✓ packages/vault/src/session-policy.test.ts > local unlock backoff > starts on third failure, doubles to 60 seconds, does not advance on blocked attempts, and resets after success 5ms
+ ✓ tests/integration/identity-keygen-recovery.test.ts > bounded native generation at the vault boundary > leaves no persisted identity after exhaustion and permits a later explicit create 6981ms
+ ✓ tests/integration/identity-keygen-recovery.test.ts > bounded native generation at the vault boundary > preserves concurrent-open and close guards while an eligible generation failure is pending 954ms
+ ✓ tests/integration/identity-keygen-recovery.test.ts > bounded native generation at the vault boundary > preserves the recovered identity through signing, lock and encrypted backup restore without regeneration 5410ms
+ ✓ packages/mutiny/src/cycle_matching/admission.test.ts > signed exact-item alpha graph admission > feeds actual verified signatures to two-party matching 54ms
+ ✓ packages/mutiny/src/cycle_matching/admission.test.ts > signed exact-item alpha graph admission > excludes unknown identities by default and local blocks 30ms
+ ✓ packages/mutiny/src/cycle_matching/admission.test.ts > signed exact-item alpha graph admission > rejects signature substitution and unauthorized offered listing 32ms
+ ✓ packages/mutiny/src/cycle_matching/admission.test.ts > signed exact-item alpha graph admission > excludes tombstoned and same revision forked listings 39ms
+ ✓ packages/mutiny/src/cycle_matching/admission.test.ts > signed exact-item alpha graph admission > does not infer wants; fresh signed wants wait the specified minimum age 42ms
+ ✓ packages/mutiny/src/cycle_matching/matching.test.ts > bounded matching primitives > discovers 2, 3, 4 and 6 party cycles within configured length 18ms
+ ✓ packages/mutiny/src/cycle_matching/matching.test.ts > bounded matching primitives > binds the whole directed ring, preserves rotation but not reversal 3ms
+ ✓ packages/mutiny/src/cycle_matching/matching.test.ts > bounded matching primitives > greedily prefers longer cycles and excludes participant/item overlap 1ms
+ ✓ packages/mutiny/src/cycle_matching/matching.test.ts > bounded matching primitives > is stable with reordered input and count cutoff 3ms
+ ✓ packages/mutiny/src/cycle_matching/matching.test.ts > bounded matching primitives > reports real time truncation without overstating completeness 1ms
+ ✓ packages/mutiny/src/cycle_matching/matching.test.ts > bounded matching primitives > rejects oversized graphs, duplicate edges, invalid budgets and inexact money 7ms
+ ✓ packages/mutiny/src/cycle_matching/matching.test.ts > bounded matching primitives > does not match mixed currencies or reused items and filters to local principal 2ms
+ ✓ packages/mutiny/src/cycle_matching/matching.test.ts > bounded matching primitives > bounds retained candidates and cryptographic work on a dense graph 45ms
+ ✓ packages/kernel/src/outbox/dispatcher.isolation.test.ts > outbox isolation between independent aggregate streams > retry of an aggregate in one tenant does not block another tenant in the same dispatch batch 34ms
+ ✓ packages/kernel/src/outbox/dispatcher.isolation.test.ts > outbox isolation between independent aggregate streams > a not-yet-due retry must not hide another tenant with the same aggregate ID from later passes 7ms
+ ✓ packages/kernel/src/outbox/dispatcher.isolation.test.ts > outbox isolation between independent aggregate streams > SQLite pending query scopes delayed retry to tenant and aggregate type, preserving unrelated events 13ms
+ ✓ packages/kernel/src/kernel.meta.test.ts > kernel spec consistency > TEST-PS-117-09.T23 every PS-117 test ID appears in a kernel test title 70ms
+ ✓ packages/kernel/src/kernel.meta.test.ts > kernel spec consistency > TEST-PS-119-09.T15 every PS-119 test ID appears in a kernel test title 24ms
+ ✓ packages/kernel/src/kernel.meta.test.ts > kernel spec consistency > TEST-PS-121-09.T13 every PS-121 test ID appears in a kernel test title 23ms
+ ✓ packages/kernel/src/kernel.meta.test.ts > kernel spec consistency > TEST-PS-117-09.T24 the core is isomorphic: only Node adapter files import node: modules 20ms
+ ✓ packages/kernel/src/kernel.meta.test.ts > kernel spec consistency > TEST-PS-119-09.T16 inbox and sync-outbox machines equal the PS-119-03 transition tables 10ms
+ ✓ packages/kernel/src/observability/metrics.test.ts > metrics registry (CTR-OBS-001 OBS-2/OBS-3) > TEST-PS-121-09.T05 names and labels are validated; identical re-registration is idempotent, conflicting throws 6ms
+ ✓ packages/kernel/src/observability/metrics.test.ts > metrics registry (CTR-OBS-001 OBS-2/OBS-3) > TEST-PS-121-09.T06 series per metric are capped and dropped combinations are counted 0ms
+ ✓ packages/kernel/src/observability/metrics.test.ts > metrics registry (CTR-OBS-001 OBS-2/OBS-3) > TEST-PS-121-09.T07 Prometheus text: HELP/TYPE, sorted series, escaping and cumulative histogram buckets 2ms
+ ✓ tests/integration/archive-backup.test.ts > production archive backup codec > round-trips archive dates and owner through encrypted backup with rebuilt indexes 6420ms
+ ✓ tests/integration/archive-backup.test.ts > production archive backup codec > refuses foreign owner evidence before initializing a backup destination 6339ms
+ ✓ tests/integration/archive-backup.test.ts > production archive backup codec > rejects extended restore deadlines and mismatched restored lifecycle dates 2ms
+ ✓ tests/integration/vault-session.test.ts > does not return a private command result when a lock occurs during post-commit delivery 59ms
+ ✓ tests/integration/vault-session.test.ts > rejects an old result after another vault replaces the session 2ms
+ ✓ tests/integration/vault-session.test.ts > locks an idle session even when synthetic activity events keep arriving 7ms
+ ✓ tests/integration/vault-session.test.ts > observes an already hidden document and clears the old session listeners on disposal 3ms
+ ✓ tests/integration/vault-session.test.ts > surfaces a storage-close error without retrying the lock callback 1ms
+ ✓ packages/kernel/src/validation/validation.test.ts > validation (CTR-ERR-001, CTR-SCH-001) > TEST-PS-117-09.T04 strict parsing maps unknown, missing, mistyped and bounded fields to VALIDATION_FAILED fields 17ms
+ ✓ packages/kernel/src/validation/validation.test.ts > validation (CTR-ERR-001, CTR-SCH-001) > TEST-PS-117-09.T05 shared validators: uuidv7, RFC 3339 ms timestamps, code-point bounds and Money shape 11ms
+ ✓ packages/kernel/src/ids/uuidv7.test.ts > UUIDv7 identifiers (CTR-ID-001) > TEST-PS-117-09.T01 generated IDs are lowercase canonical v7 with variant 10; parser rejects other forms 99ms
+ ✓ packages/kernel/src/ids/uuidv7.test.ts > UUIDv7 identifiers (CTR-ID-001) > TEST-PS-117-09.T02 property: IDs are unique and strictly increasing per generator, including same-ms bursts and clock regressions 1232ms
+ ✓ packages/kernel/src/ids/uuidv7.test.ts > UUIDv7 identifiers (CTR-ID-001) > TEST-PS-117-09.T03 IDs more than 24 h ahead of the receiver clock are rejected with ID_TIMESTAMP_SKEW 6ms
+ ✓ tests/integration/ranking-publication.test.ts > publishes the first relay ranking config and chains a rollback using the federation signer 2671ms
+ ✓ packages/kernel/src/errors/errors.test.ts > typed errors (CTR-ERR-001) > TEST-PS-117-09.T18 problem+json carries only contract fields; the common code table matches CTR-ERR-001 11ms
+ ✓ packages/kernel/src/observability/redact.test.ts > log redaction (CTR-OBS-001 OBS-1) > TEST-PS-121-09.T01 sensitive keys are dropped at any depth, in arrays and in case or suffix variants 17ms
+ ✓ packages/kernel/src/observability/redact.test.ts > log redaction (CTR-OBS-001 OBS-1) > TEST-PS-121-09.T02 IPs are truncated to /24 and /48 under IP keys and as bare values 6ms
+ ✓ tests/integration/listing-editor.test.ts > preserves exact currency amounts, revision, tags and locale without copying derived ownership fields 5ms
+ ✓ tests/integration/listing-editor.test.ts > rejects missing, negative, rounded or formatted monetary input 2ms
+ ✓ tests/integration/listing-editor.test.ts > edits a wanted draft without forcing disclosure of absent optional fields 2ms
+ ✓ tests/integration/notification-delivery.test.ts > local notification delivery health > keeps failures visible through backoff and clears them only after successful retry 36ms
+ ✓ tests/integration/notification-delivery.test.ts > local notification delivery health > keeps a dead letter visible across subsequent quiet drains 3ms
+ ✓ tests/integration/notification-lifecycle.test.ts > drops a queued button action when its vault inbox is destroyed 11ms
+ ✓ tests/integration/notification-lifecycle.test.ts > drops a queued preferences action when its vault inbox is destroyed 1ms
+ ✓ tests/integration/notification-lifecycle.test.ts > drops a queued filter action when its vault inbox is destroyed 1ms
+ ✓ tests/integration/notification-lifecycle.test.ts > runs explicit delivery recovery while the inbox remains active 1ms
+ ✓ packages/kernel/src/machine/machine.test.ts > state machines > TEST-PS-117-09.T07 definitions are validated; next returns the target or CONFLICT_STATE; the table is exported 9ms
+ ✓ packages/kernel/src/machine/machine.test.ts > state machines > TEST-PS-117-09.T08 property: random event sequences succeed only through declared transitions; terminal states absorb nothing 84ms
+ ✓ packages/kernel/src/observability/logger.test.ts > structured logger (CTR-OBS-001) > TEST-PS-121-09.T03 JSON lines start with ts, level, msg, then correlationId, module, code, durationMs; child bindings propagate 6ms
+ ✓ packages/kernel/src/observability/logger.test.ts > structured logger (CTR-OBS-001) > TEST-PS-121-09.T04 levels below the threshold are discarded, invalid levels rejected, and a throwing sink never fails the caller 6ms
+ ✓ packages/kernel/src/observability/logger.test.ts > structured logger (CTR-OBS-001) > TEST-PS-121-09.T11 the vault ring buffer is bounded and exports redacted JSON Lines on request only 3ms
+ ✓ tests/integration/discovery-i18n-entrypoints.test.ts > ranks and pages search results through the discovery package alongside the existing listing operations 15ms
+ ✓ tests/integration/discovery-i18n-entrypoints.test.ts > uses a negotiated language to render and parse exact listing amounts through the i18n package 27ms
+ ✓ packages/kernel/src/storage/scope.test.ts > tenant scoping (PS-119) > TEST-PS-119-09.T06 repositories, leases and sync entries are confined to the scope tenant 23ms
+ ✓ packages/security/src/cryptography/base64url.test.ts > canonical strict base64url codec > round-trips every length from 0 to 64 bytes without padding 19ms
+ ✓ packages/security/src/cryptography/base64url.test.ts > canonical strict base64url codec > uses the URL-safe alphabet for bytes that map to 62 and 63 0ms
+ ✓ packages/security/src/cryptography/base64url.test.ts > canonical strict base64url codec > decodes the empty string to zero bytes 0ms
+ ✓ packages/security/src/cryptography/base64url.test.ts > canonical strict base64url codec > rejects non-canonical and malformed text 2ms
+ ✓ packages/security/src/cryptography/base64url.test.ts > canonical strict base64url codec > rejects non-string input before decoding 1ms
+ ✓ packages/security/src/cryptography/base64url.test.ts > canonical strict base64url codec > enforces the byte limit before and after decoding 1ms
+ ✓ packages/kernel/src/sync/sender.expiry-boundary.test.ts > sync outbox expiry at transport dispatch boundary (IDM-7) > never sends a queued head that expires while an earlier transport send is pending 39ms
+ ✓ tests/integration/action-queue.test.ts > processes rapid imports in order and does not discard the file after a failing import 9ms
+ ✓ tests/integration/action-queue.test.ts > drops old-session actions after lock or same-principal re-unlock while preserving current work 2ms
+ ✓ packages/kernel/src/bus/perf.test.ts > bus performance budget (OBS-4) > TEST-PS-117-09.T22 load: 500 sequential idempotent commands on SQLite WAL complete with p95 ≤ 50 ms 812ms
+ ✓ packages/kernel/src/storage/storage.lifecycle.test.ts > memory storage close boundary > drains earlier work but never runs reads or writes queued behind close 7ms
+ ✓ packages/kernel/src/storage/storage.lifecycle.test.ts > indexeddb storage close boundary > drains earlier work but never runs reads or writes queued behind close 17ms
+ ✓ packages/kernel/src/events/envelope.test.ts > event envelope (CTR-EVT-001) > TEST-PS-117-09.T06 defineEvent validates names; envelopes carry every CTR-EVT-001 field with a strict payload 20ms
+ ✓ tests/integration/peer-search-form.test.ts > peer search form parser > preserves default search and parses supported choices 11ms
+ ✓ tests/integration/peer-search-form.test.ts > peer search form parser > rejects missing radius center, forbidden precision and unsupported options 4ms
+ ✓ tests/integration/peer-search-form.test.ts > peer search form parser > does not coerce non-text form data or share mutable defaults 1ms
+ ✓ packages/kernel/src/observability/readiness.test.ts > readiness (CTR-OBS-001 OBS-6) > TEST-PS-121-09.T08 ready only with writable storage, current migrations and lag < 60 s; probe failures report unready 8ms
+ ✓ packages/kernel/src/observability/diagnostic-privacy.test.ts > CTR-OBS-001 diagnostic output privacy regression > does not export identifying or credential-like data embedded in an unstructured log message 9ms
+ ✓ packages/kernel/src/observability/diagnostic-privacy.test.ts > CTR-OBS-001 diagnostic output privacy regression > does not export unstructured private strings in Error messages or stacks 2ms
+ ✓ packages/kernel/src/observability/perf.test.ts > observability overhead > TEST-PS-121-09.T12 load: 10 000 redacted log lines and 100 000 metric updates complete in under 1 s 593ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T01 memory: create, get, CAS update, conflicts, remove and JSON round trip 23ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T01 memory: query by index equality, range, order and cursor pagination 5ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T02 memory: err or exception rolls back records, outbox, idempotency, leases and sync together 6ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T03 memory: lease acquire CAS, renew, release, expiry and fencing 3ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T04 memory: pending skips delivered, dead and aggregates blocked by a future retry 4ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T05 memory: sync outbox FIFO heads per destination and declared transitions only 3ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T17 memory: MediaBlob content addressing, 5 MiB limit, dedupe and refcounted delete with records 12ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T17 memory: encrypted blobs released by repository writes or the orphan sweep are reported as shredded in that transaction 4ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T09 memory: inbox rows are pruned with their events; dead letters are kept 30 days and hold their event until purged 3ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: memory > TEST-PS-119-09.T09 memory: purge removes expired idempotency rows and outbox rows older than the cutoff 1ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T01 sqlite: create, get, CAS update, conflicts, remove and JSON round trip 7ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T01 sqlite: query by index equality, range, order and cursor pagination 5ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T02 sqlite: err or exception rolls back records, outbox, idempotency, leases and sync together 5ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T03 sqlite: lease acquire CAS, renew, release, expiry and fencing 3ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T04 sqlite: pending skips delivered, dead and aggregates blocked by a future retry 5ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T05 sqlite: sync outbox FIFO heads per destination and declared transitions only 5ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T17 sqlite: MediaBlob content addressing, 5 MiB limit, dedupe and refcounted delete with records 10ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T17 sqlite: encrypted blobs released by repository writes or the orphan sweep are reported as shredded in that transaction 15ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T09 sqlite: inbox rows are pruned with their events; dead letters are kept 30 days and hold their event until purged 4ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: sqlite > TEST-PS-119-09.T09 sqlite: purge removes expired idempotency rows and outbox rows older than the cutoff 2ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T01 indexeddb: create, get, CAS update, conflicts, remove and JSON round trip 14ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T01 indexeddb: query by index equality, range, order and cursor pagination 4ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T02 indexeddb: err or exception rolls back records, outbox, idempotency, leases and sync together 4ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T03 indexeddb: lease acquire CAS, renew, release, expiry and fencing 4ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T04 indexeddb: pending skips delivered, dead and aggregates blocked by a future retry 4ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T05 indexeddb: sync outbox FIFO heads per destination and declared transitions only 5ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T17 indexeddb: MediaBlob content addressing, 5 MiB limit, dedupe and refcounted delete with records 12ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T17 indexeddb: encrypted blobs released by repository writes or the orphan sweep are reported as shredded in that transaction 7ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T09 indexeddb: inbox rows are pruned with their events; dead letters are kept 30 days and hold their event until purged 4ms
+ ✓ packages/kernel/src/storage/storage.contract.test.ts > storage contract: indexeddb > TEST-PS-119-09.T09 indexeddb: purge removes expired idempotency rows and outbox rows older than the cutoff 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/alpha-security.test.ts > independent signed-statement security > restores an encrypted signed backup and rejects a bad later record without initializing the target
+Error: Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/integration/alpha-security.test.ts:167:3
+    165|   });
+    166|
+    167|   it('restores an encrypted signed backup and rejects a bad later reco…
+       |   ^
+    168|     const codec: BackupCodec = { type: 'test.listing', indexes: () => …
+    169|       if (!input || typeof input !== 'object' || !('title' in input) |…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget
+Error: Test timed out in 60000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/integration/mutiny-persistence.test.ts:336:3
+    334|   });
+    335|
+    336|   it('keeps a withdrawal slot when repeated signed evidence exhausts t…
+       |   ^
+    337|     const f = await scenario(2); const { reservations, holds } = await…
+    338|     await f.broadcast(reservations);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 71 passed (73)
+      Tests  2 failed | 699 passed (701)
+   Start at  22:52:23
+   Duration  477.22s (tests 95%, import 4%, transform 1%)
+
+    Isolate  73 workers spawned · ~334ms startup each (spawn + environment, per file)
+             at least ~24.07s faster with isolate: false — reuses workers across files instead of one per file
+
+JSON report written to /workspace/scratch/171008b2cfcc/evidence/domain-forks.json
+ ELIFECYCLE  Test failed. See above for more details.

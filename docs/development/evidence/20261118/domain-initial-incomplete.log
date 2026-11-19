@@ -1,0 +1,4 @@
+
+> classrup@ test /workspace/scratch/171008b2cfcc/classrupted
+> vitest run --reporter=json --outputFile=../evidence/domain.json
+

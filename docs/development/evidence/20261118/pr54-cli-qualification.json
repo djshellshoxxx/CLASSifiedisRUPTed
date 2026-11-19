@@ -1,0 +1,463 @@
+{
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "observedAtUTC": "2026-11-19 07:13:41 UTC",
+  "pr": 54,
+  "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+  "base": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+  "testedMerge": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+  "workflow": {
+    "id": 44474363663,
+    "name": "CLI setup",
+    "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663",
+    "status": "completed",
+    "conclusion": "success",
+    "attempt": 1,
+    "event": "pull_request",
+    "createdAt": "2026-11-19T06:44:23Z",
+    "updatedAt": "2026-11-19T07:11:17Z"
+  },
+  "totals": {
+    "platformJobs": 6,
+    "reportedRepeatedTests": 192,
+    "passedRepeatedAssertions": 190,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 2
+  },
+  "skipExplanation": "Each Windows platform skips only the existing POSIX FIFO/device case; no new skip or relaxed assertion was introduced.",
+  "jobs": [
+    {
+      "id": 135392596712,
+      "name": "clean-install (ubuntu-latest, 24.x)",
+      "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "run_id": 44474363663,
+      "attempt": 1,
+      "conclusion": "success",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663/job/135392596712",
+      "counts": {
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "checkoutMerge": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+      "devSmoke": true,
+      "previewSmoke": true,
+      "steps": [
+        {
+          "name": "Install pinned toolchain dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "CLI negative and repeat-setup tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-interactive setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Repeat setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose local prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Production build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real development and production browser smoke",
+          "conclusion": "success"
+        },
+        {
+          "name": "Tracked files remain unchanged",
+          "conclusion": "success"
+        }
+      ],
+      "log_file": "job-135392596712.log",
+      "excerpts": [
+        "2026-11-19T07:02:29.5067275Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+        "2026-11-19T07:02:41.7147476Z ℹ tests 32",
+        "2026-11-19T07:02:41.7148085Z ℹ pass 32",
+        "2026-11-19T07:02:41.7148367Z ℹ fail 0",
+        "2026-11-19T07:02:41.7148610Z ℹ cancelled 0",
+        "2026-11-19T07:02:41.7148876Z ℹ skipped 0",
+        "2026-11-19T07:02:41.7149102Z ℹ todo 0",
+        "2026-11-19T07:06:19.5730233Z dev: Chromium real-app startup, reload and offline shell passed",
+        "2026-11-19T07:06:20.9871185Z preview: Chromium real-app startup, reload and offline shell passed"
+      ],
+      "logBytes": 43228,
+      "logSha256": "c3ee3e1d2b5cdcda8d50ac07f890aa19733ea6f16f20ed776443427163486d97"
+    },
+    {
+      "id": 135392596738,
+      "name": "clean-install (macos-latest, 24.x)",
+      "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "run_id": 44474363663,
+      "attempt": 1,
+      "conclusion": "success",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663/job/135392596738",
+      "counts": {
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "checkoutMerge": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+      "devSmoke": true,
+      "previewSmoke": true,
+      "steps": [
+        {
+          "name": "Install pinned toolchain dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "CLI negative and repeat-setup tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-interactive setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Repeat setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose local prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Production build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real development and production browser smoke",
+          "conclusion": "success"
+        },
+        {
+          "name": "Tracked files remain unchanged",
+          "conclusion": "success"
+        }
+      ],
+      "log_file": "job-135392596738.log",
+      "excerpts": [
+        "2026-11-19T07:02:04.3604850Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+        "2026-11-19T07:02:12.6400950Z ℹ tests 32",
+        "2026-11-19T07:02:12.6401400Z ℹ pass 32",
+        "2026-11-19T07:02:12.6401600Z ℹ fail 0",
+        "2026-11-19T07:02:12.6401790Z ℹ cancelled 0",
+        "2026-11-19T07:02:12.6401940Z ℹ skipped 0",
+        "2026-11-19T07:02:12.6402120Z ℹ todo 0",
+        "2026-11-19T07:02:18.3375460Z dev: Chromium real-app startup, reload and offline shell passed",
+        "2026-11-19T07:02:19.6707490Z preview: Chromium real-app startup, reload and offline shell passed"
+      ],
+      "logBytes": 25847,
+      "logSha256": "87fa3a028d4089b6beb4bab3b2ade4e99a5ba379310a56eea577e2b12627edae"
+    },
+    {
+      "id": 135392596764,
+      "name": "clean-install (windows-latest, 24.x)",
+      "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "run_id": 44474363663,
+      "attempt": 1,
+      "conclusion": "success",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663/job/135392596764",
+      "counts": {
+        "tests": 32,
+        "pass": 31,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "todo": 0
+      },
+      "checkoutMerge": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+      "devSmoke": true,
+      "previewSmoke": true,
+      "steps": [
+        {
+          "name": "Install pinned toolchain dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "CLI negative and repeat-setup tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-interactive setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Repeat setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose local prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Production build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real development and production browser smoke",
+          "conclusion": "success"
+        },
+        {
+          "name": "Tracked files remain unchanged",
+          "conclusion": "success"
+        }
+      ],
+      "log_file": "job-135392596764.log",
+      "excerpts": [
+        "2026-11-19T07:01:46.1993802Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27\r",
+        "2026-11-19T07:02:21.6753796Z ℹ tests 32\r",
+        "2026-11-19T07:02:21.6754634Z ℹ pass 31\r",
+        "2026-11-19T07:02:21.6754941Z ℹ fail 0\r",
+        "2026-11-19T07:02:21.6755619Z ℹ cancelled 0\r",
+        "2026-11-19T07:02:21.6755969Z ℹ skipped 1\r",
+        "2026-11-19T07:02:21.6756269Z ℹ todo 0\r",
+        "2026-11-19T07:05:47.2311472Z dev: Chromium real-app startup, reload and offline shell passed\r",
+        "2026-11-19T07:05:48.8380991Z preview: Chromium real-app startup, reload and offline shell passed\r"
+      ],
+      "logBytes": 26998,
+      "logSha256": "8b4ace1f7a9215f8f7307aa5c45ebf36b67dececcb6bec3ad8673830d1dc8dd7"
+    },
+    {
+      "id": 135392596858,
+      "name": "clean-install (macos-latest, 22.18.0)",
+      "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "run_id": 44474363663,
+      "attempt": 1,
+      "conclusion": "success",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663/job/135392596858",
+      "counts": {
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "checkoutMerge": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+      "devSmoke": true,
+      "previewSmoke": true,
+      "steps": [
+        {
+          "name": "Install pinned toolchain dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "CLI negative and repeat-setup tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-interactive setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Repeat setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose local prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Production build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real development and production browser smoke",
+          "conclusion": "success"
+        },
+        {
+          "name": "Tracked files remain unchanged",
+          "conclusion": "success"
+        }
+      ],
+      "log_file": "job-135392596858.log",
+      "excerpts": [
+        "2026-11-19T07:07:08.5000870Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+        "2026-11-19T07:07:26.6663700Z # tests 32",
+        "2026-11-19T07:07:26.6664060Z # pass 32",
+        "2026-11-19T07:07:26.6664280Z # fail 0",
+        "2026-11-19T07:07:26.6664430Z # cancelled 0",
+        "2026-11-19T07:07:26.6664710Z # skipped 0",
+        "2026-11-19T07:07:26.6664940Z # todo 0",
+        "2026-11-19T07:07:36.0544040Z dev: Chromium real-app startup, reload and offline shell passed",
+        "2026-11-19T07:07:37.5062360Z preview: Chromium real-app startup, reload and offline shell passed"
+      ],
+      "logBytes": 35093,
+      "logSha256": "27862b0b648026ad7f576418edfbc5b0560e47df57c14f6a54d302c40a48675a"
+    },
+    {
+      "id": 135392596892,
+      "name": "clean-install (windows-latest, 22.18.0)",
+      "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "run_id": 44474363663,
+      "attempt": 1,
+      "conclusion": "success",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663/job/135392596892",
+      "counts": {
+        "tests": 32,
+        "pass": 31,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 1,
+        "todo": 0
+      },
+      "checkoutMerge": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+      "devSmoke": true,
+      "previewSmoke": true,
+      "steps": [
+        {
+          "name": "Install pinned toolchain dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "CLI negative and repeat-setup tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-interactive setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Repeat setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose local prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Production build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real development and production browser smoke",
+          "conclusion": "success"
+        },
+        {
+          "name": "Tracked files remain unchanged",
+          "conclusion": "success"
+        }
+      ],
+      "log_file": "job-135392596892.log",
+      "excerpts": [
+        "2026-11-19T07:02:40.8757781Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27\r",
+        "2026-11-19T07:03:24.8349098Z # tests 32\r",
+        "2026-11-19T07:03:24.8351117Z # pass 31\r",
+        "2026-11-19T07:03:24.8351403Z # fail 0\r",
+        "2026-11-19T07:03:24.8351705Z # cancelled 0\r",
+        "2026-11-19T07:03:24.8352866Z # skipped 1\r",
+        "2026-11-19T07:03:24.8353138Z # todo 0\r",
+        "2026-11-19T07:06:45.6612759Z dev: Chromium real-app startup, reload and offline shell passed\r",
+        "2026-11-19T07:06:47.2566365Z preview: Chromium real-app startup, reload and offline shell passed\r"
+      ],
+      "logBytes": 36120,
+      "logSha256": "536bc98355dd3bf158256bc1d0b895c92fd7a9b8009ca6108d6c6ae65026c939"
+    },
+    {
+      "id": 135392597135,
+      "name": "clean-install (ubuntu-latest, 22.18.0)",
+      "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "run_id": 44474363663,
+      "attempt": 1,
+      "conclusion": "success",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663/job/135392597135",
+      "counts": {
+        "tests": 32,
+        "pass": 32,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "checkoutMerge": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+      "devSmoke": true,
+      "previewSmoke": true,
+      "steps": [
+        {
+          "name": "Install pinned toolchain dependencies",
+          "conclusion": "success"
+        },
+        {
+          "name": "CLI negative and repeat-setup tests",
+          "conclusion": "success"
+        },
+        {
+          "name": "Non-interactive setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Repeat setup",
+          "conclusion": "success"
+        },
+        {
+          "name": "Diagnose local prerequisites",
+          "conclusion": "success"
+        },
+        {
+          "name": "Production build",
+          "conclusion": "success"
+        },
+        {
+          "name": "Install browser",
+          "conclusion": "success"
+        },
+        {
+          "name": "Real development and production browser smoke",
+          "conclusion": "success"
+        },
+        {
+          "name": "Tracked files remain unchanged",
+          "conclusion": "success"
+        }
+      ],
+      "log_file": "job-135392597135.log",
+      "excerpts": [
+        "2026-11-19T07:10:12.1170934Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+        "2026-11-19T07:10:32.1638449Z # tests 32",
+        "2026-11-19T07:10:32.1639041Z # pass 32",
+        "2026-11-19T07:10:32.1639237Z # fail 0",
+        "2026-11-19T07:10:32.1639555Z # cancelled 0",
+        "2026-11-19T07:10:32.1639847Z # skipped 0",
+        "2026-11-19T07:10:32.1640117Z # todo 0",
+        "2026-11-19T07:11:09.0578968Z dev: Chromium real-app startup, reload and offline shell passed",
+        "2026-11-19T07:11:10.5752757Z preview: Chromium real-app startup, reload and offline shell passed"
+      ],
+      "logBytes": 50010,
+      "logSha256": "e1a438889579b12eb99f95ea40fe46b00239d98e4bcfaf17a34d2f4a8c6673b3"
+    }
+  ],
+  "qualificationBoundary": "This completes the fresh PR54 CLI platform gate only. Alpha/domain/three-browser gate must pass independently before merge."
+}

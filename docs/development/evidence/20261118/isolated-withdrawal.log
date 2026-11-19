@@ -1,0 +1,26 @@
+
+ RUN  v5.1.0 /workspace/scratch/171008b2cfcc/classrupted
+
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > routes only newly verified peer evidence to the local inbox and resumes without duplicate alerts
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > 2 actual principals retain signed listings/wants, reserve, consent, commit and survive IndexedDB adapter restart
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > 3 actual principals retain signed listings/wants, reserve, consent, commit and survive IndexedDB adapter restart
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > 4 actual principals retain signed listings/wants, reserve, consent, commit and survive IndexedDB adapter restart
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > rejects unreserved local consent, stale optimistic revisions and mathematically valid outsider consent
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > cannot reserve a local item twice and expiry releases incomplete coordination holds
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > proposal revisions invalidate old consent and dropout persists with hold release
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > signed remote double-promises freeze both local subjects and survive restart
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > final consent cannot commit after the actual local inventory hold was released
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > restore normalization never trusts forged cached commitment or feasibility
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > previously committed coordination freezes when its actual local reservation disappears
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > committed coordination freezes after signed reservations expire and releases its hold
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > a signed participant dropout after the consent deadline cancels committed coordination and releases holds
+ ✓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget 58565ms
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > a failure after hold release rolls back coordination and inventory together
+ ↓ tests/integration/mutiny-persistence.test.ts > independent durable signed Mutiny verification > actual Bazaar tombstone prevents matching after unpublish
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 15 skipped (16)
+   Start at  23:02:17
+   Duration  59.59s (tests 99%, transform 1%, import 1%)
+
+JSON report written to /workspace/scratch/171008b2cfcc/evidence/isolated-withdrawal.json

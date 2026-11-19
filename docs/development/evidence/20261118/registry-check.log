@@ -1,0 +1,5 @@
+
+> classrup@ registry:check /workspace/scratch/171008b2cfcc/classrupted
+> node packages/platform/scripts/gen-registry.mjs --check --strict
+
+registry: 18 features, 148 modules, 565 edges, acyclic, 0 specs missing, 66579 bytes, hash sha256-tTCcMiLdFtldMU8BIh3ooR6qsHOe4UE6OddOcSPQwWQ, generation_ms 5154, up to date

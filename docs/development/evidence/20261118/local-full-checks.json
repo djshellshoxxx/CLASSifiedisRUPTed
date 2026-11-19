@@ -1,0 +1,53 @@
+[
+  {
+    "name": "domain",
+    "command": [
+      "corepack",
+      "pnpm",
+      "test",
+      "--pool=forks",
+      "--maxWorkers=1",
+      "--reporter=verbose",
+      "--reporter=json",
+      "--outputFile=../evidence/domain-forks.json"
+    ],
+    "exit_code": 1,
+    "seconds": 480.1
+  },
+  {
+    "name": "setup",
+    "command": [
+      "corepack",
+      "pnpm",
+      "run",
+      "setup",
+      "--non-interactive"
+    ],
+    "exit_code": 0,
+    "seconds": 0.71
+  },
+  {
+    "name": "build",
+    "command": [
+      "corepack",
+      "pnpm",
+      "build"
+    ],
+    "exit_code": 0,
+    "seconds": 4.7
+  },
+  {
+    "name": "browser-chromium",
+    "command": [
+      "corepack",
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "--project=chromium",
+      "--reporter=json"
+    ],
+    "exit_code": 1,
+    "seconds": 34.57
+  }
+]

@@ -1,0 +1,460 @@
+{
+  "observed_at_utc": "2026-11-19T07:07:17.617047+00:00",
+  "candidate_commit": "a111eefb907a9f039f56777715e20b4976ea3d87",
+  "publication_tree": "7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a",
+  "runtime_source_tree": "85265ab572a4980fd95b080237677f5e60b314e9",
+  "local_source_merge": "2401a6cc2b200445d21da3268bd526f2ca19cb17",
+  "runtime_equivalence": "Local publication 5d8c789 and remote a111eef have identical trees. Runtime is identical to PR #53 source d810946. Only documentation and evidence differ.",
+  "environment": {
+    "node": "24.22.3",
+    "pnpm": "10.28.0",
+    "node_options": "--max-old-space-size=768",
+    "platform": "Linux",
+    "test_concurrency": "Node test concurrency 1; final domain pool forks, maxWorkers 1",
+    "chromium": "156.0.8078.79"
+  },
+  "gates": {
+    "typecheck_retry": {
+      "exit_code": 0,
+      "source_change": false
+    },
+    "spec_check": {
+      "exit_code": 0,
+      "modules": 148
+    },
+    "dependency_boundaries": {
+      "exit_code": 0
+    },
+    "registry": {
+      "exit_code": 0,
+      "features": 18,
+      "modules": 148,
+      "edges": 565
+    },
+    "money_vectors": {
+      "exit_code": 0
+    },
+    "money_bundle": {
+      "exit_code": 0
+    },
+    "audit": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0
+      },
+      "dependencies": 142,
+      "devDependencies": 0,
+      "optionalDependencies": 0,
+      "totalDependencies": 142
+    },
+    "setup": {
+      "exit_code": 0
+    },
+    "production_build": {
+      "exit_code": 0
+    },
+    "tooling_sequential": {
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0,
+      "exit_code": 0
+    },
+    "cli_sequential": {
+      "passed": 32,
+      "failed": 0,
+      "skipped": 0,
+      "exit_code": 0
+    },
+    "independent_adversarial": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    "domain_full": {
+      "passed": 699,
+      "failed": 2,
+      "skipped": 0,
+      "exit_code": 1,
+      "failures": [
+        {
+          "file": "/workspace/scratch/171008b2cfcc/classrupted/tests/integration/alpha-security.test.ts",
+          "name": "independent signed-statement security restores an encrypted signed backup and rejects a bad later record without initializing the target",
+          "messages": [
+            "Error: Test timed out in 20000ms.\nIf this is a long-running test, pass a timeout value as the last argument or configure it globally with \"testTimeout\".\n    at task (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2700:43)\n    at Object.<anonymous> (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2717:16)\n    at Object.<anonymous> (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2486:28)\n    at chain (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:1870:14)\n    at /workspace/scratch/171008b2cfcc/classrupted/tests/integration/alpha-security.test.ts:167:3\n    at file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2781:52\n    at runWithSuite (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:3267:8)\n    at Object.collect (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2781:22)\n    at Object.collect (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2786:51)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+          ]
+        },
+        {
+          "file": "/workspace/scratch/171008b2cfcc/classrupted/tests/integration/mutiny-persistence.test.ts",
+          "name": "independent durable signed Mutiny verification keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget",
+          "messages": [
+            "Error: Test timed out in 60000ms.\nIf this is a long-running test, pass a timeout value as the last argument or configure it globally with \"testTimeout\".\n    at task (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2700:43)\n    at Object.<anonymous> (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2717:16)\n    at Object.<anonymous> (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2486:28)\n    at chain (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:1870:14)\n    at /workspace/scratch/171008b2cfcc/classrupted/tests/integration/mutiny-persistence.test.ts:336:3\n    at file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2781:52\n    at runWithSuite (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:3267:8)\n    at Object.collect (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2781:22)\n    at Object.collect (file:///workspace/scratch/171008b2cfcc/classrupted/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/dist/chunks/run.CjdgFZiW.js:2786:51)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+          ]
+        }
+      ]
+    },
+    "domain_isolated_retries": {
+      "backup": {
+        "assertions": {
+          "skipped": 18,
+          "passed": 1
+        },
+        "failures": [],
+        "passed": [
+          {
+            "file": "/workspace/scratch/171008b2cfcc/classrupted/tests/integration/alpha-security.test.ts",
+            "name": "independent signed-statement security restores an encrypted signed backup and rejects a bad later record without initializing the target",
+            "duration_ms": 15016.166051
+          }
+        ]
+      },
+      "withdrawal": {
+        "assertions": {
+          "skipped": 15,
+          "passed": 1
+        },
+        "failures": [],
+        "passed": [
+          {
+            "file": "/workspace/scratch/171008b2cfcc/classrupted/tests/integration/mutiny-persistence.test.ts",
+            "name": "independent durable signed Mutiny verification keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget",
+            "duration_ms": 58564.97687599999
+          }
+        ]
+      }
+    },
+    "local_browser": {
+      "stats": {
+        "startTime": "2026-11-19T07:00:28.010Z",
+        "duration": 32398.162,
+        "expected": 0,
+        "skipped": 0,
+        "unexpected": 24,
+        "flaky": 0
+      },
+      "case_results": [
+        {
+          "file": "alpha.spec.ts",
+          "title": "idle vault lock clears private views and preserves saved listings",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "owner closes a listing and can download its verified withdrawal after reopening",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "unlock performs local expiry and later archive without automatically exporting",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "local listing contents and identifiers stay encrypted on disk across lock and unlock",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "real persisted identity/listing and isolated peer signed-file exchange",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "wrong passphrase fails without destroying saved records; lock clears private form text",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "local notification preferences survive reload, backup and lock without external delivery",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "listing edits preserve exact amounts, publish public fields, and clear drafts on lock",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "encrypted backup restores listings, identity and private coarse area into a new empty vault",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "archive signs a withdrawal, survives encrypted backup and restores unpublished",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "owner listing pages expose records beyond 50 and reset after locking",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "concurrent tabs cannot both acquire a vault writer",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "rapid duplicate vault submissions preserve the first active session",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "layout at 390px stays within viewport and exposes visible keyboard error feedback",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "layout at 1280px stays within viewport and exposes visible keyboard error feedback",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "2 isolated principals explicitly agree to a real signed barter cycle and retain it after restart",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "3 isolated principals explicitly agree to a real signed barter cycle and retain it after restart",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "alpha.spec.ts",
+          "title": "4 isolated principals explicitly agree to a real signed barter cycle and retain it after restart",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "identity-keygen.spec.ts",
+          "title": "one native key-generation OperationError recovers into a persistent signing vault",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "identity-keygen.spec.ts",
+          "title": "exhausted native key generation stays locked and a fresh explicit create can recover",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "matching-worker.spec.ts",
+          "title": "the public matching worker is available offline after application installation",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "matching-worker.spec.ts",
+          "title": "matching can be cancelled from the PWA while ordinary actions are busy",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "no-script.spec.ts",
+          "title": "without JavaScript, vault access is inert and an explicit offline-safe explanation is shown",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        },
+        {
+          "file": "no-script.spec.ts",
+          "title": "after startup, access forms are interactable and the no-script warning is absent",
+          "status": "failed",
+          "launch_failed": true,
+          "error_count": 1
+        }
+      ],
+      "application_journeys_executed": 0,
+      "reason": "Chromium launch aborted before pages opened: process_singleton_posix socket() failed: Operation not permitted.",
+      "full_local_log_sha256": "d14e02f9493049d0175bf058a9099881776e5abeaa5e224e9280af438bc8d1c8",
+      "escalation": "Rejected by environment granular approval policy because sandbox_approval is false; no escalated browser command executed."
+    }
+  },
+  "interpretation": "The full local domain invocation was not clean. Both failed cases passed separately at their original 20s/60s limits; filtered-out cases in those retries are reported as skipped. These results do not replace final hosted combined PR and post-merge gates.",
+  "archives": [
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/browser-install.log",
+      "archive": "browser-install.log",
+      "sha256": "d3162d4a4ac7d32ccc016c87916340633def186ff675dca095e72e9abeefcd64",
+      "bytes": 5630
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/domain.log",
+      "archive": "domain-initial-incomplete.log",
+      "sha256": "382fc2730f1794910b87426d3d436f7e0d4aa105f5b13ced53a6220baba6fc79",
+      "bytes": 129
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/domain-serial.log",
+      "archive": "domain-serial-incomplete.log",
+      "sha256": "108ae18326e62937b774037da53d4940fa0e0b171b365f3cc262104ff54faf2d",
+      "bytes": 151
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/sequential-checks/domain.log",
+      "archive": "domain-sequential-incomplete.log",
+      "sha256": "dec3fe1ba6bf98026f316c933a3e169db2070b8bd6a678f5b3bf2297fb366635",
+      "bytes": 150
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/sequential-checks/tooling.log",
+      "archive": "tooling-sequential.log",
+      "sha256": "2c0f74e2893010683a4d9ef55ad9b94cb9f46720e6652627a58a74b20b971aa0",
+      "bytes": 2535
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/sequential-checks/cli.log",
+      "archive": "cli-sequential.log",
+      "sha256": "0e021d0159e0c7d9e7b4cb076149f41566ed0a56b05f7b991bfb8c9b2a5308ab",
+      "bytes": 3300
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/sequential-checks/checks.json",
+      "archive": "sequential-checks.json",
+      "sha256": "c69e504e04423f7b93bd4443679945c7850062e15e95e37de56d373bf17fa51e",
+      "bytes": 681
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/fork-checks/checks.json",
+      "archive": "local-full-checks.json",
+      "sha256": "e3a4af14e81c9e6fe8ba0e70bddb203e767e6b27d0593c66c539f320429f77c5",
+      "bytes": 852
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/fork-checks/domain.log",
+      "archive": "domain-forks.log",
+      "sha256": "3ae5ba3d37650e26c39689739ed978fee0fa8601da05203150fad7b3f6175532",
+      "bytes": 136305
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/domain-forks.json",
+      "archive": "domain-forks.json",
+      "sha256": "ee7a33b2cd98e272023df5cb192985077dda5bd363c18b6375967fb717590fe2",
+      "bytes": 300673
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/fork-checks/setup.log",
+      "archive": "setup.log",
+      "sha256": "9ac921e99615f5e921d67de2923e0e729f0c47251b76ea18aa4d51adfa761fcc",
+      "bytes": 181
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/fork-checks/build.log",
+      "archive": "build.log",
+      "sha256": "11ca6471b0269302ae33768a822a3ff9fa70f68b3f1c1652ec3ca11575fec37b",
+      "bytes": 395
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/isolated-backup.json",
+      "archive": "isolated-backup.json",
+      "sha256": "b75fab91c54f88d275e23ffa24b9182c8829cc7487cdfbe5a06abeee798072a7",
+      "bytes": 7606
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/isolated-withdrawal.json",
+      "archive": "isolated-withdrawal.json",
+      "sha256": "04d4907920804b567bba9a6e56cd785d2859160b203e8c9911c71554cdda2e5a",
+      "bytes": 7036
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/isolated-checks/checks.json",
+      "archive": "isolated-checks.json",
+      "sha256": "47d5e35fd65cacc84fce663f44c7447093ed0a54861868a47c8c449f305203c5",
+      "bytes": 1017
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/isolated-checks/backup.log",
+      "archive": "isolated-backup.log",
+      "sha256": "019fe209e9603c384a40e84559f0e0a6e31010e4957bc9a71519781284778f4d",
+      "bytes": 3539
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/isolated-checks/withdrawal.log",
+      "archive": "isolated-withdrawal.log",
+      "sha256": "3ecfc2cedd126e505ca1a74be5663ce742bc008997998e5b28873d36f9b46004",
+      "bytes": 3350
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/local-checks/spec-check.log",
+      "archive": "spec-check.log",
+      "sha256": "98bdc2f07f7a7717dfc648eef394748e8ee89d9ceb455057c566ceca3237d0d5",
+      "bytes": 156
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/local-checks/dependency-boundaries.log",
+      "archive": "dependency-boundaries.log",
+      "sha256": "899cb16f09ef9d7b9a95609c4d992a77a1fb1a5d8faf28bfb4d42e94e51eb6d5",
+      "bytes": 123
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/local-checks/registry-check.log",
+      "archive": "registry-check.log",
+      "sha256": "d04d7b413951a4b1b8b936de6614e89a2ddb81d2ca34646ef5502b24cb83a762",
+      "bytes": 314
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/local-checks/money-vectors.log",
+      "archive": "money-vectors.log",
+      "sha256": "413c70fc685fea3e6b4a09b95eda0237fcbefc2679353a99c97e50eba6a64bd2",
+      "bytes": 72
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/local-checks/money-bundle.log",
+      "archive": "money-bundle.log",
+      "sha256": "3df467e263fc9592e3ef73f7a1f172476474e3809ca257d409201d4f89497595",
+      "bytes": 43
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/pr54/initial-queue.json",
+      "archive": "pr54-initial-queue.json",
+      "sha256": "76ac3e1c3456cccc0272b59be3aad876a24e0e6365eed626c6c49aaafec31426",
+      "bytes": 4069
+    },
+    {
+      "source_scratch_path": "/workspace/scratch/171008b2cfcc/evidence/fork-checks/browser-chromium.log",
+      "archive": "browser-chromium.log",
+      "sha256": "d14e02f9493049d0175bf058a9099881776e5abeaa5e224e9280af438bc8d1c8",
+      "bytes": 410379
+    }
+  ]
+}

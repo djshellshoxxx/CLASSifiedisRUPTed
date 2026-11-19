@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "observed_at_utc": "2026-11-19 08:10:44 UTC",
+  "comparison_snapshot": {
+    "path": "final-reconciliation.json",
+    "observed_at_utc": "2026-11-19 07:31:11 UTC",
+    "sha256": "2f2840e6d6628036a8c4d136580fda5ac8620728ff2c89ffe2c18f97c8e2e20c"
+  },
+  "main": {
+    "sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+    "expected_runtime_main": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+    "unchanged": true,
+    "tree": "7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a",
+    "tree_evidence": "Same exact Git commit as the previous independently verified main/tree/ancestry snapshot."
+  },
+  "original_refs": {
+    "total_including_main": 58,
+    "checked_non_main": 57,
+    "unchanged_non_main": 57,
+    "exceptions": [],
+    "ancestor_count": 34,
+    "ancestry_evidence": "All original source SHAs and target main SHA are unchanged, so the previous complete Git ancestry proof applies without substitution."
+  },
+  "cleanup": {
+    "candidates_checked": 52,
+    "eligible_original_candidates": 52,
+    "blocked_candidates": [],
+    "open_pr_source_and_base_checks_complete": true,
+    "deleted": 0,
+    "limitation": "Candidate list only. Recheck exact refs and uncommitted external worker/release needs before any later approved deletion."
+  },
+  "live_branches": {
+    "count": 60,
+    "new_task_branches": [
+      {
+        "name": "docs/consolidation-qualification-20261118",
+        "sha": "4e2bf80d77d4722f85a8f874b83c80b580bd1cf4"
+      },
+      {
+        "name": "integration/comprehensive-consolidation",
+        "sha": "a111eefb907a9f039f56777715e20b4976ea3d87"
+      }
+    ],
+    "unexpected_new_or_changed_task_branches": []
+  },
+  "open_pull_requests": [
+    {
+      "number": 55,
+      "draft": true,
+      "state": "open",
+      "head_branch": "docs/consolidation-qualification-20261118",
+      "head_sha": "4e2bf80d77d4722f85a8f874b83c80b580bd1cf4",
+      "base_branch": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/55"
+    },
+    {
+      "number": 8,
+      "draft": true,
+      "state": "open",
+      "head_branch": "claude/bold-mccarthy-qklhl6",
+      "head_sha": "a403614bb34d3d176d4693730e512e14959718b8",
+      "base_branch": "main",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8"
+    }
+  ],
+  "source_prs_51_and_53_reopened": false,
+  "published_releases": {
+    "count": 0
+  },
+  "main_push_workflows": [
+    {
+      "id": 44480107222,
+      "name": "CLI setup",
+      "event": "push",
+      "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "updated_at": "2026-11-19T08:08:42Z",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222"
+    },
+    {
+      "id": 44480107217,
+      "name": "Alpha verification",
+      "event": "push",
+      "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "status": "completed",
+      "conclusion": "success",
+      "run_attempt": 1,
+      "updated_at": "2026-11-19T08:09:20Z",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217"
+    }
+  ],
+  "runtime_post_merge_workflow_statuses_successful": true,
+  "qualification_scope": "This read-only check confirms remote refs, open PRs, releases, and completed main workflow statuses. Main assertion counts and raw job-log qualification are recorded independently by the CI reviewer; this check does not claim to reparse those logs.",
+  "remaining_work": "Review and merge the final documentation-only PR55 closeout, verify final main runtime equivalence, and finish/pause the finite continuation. No overall completion claim yet.",
+  "pagination": {
+    "branches": {
+      "page_size": 100,
+      "returned": 60,
+      "complete": true
+    },
+    "open_pull_requests": {
+      "page_size": 100,
+      "returned": 2,
+      "complete": true
+    },
+    "releases": {
+      "page_size": 100,
+      "returned": 0,
+      "complete": true
+    }
+  }
+}

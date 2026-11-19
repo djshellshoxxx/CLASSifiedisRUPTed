@@ -1,0 +1,1417 @@
+{
+  "observedAtUTC": "2026-11-19 08:09:45 UTC",
+  "alpha": {
+    "total_count": 2,
+    "jobs": [
+      {
+        "id": 135410010777,
+        "run_id": 44480107217,
+        "workflow_name": "Alpha verification",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfhxDKmQ",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135410010777",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217/job/135410010777",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:30:17Z",
+        "started_at": "2026-11-19T07:44:25Z",
+        "completed_at": "2026-11-19T07:44:34Z",
+        "name": "plan",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T07:44:26Z",
+            "completed_at": "2026-11-19T07:44:27Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T07:44:27Z",
+            "completed_at": "2026-11-19T07:44:30Z"
+          },
+          {
+            "name": "Decide which browser engines this change needs",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T07:44:30Z",
+            "completed_at": "2026-11-19T07:44:32Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T07:44:32Z",
+            "completed_at": "2026-11-19T07:44:32Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T07:44:32Z",
+            "completed_at": "2026-11-19T07:44:32Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135410010777",
+        "labels": [
+          "ubuntu-latest"
+        ],
+        "runner_id": 1000064684,
+        "runner_name": "GitHub Actions 1000064684",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      },
+      {
+        "id": 135416060044,
+        "run_id": 44480107217,
+        "workflow_name": "Alpha verification",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfh20YjA",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135416060044",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217/job/135416060044",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:44:35Z",
+        "started_at": "2026-11-19T07:59:16Z",
+        "completed_at": "2026-11-19T08:09:20Z",
+        "name": "domain",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T07:59:17Z",
+            "completed_at": "2026-11-19T07:59:17Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T07:59:17Z",
+            "completed_at": "2026-11-19T07:59:19Z"
+          },
+          {
+            "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T07:59:19Z",
+            "completed_at": "2026-11-19T07:59:20Z"
+          },
+          {
+            "name": "Run corepack pnpm install --frozen-lockfile",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4,
+            "started_at": "2026-11-19T07:59:20Z",
+            "completed_at": "2026-11-19T07:59:22Z"
+          },
+          {
+            "name": "Run corepack pnpm typecheck",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5,
+            "started_at": "2026-11-19T07:59:22Z",
+            "completed_at": "2026-11-19T07:59:23Z"
+          },
+          {
+            "name": "Run corepack pnpm spec:check",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T07:59:23Z",
+            "completed_at": "2026-11-19T07:59:24Z"
+          },
+          {
+            "name": "Run corepack pnpm deps:check",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T07:59:24Z",
+            "completed_at": "2026-11-19T07:59:24Z"
+          },
+          {
+            "name": "Run corepack pnpm registry:check",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8,
+            "started_at": "2026-11-19T07:59:24Z",
+            "completed_at": "2026-11-19T07:59:25Z"
+          },
+          {
+            "name": "Verify money vectors against the independent Python reference",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-19T07:59:25Z",
+            "completed_at": "2026-11-19T07:59:25Z"
+          },
+          {
+            "name": "Enforce the money browser bundle size budget",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-19T07:59:25Z",
+            "completed_at": "2026-11-19T07:59:25Z"
+          },
+          {
+            "name": "Run corepack pnpm run test:tooling",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-19T07:59:25Z",
+            "completed_at": "2026-11-19T07:59:29Z"
+          },
+          {
+            "name": "Run corepack pnpm test --reporter=json --outputFile=test-results/domain.json",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12,
+            "started_at": "2026-11-19T07:59:29Z",
+            "completed_at": "2026-11-19T08:00:15Z"
+          },
+          {
+            "name": "Report executed domain assertion counts",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-19T08:00:15Z",
+            "completed_at": "2026-11-19T08:00:15Z"
+          },
+          {
+            "name": "Report executed requirement coverage (not a release gate)",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-19T08:00:15Z",
+            "completed_at": "2026-11-19T08:00:16Z"
+          },
+          {
+            "name": "Report feature status (not a release gate)",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 15,
+            "started_at": "2026-11-19T08:00:16Z",
+            "completed_at": "2026-11-19T08:00:17Z"
+          },
+          {
+            "name": "Run corepack pnpm run setup --non-interactive",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 16,
+            "started_at": "2026-11-19T08:00:17Z",
+            "completed_at": "2026-11-19T08:00:17Z"
+          },
+          {
+            "name": "Run corepack pnpm build",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 17,
+            "started_at": "2026-11-19T08:00:17Z",
+            "completed_at": "2026-11-19T08:00:18Z"
+          },
+          {
+            "name": "Locate the browser cache",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 18,
+            "started_at": "2026-11-19T08:00:18Z",
+            "completed_at": "2026-11-19T08:00:18Z"
+          },
+          {
+            "name": "Restore the pinned browser downloads",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 19,
+            "started_at": "2026-11-19T08:00:18Z",
+            "completed_at": "2026-11-19T08:00:22Z"
+          },
+          {
+            "name": "Install browsers",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 20,
+            "started_at": "2026-11-19T08:00:22Z",
+            "completed_at": "2026-11-19T08:00:55Z"
+          },
+          {
+            "name": "Browser journeys",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 21,
+            "started_at": "2026-11-19T08:00:55Z",
+            "completed_at": "2026-11-19T08:09:17Z"
+          },
+          {
+            "name": "Keep failure screenshots",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 22,
+            "started_at": "2026-11-19T08:09:17Z",
+            "completed_at": "2026-11-19T08:09:17Z"
+          },
+          {
+            "name": "Post Restore the pinned browser downloads",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 42,
+            "started_at": "2026-11-19T08:09:17Z",
+            "completed_at": "2026-11-19T08:09:17Z"
+          },
+          {
+            "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 43,
+            "started_at": "2026-11-19T08:09:17Z",
+            "completed_at": "2026-11-19T08:09:17Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 44,
+            "started_at": "2026-11-19T08:09:17Z",
+            "completed_at": "2026-11-19T08:09:17Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 45,
+            "started_at": "2026-11-19T08:09:17Z",
+            "completed_at": "2026-11-19T08:09:17Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135416060044",
+        "labels": [
+          "ubuntu-latest"
+        ],
+        "runner_id": 1000064794,
+        "runner_name": "GitHub Actions 1000064794",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      }
+    ]
+  },
+  "cli": {
+    "total_count": 7,
+    "jobs": [
+      {
+        "id": 135410010473,
+        "run_id": 44480107222,
+        "workflow_name": "CLI setup",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfhxDJaQ",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135410010473",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222/job/135410010473",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:30:17Z",
+        "started_at": "2026-11-19T07:44:25Z",
+        "completed_at": "2026-11-19T07:44:30Z",
+        "name": "plan",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T07:44:26Z",
+            "completed_at": "2026-11-19T07:44:26Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T07:44:26Z",
+            "completed_at": "2026-11-19T07:44:28Z"
+          },
+          {
+            "name": "Decide which operating systems this change needs",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T07:44:28Z",
+            "completed_at": "2026-11-19T07:44:28Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T07:44:28Z",
+            "completed_at": "2026-11-19T07:44:28Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T07:44:28Z",
+            "completed_at": "2026-11-19T07:44:28Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135410010473",
+        "labels": [
+          "ubuntu-latest"
+        ],
+        "runner_id": 1000064683,
+        "runner_name": "GitHub Actions 1000064683",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      },
+      {
+        "id": 135416030809,
+        "run_id": 44480107222,
+        "workflow_name": "CLI setup",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfh2ymWQ",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135416030809",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222/job/135416030809",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:44:31Z",
+        "started_at": "2026-11-19T07:56:40Z",
+        "completed_at": "2026-11-19T07:57:30Z",
+        "name": "clean-install (macos-latest, 24.x)",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T07:56:40Z",
+            "completed_at": "2026-11-19T07:56:41Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T07:56:41Z",
+            "completed_at": "2026-11-19T07:56:45Z"
+          },
+          {
+            "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T07:56:45Z",
+            "completed_at": "2026-11-19T07:56:47Z"
+          },
+          {
+            "name": "Install pinned toolchain dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4,
+            "started_at": "2026-11-19T07:56:47Z",
+            "completed_at": "2026-11-19T07:56:51Z"
+          },
+          {
+            "name": "CLI negative and repeat-setup tests",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5,
+            "started_at": "2026-11-19T07:56:51Z",
+            "completed_at": "2026-11-19T07:57:06Z"
+          },
+          {
+            "name": "Non-interactive setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T07:57:06Z",
+            "completed_at": "2026-11-19T07:57:07Z"
+          },
+          {
+            "name": "Repeat setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T07:57:07Z",
+            "completed_at": "2026-11-19T07:57:07Z"
+          },
+          {
+            "name": "Diagnose local prerequisites",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8,
+            "started_at": "2026-11-19T07:57:07Z",
+            "completed_at": "2026-11-19T07:57:08Z"
+          },
+          {
+            "name": "Production build",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-19T07:57:08Z",
+            "completed_at": "2026-11-19T07:57:09Z"
+          },
+          {
+            "name": "Locate the browser cache",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-19T07:57:09Z",
+            "completed_at": "2026-11-19T07:57:09Z"
+          },
+          {
+            "name": "Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-19T07:57:09Z",
+            "completed_at": "2026-11-19T07:57:16Z"
+          },
+          {
+            "name": "Install browser",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12,
+            "started_at": "2026-11-19T07:57:16Z",
+            "completed_at": "2026-11-19T07:57:17Z"
+          },
+          {
+            "name": "Real development and production browser smoke",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-19T07:57:17Z",
+            "completed_at": "2026-11-19T07:57:24Z"
+          },
+          {
+            "name": "Tracked files remain unchanged",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-19T07:57:24Z",
+            "completed_at": "2026-11-19T07:57:25Z"
+          },
+          {
+            "name": "Post Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 26,
+            "started_at": "2026-11-19T07:57:25Z",
+            "completed_at": "2026-11-19T07:57:25Z"
+          },
+          {
+            "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 27,
+            "started_at": "2026-11-19T07:57:25Z",
+            "completed_at": "2026-11-19T07:57:25Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28,
+            "started_at": "2026-11-19T07:57:25Z",
+            "completed_at": "2026-11-19T07:57:26Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29,
+            "started_at": "2026-11-19T07:57:26Z",
+            "completed_at": "2026-11-19T07:57:27Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135416030809",
+        "labels": [
+          "macos-latest"
+        ],
+        "runner_id": 1000064775,
+        "runner_name": "GitHub Actions 1000064775",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      },
+      {
+        "id": 135416030817,
+        "run_id": 44480107222,
+        "workflow_name": "CLI setup",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfh2ymYQ",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135416030817",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222/job/135416030817",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:44:31Z",
+        "started_at": "2026-11-19T07:57:06Z",
+        "completed_at": "2026-11-19T07:59:30Z",
+        "name": "clean-install (ubuntu-latest, 24.x)",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T07:57:07Z",
+            "completed_at": "2026-11-19T07:57:08Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T07:57:08Z",
+            "completed_at": "2026-11-19T07:57:09Z"
+          },
+          {
+            "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T07:57:09Z",
+            "completed_at": "2026-11-19T07:57:10Z"
+          },
+          {
+            "name": "Install pinned toolchain dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4,
+            "started_at": "2026-11-19T07:57:10Z",
+            "completed_at": "2026-11-19T07:57:13Z"
+          },
+          {
+            "name": "CLI negative and repeat-setup tests",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5,
+            "started_at": "2026-11-19T07:57:13Z",
+            "completed_at": "2026-11-19T07:57:25Z"
+          },
+          {
+            "name": "Non-interactive setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T07:57:25Z",
+            "completed_at": "2026-11-19T07:57:25Z"
+          },
+          {
+            "name": "Repeat setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T07:57:25Z",
+            "completed_at": "2026-11-19T07:57:25Z"
+          },
+          {
+            "name": "Diagnose local prerequisites",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8,
+            "started_at": "2026-11-19T07:57:25Z",
+            "completed_at": "2026-11-19T07:57:26Z"
+          },
+          {
+            "name": "Production build",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-19T07:57:26Z",
+            "completed_at": "2026-11-19T07:57:27Z"
+          },
+          {
+            "name": "Locate the browser cache",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-19T07:57:27Z",
+            "completed_at": "2026-11-19T07:57:27Z"
+          },
+          {
+            "name": "Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-19T07:57:27Z",
+            "completed_at": "2026-11-19T07:57:30Z"
+          },
+          {
+            "name": "Install browser",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12,
+            "started_at": "2026-11-19T07:57:30Z",
+            "completed_at": "2026-11-19T07:59:21Z"
+          },
+          {
+            "name": "Real development and production browser smoke",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-19T07:59:21Z",
+            "completed_at": "2026-11-19T07:59:27Z"
+          },
+          {
+            "name": "Tracked files remain unchanged",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-19T07:59:27Z",
+            "completed_at": "2026-11-19T07:59:27Z"
+          },
+          {
+            "name": "Post Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 26,
+            "started_at": "2026-11-19T07:59:27Z",
+            "completed_at": "2026-11-19T07:59:28Z"
+          },
+          {
+            "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 27,
+            "started_at": "2026-11-19T07:59:28Z",
+            "completed_at": "2026-11-19T07:59:28Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28,
+            "started_at": "2026-11-19T07:59:28Z",
+            "completed_at": "2026-11-19T07:59:28Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29,
+            "started_at": "2026-11-19T07:59:28Z",
+            "completed_at": "2026-11-19T07:59:28Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135416030817",
+        "labels": [
+          "ubuntu-latest"
+        ],
+        "runner_id": 1000064781,
+        "runner_name": "GitHub Actions 1000064781",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      },
+      {
+        "id": 135416030855,
+        "run_id": 44480107222,
+        "workflow_name": "CLI setup",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfh2ymhw",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135416030855",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222/job/135416030855",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:44:31Z",
+        "started_at": "2026-11-19T08:02:32Z",
+        "completed_at": "2026-11-19T08:06:17Z",
+        "name": "clean-install (windows-latest, 24.x)",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T08:02:33Z",
+            "completed_at": "2026-11-19T08:02:34Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T08:02:34Z",
+            "completed_at": "2026-11-19T08:02:40Z"
+          },
+          {
+            "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T08:02:40Z",
+            "completed_at": "2026-11-19T08:02:47Z"
+          },
+          {
+            "name": "Install pinned toolchain dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4,
+            "started_at": "2026-11-19T08:02:47Z",
+            "completed_at": "2026-11-19T08:03:01Z"
+          },
+          {
+            "name": "CLI negative and repeat-setup tests",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5,
+            "started_at": "2026-11-19T08:03:01Z",
+            "completed_at": "2026-11-19T08:03:13Z"
+          },
+          {
+            "name": "Non-interactive setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T08:03:13Z",
+            "completed_at": "2026-11-19T08:03:14Z"
+          },
+          {
+            "name": "Repeat setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T08:03:14Z",
+            "completed_at": "2026-11-19T08:03:15Z"
+          },
+          {
+            "name": "Diagnose local prerequisites",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8,
+            "started_at": "2026-11-19T08:03:15Z",
+            "completed_at": "2026-11-19T08:03:16Z"
+          },
+          {
+            "name": "Production build",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-19T08:03:16Z",
+            "completed_at": "2026-11-19T08:03:17Z"
+          },
+          {
+            "name": "Locate the browser cache",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-19T08:03:17Z",
+            "completed_at": "2026-11-19T08:03:18Z"
+          },
+          {
+            "name": "Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-19T08:03:18Z",
+            "completed_at": "2026-11-19T08:03:25Z"
+          },
+          {
+            "name": "Install browser",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12,
+            "started_at": "2026-11-19T08:03:25Z",
+            "completed_at": "2026-11-19T08:06:05Z"
+          },
+          {
+            "name": "Real development and production browser smoke",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-19T08:06:05Z",
+            "completed_at": "2026-11-19T08:06:12Z"
+          },
+          {
+            "name": "Tracked files remain unchanged",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-19T08:06:12Z",
+            "completed_at": "2026-11-19T08:06:12Z"
+          },
+          {
+            "name": "Post Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 26,
+            "started_at": "2026-11-19T08:06:12Z",
+            "completed_at": "2026-11-19T08:06:13Z"
+          },
+          {
+            "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 27,
+            "started_at": "2026-11-19T08:06:13Z",
+            "completed_at": "2026-11-19T08:06:13Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28,
+            "started_at": "2026-11-19T08:06:13Z",
+            "completed_at": "2026-11-19T08:06:14Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29,
+            "started_at": "2026-11-19T08:06:14Z",
+            "completed_at": "2026-11-19T08:06:14Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135416030855",
+        "labels": [
+          "windows-latest"
+        ],
+        "runner_id": 1000064817,
+        "runner_name": "GitHub Actions 1000064817",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      },
+      {
+        "id": 135416030901,
+        "run_id": 44480107222,
+        "workflow_name": "CLI setup",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfh2ymtQ",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135416030901",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222/job/135416030901",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:44:31Z",
+        "started_at": "2026-11-19T08:01:06Z",
+        "completed_at": "2026-11-19T08:03:40Z",
+        "name": "clean-install (ubuntu-latest, 22.18.0)",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T08:01:07Z",
+            "completed_at": "2026-11-19T08:01:08Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T08:01:08Z",
+            "completed_at": "2026-11-19T08:01:09Z"
+          },
+          {
+            "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T08:01:09Z",
+            "completed_at": "2026-11-19T08:01:14Z"
+          },
+          {
+            "name": "Install pinned toolchain dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4,
+            "started_at": "2026-11-19T08:01:14Z",
+            "completed_at": "2026-11-19T08:01:16Z"
+          },
+          {
+            "name": "CLI negative and repeat-setup tests",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5,
+            "started_at": "2026-11-19T08:01:16Z",
+            "completed_at": "2026-11-19T08:01:29Z"
+          },
+          {
+            "name": "Non-interactive setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T08:01:29Z",
+            "completed_at": "2026-11-19T08:01:29Z"
+          },
+          {
+            "name": "Repeat setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T08:01:29Z",
+            "completed_at": "2026-11-19T08:01:29Z"
+          },
+          {
+            "name": "Diagnose local prerequisites",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8,
+            "started_at": "2026-11-19T08:01:29Z",
+            "completed_at": "2026-11-19T08:01:30Z"
+          },
+          {
+            "name": "Production build",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-19T08:01:30Z",
+            "completed_at": "2026-11-19T08:01:31Z"
+          },
+          {
+            "name": "Locate the browser cache",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-19T08:01:31Z",
+            "completed_at": "2026-11-19T08:01:31Z"
+          },
+          {
+            "name": "Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-19T08:01:31Z",
+            "completed_at": "2026-11-19T08:01:35Z"
+          },
+          {
+            "name": "Install browser",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12,
+            "started_at": "2026-11-19T08:01:35Z",
+            "completed_at": "2026-11-19T08:03:31Z"
+          },
+          {
+            "name": "Real development and production browser smoke",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-19T08:03:31Z",
+            "completed_at": "2026-11-19T08:03:37Z"
+          },
+          {
+            "name": "Tracked files remain unchanged",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-19T08:03:37Z",
+            "completed_at": "2026-11-19T08:03:38Z"
+          },
+          {
+            "name": "Post Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 26,
+            "started_at": "2026-11-19T08:03:38Z",
+            "completed_at": "2026-11-19T08:03:38Z"
+          },
+          {
+            "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 27,
+            "started_at": "2026-11-19T08:03:38Z",
+            "completed_at": "2026-11-19T08:03:38Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28,
+            "started_at": "2026-11-19T08:03:38Z",
+            "completed_at": "2026-11-19T08:03:38Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29,
+            "started_at": "2026-11-19T08:03:38Z",
+            "completed_at": "2026-11-19T08:03:38Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135416030901",
+        "labels": [
+          "ubuntu-latest"
+        ],
+        "runner_id": 1000064810,
+        "runner_name": "GitHub Actions 1000064810",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      },
+      {
+        "id": 135416030948,
+        "run_id": 44480107222,
+        "workflow_name": "CLI setup",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfh2ym5A",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135416030948",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222/job/135416030948",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:44:31Z",
+        "started_at": "2026-11-19T08:03:29Z",
+        "completed_at": "2026-11-19T08:04:25Z",
+        "name": "clean-install (macos-latest, 22.18.0)",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T08:03:30Z",
+            "completed_at": "2026-11-19T08:03:32Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T08:03:32Z",
+            "completed_at": "2026-11-19T08:03:35Z"
+          },
+          {
+            "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T08:03:35Z",
+            "completed_at": "2026-11-19T08:03:44Z"
+          },
+          {
+            "name": "Install pinned toolchain dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4,
+            "started_at": "2026-11-19T08:03:44Z",
+            "completed_at": "2026-11-19T08:03:48Z"
+          },
+          {
+            "name": "CLI negative and repeat-setup tests",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5,
+            "started_at": "2026-11-19T08:03:48Z",
+            "completed_at": "2026-11-19T08:04:01Z"
+          },
+          {
+            "name": "Non-interactive setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T08:04:01Z",
+            "completed_at": "2026-11-19T08:04:02Z"
+          },
+          {
+            "name": "Repeat setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T08:04:02Z",
+            "completed_at": "2026-11-19T08:04:02Z"
+          },
+          {
+            "name": "Diagnose local prerequisites",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8,
+            "started_at": "2026-11-19T08:04:02Z",
+            "completed_at": "2026-11-19T08:04:03Z"
+          },
+          {
+            "name": "Production build",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-19T08:04:03Z",
+            "completed_at": "2026-11-19T08:04:04Z"
+          },
+          {
+            "name": "Locate the browser cache",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-19T08:04:04Z",
+            "completed_at": "2026-11-19T08:04:04Z"
+          },
+          {
+            "name": "Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-19T08:04:04Z",
+            "completed_at": "2026-11-19T08:04:11Z"
+          },
+          {
+            "name": "Install browser",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12,
+            "started_at": "2026-11-19T08:04:11Z",
+            "completed_at": "2026-11-19T08:04:12Z"
+          },
+          {
+            "name": "Real development and production browser smoke",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-19T08:04:12Z",
+            "completed_at": "2026-11-19T08:04:20Z"
+          },
+          {
+            "name": "Tracked files remain unchanged",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-19T08:04:20Z",
+            "completed_at": "2026-11-19T08:04:21Z"
+          },
+          {
+            "name": "Post Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 26,
+            "started_at": "2026-11-19T08:04:21Z",
+            "completed_at": "2026-11-19T08:04:21Z"
+          },
+          {
+            "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 27,
+            "started_at": "2026-11-19T08:04:21Z",
+            "completed_at": "2026-11-19T08:04:21Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28,
+            "started_at": "2026-11-19T08:04:21Z",
+            "completed_at": "2026-11-19T08:04:22Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29,
+            "started_at": "2026-11-19T08:04:22Z",
+            "completed_at": "2026-11-19T08:04:23Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135416030948",
+        "labels": [
+          "macos-latest"
+        ],
+        "runner_id": 1000064821,
+        "runner_name": "GitHub Actions 1000064821",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      },
+      {
+        "id": 135416031074,
+        "run_id": 44480107222,
+        "workflow_name": "CLI setup",
+        "head_branch": "main",
+        "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222",
+        "run_attempt": 1,
+        "node_id": "CR_kwDOVTfRFs8AAAAfh2ynYg",
+        "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135416031074",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222/job/135416031074",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-11-19T07:44:31Z",
+        "started_at": "2026-11-19T08:04:53Z",
+        "completed_at": "2026-11-19T08:08:42Z",
+        "name": "clean-install (windows-latest, 22.18.0)",
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1,
+            "started_at": "2026-11-19T08:04:54Z",
+            "completed_at": "2026-11-19T08:04:55Z"
+          },
+          {
+            "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2,
+            "started_at": "2026-11-19T08:04:55Z",
+            "completed_at": "2026-11-19T08:05:02Z"
+          },
+          {
+            "name": "Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3,
+            "started_at": "2026-11-19T08:05:02Z",
+            "completed_at": "2026-11-19T08:05:11Z"
+          },
+          {
+            "name": "Install pinned toolchain dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4,
+            "started_at": "2026-11-19T08:05:11Z",
+            "completed_at": "2026-11-19T08:05:32Z"
+          },
+          {
+            "name": "CLI negative and repeat-setup tests",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5,
+            "started_at": "2026-11-19T08:05:32Z",
+            "completed_at": "2026-11-19T08:05:45Z"
+          },
+          {
+            "name": "Non-interactive setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6,
+            "started_at": "2026-11-19T08:05:45Z",
+            "completed_at": "2026-11-19T08:05:46Z"
+          },
+          {
+            "name": "Repeat setup",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7,
+            "started_at": "2026-11-19T08:05:46Z",
+            "completed_at": "2026-11-19T08:05:47Z"
+          },
+          {
+            "name": "Diagnose local prerequisites",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8,
+            "started_at": "2026-11-19T08:05:47Z",
+            "completed_at": "2026-11-19T08:05:47Z"
+          },
+          {
+            "name": "Production build",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9,
+            "started_at": "2026-11-19T08:05:47Z",
+            "completed_at": "2026-11-19T08:05:49Z"
+          },
+          {
+            "name": "Locate the browser cache",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 10,
+            "started_at": "2026-11-19T08:05:49Z",
+            "completed_at": "2026-11-19T08:05:49Z"
+          },
+          {
+            "name": "Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 11,
+            "started_at": "2026-11-19T08:05:49Z",
+            "completed_at": "2026-11-19T08:05:53Z"
+          },
+          {
+            "name": "Install browser",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 12,
+            "started_at": "2026-11-19T08:05:53Z",
+            "completed_at": "2026-11-19T08:08:30Z"
+          },
+          {
+            "name": "Real development and production browser smoke",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 13,
+            "started_at": "2026-11-19T08:08:30Z",
+            "completed_at": "2026-11-19T08:08:38Z"
+          },
+          {
+            "name": "Tracked files remain unchanged",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 14,
+            "started_at": "2026-11-19T08:08:38Z",
+            "completed_at": "2026-11-19T08:08:38Z"
+          },
+          {
+            "name": "Post Restore the pinned browser download",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 26,
+            "started_at": "2026-11-19T08:08:38Z",
+            "completed_at": "2026-11-19T08:08:38Z"
+          },
+          {
+            "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 27,
+            "started_at": "2026-11-19T08:08:38Z",
+            "completed_at": "2026-11-19T08:08:39Z"
+          },
+          {
+            "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 28,
+            "started_at": "2026-11-19T08:08:39Z",
+            "completed_at": "2026-11-19T08:08:40Z"
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 29,
+            "started_at": "2026-11-19T08:08:40Z",
+            "completed_at": "2026-11-19T08:08:40Z"
+          }
+        ],
+        "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135416031074",
+        "labels": [
+          "windows-latest"
+        ],
+        "runner_id": 1000064834,
+        "runner_name": "GitHub Actions 1000064834",
+        "runner_group_id": 0,
+        "runner_group_name": "GitHub Actions"
+      }
+    ]
+  }
+}

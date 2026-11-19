@@ -1,0 +1,5 @@
+
+> classrup@ spec:check /workspace/scratch/b3afde5215ae/classrupted
+> node tools/specgen/specgen.mjs check
+
+specified 148/148 modules; 0 errors; 0 warnings

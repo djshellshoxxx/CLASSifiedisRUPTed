@@ -1,0 +1,6 @@
+
+> classrup@ test /workspace/scratch/b3afde5215ae/classrupted
+> vitest run --reporter=json --outputFile=/workspace/scratch/b3afde5215ae/qualification/domain.json --maxWorkers=2
+
+Killed
+ ELIFECYCLE  Test failed. See above for more details.

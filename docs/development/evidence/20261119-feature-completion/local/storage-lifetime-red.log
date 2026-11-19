@@ -1,0 +1,213 @@
+
+ RUN  v5.1.0 /workspace/scratch/b3afde5215ae/classrupted-storage
+
+ ❯ packages/kernel/src/storage/storage.lifetime.test.ts (19 tests | 19 failed) 120ms
+   ❯ memory transaction lifetime (6)
+     × revokes retained reads, writes and detached methods after commit 43ms
+     × revokes retained reads, writes and detached methods after error 2ms
+     × revokes retained reads, writes and detached methods after throw 3ms
+     × revokes retained reads, writes and detached methods after read 5ms
+     × rejects an unawaited blob write that resumes after its transaction ends 10ms
+     × keeps an awaited asynchronous read active only until its callback settles 2ms
+   ❯ indexeddb transaction lifetime (6)
+     × revokes retained reads, writes and detached methods after commit 12ms
+     × revokes retained reads, writes and detached methods after error 3ms
+     × revokes retained reads, writes and detached methods after throw 5ms
+     × revokes retained reads, writes and detached methods after read 5ms
+     × rejects an unawaited blob write that resumes after its transaction ends 3ms
+     × keeps an awaited asynchronous read active only until its callback settles 2ms
+   ❯ sqlite transaction lifetime (6)
+     × revokes retained reads, writes and detached methods after commit 7ms
+     × revokes retained reads, writes and detached methods after error 3ms
+     × revokes retained reads, writes and detached methods after throw 4ms
+     × revokes retained reads, writes and detached methods after read 2ms
+     × rejects an unawaited blob write that resumes after its transaction ends 3ms
+     × keeps an awaited asynchronous read active only until its callback settles 2ms
+   × revokes transaction handles before an asynchronous durable commit and after failed persistence 1ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 19 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > memory transaction lifetime > revokes retained reads, writes and detached methods after commit
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > memory transaction lifetime > revokes retained reads, writes and detached methods after error
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > memory transaction lifetime > revokes retained reads, writes and detached methods after throw
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > indexeddb transaction lifetime > revokes retained reads, writes and detached methods after commit
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > indexeddb transaction lifetime > revokes retained reads, writes and detached methods after error
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > indexeddb transaction lifetime > revokes retained reads, writes and detached methods after throw
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > sqlite transaction lifetime > revokes retained reads, writes and detached methods after commit
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > sqlite transaction lifetime > revokes retained reads, writes and detached methods after error
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > sqlite transaction lifetime > revokes retained reads, writes and detached methods after throw
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > sqlite transaction lifetime > revokes retained reads, writes and detached methods after read
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ packages/kernel/src/storage/storage.lifetime.test.ts:34:58
+     32|       }
+     33|       const detached = retained.records.get;
+     34|       expect(() => retained.records.put(put('outside'))).toThrow('Tran…
+       |                                                          ^
+     35|       expect(() => detached('owner', 'test.note', 'inside')).toThrow('…
+     36|       await storage.transaction(tx => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/19]⎯
+
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > memory transaction lifetime > revokes retained reads, writes and detached methods after read
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > indexeddb transaction lifetime > revokes retained reads, writes and detached methods after read
+AssertionError: expected [Function] to throw error including 'Transaction is no longer active' but got 'write in a read transaction'
+
+Expected: "Transaction is no longer active"
+Received: "write in a read transaction"
+
+ ❯ packages/kernel/src/storage/storage.lifetime.test.ts:34:58
+     32|       }
+     33|       const detached = retained.records.get;
+     34|       expect(() => retained.records.put(put('outside'))).toThrow('Tran…
+       |                                                          ^
+     35|       expect(() => detached('owner', 'test.note', 'inside')).toThrow('…
+     36|       await storage.transaction(tx => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/19]⎯
+
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > memory transaction lifetime > rejects an unawaited blob write that resumes after its transaction ends
+AssertionError: promise resolved "{ ok: true, value: { …(7) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "ok": true,
++   "value": {
++     "contentType": "application/octet-stream",
++     "createdAt": "2026-11-19T10:04:07.566Z",
++     "encrypted": false,
++     "holders": 0,
++     "privacy": "P0",
++     "ref": "blob:sha256-A5BYxvLAy0ksUzsKTRTvd8wPeKvMztUofYShogEc-4E",
++     "size": 3,
++   },
+  }
+
+ ❯ packages/kernel/src/storage/storage.lifetime.test.ts:60:40
+     58|         return ok(undefined);
+     59|       });
+     60|       const assertion = expect(outcome).rejects.toThrow('Transaction i…
+       |                                        ^
+     61|       release();
+     62|       await assertion;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/19]⎯
+
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > memory transaction lifetime > keeps an awaited asynchronous read active only until its callback settles
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > indexeddb transaction lifetime > keeps an awaited asynchronous read active only until its callback settles
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > sqlite transaction lifetime > keeps an awaited asynchronous read active only until its callback settles
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ packages/kernel/src/storage/storage.lifetime.test.ts:78:76
+     76|       });
+     77|       expect(result?.revision).toBe(1);
+     78|       expect(() => retained.records.get('owner', 'test.note', 'existin…
+       |                                                                            ^
+     79|     } finally { await storage.close(); }
+     80|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/19]⎯
+
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > indexeddb transaction lifetime > rejects an unawaited blob write that resumes after its transaction ends
+AssertionError: promise resolved "{ ok: true, value: { …(7) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "ok": true,
++   "value": {
++     "contentType": "application/octet-stream",
++     "createdAt": "2026-11-19T10:04:07.602Z",
++     "encrypted": false,
++     "holders": 0,
++     "privacy": "P0",
++     "ref": "blob:sha256-A5BYxvLAy0ksUzsKTRTvd8wPeKvMztUofYShogEc-4E",
++     "size": 3,
++   },
+  }
+
+ ❯ packages/kernel/src/storage/storage.lifetime.test.ts:60:40
+     58|         return ok(undefined);
+     59|       });
+     60|       const assertion = expect(outcome).rejects.toThrow('Transaction i…
+       |                                        ^
+     61|       release();
+     62|       await assertion;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/19]⎯
+
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > sqlite transaction lifetime > rejects an unawaited blob write that resumes after its transaction ends
+AssertionError: promise resolved "{ ok: true, value: { …(7) } }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "ok": true,
++   "value": {
++     "contentType": "application/octet-stream",
++     "createdAt": "2026-11-19T10:04:07.623Z",
++     "encrypted": false,
++     "holders": 0,
++     "privacy": "P0",
++     "ref": "blob:sha256-A5BYxvLAy0ksUzsKTRTvd8wPeKvMztUofYShogEc-4E",
++     "size": 3,
++   },
+  }
+
+ ❯ packages/kernel/src/storage/storage.lifetime.test.ts:60:40
+     58|         return ok(undefined);
+     59|       });
+     60|       const assertion = expect(outcome).rejects.toThrow('Transaction i…
+       |                                        ^
+     61|       release();
+     62|       await assertion;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/19]⎯
+
+ FAIL  packages/kernel/src/storage/storage.lifetime.test.ts > revokes transaction handles before an asynchronous durable commit and after failed persistence
+AssertionError: expected [Function] to throw an error
+
+- Expected:
+null
+
++ Received:
+undefined
+
+ ❯ packages/kernel/src/storage/storage.lifetime.test.ts:95:65
+     93|   try {
+     94|     await ready;
+     95|     expect(() => retained.records.put(put('while-persisting'))).toThro…
+       |                                                                 ^
+     96|     rejectCommit(new Error('injected persistence failure'));
+     97|     expect(await write).toEqual({ error: new Error('injected persisten…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/19]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  19 failed (19)
+   Start at  02:04:06
+   Duration  941ms (transform 44%, import 30%, tests 24%, worker 2%)
+

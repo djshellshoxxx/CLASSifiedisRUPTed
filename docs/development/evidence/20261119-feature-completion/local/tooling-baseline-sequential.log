@@ -1,0 +1,38 @@
+✔ pushes, manual runs and unknown change lists get every OS and every browser (14.496551ms)
+✔ a domain-only pull request runs the Linux gate with Chromium (0.91194ms)
+✔ CLI, build and toolchain changes bring back Windows and macOS (0.435316ms)
+✔ PWA, browser storage and cryptography changes bring back Firefox and WebKit (4.500965ms)
+✔ the script prints GITHUB_OUTPUT lines and refuses a missing event (609.126593ms)
+✔ workflows parse, pin actions by commit, declare least privilege and cancel stale runs (69.77521ms)
+✔ real catalog generates the checked-in immutable graph within the raw and gzip size budgets (8723.039321ms)
+✔ stale checks never write; a valid source change requires explicit regeneration (42.557311ms)
+✔ parse and graph failures preserve the previous generated output (8.898208ms)
+✔ a catalog entry cannot use a different module specification or a null dependency list (6.089539ms)
+✔ catalog path traversal is rejected before calling the injected spec reader (19.780321ms)
+✔ the filesystem adapter rejects traversal for reads and writes (2.485921ms)
+✔ spec and output symlinks cannot read or replace an external file (2.752521ms)
+✔ a symbolic-link directory cannot redirect the registry reader (5.633225ms)
+✖ tests/tooling/feature-registry.test.mjs (12451.649273ms)
+✖ tests/tooling/status.test.mjs (6764.980995ms)
+✔ source references and comments never establish passing execution (3947.168631ms)
+✔ missing or malformed results fail closed (1.16246ms)
+✔ only passed assertions count and skipped/failed duplicates win (0.882475ms)
+✔ CLI rejects missing --results argument rather than using source inventory (256.870448ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 18
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 26042.140964
+
+✖ failing tests:
+
+test at tests/tooling/feature-registry.test.mjs:1:1
+✖ tests/tooling/feature-registry.test.mjs (12451.649273ms)
+  'test failed'
+
+test at tests/tooling/status.test.mjs:1:1
+✖ tests/tooling/status.test.mjs (6764.980995ms)
+  'test failed'

@@ -1,0 +1,99 @@
+
+> classrup@ test:cli /workspace/scratch/171008b2cfcc/classrupted
+> node --test tests/cli/*.test.mjs
+
+✔ CLI rejects a symbolic link nested in the public asset tree without reading the external file (127.678503ms)
+✔ CLI rejects a linked public directory before touching existing dist output (53.420124ms)
+✔ CLI build rejects linked public assets before reading or modifying external targets (148.483207ms)
+✔ independent Ed25519 listing fixture verifies without configuration, persistence or payload disclosure (2298.627763ms)
+✔ human output contains only verified metadata and explicit evidence limits (2628.190583ms)
+✔ standalone signed withdrawal verifies without claiming its target or sequence history is known (1704.986694ms)
+✖ subprocess rejects tampering, wrong CID, invalid signature and unknown envelope fields (15662.761927ms)
+✔ subprocess rejects correctly signed unsupported types, substituted owners, private fields and expired records (25669.298582ms)
+✔ shared validation preserves PWA retain acceptance and exact rejection codes (411.756695ms)
+✔ malformed JSON, invalid UTF-8, empty input and private input errors are redacted (18862.266309ms)
+✔ input size is bounded and overcomplex signed-domain JSON fails without disclosure (8176.481791ms)
+✔ actual descriptor read cap rejects a file that grows after both metadata checks (44.220432ms)
+✔ directories, final symlinks and missing files fail with stable exits (5014.789862ms)
+✔ FIFO and device inputs fail promptly without opening a stream (2803.132432ms)
+✔ unknown, repeated, missing, network and stdin options never echo supplied values (17987.561804ms)
+✔ runtime dependency failures use the fixed domain infrastructure error (213.587498ms)
+✔ record verification performs no network connection and help needs no setup (1949.664952ms)
+✔ worker pre-caches only fixed public assets without credentials (43.870636ms)
+✔ failed precache rejects installation and deletes only the incomplete new cache (9.990735ms)
+✔ activation only removes old versions owned by the same application scope (17.621595ms)
+✔ private paths, queries, other origins and writes never enter worker handling (12.748396ms)
+✔ runtime and package manager compatibility fail closed (20.121422ms)
+✔ setup accepts validated explicit flags only (2.36767ms)
+✔ setup preserves config byte-for-byte and unrelated data on repeat (167.056956ms)
+✔ concurrent setups and interrupted temporary files never corrupt config (132.836205ms)
+✔ invalid existing config is preserved and missing config is actionable (23.029265ms)
+✔ setup fails clearly when config path is not a directory (13.644386ms)
+✔ occupied port is a blocking diagnostic (54.647857ms)
+✔ preview serves only public output with security headers, correct base and methods (304.281742ms)
+✔ CLI failures exit nonzero and help is available without setup (1463.33682ms)
+✔ explicit configure changes only validated fields and preserves on failure (77.348936ms)
+✘ [ERROR] Expected ";" but found "is"
+
+    ../../../../tmp/classrup setup with spaces cvA7AB/apps/pwa/src/main.ts:1:5:
+      1 │ this is invalid typescript !
+        │      ~~
+        ╵      ;
+
+✔ build failure preserves prior output and successful build removes stale assets (393.441284ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 31
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 105316.182519
+
+✖ failing tests:
+
+test at tests/cli/records.test.mjs:128:1
+✖ subprocess rejects tampering, wrong CID, invalid signature and unknown envelope fields (15662.761927ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node ETIMEDOUT
+  +     at Object.spawnSync (node:internal/child_process:1191:20)
+  +     at spawnSync (node:child_process:929:24)
+  +     at run (file:///workspace/scratch/171008b2cfcc/classrupted/tests/cli/records.test.mjs:66:10)
+  +     at TestContext.<anonymous> (file:///workspace/scratch/171008b2cfcc/classrupted/tests/cli/records.test.mjs:135:15)
+  +     at async Test.run (node:internal/test_runner/test:1409:7)
+  +     at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+  +   code: 'ETIMEDOUT',
+  +   errno: -110,
+  +   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',
+  +   spawnargs: [
+  +     '/workspace/scratch/171008b2cfcc/classrupted/tools/cli/classrup.mjs',
+  +     'record',
+  +     'verify',
+  +     '--file',
+  +     '/tmp/classrup records with spaces W7rD06/signed record.json',
+  +     '--json'
+  +   ],
+  +   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'
+  + }
+  - undefined
+  
+      at rejected (file:///workspace/scratch/171008b2cfcc/classrupted/tests/cli/records.test.mjs:69:10)
+      at TestContext.<anonymous> (file:///workspace/scratch/171008b2cfcc/classrupted/tests/cli/records.test.mjs:135:6)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node ETIMEDOUT
+        at Object.spawnSync (node:internal/child_process:1191:20)
+        at spawnSync (node:child_process:929:24)
+        at run (file:///workspace/scratch/171008b2cfcc/classrupted/tests/cli/records.test.mjs:66:10)
+        at TestContext.<anonymous> (file:///workspace/scratch/171008b2cfcc/classrupted/tests/cli/records.test.mjs:135:15)
+        at async Test.run (node:internal/test_runner/test:1409:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:974:7),
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+ ELIFECYCLE  Command failed with exit code 1.

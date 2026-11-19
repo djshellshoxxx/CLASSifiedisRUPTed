@@ -1,0 +1,83 @@
+[
+  {
+    "name": "typecheck",
+    "command": [
+      "corepack",
+      "pnpm",
+      "typecheck"
+    ],
+    "exit_code": 137,
+    "seconds": 57.71
+  },
+  {
+    "name": "spec-check",
+    "command": [
+      "corepack",
+      "pnpm",
+      "spec:check"
+    ],
+    "exit_code": 0,
+    "seconds": 57.73
+  },
+  {
+    "name": "dependency-boundaries",
+    "command": [
+      "corepack",
+      "pnpm",
+      "deps:check"
+    ],
+    "exit_code": 0,
+    "seconds": 5.25
+  },
+  {
+    "name": "registry-check",
+    "command": [
+      "corepack",
+      "pnpm",
+      "registry:check"
+    ],
+    "exit_code": 0,
+    "seconds": 10.01
+  },
+  {
+    "name": "money-vectors",
+    "command": [
+      "python3",
+      "-I",
+      "packages/commerce/test/check_money_vectors.py"
+    ],
+    "exit_code": 0,
+    "seconds": 0.32
+  },
+  {
+    "name": "money-bundle",
+    "command": [
+      "node",
+      "packages/commerce/test/check_money_bundle.mjs"
+    ],
+    "exit_code": 0,
+    "seconds": 0.97
+  },
+  {
+    "name": "tooling",
+    "command": [
+      "corepack",
+      "pnpm",
+      "run",
+      "test:tooling"
+    ],
+    "exit_code": 1,
+    "seconds": 74.92
+  },
+  {
+    "name": "cli",
+    "command": [
+      "corepack",
+      "pnpm",
+      "run",
+      "test:cli"
+    ],
+    "exit_code": 1,
+    "seconds": 107.99
+  }
+]

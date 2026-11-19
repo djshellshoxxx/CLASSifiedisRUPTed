@@ -1,5 +1,14 @@
 # Project status
 
+## Current consolidation record
+
+The [comprehensive branch audit](../development/BRANCH_CONSOLIDATION.md) records
+all 58 branches and 53 historical PRs discovered for the November 18 continuation,
+including PR #53/51 qualification and exact integration outcomes as they complete.
+Use the [remaining-work register](../development/REMAINING_WORK.md) for current
+priorities. The dated sections below remain historical source checkpoints;
+their queued/draft observations do not override newer linked execution evidence.
+
 ## November 18, 2026 public-record CLI continuation
 
 The F1a command `node tools/cli/classrup.mjs record verify --file FILE [--json]`

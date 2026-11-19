@@ -1,0 +1,194 @@
+{
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "observedAtUTC": "2026-11-19",
+  "pr53": {
+    "number": 53,
+    "head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+    "base": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+    "mergeRef": "ed75ffacd380ad766a7edb40e024304409ca6bfe",
+    "draft": true,
+    "alphaRun": 44320887748,
+    "cliRun": 44320887774,
+    "cliAttempt": 2,
+    "alpha": {
+      "domainAssertionsPassed": 701,
+      "toolingAssertionsPassed": 27,
+      "browserJourneysPassed": 72
+    },
+    "cli": [
+      {
+        "id": 135369195854,
+        "name": "clean-install (macos-latest, 22.18.0)",
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44320887774/job/135369195854",
+        "head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+        "attempt": 2,
+        "conclusion": "success",
+        "counts": [
+          "2026-11-19T05:48:42.2493600Z # tests 32",
+          "2026-11-19T05:48:42.2493850Z # pass 32",
+          "2026-11-19T05:48:42.2493970Z # fail 0",
+          "2026-11-19T05:48:42.2494100Z # cancelled 0",
+          "2026-11-19T05:48:42.2494230Z # skipped 0",
+          "2026-11-19T05:48:42.2494360Z # todo 0",
+          "2026-11-19T05:48:50.4451520Z dev: Chromium real-app startup, reload and offline shell passed",
+          "2026-11-19T05:48:51.8516040Z preview: Chromium real-app startup, reload and offline shell passed"
+        ]
+      },
+      {
+        "id": 135369196936,
+        "name": "clean-install (ubuntu-latest, 24.x)",
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44320887774/job/135369196936",
+        "head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+        "attempt": 2,
+        "conclusion": "success",
+        "counts": [
+          "2026-11-18T16:26:28.4780708Z ℹ tests 32",
+          "2026-11-18T16:26:28.4781344Z ℹ pass 32",
+          "2026-11-18T16:26:28.4781617Z ℹ fail 0",
+          "2026-11-18T16:26:28.4781885Z ℹ cancelled 0",
+          "2026-11-18T16:26:28.4782157Z ℹ skipped 0",
+          "2026-11-18T16:26:28.4782422Z ℹ todo 0",
+          "2026-11-18T16:26:47.4645343Z dev: Chromium real-app startup, reload and offline shell passed",
+          "2026-11-18T16:26:48.8783404Z preview: Chromium real-app startup, reload and offline shell passed"
+        ]
+      },
+      {
+        "id": 135369197608,
+        "name": "clean-install (ubuntu-latest, 22.18.0)",
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44320887774/job/135369197608",
+        "head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+        "attempt": 2,
+        "conclusion": "success",
+        "counts": [
+          "2026-11-18T16:27:13.0417175Z # tests 32",
+          "2026-11-18T16:27:13.0417394Z # pass 32",
+          "2026-11-18T16:27:13.0417506Z # fail 0",
+          "2026-11-18T16:27:13.0417622Z # cancelled 0",
+          "2026-11-18T16:27:13.0417737Z # skipped 0",
+          "2026-11-18T16:27:13.0417847Z # todo 0",
+          "2026-11-18T16:27:27.4897441Z dev: Chromium real-app startup, reload and offline shell passed",
+          "2026-11-18T16:27:28.8561757Z preview: Chromium real-app startup, reload and offline shell passed"
+        ]
+      },
+      {
+        "id": 135369228140,
+        "name": "clean-install (windows-latest, 24.x)",
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44320887774/job/135369228140",
+        "head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+        "attempt": 2,
+        "conclusion": "success",
+        "counts": [
+          "2026-11-18T16:02:44.6569452Z ﹣ FIFO and device inputs fail promptly without opening a stream (0.2129ms) # SKIP\r",
+          "2026-11-18T16:02:49.7206081Z ℹ tests 32\r",
+          "2026-11-18T16:02:49.7207140Z ℹ pass 31\r",
+          "2026-11-18T16:02:49.7207471Z ℹ fail 0\r",
+          "2026-11-18T16:02:49.7207802Z ℹ cancelled 0\r",
+          "2026-11-18T16:02:49.7208164Z ℹ skipped 1\r",
+          "2026-11-18T16:02:49.7208485Z ℹ todo 0\r",
+          "2026-11-18T16:06:13.2427394Z dev: Chromium real-app startup, reload and offline shell passed\r",
+          "2026-11-18T16:06:14.8196022Z preview: Chromium real-app startup, reload and offline shell passed\r"
+        ]
+      },
+      {
+        "id": 135369229451,
+        "name": "clean-install (macos-latest, 24.x)",
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44320887774/job/135369229451",
+        "head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+        "attempt": 2,
+        "conclusion": "success",
+        "counts": [
+          "2026-11-18T17:34:24.9384780Z ℹ tests 32",
+          "2026-11-18T17:34:24.9386430Z ℹ pass 32",
+          "2026-11-18T17:34:24.9386690Z ℹ fail 0",
+          "2026-11-18T17:34:24.9386920Z ℹ cancelled 0",
+          "2026-11-18T17:34:24.9387210Z ℹ skipped 0",
+          "2026-11-18T17:34:24.9387450Z ℹ todo 0",
+          "2026-11-18T17:34:33.1404540Z dev: Chromium real-app startup, reload and offline shell passed",
+          "2026-11-18T17:34:34.7385700Z preview: Chromium real-app startup, reload and offline shell passed"
+        ]
+      },
+      {
+        "id": 135369253424,
+        "name": "clean-install (windows-latest, 22.18.0)",
+        "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44320887774/job/135369253424",
+        "head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+        "attempt": 2,
+        "conclusion": "success",
+        "counts": [
+          "2026-11-18T16:28:16.9806710Z ok 14 - FIFO and device inputs fail promptly without opening a stream # SKIP\r",
+          "2026-11-18T16:28:21.7451043Z # tests 32\r",
+          "2026-11-18T16:28:21.7451300Z # pass 31\r",
+          "2026-11-18T16:28:21.7451427Z # fail 0\r",
+          "2026-11-18T16:28:21.7451570Z # cancelled 0\r",
+          "2026-11-18T16:28:21.7451710Z # skipped 1\r",
+          "2026-11-18T16:28:21.7451843Z # todo 0\r",
+          "2026-11-18T16:31:14.3450065Z dev: Chromium real-app startup, reload and offline shell passed\r",
+          "2026-11-18T16:31:16.0255861Z preview: Chromium real-app startup, reload and offline shell passed\r"
+        ]
+      }
+    ],
+    "oldCancelledJob": {
+      "id": 134903492477,
+      "run_id": 44320887774,
+      "workflow_name": "CLI setup",
+      "head_branch": "integration/classrupted-continuation-20261118",
+      "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44320887774",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOVTfRFs8AAAAfaN_vfQ",
+      "head_sha": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/134903492477",
+      "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44320887774/job/134903492477",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "created_at": "2026-11-18T15:14:55Z",
+      "started_at": "2026-11-18T15:14:55Z",
+      "completed_at": "2026-11-18T17:40:48Z",
+      "name": "clean-install (macos-latest, 22.18.0)",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/134903492477",
+      "labels": [
+        "macos-latest"
+      ],
+      "runner_id": 0,
+      "runner_name": "",
+      "runner_group_id": 0,
+      "runner_group_name": ""
+    }
+  },
+  "pr37": {
+    "number": 37,
+    "head": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+    "mergeCommit": "3fd5fdbc89f81bc1267ca907a7a1fb9a13943828",
+    "mergedAt": "2026-11-16T16:46:17Z",
+    "runs": [
+      {
+        "id": 43889531898,
+        "name": "Alpha verification",
+        "sha": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+        "conclusion": "success"
+      },
+      {
+        "id": 43889532000,
+        "name": "CLI setup",
+        "sha": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "unresolvedWebKitDiagnostic": {
+    "run": 44268543372,
+    "job": 134679038898,
+    "sha": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+    "failedTests": 2,
+    "leadingZeroPrivateImport": "DataError",
+    "allZeroPrivateImport": "DataError",
+    "nonzeroControl": "pass",
+    "generationFailures": 7,
+    "generationTrials": 512,
+    "generationError": "OperationError",
+    "mitigationAlreadyPresent": "e331e56165304c98a1c2bdd26692772b586e499d",
+    "mitigationLimit": "3 sequential native attempts only for new-key generation DOMException OperationError",
+    "remaining": "native fixed-width private import remains unresolved; product suite passes do not establish native probes passed"
+  }
+}
+

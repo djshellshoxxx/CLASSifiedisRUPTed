@@ -1,0 +1,4 @@
+
+> classrup@ typecheck /workspace/scratch/171008b2cfcc/classrupted
+> tsc -p tsconfig.json --noEmit
+

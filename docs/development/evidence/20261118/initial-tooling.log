@@ -1,0 +1,43 @@
+
+> classrup@ test:tooling /workspace/scratch/171008b2cfcc/classrupted
+> node --test tests/tooling/*.test.mjs
+
+✔ pushes, manual runs and unknown change lists get every OS and every browser (20.925043ms)
+✔ a domain-only pull request runs the Linux gate with Chromium (10.435649ms)
+✔ CLI, build and toolchain changes bring back Windows and macOS (0.374793ms)
+✔ PWA, browser storage and cryptography changes bring back Firefox and WebKit (0.890229ms)
+✔ the script prints GITHUB_OUTPUT lines and refuses a missing event (1137.442456ms)
+✔ workflows parse, pin actions by commit, declare least privilege and cancel stale runs (134.24405ms)
+✔ real catalog generates the checked-in immutable graph within the raw and gzip size budgets (18736.272323ms)
+✔ stale checks never write; a valid source change requires explicit regeneration (102.067423ms)
+✔ parse and graph failures preserve the previous generated output (15.987833ms)
+✔ a catalog entry cannot use a different module specification or a null dependency list (23.188297ms)
+✔ catalog path traversal is rejected before calling the injected spec reader (15.137509ms)
+✔ the filesystem adapter rejects traversal for reads and writes (1.565226ms)
+✔ spec and output symlinks cannot read or replace an external file (1.591655ms)
+✔ a symbolic-link directory cannot redirect the registry reader (1.286893ms)
+✔ an interrupted temporary file survives a failed replacement and the prior output stays intact (11.403776ms)
+✔ a partial write failure cleans up its own temporary file and permits retry (1277.54934ms)
+✔ read errors and invalid output paths return structured failures without writing (0.312316ms)
+✔ generator CLI rejects unknown arguments and the documented build retains the stale gate (26519.741416ms)
+✔ Git preserves exact registry input and output line endings on Windows checkouts (53.005381ms)
+✖ tests/tooling/status.test.mjs (71199.689917ms)
+✔ source references and comments never establish passing execution (18362.44965ms)
+✔ missing or malformed results fail closed (1.7221ms)
+✔ only passed assertions count and skipped/failed duplicates win (1.023929ms)
+✔ CLI rejects missing --results argument rather than using source inventory (1127.065033ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 23
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 71340.025007
+
+✖ failing tests:
+
+test at tests/tooling/status.test.mjs:1:1
+✖ tests/tooling/status.test.mjs (71199.689917ms)
+  'test failed'
+ ELIFECYCLE  Command failed with exit code 1.

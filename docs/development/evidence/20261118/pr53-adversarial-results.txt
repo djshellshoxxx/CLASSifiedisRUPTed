@@ -1,0 +1,18 @@
+✔ exact 1 MiB file is accepted and one extra byte is refused (135.959687ms)
+✔ regular file replaced between lstat and open is rejected (10.113145ms)
+✔ final symlink substituted after lstat cannot redirect the read (9.018182ms)
+✔ rename and replacement after open still reads the original descriptor (9.144941ms)
+✔ multiple short reads reconstruct the record without truncation (79.754954ms)
+✔ opened descriptor closes if metadata verification fails (8.077237ms)
+✔ verification detaches mutable caller input before asynchronous crypto (2.820991ms)
+✔ signed public metadata with terminal-control injection fails closed (20.48706ms)
+✔ malformed multi-document JSON and truncated UTF8 are rejected before verification (9.220081ms)
+✔ invalid repeated options fail before any filesystem lookup (0.625563ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 26900.654171

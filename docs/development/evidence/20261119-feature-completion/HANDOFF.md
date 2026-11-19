@@ -1,11 +1,16 @@
 # Qualification handoff
 
-Updated 2026-11-19T10:59:06Z. PR #56 remains draft and unmerged. The current source is
+Updated from the 2026-11-19T11:29:56Z queue observation. PR #56 remains draft and unmerged. The current source is
 `3aa7a17b28ee07ebec4336b49c3527743510bc16`, tree
 `92a6452b4241fbcafe13b334a154765bbac63c3e`; current test merge is
 `0e890e7ad2dffe10d65466f5f16f2595bb19f928`. The
 [correction checkpoint](correction-checkpoint.json) supersedes the original
 dated pending-state checkpoint for current status.
+
+The [latest queue checkpoint](corrected-head-queued-checkpoint.json) records both
+current planning jobs still queued, with zero executed steps and no assigned
+runner. Actual corrected-source checkout and passing qualification remain
+unobserved.
 
 The first source's Alpha run passed 748 domain assertions and 27 tooling tests,
 then failed all three new value-removal browser cases at an exact label lookup:

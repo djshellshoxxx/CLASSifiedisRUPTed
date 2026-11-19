@@ -15,6 +15,23 @@ export type PublicListingProjection = z.output<typeof publicListingSchema>;
 export const tombstoneSchema = z.strictObject({ listingId: uuidv7(), ownerId: z.string().startsWith('did:key:').max(128), revision: z.int().min(1), target: z.string().min(1).max(200), reason: z.enum(['owner', 'policy_changed', 'closed', 'archived', 'account_deleted']) });
 export interface VerifiedStatement { readonly author: string; readonly type: string; readonly payload: unknown; readonly cid: string; readonly seq: number; }
 export interface DiscoveryOptions { readonly verifyEnvelope: (input: unknown) => Promise<VerifiedStatement>; }
+
+/** Shared public-file admission checks. The caller must verify the envelope before calling this function.
+ * This validates only the signed payload, its author binding and local expiry, not retained history or trust. */
+export function validatePublicListingStatement(envelope: VerifiedStatement, now: number) {
+  const isTombstone = envelope.type === 'classrup.alpha.tombstone/v1';
+  if (!isTombstone && envelope.type !== 'classrup.bazaar.listing/v1') return err(appError('VALIDATION_FAILED'));
+  if (isTombstone) {
+    const parsed = tombstoneSchema.safeParse(envelope.payload);
+    if (!parsed.success) return err(appError('VALIDATION_FAILED'));
+    if (parsed.data.ownerId !== envelope.author) return err(appError('FORBIDDEN'));
+    return ok({ isTombstone: true as const, data: parsed.data, projection: null });
+  }
+  const parsed = publicListingSchema.safeParse(envelope.payload);
+  if (!parsed.success || parsed.data.ownerId !== envelope.author) return err(appError('FORBIDDEN'));
+  if (Date.parse(parsed.data.expiresAt) <= now) return err(appError('PRECONDITION_FAILED'));
+  return ok({ isTombstone: false as const, data: parsed.data, projection: parsed.data });
+}
 const retainedSchema = z.strictObject({
   ownerId: z.string(), listingId: z.string(), remoteRevision: z.int().positive(), cid: z.string(),
   envelopes: z.array(z.unknown()).min(1).max(2), projection: publicListingSchema.nullable(), observedAt: timestamp(), conflicted: z.boolean(), evidenceCids: z.array(z.string()).max(2),
@@ -43,24 +60,10 @@ export function discoveryDefinitions(options: DiscoveryOptions) {
       let envelope: VerifiedStatement;
       let snapshot: unknown;
       try { snapshot = structuredClone(input.envelope); envelope = await options.verifyEnvelope(snapshot); } catch { return err(appError('VALIDATION_FAILED')); }
-      const isTombstone = envelope.type === 'classrup.alpha.tombstone/v1';
-      if (!isTombstone && envelope.type !== 'classrup.bazaar.listing/v1') return err(appError('VALIDATION_FAILED'));
+      const validated = validatePublicListingStatement(envelope, ctx.clock.now());
+      if (!validated.ok) return validated;
+      const { isTombstone, data, projection } = validated.value;
       const repo = ctx.tx.repo(retainedListingRepo);
-      let data: { ownerId: string; listingId: string; revision: number };
-      let projection: PublicListingProjection | null;
-      if (isTombstone) {
-        const parsed = tombstoneSchema.safeParse(envelope.payload);
-        if (!parsed.success) return err(appError('VALIDATION_FAILED'));
-        if (parsed.data.ownerId !== envelope.author) return err(appError('FORBIDDEN'));
-        data = parsed.data;
-        projection = null;
-      } else {
-        const parsed = publicListingSchema.safeParse(envelope.payload);
-        if (!parsed.success || parsed.data.ownerId !== envelope.author) return err(appError('FORBIDDEN'));
-        data = parsed.data;
-        projection = parsed.data;
-      }
-      if (projection && Date.parse(projection.expiresAt) <= ctx.clock.now()) return err(appError('PRECONDITION_FAILED'));
       const key = `${data.ownerId}/${data.listingId}`;
       const previous = repo.get(key);
       if (isTombstone && previous && previous.data.cid !== envelope.cid && tombstoneSchema.parse(envelope.payload).target !== previous.data.cid) return err(appError('CONFLICT_REVISION'));

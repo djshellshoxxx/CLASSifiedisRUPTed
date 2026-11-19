@@ -14,6 +14,15 @@ const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const generator = join(ROOT, 'packages/platform/scripts/gen-registry.mjs');
 const specPath = '01_Bazaar/01_listings/mod_listing/module.spec.yaml';
 
+// Local runners without symlink rights may skip; CI must never silently skip.
+function skipOrFailInCi(t, reason) {
+  if (process.env.CI) {
+    throw new Error(`Symlink test "${t.name}" cannot run on this CI runner (${reason}). Skipping is forbidden when CI is set; provide a runner that can create symbolic links.`);
+  }
+  t.diagnostic(`SKIPPED locally: "${t.name}" needs symbolic links (${reason}). It is enforced in CI.`);
+  t.skip(reason);
+}
+
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'classrup-registry-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -129,7 +138,7 @@ test('spec and output symlinks cannot read or replace an external file', async (
   rmSync(join(root, specPath));
   try { symlinkSync(secret, join(root, specPath), 'file'); }
   catch (error) {
-    if (error.code === 'EPERM' || error.code === 'EACCES') { t.skip('Host cannot create symlinks'); return; }
+    if (error.code === 'EPERM' || error.code === 'EACCES') { skipOrFailInCi(t, 'Host cannot create symlinks'); return; }
     throw error;
   }
   assert.throws(() => io.readText(specPath), /Symbolic links/);
@@ -150,7 +159,7 @@ test('a symbolic-link directory cannot redirect the registry reader', (t) => {
   writeFileSync(join(external, 'module.spec.yaml'), 'outside');
   try { symlinkSync(external, join(root, 'linked'), process.platform === 'win32' ? 'junction' : 'dir'); }
   catch (error) {
-    if (error.code === 'EPERM' || error.code === 'EACCES') { t.skip('Host cannot create symlinks'); return; }
+    if (error.code === 'EPERM' || error.code === 'EACCES') { skipOrFailInCi(t, 'Host cannot create symlinks'); return; }
     throw error;
   }
   assert.throws(() => io.readText('linked/module.spec.yaml'), /Symbolic links/);

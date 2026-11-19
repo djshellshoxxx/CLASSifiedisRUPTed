@@ -1,0 +1,396 @@
+[
+  {
+    "branch": "agents/ci/trim-workflows",
+    "sha": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+    "reason": "Already integrated by reviewed content",
+    "prs": [
+      33
+    ]
+  },
+  {
+    "branch": "agents/discovery/coarse-filters",
+    "sha": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+    "reason": "Already integrated by reviewed content",
+    "prs": [
+      26
+    ]
+  },
+  {
+    "branch": "agents/discovery/ranking",
+    "sha": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      27
+    ]
+  },
+  {
+    "branch": "agents/governance/taxonomy-prohibited",
+    "sha": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+    "reason": "Already integrated by reviewed content",
+    "prs": [
+      30
+    ]
+  },
+  {
+    "branch": "agents/i18n/languages-currencies",
+    "sha": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      28
+    ]
+  },
+  {
+    "branch": "agents/moderation/rate-limits-signals",
+    "sha": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+    "reason": "Already integrated by reviewed content",
+    "prs": [
+      32
+    ]
+  },
+  {
+    "branch": "agents/notify/prefs-inapp",
+    "sha": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+    "reason": "Already integrated by reviewed content",
+    "prs": [
+      29
+    ]
+  },
+  {
+    "branch": "agents/orchestration/wave1-handoff",
+    "sha": "6406a0369098fdb7aa58b5a4e85325560857815f",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      34
+    ]
+  },
+  {
+    "branch": "agents/privacy/classification-metadata-consent",
+    "sha": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+    "reason": "Already integrated by reviewed content",
+    "prs": [
+      31
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/audit-observability-20261110",
+    "sha": "1ee040492345e607b431707fd7f08528bbf2db77",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      14
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/barter-discovery-status-20261110",
+    "sha": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      20
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/cli-nested-assets-20261110",
+    "sha": "3a66e440847d7e1234e5a82674decdacb3efb954",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      19
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+    "sha": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      17
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+    "sha": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      22
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/docs-wiki-20261110",
+    "sha": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      13
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+    "sha": "20691f1cce36b1254644ea16bb438ca91221a872",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      15
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+    "sha": "968d63d8aebac1055ffc911fcceec519f30c8855",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      21
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/outbox-isolation-20261110",
+    "sha": "a294dd21715edf501aac75bee69f785951985cd5",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      16
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/qualify-pr10-20261110",
+    "sha": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      12
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+    "sha": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      35
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+    "sha": "12558435a307415ba0332777f87b1603abba5268",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      23
+    ]
+  },
+  {
+    "branch": "chatgpt/zero-codex-continuation-spec-20261109",
+    "sha": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      11
+    ]
+  },
+  {
+    "branch": "claude/classifiedisrupted-continue-lcuuwg",
+    "sha": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": [
+      5
+    ]
+  },
+  {
+    "branch": "claude/difficult-project-parts-dcqlup",
+    "sha": "566778cdf72399df4696e1d6f6675412813e6d5a",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      25
+    ]
+  },
+  {
+    "branch": "claude/gallant-goodall-9cc7yb",
+    "sha": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": []
+  },
+  {
+    "branch": "claude/pensive-mendel-30x81m",
+    "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": [
+      3
+    ]
+  },
+  {
+    "branch": "claude/vigilant-newton-nva2l6",
+    "sha": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": [
+      6
+    ]
+  },
+  {
+    "branch": "codex/classrup-completion-20261116",
+    "sha": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      37
+    ]
+  },
+  {
+    "branch": "codex/classrup-consolidation-audit-20261104",
+    "sha": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      9
+    ]
+  },
+  {
+    "branch": "codex/classrup-features-20261116",
+    "sha": "560b328dd335aebdc12de01ec339c43ebd164be3",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      41
+    ]
+  },
+  {
+    "branch": "codex/consolidate-keyboard-focus-20261117",
+    "sha": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      45
+    ]
+  },
+  {
+    "branch": "codex/encrypted-domain-storage-20261116",
+    "sha": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      38
+    ]
+  },
+  {
+    "branch": "codex/listing-history-20261116",
+    "sha": "3f814c03a8c09652c79312959d0225ee0742457b",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      39
+    ]
+  },
+  {
+    "branch": "codex/local-alpha-20261109",
+    "sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      10
+    ]
+  },
+  {
+    "branch": "codex/parallel-completion-20261116",
+    "sha": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      43,
+      42
+    ]
+  },
+  {
+    "branch": "codex/verified-status-20261116",
+    "sha": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      40
+    ]
+  },
+  {
+    "branch": "continuation/classrup-20261101",
+    "sha": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": []
+  },
+  {
+    "branch": "docs/client-owned-foundations-20261024",
+    "sha": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": [
+      2
+    ]
+  },
+  {
+    "branch": "docs/pr-consolidation-results-20261117",
+    "sha": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      47
+    ]
+  },
+  {
+    "branch": "docs/prompt3-foundations-20261022",
+    "sha": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": [
+      1
+    ]
+  },
+  {
+    "branch": "integration/classrup-completion",
+    "sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      24
+    ]
+  },
+  {
+    "branch": "integration/classrupted-audit-record-20261117",
+    "sha": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      52,
+      50
+    ]
+  },
+  {
+    "branch": "integration/classrupted-consolidation-20261117",
+    "sha": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+    "reason": "Stacked PR49 superseded by PR50",
+    "prs": [
+      49
+    ]
+  },
+  {
+    "branch": "integration/feature-registry-20261117",
+    "sha": "e331e56165304c98a1c2bdd26692772b586e499d",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      48
+    ]
+  },
+  {
+    "branch": "integration/pr-docs-consolidation-20261117",
+    "sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      46
+    ]
+  },
+  {
+    "branch": "integration/qualified-listing-vault-stack-20261116",
+    "sha": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+    "reason": "Already integrated by ancestry",
+    "prs": [
+      44
+    ]
+  },
+  {
+    "branch": "milestone/framework-browser-verification",
+    "sha": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": [
+      7
+    ]
+  },
+  {
+    "branch": "planning/future-cli-specs-20261110",
+    "sha": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+    "reason": "Proposal adapted through PR50",
+    "prs": []
+  },
+  {
+    "branch": "work/classrup-framework",
+    "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": []
+  },
+  {
+    "branch": "work/classrup-haiku-framework",
+    "sha": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+    "reason": "Historical source superseded; retain provenance",
+    "prs": [
+      4
+    ]
+  }
+]

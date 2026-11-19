@@ -24,6 +24,7 @@
     "test:browser:crypto": "playwright test --config playwright.crypto.config.ts",
     "configure": "node tools/cli/classrup.mjs configure",
     "test:tooling": "node --test tests/tooling/*.test.mjs",
+    "bench:mutiny": "node tests/tooling/mutiny-benchmark.mjs",
     "status": "node tools/status/status.mjs",
     "registry:generate": "node packages/platform/scripts/gen-registry.mjs --strict",
     "registry:check": "node packages/platform/scripts/gen-registry.mjs --check --strict"

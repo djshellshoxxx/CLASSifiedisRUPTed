@@ -1,6 +1,6 @@
 # Future specification: client-owned ClassRup domain CLI
 
-**Status: planned.** This document proposes command-line access to local marketplace and barter workflows. It does not add these commands or change the current application's storage format.
+**Status: F1a public-record verification implemented; broader CLI workflows planned.** The supported `node tools/cli/classrup.mjs record verify --file FILE [--json]` command verifies existing signed listing and alpha withdrawal files. It does not access a vault, persist records or change any storage/signature format. The broader command families below remain a delivery plan.
 
 ## Source and architectural reconciliation
 
@@ -10,9 +10,9 @@ The existing [setup CLI](CLI_SETUP.md), [kernel](../packages/kernel/src/index.ts
 
 ## What exists today
 
-The supported terminal commands are `pnpm run setup`, `pnpm run configure`, `pnpm run doctor`, `pnpm dev`, `pnpm build` and `pnpm preview`. `node tools/cli/classrup.mjs --help` describes their current interface. They configure, build and serve public PWA assets. They do not create or unlock browser vaults, hold user keys, or execute listing and barter operations.
+The supported setup commands are `pnpm run setup`, `pnpm run configure`, `pnpm run doctor`, `pnpm dev`, `pnpm build` and `pnpm preview`. `node tools/cli/classrup.mjs --help` describes their current interface. They configure, build and serve public PWA assets. The F1a `record verify` command additionally checks an explicitly selected, bounded public listing/withdrawal file using shared envelope and PWA payload validation. It provides schema-version-1 JSON and exits 0/2/3, with fixed redacted errors. Its output explicitly leaves prior history, chain continuity, revocation, current ownership and trust unestablished, and performs no vault admission. See the [CLI guide](CLI_SETUP.md#verify-a-public-signed-file) for the implemented contract. No current terminal command creates or unlocks browser vaults, holds user keys, or executes private listing/barter mutations.
 
-The `classrup …` examples below describe a proposed future executable and command grammar. They are not commands that the current checkout implements. Bare `pnpm setup` and `pnpm doctor` remain pnpm's own commands; the supported project scripts use `pnpm run`.
+The `classrup …` examples below describe a proposed future executable and command grammar. Only the documented `node tools/cli/classrup.mjs record verify` form is implemented from the domain families. Bare `pnpm setup` and `pnpm doctor` remain pnpm's own commands; the supported project scripts use `pnpm run`.
 
 ## Goal and authority
 
@@ -85,5 +85,7 @@ Recovery and deletion require explicit scope. Local deletion, encrypted-backup r
 | F2 | Encrypted file-vault adapter and compatible backup import/export; local identity status and owner-listing commands. | Round-trip compatibility, crash/concurrency, foreign-vault, lock/session and privacy tests pass across supported platforms. |
 | F3 | Supported bilateral/cyclic barter, matching explanations and complete CLI/PWA parity for implemented workflows. | Real signed exchanges, stale/forked history, consent, expiry and retry tests pass. |
 | F4 | Optional relay operations and later product modules. | Each adapter and feature passes its own authority, privacy and end-to-end gates before its commands become available. |
+
+F1a delivers the public-record verification subset of F1. It accepts only listing and alpha tombstone records; it does not complete F1 listing/search, a standalone packaged executable or the broader phase. Its subprocess tests cover independently signed Ed25519 fixtures, malformed/tampered/unsupported records, PWA payload-validation parity, expiry, ownership binding, bounded file reads, fixed error disclosure, file-type refusal and network-free execution. Platform qualification must be tied to the actual candidate's CI results, not inferred from these test definitions.
 
 Implementation should proceed through small verified contributions. This specification preserves a useful orphan proposal; it does not mark domain CLI parity, messaging, relay operation or any other future feature complete.

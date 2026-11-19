@@ -1,0 +1,2760 @@
+{
+  "schema_version": 1,
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "observed_at_utc": "2026-11-19 07:31:11 UTC",
+  "initial_main": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+  "final_runtime_main": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+  "source_inventory": "docs/development/evidence/20261118/inventory.json",
+  "snapshot_scope": "After PR54 merge and automatic source-PR resolution, before PR55 documentation merge and before post-merge main CI completes.",
+  "collection_evidence": {
+    "branches": {
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/branches?per_page=100&page=1",
+      "page_size": 100,
+      "returned": 60,
+      "pagination_complete": true
+    },
+    "pull_requests": {
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls?state=all&per_page=100&page=1",
+      "page_size": 100,
+      "returned": 55,
+      "pagination_complete": true
+    },
+    "releases": {
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/releases?per_page=100&page=1",
+      "returned": 0,
+      "pagination_complete": true
+    },
+    "tags": {
+      "method": "read-only Git advertised tag refs",
+      "count": 0
+    }
+  },
+  "remote_branches": [
+    {
+      "name": "agents/ci/trim-workflows",
+      "sha": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "protected": false
+    },
+    {
+      "name": "agents/discovery/coarse-filters",
+      "sha": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "protected": false
+    },
+    {
+      "name": "agents/discovery/ranking",
+      "sha": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "protected": false
+    },
+    {
+      "name": "agents/governance/taxonomy-prohibited",
+      "sha": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "protected": false
+    },
+    {
+      "name": "agents/i18n/languages-currencies",
+      "sha": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "protected": false
+    },
+    {
+      "name": "agents/moderation/rate-limits-signals",
+      "sha": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "protected": false
+    },
+    {
+      "name": "agents/notify/prefs-inapp",
+      "sha": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "protected": false
+    },
+    {
+      "name": "agents/orchestration/wave1-handoff",
+      "sha": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "protected": false
+    },
+    {
+      "name": "agents/privacy/classification-metadata-consent",
+      "sha": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/audit-observability-20261110",
+      "sha": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/barter-discovery-status-20261110",
+      "sha": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/cli-nested-assets-20261110",
+      "sha": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "sha": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+      "sha": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/docs-wiki-20261110",
+      "sha": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+      "sha": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+      "sha": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/outbox-isolation-20261110",
+      "sha": "a294dd21715edf501aac75bee69f785951985cd5",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "sha": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+      "sha": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+      "sha": "12558435a307415ba0332777f87b1603abba5268",
+      "protected": false
+    },
+    {
+      "name": "chatgpt/zero-codex-continuation-spec-20261109",
+      "sha": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "protected": false
+    },
+    {
+      "name": "claude/bold-mccarthy-qklhl6",
+      "sha": "a403614bb34d3d176d4693730e512e14959718b8",
+      "protected": false
+    },
+    {
+      "name": "claude/busy-cerf-vg3hz3",
+      "sha": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "protected": false
+    },
+    {
+      "name": "claude/classifiedisrupted-continue-lcuuwg",
+      "sha": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "protected": false
+    },
+    {
+      "name": "claude/difficult-project-parts-dcqlup",
+      "sha": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "protected": false
+    },
+    {
+      "name": "claude/gallant-goodall-9cc7yb",
+      "sha": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "protected": false
+    },
+    {
+      "name": "claude/haiku-classrupted-features-cc9qmr",
+      "sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "protected": false
+    },
+    {
+      "name": "claude/happy-newton-4yttpa",
+      "sha": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "protected": false
+    },
+    {
+      "name": "claude/pensive-mendel-30x81m",
+      "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "protected": false
+    },
+    {
+      "name": "claude/vigilant-newton-nva2l6",
+      "sha": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "protected": false
+    },
+    {
+      "name": "claude/wonderful-cori-ynhlsb",
+      "sha": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "protected": false
+    },
+    {
+      "name": "codex/classrup-completion-20261116",
+      "sha": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "protected": false
+    },
+    {
+      "name": "codex/classrup-consolidation-audit-20261104",
+      "sha": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "protected": false
+    },
+    {
+      "name": "codex/classrup-features-20261116",
+      "sha": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "protected": false
+    },
+    {
+      "name": "codex/consolidate-keyboard-focus-20261117",
+      "sha": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "protected": false
+    },
+    {
+      "name": "codex/encrypted-domain-storage-20261116",
+      "sha": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "protected": false
+    },
+    {
+      "name": "codex/listing-history-20261116",
+      "sha": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "protected": false
+    },
+    {
+      "name": "codex/local-alpha-20261109",
+      "sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "protected": false
+    },
+    {
+      "name": "codex/parallel-completion-20261116",
+      "sha": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "protected": false
+    },
+    {
+      "name": "codex/verified-status-20261116",
+      "sha": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "protected": false
+    },
+    {
+      "name": "continuation/classrup-20261101",
+      "sha": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "protected": false
+    },
+    {
+      "name": "diagnostic/webkit-keygen-20261118",
+      "sha": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "protected": false
+    },
+    {
+      "name": "docs/client-owned-foundations-20261024",
+      "sha": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "protected": false
+    },
+    {
+      "name": "docs/consolidation-qualification-20261118",
+      "sha": "c20fe7f4c86d0b015f8083806cb0b66ab14cddb9",
+      "protected": false
+    },
+    {
+      "name": "docs/pr-consolidation-results-20261117",
+      "sha": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "protected": false
+    },
+    {
+      "name": "docs/prompt3-foundations-20261022",
+      "sha": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "protected": false
+    },
+    {
+      "name": "integration/classrup-completion",
+      "sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "protected": false
+    },
+    {
+      "name": "integration/classrupted-audit-record-20261117",
+      "sha": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "protected": false
+    },
+    {
+      "name": "integration/classrupted-consolidation-20261117",
+      "sha": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "protected": false
+    },
+    {
+      "name": "integration/classrupted-continuation-20261118",
+      "sha": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "protected": false
+    },
+    {
+      "name": "integration/comprehensive-consolidation",
+      "sha": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "protected": false
+    },
+    {
+      "name": "integration/feature-registry-20261117",
+      "sha": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "protected": false
+    },
+    {
+      "name": "integration/pr-docs-consolidation-20261117",
+      "sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "protected": false
+    },
+    {
+      "name": "integration/qualified-listing-vault-stack-20261116",
+      "sha": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "protected": false
+    },
+    {
+      "name": "main",
+      "sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "protected": false
+    },
+    {
+      "name": "milestone/framework-browser-verification",
+      "sha": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "protected": false
+    },
+    {
+      "name": "planning/future-cli-specs-20261110",
+      "sha": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "protected": false
+    },
+    {
+      "name": "work/classrup-framework",
+      "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "protected": false
+    },
+    {
+      "name": "work/classrup-haiku-framework",
+      "sha": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "protected": false
+    }
+  ],
+  "pull_requests": [
+    {
+      "number": 55,
+      "state": "open",
+      "draft": true,
+      "head_branch": "docs/consolidation-qualification-20261118",
+      "head_sha": "c20fe7f4c86d0b015f8083806cb0b66ab14cddb9",
+      "base_branch": "main",
+      "base_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "merged_at": null,
+      "closed_at": null,
+      "merge_commit_sha": "5cfcd89f4942d8e929c1a51f607d0a46199c3fe3",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/55"
+    },
+    {
+      "number": 54,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "integration/comprehensive-consolidation",
+      "head_sha": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "base_branch": "main",
+      "base_sha": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+      "merged_at": "2026-11-19T07:30:13Z",
+      "closed_at": "2026-11-19T07:30:14Z",
+      "merge_commit_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/54"
+    },
+    {
+      "number": 53,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "integration/classrupted-continuation-20261118",
+      "head_sha": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "base_branch": "main",
+      "base_sha": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+      "merged_at": "2026-11-19T07:30:15Z",
+      "closed_at": "2026-11-19T07:30:16Z",
+      "merge_commit_sha": "098d970dd9515d6c43b779aee07cab6d696acd8d",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/53"
+    },
+    {
+      "number": 52,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "integration/classrupted-audit-record-20261117",
+      "head_sha": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "base_branch": "main",
+      "base_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+      "merged_at": "2026-11-18T14:00:06Z",
+      "closed_at": "2026-11-18T14:00:06Z",
+      "merge_commit_sha": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/52"
+    },
+    {
+      "number": 51,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "claude/haiku-classrupted-features-cc9qmr",
+      "head_sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "base_branch": "main",
+      "base_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+      "merged_at": "2026-11-19T07:30:16Z",
+      "closed_at": "2026-11-19T07:30:16Z",
+      "merge_commit_sha": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51"
+    },
+    {
+      "number": 50,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "integration/classrupted-audit-record-20261117",
+      "head_sha": "486778817f65011d0d24f2ebff647143139524f9",
+      "base_branch": "main",
+      "base_sha": "c4f733e8f2e13c38844acc84b2401209bedf4e24",
+      "merged_at": "2026-11-18T08:03:11Z",
+      "closed_at": "2026-11-18T08:03:11Z",
+      "merge_commit_sha": "aca990e480a4ed586c1af5cf95a205e5adbfd84b",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/50"
+    },
+    {
+      "number": 49,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "integration/classrupted-consolidation-20261117",
+      "head_sha": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "base_branch": "integration/feature-registry-20261117",
+      "base_sha": "336839cdf5fb912e3f2eb84c2fecba12243b26ec",
+      "merged_at": null,
+      "closed_at": "2026-11-18T08:03:56Z",
+      "merge_commit_sha": "ce3bd7af5c23bdfc1adcc3026040a7f32854e2c4",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/49"
+    },
+    {
+      "number": 48,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "integration/feature-registry-20261117",
+      "head_sha": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "base_branch": "main",
+      "base_sha": "c4f733e8f2e13c38844acc84b2401209bedf4e24",
+      "merged_at": "2026-11-18T09:22:26Z",
+      "closed_at": "2026-11-18T09:22:26Z",
+      "merge_commit_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/48"
+    },
+    {
+      "number": 47,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "docs/pr-consolidation-results-20261117",
+      "head_sha": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "base_branch": "main",
+      "base_sha": "03145774e5865fd7eac6ff6c4751a25ce6aa9422",
+      "merged_at": "2026-11-18T03:17:59Z",
+      "closed_at": "2026-11-18T03:17:59Z",
+      "merge_commit_sha": "c4f733e8f2e13c38844acc84b2401209bedf4e24",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/47"
+    },
+    {
+      "number": 46,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "integration/pr-docs-consolidation-20261117",
+      "head_sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "base_branch": "main",
+      "base_sha": "2b3193148029a4af64e8f3fe68373b6ca55620f9",
+      "merged_at": "2026-11-18T03:04:15Z",
+      "closed_at": "2026-11-18T03:04:15Z",
+      "merge_commit_sha": "0a467556436cf2f4ad154fe3694e3d158458b83c",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/46"
+    },
+    {
+      "number": 45,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "codex/consolidate-keyboard-focus-20261117",
+      "head_sha": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "base_branch": "main",
+      "base_sha": "2b3193148029a4af64e8f3fe68373b6ca55620f9",
+      "merged_at": "2026-11-18T03:15:51Z",
+      "closed_at": "2026-11-18T03:15:51Z",
+      "merge_commit_sha": "03145774e5865fd7eac6ff6c4751a25ce6aa9422",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/45"
+    },
+    {
+      "number": 44,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "integration/qualified-listing-vault-stack-20261116",
+      "head_sha": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "base_branch": "main",
+      "base_sha": "32c9d7e010000ca72fddfe64233459daca3c06fa",
+      "merged_at": "2026-11-17T00:09:25Z",
+      "closed_at": "2026-11-17T00:09:25Z",
+      "merge_commit_sha": "50abc470139a613f4404bdb9fb442f4011c13932",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/44"
+    },
+    {
+      "number": 43,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "codex/parallel-completion-20261116",
+      "head_sha": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "base_branch": "main",
+      "base_sha": "32c9d7e010000ca72fddfe64233459daca3c06fa",
+      "merged_at": "2026-11-18T02:37:08Z",
+      "closed_at": "2026-11-18T02:37:08Z",
+      "merge_commit_sha": "2b3193148029a4af64e8f3fe68373b6ca55620f9",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/43"
+    },
+    {
+      "number": 42,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "codex/parallel-completion-20261116",
+      "head_sha": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "base_branch": "codex/classrup-features-20261116",
+      "base_sha": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:21Z",
+      "merge_commit_sha": "040cd0354ce364dc0c8c4398104195997d9494e3",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/42"
+    },
+    {
+      "number": 41,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "codex/classrup-features-20261116",
+      "head_sha": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "base_branch": "codex/verified-status-20261116",
+      "base_sha": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:20Z",
+      "merge_commit_sha": "e4f85b31c4aeb4fc0165f777ade65a52d8ec37bc",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/41"
+    },
+    {
+      "number": 40,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "codex/verified-status-20261116",
+      "head_sha": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "base_branch": "codex/listing-history-20261116",
+      "base_sha": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:18Z",
+      "merge_commit_sha": "4381f3d605883b914439d4d6b757a46de480c04d",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/40"
+    },
+    {
+      "number": 39,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "codex/listing-history-20261116",
+      "head_sha": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "base_branch": "main",
+      "base_sha": "32c9d7e010000ca72fddfe64233459daca3c06fa",
+      "merged_at": "2026-11-17T00:09:27Z",
+      "closed_at": "2026-11-17T00:09:27Z",
+      "merge_commit_sha": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/39"
+    },
+    {
+      "number": 38,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "codex/encrypted-domain-storage-20261116",
+      "head_sha": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "base_branch": "main",
+      "base_sha": "3fd5fdbc89f81bc1267ca907a7a1fb9a13943828",
+      "merged_at": "2026-11-16T17:13:55Z",
+      "closed_at": "2026-11-16T17:13:56Z",
+      "merge_commit_sha": "32c9d7e010000ca72fddfe64233459daca3c06fa",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/38"
+    },
+    {
+      "number": 37,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "codex/classrup-completion-20261116",
+      "head_sha": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "base_branch": "main",
+      "base_sha": "76d39e31eaf6cdb652bdbfba1ca5946e4db3a523",
+      "merged_at": "2026-11-16T16:46:17Z",
+      "closed_at": "2026-11-16T16:46:17Z",
+      "merge_commit_sha": "3fd5fdbc89f81bc1267ca907a7a1fb9a13943828",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/37"
+    },
+    {
+      "number": 36,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "claude/wonderful-cori-ynhlsb",
+      "head_sha": "3a5c9e36e22a635104dfecf41641b438c95fa239",
+      "base_branch": "main",
+      "base_sha": "76d39e31eaf6cdb652bdbfba1ca5946e4db3a523",
+      "merged_at": null,
+      "closed_at": "2026-11-18T03:05:06Z",
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/36"
+    },
+    {
+      "number": 35,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+      "head_sha": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:16Z",
+      "merge_commit_sha": "788c3c1c646b7adb5d468a1a5bb8a3ccdda409bf",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/35"
+    },
+    {
+      "number": 34,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/orchestration/wave1-handoff",
+      "head_sha": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-18T03:05:04Z",
+      "merge_commit_sha": "53a44d06658c826369ce917f5f80f7918fb5d3bc",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/34"
+    },
+    {
+      "number": 33,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/ci/trim-workflows",
+      "head_sha": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:16Z",
+      "merge_commit_sha": "de4c91af91747d49c223b0b9b5e54dbd61659a32",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/33"
+    },
+    {
+      "number": 32,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/moderation/rate-limits-signals",
+      "head_sha": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:15Z",
+      "merge_commit_sha": "90ba491a95678a53acc8dabf7dadc80fe9656984",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/32"
+    },
+    {
+      "number": 31,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/privacy/classification-metadata-consent",
+      "head_sha": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:14Z",
+      "merge_commit_sha": "1e956488b37a35d005d9c22e2a824f73a8eb10b7",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/31"
+    },
+    {
+      "number": 30,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/governance/taxonomy-prohibited",
+      "head_sha": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:12Z",
+      "merge_commit_sha": "91b0b022c4b37b462bc41e4778df6cab242ebca8",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/30"
+    },
+    {
+      "number": 29,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/notify/prefs-inapp",
+      "head_sha": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:11Z",
+      "merge_commit_sha": "e239d1ea422fddc0f30a2fcbaef1b0504c7d5355",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/29"
+    },
+    {
+      "number": 28,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/i18n/languages-currencies",
+      "head_sha": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:17Z",
+      "merge_commit_sha": "0a5a0ac64f63ad66cd39f029e5e8ef4da4f77453",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/28"
+    },
+    {
+      "number": 27,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/discovery/ranking",
+      "head_sha": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:19Z",
+      "merge_commit_sha": "665f6913231e6ca4426bb96776c4d11c01a1f2a1",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/27"
+    },
+    {
+      "number": 26,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "agents/discovery/coarse-filters",
+      "head_sha": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "base_branch": "integration/classrup-completion",
+      "base_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:38:10Z",
+      "merge_commit_sha": "23a0303a9bedeada4fad1b2102dcd8889b176201",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/26"
+    },
+    {
+      "number": 25,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "claude/difficult-project-parts-dcqlup",
+      "head_sha": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "base_branch": "codex/local-alpha-20261109",
+      "base_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "merged_at": null,
+      "closed_at": "2026-11-18T03:05:03Z",
+      "merge_commit_sha": "9ba2fbcc6ecca107d26fe6f7f7318bdbd49bdef8",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/25"
+    },
+    {
+      "number": 24,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "integration/classrup-completion",
+      "head_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": "2026-11-16T16:46:19Z",
+      "closed_at": "2026-11-16T16:46:19Z",
+      "merge_commit_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/24"
+    },
+    {
+      "number": 23,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+      "head_sha": "12558435a307415ba0332777f87b1603abba5268",
+      "base_branch": "codex/local-alpha-20261109",
+      "base_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:21Z",
+      "merge_commit_sha": "e1009a145de62aad214bbeff6c942d6353cb8d1e",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/23"
+    },
+    {
+      "number": 22,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+      "head_sha": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "base_branch": "codex/local-alpha-20261109",
+      "base_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:22Z",
+      "merge_commit_sha": "9d4635319ede7c1aa82aca24118f9960e2bac721",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/22"
+    },
+    {
+      "number": 21,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+      "head_sha": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "base_branch": "codex/local-alpha-20261109",
+      "base_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:24Z",
+      "merge_commit_sha": "aab9a47484696a3a23c77b035dd23a452a5795ad",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/21"
+    },
+    {
+      "number": 20,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/barter-discovery-status-20261110",
+      "head_sha": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "base_branch": "codex/local-alpha-20261109",
+      "base_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:25Z",
+      "merge_commit_sha": "b2f9c1e2d3322f90b98f33136addc916cb8ffbed",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/20"
+    },
+    {
+      "number": 19,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/cli-nested-assets-20261110",
+      "head_sha": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "base_branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "base_sha": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:27Z",
+      "merge_commit_sha": "640627062a67d55cf70a5c3043449986d78196f0",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/19"
+    },
+    {
+      "number": 18,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "claude/happy-newton-4yttpa",
+      "head_sha": "e402bd56352ae62cb3adcd3ba201a94a06b6217d",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": "2026-11-18T03:05:01Z",
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/18"
+    },
+    {
+      "number": 17,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "head_sha": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "base_branch": "codex/local-alpha-20261109",
+      "base_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:28Z",
+      "merge_commit_sha": "229fa5613a229c85f41b06a58717ce2027272fd6",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/17"
+    },
+    {
+      "number": 16,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/outbox-isolation-20261110",
+      "head_sha": "a294dd21715edf501aac75bee69f785951985cd5",
+      "base_branch": "codex/local-alpha-20261109",
+      "base_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:30Z",
+      "merge_commit_sha": "6d46923a2048f047bd422ecea0af2addacc541be",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/16"
+    },
+    {
+      "number": 15,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+      "head_sha": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "base_branch": "codex/local-alpha-20261109",
+      "base_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:39Z",
+      "merge_commit_sha": "e6c28c446eb10a1fa001ff24b72126e9dd53214c",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/15"
+    },
+    {
+      "number": 14,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/audit-observability-20261110",
+      "head_sha": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": "2026-11-18T03:04:17Z",
+      "closed_at": "2026-11-18T03:04:17Z",
+      "merge_commit_sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/14"
+    },
+    {
+      "number": 13,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/docs-wiki-20261110",
+      "head_sha": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": "2026-11-18T03:04:17Z",
+      "closed_at": "2026-11-18T03:04:18Z",
+      "merge_commit_sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/13"
+    },
+    {
+      "number": 12,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "head_sha": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": "2026-11-18T03:04:17Z",
+      "closed_at": "2026-11-18T03:04:17Z",
+      "merge_commit_sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/12"
+    },
+    {
+      "number": 11,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "chatgpt/zero-codex-continuation-spec-20261109",
+      "head_sha": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": "2026-11-16T16:46:19Z",
+      "closed_at": "2026-11-16T16:46:19Z",
+      "merge_commit_sha": "4ed3cf67abe01911b7822df54ed0c555991384a7",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/11"
+    },
+    {
+      "number": 10,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "codex/local-alpha-20261109",
+      "head_sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "base_branch": "claude/bold-mccarthy-qklhl6",
+      "base_sha": "3694395272e880d929fcb53693ddd70e14bc47bf",
+      "merged_at": null,
+      "closed_at": "2026-11-16T16:52:31Z",
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/10"
+    },
+    {
+      "number": 9,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "codex/classrup-consolidation-audit-20261104",
+      "head_sha": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": "2026-11-16T16:46:19Z",
+      "closed_at": "2026-11-16T16:46:19Z",
+      "merge_commit_sha": "cf81aba34ba37a9c0f0717362d1d92f78b7bd5ff",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/9"
+    },
+    {
+      "number": 8,
+      "state": "open",
+      "draft": true,
+      "head_branch": "claude/bold-mccarthy-qklhl6",
+      "head_sha": "a403614bb34d3d176d4693730e512e14959718b8",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": null,
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8"
+    },
+    {
+      "number": 7,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "milestone/framework-browser-verification",
+      "head_sha": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "base_branch": "work/classrup-haiku-framework",
+      "base_sha": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:54:35Z",
+      "merge_commit_sha": "75b6239ce38227cf501e4bfb2dfdd2fced950775",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/7"
+    },
+    {
+      "number": 6,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "claude/vigilant-newton-nva2l6",
+      "head_sha": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:54:33Z",
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/6"
+    },
+    {
+      "number": 5,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "claude/classifiedisrupted-continue-lcuuwg",
+      "head_sha": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:54:32Z",
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/5"
+    },
+    {
+      "number": 4,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "work/classrup-haiku-framework",
+      "head_sha": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:54:30Z",
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/4"
+    },
+    {
+      "number": 3,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "claude/pensive-mendel-30x81m",
+      "head_sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:54:29Z",
+      "merge_commit_sha": "2e25e156a448b3ab634f199a79bdf8c1c6a78b42",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/3"
+    },
+    {
+      "number": 2,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "docs/client-owned-foundations-20261024",
+      "head_sha": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:54:27Z",
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/2"
+    },
+    {
+      "number": 1,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "docs/prompt3-foundations-20261022",
+      "head_sha": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": "2026-11-18T02:54:26Z",
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/1"
+    }
+  ],
+  "published_releases": [],
+  "main_push_ci": [
+    {
+      "id": 44480107222,
+      "name": "CLI setup",
+      "event": "push",
+      "status": "queued",
+      "conclusion": null,
+      "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "run_attempt": 1,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222",
+      "created_at": "2026-11-19T07:30:16Z",
+      "updated_at": "2026-11-19T07:30:16Z"
+    },
+    {
+      "id": 44480107217,
+      "name": "Alpha verification",
+      "event": "push",
+      "status": "queued",
+      "conclusion": null,
+      "head_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "run_attempt": 1,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217",
+      "created_at": "2026-11-19T07:30:16Z",
+      "updated_at": "2026-11-19T07:30:16Z"
+    }
+  ],
+  "completion_claim": false,
+  "qualification_boundary": "The main runtime tree is the tested PR54 tree and source inclusion is verified. Its own push workflows remain queued at this observation; post-merge qualification and documentation closeout are pending.",
+  "main_commit": {
+    "sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+    "tree": "7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a",
+    "parents": [
+      "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+      "a111eefb907a9f039f56777715e20b4976ea3d87"
+    ],
+    "initial_main_is_ancestor": true,
+    "tree_equals_tested_pr54_tree": true
+  },
+  "original_branch_reconciliation": [
+    {
+      "branch": "agents/ci/trim-workflows",
+      "initial_head": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "observed_head": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 33,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "de4c91af91747d49c223b0b9b5e54dbd61659a32"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "agents/discovery/coarse-filters",
+      "initial_head": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "observed_head": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 26,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "23a0303a9bedeada4fad1b2102dcd8889b176201"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "agents/discovery/ranking",
+      "initial_head": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "observed_head": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 27,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "665f6913231e6ca4426bb96776c4d11c01a1f2a1"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "agents/governance/taxonomy-prohibited",
+      "initial_head": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "observed_head": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 30,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "91b0b022c4b37b462bc41e4778df6cab242ebca8"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "agents/i18n/languages-currencies",
+      "initial_head": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "observed_head": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 28,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "0a5a0ac64f63ad66cd39f029e5e8ef4da4f77453"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "agents/moderation/rate-limits-signals",
+      "initial_head": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "observed_head": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 32,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "90ba491a95678a53acc8dabf7dadc80fe9656984"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "agents/notify/prefs-inapp",
+      "initial_head": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "observed_head": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 29,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "e239d1ea422fddc0f30a2fcbaef1b0504c7d5355"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "agents/orchestration/wave1-handoff",
+      "initial_head": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "observed_head": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 34,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "53a44d06658c826369ce917f5f80f7918fb5d3bc"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "agents/privacy/classification-metadata-consent",
+      "initial_head": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "observed_head": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 31,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "1e956488b37a35d005d9c22e2a824f73a8eb10b7"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/audit-observability-20261110",
+      "initial_head": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "observed_head": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 14,
+          "state": "closed",
+          "merged_at": "2026-11-18T03:04:17Z",
+          "merge_commit_sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/barter-discovery-status-20261110",
+      "initial_head": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "observed_head": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 20,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "b2f9c1e2d3322f90b98f33136addc916cb8ffbed"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-nested-assets-20261110",
+      "initial_head": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "observed_head": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 19,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "640627062a67d55cf70a5c3043449986d78196f0"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "initial_head": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "observed_head": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 17,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "229fa5613a229c85f41b06a58717ce2027272fd6"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+      "initial_head": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "observed_head": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 22,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "9d4635319ede7c1aa82aca24118f9960e2bac721"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/docs-wiki-20261110",
+      "initial_head": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "observed_head": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 13,
+          "state": "closed",
+          "merged_at": "2026-11-18T03:04:17Z",
+          "merge_commit_sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+      "initial_head": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "observed_head": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 15,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "e6c28c446eb10a1fa001ff24b72126e9dd53214c"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+      "initial_head": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "observed_head": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 21,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "aab9a47484696a3a23c77b035dd23a452a5795ad"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/outbox-isolation-20261110",
+      "initial_head": "a294dd21715edf501aac75bee69f785951985cd5",
+      "observed_head": "a294dd21715edf501aac75bee69f785951985cd5",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 16,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "6d46923a2048f047bd422ecea0af2addacc541be"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "initial_head": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "observed_head": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 12,
+          "state": "closed",
+          "merged_at": "2026-11-18T03:04:17Z",
+          "merge_commit_sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+      "initial_head": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "observed_head": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 35,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "788c3c1c646b7adb5d468a1a5bb8a3ccdda409bf"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+      "initial_head": "12558435a307415ba0332777f87b1603abba5268",
+      "observed_head": "12558435a307415ba0332777f87b1603abba5268",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 23,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "e1009a145de62aad214bbeff6c942d6353cb8d1e"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "chatgpt/zero-codex-continuation-spec-20261109",
+      "initial_head": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "observed_head": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 11,
+          "state": "closed",
+          "merged_at": "2026-11-16T16:46:19Z",
+          "merge_commit_sha": "4ed3cf67abe01911b7822df54ed0c555991384a7"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "claude/bold-mccarthy-qklhl6",
+      "initial_head": "a403614bb34d3d176d4693730e512e14959718b8",
+      "observed_head": "a403614bb34d3d176d4693730e512e14959718b8",
+      "ref_state": "unchanged",
+      "initial_classification": "C",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [
+        8
+      ],
+      "source_prs": [
+        {
+          "number": 8,
+          "state": "open",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": false,
+      "disposition": "preserve unique unfinished product/specification work"
+    },
+    {
+      "branch": "claude/busy-cerf-vg3hz3",
+      "initial_head": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "observed_head": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "ref_state": "unchanged",
+      "initial_classification": "E",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [],
+      "cleanup_candidate": false,
+      "disposition": "preserve unique unfinished product/specification work"
+    },
+    {
+      "branch": "claude/classifiedisrupted-continue-lcuuwg",
+      "initial_head": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "observed_head": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 5,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "claude/difficult-project-parts-dcqlup",
+      "initial_head": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "observed_head": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 25,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "9ba2fbcc6ecca107d26fe6f7f7318bdbd49bdef8"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "claude/gallant-goodall-9cc7yb",
+      "initial_head": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "observed_head": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "claude/haiku-classrupted-features-cc9qmr",
+      "initial_head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "observed_head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "ref_state": "unchanged",
+      "initial_classification": "A",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 51,
+          "state": "closed",
+          "merged_at": "2026-11-19T07:30:16Z",
+          "merge_commit_sha": "d81094688ac116c84c09f3105c7b3f6b4c472793"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "new source history integrated through PR54"
+    },
+    {
+      "branch": "claude/happy-newton-4yttpa",
+      "initial_head": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "observed_head": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "ref_state": "unchanged",
+      "initial_classification": "C",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 18,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": false,
+      "disposition": "preserve unique unfinished product/specification work"
+    },
+    {
+      "branch": "claude/pensive-mendel-30x81m",
+      "initial_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 3,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "2e25e156a448b3ab634f199a79bdf8c1c6a78b42"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "claude/vigilant-newton-nva2l6",
+      "initial_head": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "observed_head": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 6,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "claude/wonderful-cori-ynhlsb",
+      "initial_head": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "observed_head": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "ref_state": "unchanged",
+      "initial_classification": "C",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 36,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": false,
+      "disposition": "preserve unique unfinished product/specification work"
+    },
+    {
+      "branch": "codex/classrup-completion-20261116",
+      "initial_head": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "observed_head": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 37,
+          "state": "closed",
+          "merged_at": "2026-11-16T16:46:17Z",
+          "merge_commit_sha": "3fd5fdbc89f81bc1267ca907a7a1fb9a13943828"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "codex/classrup-consolidation-audit-20261104",
+      "initial_head": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "observed_head": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 9,
+          "state": "closed",
+          "merged_at": "2026-11-16T16:46:19Z",
+          "merge_commit_sha": "cf81aba34ba37a9c0f0717362d1d92f78b7bd5ff"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "codex/classrup-features-20261116",
+      "initial_head": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "observed_head": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 41,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "e4f85b31c4aeb4fc0165f777ade65a52d8ec37bc"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "codex/consolidate-keyboard-focus-20261117",
+      "initial_head": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "observed_head": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 45,
+          "state": "closed",
+          "merged_at": "2026-11-18T03:15:51Z",
+          "merge_commit_sha": "03145774e5865fd7eac6ff6c4751a25ce6aa9422"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "codex/encrypted-domain-storage-20261116",
+      "initial_head": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "observed_head": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 38,
+          "state": "closed",
+          "merged_at": "2026-11-16T17:13:55Z",
+          "merge_commit_sha": "32c9d7e010000ca72fddfe64233459daca3c06fa"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "codex/listing-history-20261116",
+      "initial_head": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "observed_head": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 39,
+          "state": "closed",
+          "merged_at": "2026-11-17T00:09:27Z",
+          "merge_commit_sha": "3f814c03a8c09652c79312959d0225ee0742457b"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "codex/local-alpha-20261109",
+      "initial_head": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "observed_head": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 10,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "codex/parallel-completion-20261116",
+      "initial_head": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "observed_head": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 43,
+          "state": "closed",
+          "merged_at": "2026-11-18T02:37:08Z",
+          "merge_commit_sha": "2b3193148029a4af64e8f3fe68373b6ca55620f9"
+        },
+        {
+          "number": 42,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "040cd0354ce364dc0c8c4398104195997d9494e3"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "codex/verified-status-20261116",
+      "initial_head": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "observed_head": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 40,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "4381f3d605883b914439d4d6b757a46de480c04d"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "continuation/classrup-20261101",
+      "initial_head": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "observed_head": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "diagnostic/webkit-keygen-20261118",
+      "initial_head": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "observed_head": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "ref_state": "unchanged",
+      "initial_classification": "C",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [],
+      "cleanup_candidate": false,
+      "disposition": "preserve diagnostic source and unresolved native-engine evidence"
+    },
+    {
+      "branch": "docs/client-owned-foundations-20261024",
+      "initial_head": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "observed_head": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 2,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "docs/pr-consolidation-results-20261117",
+      "initial_head": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "observed_head": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 47,
+          "state": "closed",
+          "merged_at": "2026-11-18T03:17:59Z",
+          "merge_commit_sha": "c4f733e8f2e13c38844acc84b2401209bedf4e24"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "docs/prompt3-foundations-20261022",
+      "initial_head": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "observed_head": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 1,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "integration/classrup-completion",
+      "initial_head": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "observed_head": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 24,
+          "state": "closed",
+          "merged_at": "2026-11-16T16:46:19Z",
+          "merge_commit_sha": "75d4bf51433ebddef56c86c4065d9619ebe02058"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "integration/classrupted-audit-record-20261117",
+      "initial_head": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "observed_head": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 52,
+          "state": "closed",
+          "merged_at": "2026-11-18T14:00:06Z",
+          "merge_commit_sha": "044c213d90d62f1f06edb8ca1b9c2141d3991c27"
+        },
+        {
+          "number": 50,
+          "state": "closed",
+          "merged_at": "2026-11-18T08:03:11Z",
+          "merge_commit_sha": "aca990e480a4ed586c1af5cf95a205e5adbfd84b"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "integration/classrupted-consolidation-20261117",
+      "initial_head": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "observed_head": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 49,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "ce3bd7af5c23bdfc1adcc3026040a7f32854e2c4"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "integration/classrupted-continuation-20261118",
+      "initial_head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "observed_head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "ref_state": "unchanged",
+      "initial_classification": "A",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 53,
+          "state": "closed",
+          "merged_at": "2026-11-19T07:30:15Z",
+          "merge_commit_sha": "098d970dd9515d6c43b779aee07cab6d696acd8d"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "new source history integrated through PR54"
+    },
+    {
+      "branch": "integration/feature-registry-20261117",
+      "initial_head": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "observed_head": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 48,
+          "state": "closed",
+          "merged_at": "2026-11-18T09:22:26Z",
+          "merge_commit_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "integration/pr-docs-consolidation-20261117",
+      "initial_head": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "observed_head": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 46,
+          "state": "closed",
+          "merged_at": "2026-11-18T03:04:15Z",
+          "merge_commit_sha": "0a467556436cf2f4ad154fe3694e3d158458b83c"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "integration/qualified-listing-vault-stack-20261116",
+      "initial_head": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "observed_head": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 44,
+          "state": "closed",
+          "merged_at": "2026-11-17T00:09:25Z",
+          "merge_commit_sha": "50abc470139a613f4404bdb9fb442f4011c13932"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "main",
+      "initial_head": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+      "observed_head": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "ref_state": "main advanced as expected",
+      "initial_classification": "baseline",
+      "initial_head_ancestor_of_final_main": true,
+      "initial_head_was_ancestor_of_initial_main": true,
+      "open_pr_source_or_base_dependencies": [
+        55,
+        8
+      ],
+      "source_prs": [],
+      "cleanup_candidate": false,
+      "disposition": "canonical main target"
+    },
+    {
+      "branch": "milestone/framework-browser-verification",
+      "initial_head": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "observed_head": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 7,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": "75b6239ce38227cf501e4bfb2dfdd2fced950775"
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "planning/future-cli-specs-20261110",
+      "initial_head": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "observed_head": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "work/classrup-framework",
+      "initial_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    },
+    {
+      "branch": "work/classrup-haiku-framework",
+      "initial_head": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "observed_head": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "ref_state": "unchanged",
+      "initial_classification": "D",
+      "initial_head_ancestor_of_final_main": false,
+      "initial_head_was_ancestor_of_initial_main": false,
+      "open_pr_source_or_base_dependencies": [],
+      "source_prs": [
+        {
+          "number": 4,
+          "state": "closed",
+          "merged_at": null,
+          "merge_commit_sha": null
+        }
+      ],
+      "cleanup_candidate": true,
+      "disposition": "previously integrated/superseded; unchanged evidence"
+    }
+  ],
+  "cleanup_candidates": [
+    {
+      "branch": "agents/ci/trim-workflows",
+      "sha": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "agents/discovery/coarse-filters",
+      "sha": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "agents/discovery/ranking",
+      "sha": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "agents/governance/taxonomy-prohibited",
+      "sha": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "agents/i18n/languages-currencies",
+      "sha": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "agents/moderation/rate-limits-signals",
+      "sha": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "agents/notify/prefs-inapp",
+      "sha": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "agents/orchestration/wave1-handoff",
+      "sha": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "agents/privacy/classification-metadata-consent",
+      "sha": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/audit-observability-20261110",
+      "sha": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/barter-discovery-status-20261110",
+      "sha": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-nested-assets-20261110",
+      "sha": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "sha": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+      "sha": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/docs-wiki-20261110",
+      "sha": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+      "sha": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+      "sha": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/outbox-isolation-20261110",
+      "sha": "a294dd21715edf501aac75bee69f785951985cd5",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "sha": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+      "sha": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+      "sha": "12558435a307415ba0332777f87b1603abba5268",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "chatgpt/zero-codex-continuation-spec-20261109",
+      "sha": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "claude/classifiedisrupted-continue-lcuuwg",
+      "sha": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "claude/difficult-project-parts-dcqlup",
+      "sha": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "claude/gallant-goodall-9cc7yb",
+      "sha": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "claude/haiku-classrupted-features-cc9qmr",
+      "sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "basis": "newly integrated exact source and resolved source PR",
+      "original_classification": "A",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "claude/pensive-mendel-30x81m",
+      "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "claude/vigilant-newton-nva2l6",
+      "sha": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/classrup-completion-20261116",
+      "sha": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/classrup-consolidation-audit-20261104",
+      "sha": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/classrup-features-20261116",
+      "sha": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/consolidate-keyboard-focus-20261117",
+      "sha": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/encrypted-domain-storage-20261116",
+      "sha": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/listing-history-20261116",
+      "sha": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/local-alpha-20261109",
+      "sha": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/parallel-completion-20261116",
+      "sha": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "codex/verified-status-20261116",
+      "sha": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "continuation/classrup-20261101",
+      "sha": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "docs/client-owned-foundations-20261024",
+      "sha": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "docs/pr-consolidation-results-20261117",
+      "sha": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "docs/prompt3-foundations-20261022",
+      "sha": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "integration/classrup-completion",
+      "sha": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "integration/classrupted-audit-record-20261117",
+      "sha": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "integration/classrupted-consolidation-20261117",
+      "sha": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "integration/classrupted-continuation-20261118",
+      "sha": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "basis": "newly integrated exact source and resolved source PR",
+      "original_classification": "A",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "integration/feature-registry-20261117",
+      "sha": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "integration/pr-docs-consolidation-20261117",
+      "sha": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "integration/qualified-listing-vault-stack-20261116",
+      "sha": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "milestone/framework-browser-verification",
+      "sha": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "planning/future-cli-specs-20261110",
+      "sha": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "work/classrup-framework",
+      "sha": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    },
+    {
+      "branch": "work/classrup-haiku-framework",
+      "sha": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "basis": "unchanged prior D ancestry/content/supersession evidence",
+      "original_classification": "D",
+      "open_pr_dependency_count": 0
+    }
+  ],
+  "new_branches": [
+    {
+      "name": "docs/consolidation-qualification-20261118",
+      "sha": "c20fe7f4c86d0b015f8083806cb0b66ab14cddb9",
+      "protected": false
+    },
+    {
+      "name": "integration/comprehensive-consolidation",
+      "sha": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "protected": false
+    }
+  ],
+  "original_ref_exceptions": [],
+  "open_prs": [
+    {
+      "number": 55,
+      "state": "open",
+      "draft": true,
+      "head_branch": "docs/consolidation-qualification-20261118",
+      "head_sha": "c20fe7f4c86d0b015f8083806cb0b66ab14cddb9",
+      "base_branch": "main",
+      "base_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "merged_at": null,
+      "closed_at": null,
+      "merge_commit_sha": "5cfcd89f4942d8e929c1a51f607d0a46199c3fe3",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/55"
+    },
+    {
+      "number": 8,
+      "state": "open",
+      "draft": true,
+      "head_branch": "claude/bold-mccarthy-qklhl6",
+      "head_sha": "a403614bb34d3d176d4693730e512e14959718b8",
+      "base_branch": "main",
+      "base_sha": "95c46be41233520382566360e7135011412e8e6e",
+      "merged_at": null,
+      "closed_at": null,
+      "merge_commit_sha": null,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8"
+    }
+  ],
+  "counts": {
+    "original_branches_including_main": 58,
+    "original_non_main_heads_unchanged": 57,
+    "original_non_main_heads_missing": 0,
+    "original_non_main_heads_changed": 0,
+    "original_non_main_ancestors_before": 32,
+    "original_non_main_ancestors_after": 34,
+    "newly_integrated_original_heads": 2,
+    "prior_D_superseded_or_integrated": 50,
+    "new_partial_recoveries_this_run": 0,
+    "new_source_repairs_this_run": 0,
+    "original_cleanup_candidates": 52,
+    "original_refs_deleted": 0,
+    "remaining_unique_product_or_spec_heads": 4,
+    "preserved_diagnostic_heads": 1,
+    "new_task_branches": 2,
+    "live_branches_total": 60,
+    "pull_requests_total": 55,
+    "pull_requests_open": 2,
+    "pull_requests_merged": 20,
+    "pull_requests_closed_without_merge": 33
+  },
+  "new_merge_outcomes": [
+    {
+      "number": 54,
+      "state": "closed",
+      "draft": false,
+      "head_branch": "integration/comprehensive-consolidation",
+      "head_sha": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "base_branch": "main",
+      "base_sha": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+      "merged_at": "2026-11-19T07:30:13Z",
+      "closed_at": "2026-11-19T07:30:14Z",
+      "merge_commit_sha": "d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/54",
+      "action_classification": "direct consolidation merge"
+    },
+    {
+      "number": 53,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "integration/classrupted-continuation-20261118",
+      "head_sha": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "base_branch": "main",
+      "base_sha": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+      "merged_at": "2026-11-19T07:30:15Z",
+      "closed_at": "2026-11-19T07:30:16Z",
+      "merge_commit_sha": "098d970dd9515d6c43b779aee07cab6d696acd8d",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/53",
+      "action_classification": "source PR marked merged after consolidation; no separate merge action claimed"
+    },
+    {
+      "number": 51,
+      "state": "closed",
+      "draft": true,
+      "head_branch": "claude/haiku-classrupted-features-cc9qmr",
+      "head_sha": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "base_branch": "main",
+      "base_sha": "5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54",
+      "merged_at": "2026-11-19T07:30:16Z",
+      "closed_at": "2026-11-19T07:30:16Z",
+      "merge_commit_sha": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51",
+      "action_classification": "source PR marked merged after consolidation; no separate merge action claimed"
+    }
+  ],
+  "cleanup_limit": "This is an explicit candidate list, not a deletion action or authorization. All original source refs are unchanged and no open PR names a candidate as source or base; zero published releases were returned. Uncommitted external work cannot be excluded by GitHub refs. Recheck exact refs, PRs and worker/release need before any later approved pre-existing-branch deletion. Main post-merge CI is still pending.",
+  "content_integrated_source_recheck": {
+    "branches": [
+      {
+        "branch": "agents/ci/trim-workflows",
+        "source_head": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+        "paths": 4,
+        "identical": 3,
+        "different": 1,
+        "absent": 0
+      },
+      {
+        "branch": "agents/discovery/coarse-filters",
+        "source_head": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+        "paths": 9,
+        "identical": 5,
+        "different": 4,
+        "absent": 0
+      },
+      {
+        "branch": "agents/governance/taxonomy-prohibited",
+        "source_head": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+        "paths": 14,
+        "identical": 12,
+        "different": 2,
+        "absent": 0
+      },
+      {
+        "branch": "agents/moderation/rate-limits-signals",
+        "source_head": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+        "paths": 10,
+        "identical": 4,
+        "different": 6,
+        "absent": 0
+      },
+      {
+        "branch": "agents/notify/prefs-inapp",
+        "source_head": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+        "paths": 10,
+        "identical": 0,
+        "different": 10,
+        "absent": 0
+      },
+      {
+        "branch": "agents/privacy/classification-metadata-consent",
+        "source_head": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+        "paths": 19,
+        "identical": 14,
+        "different": 5,
+        "absent": 0
+      }
+    ],
+    "totals": {
+      "paths": 66,
+      "identical": 38,
+      "different": 28,
+      "absent": 0
+    },
+    "semantic_review": "docs/reviews/20261117-pr-consolidation/parked-modules-review.md",
+    "limit": "Path comparison supplements the prior exact-source semantic review; differences are not automatically proof of equivalence."
+  },
+  "tag_refs": {
+    "command": "git ls-remote --tags origin",
+    "exit_code": 0,
+    "refs": [],
+    "count": 0
+  }
+}

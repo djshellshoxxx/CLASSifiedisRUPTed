@@ -1,0 +1,96 @@
+MAIN PUSH QUALIFICATION
+Head: d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+Tree: 7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a
+Observation: 2026-11-19 08:09:45 UTC
+
+ALPHA (log SHA256 074a1d763eeb136203caf6f4d0be9d43e31cf68e97b56351a9c539f420c1c897)
+2026-11-19T07:59:19.8223555Z d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+2026-11-19T07:59:24.6857377Z specified 148/148 modules; 0 errors; 0 warnings
+2026-11-19T07:59:24.9593107Z dependency check: 0 errors
+2026-11-19T07:59:25.7212533Z registry: 18 features, 148 modules, 565 edges, acyclic, 0 specs missing, 66579 bytes, hash sha256-tTCcMiLdFtldMU8BIh3ooR6qsHOe4UE6OddOcSPQwWQ, generation_ms 393, up to date
+2026-11-19T07:59:25.7777192Z 331 money vectors verified with Python Fraction; format v1; seed 740016
+2026-11-19T07:59:25.8349373Z {"gzipBytes":2355,"gzipBudgetBytes":12288}
+2026-11-19T07:59:29.3256580Z ℹ tests 27
+2026-11-19T07:59:29.3259060Z ℹ pass 27
+2026-11-19T07:59:29.3259262Z ℹ fail 0
+2026-11-19T07:59:29.3259451Z ℹ cancelled 0
+2026-11-19T07:59:29.3259648Z ℹ skipped 0
+2026-11-19T07:59:29.3259830Z ℹ todo 0
+2026-11-19T08:00:15.5943108Z Executed domain assertions: {"passed":701,"failed":0,"pending":0,"skipped":0,"todo":0}
+2026-11-19T08:00:16.3621846Z modules with tests: 21/148; requirements covered: 487/4510; gaps in implemented MVP modules: 152
+2026-11-19T08:00:17.4053516Z modules with runtime: 36/148; interface: 15/688; requirements covered: 487/4510
+2026-11-19T08:00:17.6621374Z Created .classrup/local.json. Browser vault data is untouched.
+2026-11-19T08:00:18.3698155Z registry: 18 features, 148 modules, 565 edges, acyclic, 0 specs missing, 66579 bytes, hash sha256-tTCcMiLdFtldMU8BIh3ooR6qsHOe4UE6OddOcSPQwWQ, generation_ms 372, up to date
+2026-11-19T08:00:18.4990937Z Built dist/. Publish these public assets over HTTPS.
+2026-11-19T08:00:55.5315358Z ##[group]Run corepack pnpm exec playwright test --project=chromium --project=firefox --project=webkit --trace off
+2026-11-19T08:00:57.3098805Z Running 72 tests using 1 worker
+2026-11-19T08:09:17.2989929Z   72 passed (8.4m)
+
+CLI clean-install (macos-latest, 24.x) (job 135416030809, log SHA256 8640e51b7f25dfb7b3e9e384058c64922be642a5dd4e3c07f2e070b087573476)
+2026-11-19T07:56:45.7522390Z d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+2026-11-19T07:57:06.6082450Z ℹ tests 32
+2026-11-19T07:57:06.6083060Z ℹ pass 32
+2026-11-19T07:57:06.6083380Z ℹ fail 0
+2026-11-19T07:57:06.6083710Z ℹ cancelled 0
+2026-11-19T07:57:06.6083970Z ℹ skipped 0
+2026-11-19T07:57:06.6084260Z ℹ todo 0
+2026-11-19T07:57:20.3930290Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:57:21.8832530Z preview: Chromium real-app startup, reload and offline shell passed
+
+CLI clean-install (ubuntu-latest, 24.x) (job 135416030817, log SHA256 21dc0aab85f5bf1a734460a644739e3644727d83acf6beeea931feddd716d166)
+2026-11-19T07:57:09.8882898Z d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+2026-11-19T07:57:25.2040376Z ℹ tests 32
+2026-11-19T07:57:25.2041280Z ℹ pass 32
+2026-11-19T07:57:25.2041701Z ℹ fail 0
+2026-11-19T07:57:25.2042124Z ℹ cancelled 0
+2026-11-19T07:57:25.2042561Z ℹ skipped 0
+2026-11-19T07:57:25.2042976Z ℹ todo 0
+2026-11-19T07:59:23.2595039Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:59:24.7197123Z preview: Chromium real-app startup, reload and offline shell passed
+
+CLI clean-install (windows-latest, 24.x) (job 135416030855, log SHA256 e2486ce2eaa90729dab0131f2332a9414b011f8bc2020b58e4640a7b93961353)
+2026-11-19T08:02:40.3737780Z d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+2026-11-19T08:03:09.8058814Z ﹣ FIFO and device inputs fail promptly without opening a stream (0.1595ms) # SKIP
+2026-11-19T08:03:13.7209978Z ℹ tests 32
+2026-11-19T08:03:13.7210502Z ℹ pass 31
+2026-11-19T08:03:13.7210729Z ℹ fail 0
+2026-11-19T08:03:13.7210964Z ℹ cancelled 0
+2026-11-19T08:03:13.7211220Z ℹ skipped 1
+2026-11-19T08:03:13.7211446Z ℹ todo 0
+2026-11-19T08:06:07.8123652Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T08:06:09.3080797Z preview: Chromium real-app startup, reload and offline shell passed
+
+CLI clean-install (ubuntu-latest, 22.18.0) (job 135416030901, log SHA256 b2295b0cfb924c2daa008304f2f694acb8a364320b720d50124f908afd8965b8)
+2026-11-19T08:01:09.9237895Z d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+2026-11-19T08:01:29.2970438Z # tests 32
+2026-11-19T08:01:29.2971227Z # pass 32
+2026-11-19T08:01:29.2971542Z # fail 0
+2026-11-19T08:01:29.2971928Z # cancelled 0
+2026-11-19T08:01:29.2972285Z # skipped 0
+2026-11-19T08:01:29.2972711Z # todo 0
+2026-11-19T08:03:33.4304591Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T08:03:34.9000595Z preview: Chromium real-app startup, reload and offline shell passed
+
+CLI clean-install (macos-latest, 22.18.0) (job 135416030948, log SHA256 3c46114a37405bb00555dcd87286e5752d9faf8008afbf4138ceff3b74934009)
+2026-11-19T08:03:35.8396520Z d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+2026-11-19T08:04:01.7445530Z # tests 32
+2026-11-19T08:04:01.7447180Z # pass 32
+2026-11-19T08:04:01.7447830Z # fail 0
+2026-11-19T08:04:01.7448400Z # cancelled 0
+2026-11-19T08:04:01.7449180Z # skipped 0
+2026-11-19T08:04:01.7449700Z # todo 0
+2026-11-19T08:04:15.8522010Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T08:04:17.4562290Z preview: Chromium real-app startup, reload and offline shell passed
+
+CLI clean-install (windows-latest, 22.18.0) (job 135416031074, log SHA256 391c2b45a22fc6d486f69a5f22c4befcc81750d274ef381e6b86507b2cf5a975)
+2026-11-19T08:05:02.2134198Z d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+2026-11-19T08:05:41.1270881Z ok 14 - FIFO and device inputs fail promptly without opening a stream # SKIP
+2026-11-19T08:05:45.5829230Z # tests 32
+2026-11-19T08:05:45.5829631Z # pass 31
+2026-11-19T08:05:45.5829850Z # fail 0
+2026-11-19T08:05:45.5830336Z # cancelled 0
+2026-11-19T08:05:45.5830810Z # skipped 1
+2026-11-19T08:05:45.5831020Z # todo 0
+2026-11-19T08:08:33.6054038Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T08:08:35.0943852Z preview: Chromium real-app startup, reload and offline shell passed
+

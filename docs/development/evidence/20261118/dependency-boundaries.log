@@ -1,0 +1,5 @@
+
+> classrup@ deps:check /workspace/scratch/171008b2cfcc/classrupted
+> node tools/deps/deps.mjs
+
+dependency check: 0 errors

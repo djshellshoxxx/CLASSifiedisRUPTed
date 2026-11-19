@@ -1,0 +1,35 @@
+✔ pushes, manual runs and unknown change lists get every OS and every browser (11.433473ms)
+✔ a domain-only pull request runs the Linux gate with Chromium (15.856941ms)
+✔ CLI, build and toolchain changes bring back Windows and macOS (1.793383ms)
+✔ PWA, browser storage and cryptography changes bring back Firefox and WebKit (0.343084ms)
+✔ the script prints GITHUB_OUTPUT lines and refuses a missing event (918.470683ms)
+✔ workflows parse, pin actions by commit, declare least privilege and cancel stale runs (121.655333ms)
+✔ real catalog generates the checked-in immutable graph within the raw and gzip size budgets (4664.092194ms)
+✔ stale checks never write; a valid source change requires explicit regeneration (33.03594ms)
+✔ parse and graph failures preserve the previous generated output (21.976298ms)
+✔ a catalog entry cannot use a different module specification or a null dependency list (5.840004ms)
+✔ catalog path traversal is rejected before calling the injected spec reader (8.696501ms)
+✔ the filesystem adapter rejects traversal for reads and writes (3.223706ms)
+✔ spec and output symlinks cannot read or replace an external file (14.544587ms)
+✔ a symbolic-link directory cannot redirect the registry reader (1.530992ms)
+✔ an interrupted temporary file survives a failed replacement and the prior output stays intact (15.633662ms)
+✔ a partial write failure cleans up its own temporary file and permits retry (1254.945883ms)
+✔ read errors and invalid output paths return structured failures without writing (0.367679ms)
+✔ generator CLI rejects unknown arguments and the documented build retains the stale gate (6477.373871ms)
+✔ Git preserves exact registry input and output line endings on Windows checkouts (160.730411ms)
+✔ status without execution results reports zero requirement coverage (6294.60947ms)
+✔ interface counts come from non-test source definitions and never exceed the specification (4022.526126ms)
+✔ only passing mapped tests raise requirement coverage (4774.187911ms)
+✔ CLI rejects a missing --results argument (475.461525ms)
+✔ source references and comments never establish passing execution (2516.195518ms)
+✔ missing or malformed results fail closed (1.550508ms)
+✔ only passed assertions count and skipped/failed duplicates win (0.542417ms)
+✔ CLI rejects missing --results argument rather than using source inventory (435.516972ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36745.089638

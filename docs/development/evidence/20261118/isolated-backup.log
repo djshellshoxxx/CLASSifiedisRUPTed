@@ -1,0 +1,29 @@
+
+ RUN  v5.1.0 /workspace/scratch/171008b2cfcc/classrupted
+
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects a mathematically valid statement when its signer lacks the expected role
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects signature, payload, author, type, and CID substitution
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > detaches input before asynchronous verification and returns immutable evidence
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects unsupported versions, broken chains, future claims and stale statements
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > does not unlock a private key under a substituted principal
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects wrong recovery material and invalid KDF parameters
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > revokes signing capability after lock
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects ambiguous or excessive JSON before signing
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > discovery refuses a valid signature from somebody other than the listing owner and refuses private fields
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > freezes discovery on two signed listing versions at the same revision and preserves both evidence envelopes
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > retains the verified evidence snapshot when a caller mutates the input during asynchronous verification
+ ✓ tests/integration/alpha-security.test.ts > independent signed-statement security > restores an encrypted signed backup and rejects a bad later record without initializing the target 15016ms
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > locking a vault during an awaited write rolls the write back before closing persistent storage
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > rejects a forged peer projection inside a correctly signed and encrypted local backup
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > does not trust a restored feasibility boolean to mark authentic consent evidence committed
+ ↓ tests/integration/alpha-security.test.ts > independent signed-statement security > does not commit after the local hold is released even when all signed consents and reservation statements exist
+ ↓ tests/integration/alpha-security.test.ts > independent alpha persistence security > rolls back an earlier restored record when a later revision conflicts, including after reopen
+ ↓ tests/integration/alpha-security.test.ts > independent alpha persistence security > keeps identical record IDs in separate principal databases isolated across reopen
+ ↓ tests/integration/alpha-security.test.ts > independent alpha persistence security > does not leave partial working-set changes after a persistence quota failure
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 18 skipped (19)
+   Start at  23:01:55
+   Duration  19.31s (tests 95%, transform 2%, import 2%)
+
+JSON report written to /workspace/scratch/171008b2cfcc/evidence/isolated-backup.json

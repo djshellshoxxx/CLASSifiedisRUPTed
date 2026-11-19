@@ -1,0 +1,473 @@
+﻿2026-11-19T08:03:30.8754420Z Current runner version: '2.338.2'
+2026-11-19T08:03:30.8771850Z ##[group]Runner Image Provisioner
+2026-11-19T08:03:30.8772430Z Hosted Compute Agent
+2026-11-19T08:03:30.8772790Z Version: 20261103.629
+2026-11-19T08:03:30.8773190Z Commit: 15dbd9ccb5dbf34fae002b6ed1a2670f52df37bc
+2026-11-19T08:03:30.8773660Z Build Date: 2026-11-03T17:26:59Z
+2026-11-19T08:03:30.8774090Z Worker ID: {297990eb-c405-4f1b-b83d-802c5ab002f2}
+2026-11-19T08:03:30.8774540Z Region: westus
+2026-11-19T08:03:30.8774910Z Cloud: MacCloud
+2026-11-19T08:03:30.8775260Z ##[endgroup]
+2026-11-19T08:03:30.8776300Z ##[group]Operating System
+2026-11-19T08:03:30.8776700Z macOS
+2026-11-19T08:03:30.8777040Z 26.7.2
+2026-11-19T08:03:30.8777380Z 25G332
+2026-11-19T08:03:30.8777720Z ##[endgroup]
+2026-11-19T08:03:30.8778090Z ##[group]Runner Image
+2026-11-19T08:03:30.8778580Z Image: macos-26-arm64
+2026-11-19T08:03:30.8779020Z Version: 20261112.0504.1
+2026-11-19T08:03:30.8782000Z Included Software: https://github.com/actions/runner-images/blob/macos-26-arm64/20261112.0504/images/macos/macos-26-arm64-Readme.md
+2026-11-19T08:03:30.8783150Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-26-arm64%2F20261112.0504
+2026-11-19T08:03:30.8783820Z ##[endgroup]
+2026-11-19T08:03:30.8784590Z ##[group]GITHUB_TOKEN Permissions
+2026-11-19T08:03:30.8786300Z Contents: read
+2026-11-19T08:03:30.8787580Z Metadata: read
+2026-11-19T08:03:30.8788760Z ##[endgroup]
+2026-11-19T08:03:30.8793280Z Secret source: Actions
+2026-11-19T08:03:30.8794800Z Cache mode: write
+2026-11-19T08:03:30.8795980Z Prepare workflow directory
+2026-11-19T08:03:30.9178160Z Prepare all required actions
+2026-11-19T08:03:30.9228100Z Getting action download info
+2026-11-19T08:03:31.2905790Z Download action repository 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' (SHA:11bd71901bbe5b1630ceea73d27597364c9af683)
+2026-11-19T08:03:31.6393080Z Download action repository 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-11-19T08:03:31.8553340Z Download action repository 'actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-11-19T08:03:32.0707680Z Complete job name: clean-install (macos-latest, 22.18.0)
+2026-11-19T08:03:32.1387110Z ##[group]Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+2026-11-19T08:03:32.1388080Z with:
+2026-11-19T08:03:32.1388500Z   repository: djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T08:03:32.1392070Z   token: ***
+2026-11-19T08:03:32.1392430Z   ssh-strict: true
+2026-11-19T08:03:32.1392780Z   ssh-user: git
+2026-11-19T08:03:32.1393150Z   persist-credentials: true
+2026-11-19T08:03:32.1393610Z   clean: true
+2026-11-19T08:03:32.1394010Z   sparse-checkout-cone-mode: true
+2026-11-19T08:03:32.1394530Z   fetch-depth: 1
+2026-11-19T08:03:32.1394960Z   fetch-tags: false
+2026-11-19T08:03:32.1395320Z   show-progress: true
+2026-11-19T08:03:32.1395710Z   lfs: false
+2026-11-19T08:03:32.1396130Z   submodules: false
+2026-11-19T08:03:32.1396600Z   set-safe-directory: true
+2026-11-19T08:03:32.1397490Z ##[endgroup]
+2026-11-19T08:03:32.7532040Z Syncing repository: djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T08:03:32.7534230Z ##[group]Getting Git version info
+2026-11-19T08:03:32.7535490Z Working directory is '/Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed'
+2026-11-19T08:03:32.7537170Z [command]/opt/homebrew/bin/git version
+2026-11-19T08:03:32.7931720Z git version 2.56.1
+2026-11-19T08:03:32.8008000Z ##[endgroup]
+2026-11-19T08:03:32.8028450Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/dc2f654e-0f2a-4d79-ab2c-b092b289cb9a/.gitconfig'
+2026-11-19T08:03:32.8036220Z Temporarily overriding HOME='/Users/runner/work/_temp/dc2f654e-0f2a-4d79-ab2c-b092b289cb9a' before making global git config changes
+2026-11-19T08:03:32.8041740Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-19T08:03:32.8044540Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T08:03:32.8380230Z Deleting the contents of '/Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed'
+2026-11-19T08:03:32.8385740Z ##[group]Initializing the repository
+2026-11-19T08:03:32.8389600Z [command]/opt/homebrew/bin/git init /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T08:03:32.8709840Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-19T08:03:32.8712270Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-19T08:03:32.8714210Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-19T08:03:32.8715810Z hint: call:
+2026-11-19T08:03:32.8716690Z hint:
+2026-11-19T08:03:32.8717730Z hint: 	git config --global init.defaultBranch <name>
+2026-11-19T08:03:32.8718990Z hint:
+2026-11-19T08:03:32.8720210Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-19T08:03:32.8722270Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-19T08:03:32.8723830Z hint:
+2026-11-19T08:03:32.8724600Z hint: 	git branch -m <name>
+2026-11-19T08:03:32.8725520Z hint:
+2026-11-19T08:03:32.8726700Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-19T08:03:32.8730030Z Initialized empty Git repository in /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed/.git/
+2026-11-19T08:03:32.8733850Z [command]/opt/homebrew/bin/git remote add origin https://github.com/djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T08:03:32.8833420Z ##[endgroup]
+2026-11-19T08:03:32.8835020Z ##[group]Disabling automatic garbage collection
+2026-11-19T08:03:32.8836560Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-11-19T08:03:32.8915390Z ##[endgroup]
+2026-11-19T08:03:32.8916760Z ##[group]Setting up auth
+2026-11-19T08:03:32.8925960Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T08:03:32.9036610Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-19T08:03:33.0668700Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T08:03:33.0772910Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-19T08:03:33.1930840Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-19T08:03:33.2020810Z ##[endgroup]
+2026-11-19T08:03:33.2023810Z ##[group]Fetching the repository
+2026-11-19T08:03:33.2029630Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8:refs/remotes/origin/main
+2026-11-19T08:03:34.9647640Z From https://github.com/djshellshoxxx/CLASSifiedisRUPTed
+2026-11-19T08:03:34.9651500Z  * [new ref]         d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8 -> origin/main
+2026-11-19T08:03:34.9656110Z ##[endgroup]
+2026-11-19T08:03:34.9657620Z ##[group]Determining the checkout info
+2026-11-19T08:03:34.9658960Z ##[endgroup]
+2026-11-19T08:03:34.9665160Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-11-19T08:03:34.9834980Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-19T08:03:34.9942930Z ##[group]Checking out the ref
+2026-11-19T08:03:34.9947100Z [command]/opt/homebrew/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-19T08:03:35.7501410Z Switched to a new branch 'main'
+2026-11-19T08:03:35.7601380Z branch 'main' set up to track 'origin/main'.
+2026-11-19T08:03:35.7963100Z ##[endgroup]
+2026-11-19T08:03:35.8294850Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-11-19T08:03:35.8396520Z d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8
+2026-11-19T08:03:35.9261810Z ##[group]Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+2026-11-19T08:03:35.9263130Z with:
+2026-11-19T08:03:35.9263740Z   node-version: 22.18.0
+2026-11-19T08:03:35.9264340Z   always-auth: false
+2026-11-19T08:03:35.9264800Z   check-latest: false
+2026-11-19T08:03:35.9270610Z   token: ***
+2026-11-19T08:03:35.9271140Z ##[endgroup]
+2026-11-19T08:03:36.2957130Z Attempting to download 22.18.0...
+2026-11-19T08:03:36.3078490Z (node:3500) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-19T08:03:36.3156050Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T08:03:37.2892860Z Acquiring 22.18.0 - arm64 from https://github.com/actions/node-versions/releases/download/22.18.0-16666198358/node-22.18.0-darwin-arm64.tar.gz
+2026-11-19T08:03:38.2532910Z Extracting ...
+2026-11-19T08:03:38.2931930Z [command]/usr/bin/tar xz --strip 1 -C /Users/runner/work/_temp/9a01198c-e796-4282-9577-d4a9efeba9c4 -f /Users/runner/work/_temp/2a5021fd-a7c9-4e8e-ac15-36d418680ddf
+2026-11-19T08:03:40.4943920Z Adding to the cache ...
+2026-11-19T08:03:44.0795080Z ##[group]Environment details
+2026-11-19T08:03:44.7133800Z node: v22.18.0
+2026-11-19T08:03:44.7260280Z npm: 10.9.3
+2026-11-19T08:03:44.7296410Z yarn: 1.22.22
+2026-11-19T08:03:44.7302350Z ##[endgroup]
+2026-11-19T08:03:44.7744460Z ##[group]Run corepack pnpm install --frozen-lockfile
+2026-11-19T08:03:44.7745320Z [36;1mcorepack pnpm install --frozen-lockfile[0m
+2026-11-19T08:03:44.7852170Z shell: /bin/bash -e {0}
+2026-11-19T08:03:44.7852770Z ##[endgroup]
+2026-11-19T08:03:46.3838560Z Scope: all 20 workspace projects
+2026-11-19T08:03:46.4193780Z Lockfile is up to date, resolution step is skipped
+2026-11-19T08:03:46.4392350Z Progress: resolved 1, reused 0, downloaded 0, added 0
+2026-11-19T08:03:46.4568620Z Packages: +54
+2026-11-19T08:03:46.4673500Z ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+2026-11-19T08:03:47.4454960Z Progress: resolved 54, reused 0, downloaded 20, added 5
+2026-11-19T08:03:48.2575920Z Progress: resolved 54, reused 0, downloaded 54, added 54, done
+2026-11-19T08:03:48.4318870Z 
+2026-11-19T08:03:48.4426370Z devDependencies:
+2026-11-19T08:03:48.4532220Z + @classrup/discovery 0.1.0 <- packages/discovery
+2026-11-19T08:03:48.4631760Z + @classrup/i18n 0.1.0 <- packages/i18n
+2026-11-19T08:03:48.4735670Z + @playwright/test 1.64.1
+2026-11-19T08:03:48.4860990Z + @types/node 22.20.5
+2026-11-19T08:03:48.4898820Z + esbuild 0.27.0
+2026-11-19T08:03:48.4906350Z + fake-indexeddb 6.2.6
+2026-11-19T08:03:48.4908790Z + fast-check 4.10.2
+2026-11-19T08:03:48.5012920Z + typescript 7.0.2
+2026-11-19T08:03:48.5056000Z + vitest 5.1.0
+2026-11-19T08:03:48.5115900Z + yaml 2.9.1
+2026-11-19T08:03:48.5120560Z 
+2026-11-19T08:03:48.5226810Z ╭ Warning ─────────────────────────────────────────────────────────────────────╮
+2026-11-19T08:03:48.5316780Z │                                                                              │
+2026-11-19T08:03:48.5418480Z │   Ignored build scripts: esbuild@0.27.0.                                     │
+2026-11-19T08:03:48.5437000Z │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+2026-11-19T08:03:48.5438940Z │   to run scripts.                                                            │
+2026-11-19T08:03:48.5440130Z │                                                                              │
+2026-11-19T08:03:48.5449620Z ╰──────────────────────────────────────────────────────────────────────────────╯
+2026-11-19T08:03:48.5451420Z Done in 2.4s using pnpm v10.28.0
+2026-11-19T08:03:48.5542070Z ##[group]Run node --test tests/cli/*.test.mjs
+2026-11-19T08:03:48.5542620Z [36;1mnode --test tests/cli/*.test.mjs[0m
+2026-11-19T08:03:48.5605370Z shell: /bin/bash -e {0}
+2026-11-19T08:03:48.5605750Z ##[endgroup]
+2026-11-19T08:03:48.6951030Z TAP version 13
+2026-11-19T08:03:48.8645550Z # Subtest: CLI rejects a symbolic link nested in the public asset tree without reading the external file
+2026-11-19T08:03:48.8747520Z ok 1 - CLI rejects a symbolic link nested in the public asset tree without reading the external file
+2026-11-19T08:03:48.8858140Z   ---
+2026-11-19T08:03:48.8959470Z   duration_ms: 66.637417
+2026-11-19T08:03:48.9061840Z   type: 'test'
+2026-11-19T08:03:48.9163390Z   ...
+2026-11-19T08:03:48.9266220Z # Subtest: CLI rejects a linked public directory before touching existing dist output
+2026-11-19T08:03:48.9369040Z ok 2 - CLI rejects a linked public directory before touching existing dist output
+2026-11-19T08:03:48.9470580Z   ---
+2026-11-19T08:03:48.9580700Z   duration_ms: 14.196875
+2026-11-19T08:03:48.9715250Z   type: 'test'
+2026-11-19T08:03:48.9821390Z   ...
+2026-11-19T08:03:48.9930120Z # Subtest: CLI build rejects linked public assets before reading or modifying external targets
+2026-11-19T08:03:49.0032380Z ok 3 - CLI build rejects linked public assets before reading or modifying external targets
+2026-11-19T08:03:49.0141750Z   ---
+2026-11-19T08:03:49.0301650Z   duration_ms: 51.90925
+2026-11-19T08:03:49.0489850Z   type: 'test'
+2026-11-19T08:03:49.0638150Z   ...
+2026-11-19T08:03:49.6359070Z # Subtest: independent Ed25519 listing fixture verifies without configuration, persistence or payload disclosure
+2026-11-19T08:03:49.6462390Z ok 4 - independent Ed25519 listing fixture verifies without configuration, persistence or payload disclosure
+2026-11-19T08:03:49.6559120Z   ---
+2026-11-19T08:03:49.6660490Z   duration_ms: 379.019875
+2026-11-19T08:03:49.6775760Z   type: 'test'
+2026-11-19T08:03:49.6840910Z   ...
+2026-11-19T08:03:49.9485900Z # Subtest: human output contains only verified metadata and explicit evidence limits
+2026-11-19T08:03:49.9587880Z ok 5 - human output contains only verified metadata and explicit evidence limits
+2026-11-19T08:03:49.9688270Z   ---
+2026-11-19T08:03:49.9789640Z   duration_ms: 313.315
+2026-11-19T08:03:49.9889910Z   type: 'test'
+2026-11-19T08:03:49.9939220Z   ...
+2026-11-19T08:03:50.2928110Z # Subtest: standalone signed withdrawal verifies without claiming its target or sequence history is known
+2026-11-19T08:03:50.3030220Z ok 6 - standalone signed withdrawal verifies without claiming its target or sequence history is known
+2026-11-19T08:03:50.3132660Z   ---
+2026-11-19T08:03:50.3233770Z   duration_ms: 342.344875
+2026-11-19T08:03:50.3334570Z   type: 'test'
+2026-11-19T08:03:50.3435650Z   ...
+2026-11-19T08:03:51.5278120Z # Subtest: subprocess rejects tampering, wrong CID, invalid signature and unknown envelope fields
+2026-11-19T08:03:51.5363160Z ok 7 - subprocess rejects tampering, wrong CID, invalid signature and unknown envelope fields
+2026-11-19T08:03:51.5411630Z   ---
+2026-11-19T08:03:51.5444970Z   duration_ms: 1231.947208
+2026-11-19T08:03:51.5447610Z   type: 'test'
+2026-11-19T08:03:51.5448350Z   ...
+2026-11-19T08:03:54.0158020Z # Subtest: subprocess rejects correctly signed unsupported types, substituted owners, private fields and expired records
+2026-11-19T08:03:54.0262690Z ok 8 - subprocess rejects correctly signed unsupported types, substituted owners, private fields and expired records
+2026-11-19T08:03:54.0361150Z   ---
+2026-11-19T08:03:54.0467780Z   duration_ms: 2479.50625
+2026-11-19T08:03:54.0566830Z   type: 'test'
+2026-11-19T08:03:54.0668590Z   ...
+2026-11-19T08:03:54.0775000Z # Subtest: shared validation preserves PWA retain acceptance and exact rejection codes
+2026-11-19T08:03:54.0803820Z ok 9 - shared validation preserves PWA retain acceptance and exact rejection codes
+2026-11-19T08:03:54.0873180Z   ---
+2026-11-19T08:03:54.0875010Z   duration_ms: 42.256167
+2026-11-19T08:03:54.0875420Z   type: 'test'
+2026-11-19T08:03:54.0876180Z   ...
+2026-11-19T08:03:55.1261020Z # Subtest: malformed JSON, invalid UTF-8, empty input and private input errors are redacted
+2026-11-19T08:03:55.1360490Z ok 10 - malformed JSON, invalid UTF-8, empty input and private input errors are redacted
+2026-11-19T08:03:55.1462850Z   ---
+2026-11-19T08:03:55.1494780Z   duration_ms: 1079.778333
+2026-11-19T08:03:55.1495190Z   type: 'test'
+2026-11-19T08:03:55.1495450Z   ...
+2026-11-19T08:03:55.6809700Z # Subtest: input size is bounded and overcomplex signed-domain JSON fails without disclosure
+2026-11-19T08:03:55.6909450Z ok 11 - input size is bounded and overcomplex signed-domain JSON fails without disclosure
+2026-11-19T08:03:55.7010700Z   ---
+2026-11-19T08:03:55.7011460Z   duration_ms: 558.084458
+2026-11-19T08:03:55.7011760Z   type: 'test'
+2026-11-19T08:03:55.7012040Z   ...
+2026-11-19T08:03:55.7012690Z # Subtest: actual descriptor read cap rejects a file that grows after both metadata checks
+2026-11-19T08:03:55.7013830Z ok 12 - actual descriptor read cap rejects a file that grows after both metadata checks
+2026-11-19T08:03:55.7014610Z   ---
+2026-11-19T08:03:55.7014900Z   duration_ms: 5.039166
+2026-11-19T08:03:55.7015290Z   type: 'test'
+2026-11-19T08:03:55.7015680Z   ...
+2026-11-19T08:03:56.5180600Z # Subtest: directories, final symlinks and missing files fail with stable exits
+2026-11-19T08:03:56.5283440Z ok 13 - directories, final symlinks and missing files fail with stable exits
+2026-11-19T08:03:56.5383450Z   ---
+2026-11-19T08:03:56.5407280Z   duration_ms: 824.521042
+2026-11-19T08:03:56.5415580Z   type: 'test'
+2026-11-19T08:03:56.5425210Z   ...
+2026-11-19T08:03:57.2348480Z # Subtest: FIFO and device inputs fail promptly without opening a stream
+2026-11-19T08:03:57.2450990Z ok 14 - FIFO and device inputs fail promptly without opening a stream
+2026-11-19T08:03:57.2552630Z   ---
+2026-11-19T08:03:57.2654360Z   duration_ms: 716.912834
+2026-11-19T08:03:57.2756210Z   type: 'test'
+2026-11-19T08:03:57.2796390Z   ...
+2026-11-19T08:04:01.2704760Z # Subtest: unknown, repeated, missing, network and stdin options never echo supplied values
+2026-11-19T08:04:01.2706370Z ok 15 - unknown, repeated, missing, network and stdin options never echo supplied values
+2026-11-19T08:04:01.2706880Z   ---
+2026-11-19T08:04:01.2707180Z   duration_ms: 4040.457708
+2026-11-19T08:04:01.2707490Z   type: 'test'
+2026-11-19T08:04:01.2707850Z   ...
+2026-11-19T08:04:01.3460140Z # Subtest: runtime dependency failures use the fixed domain infrastructure error
+2026-11-19T08:04:01.3461670Z ok 16 - runtime dependency failures use the fixed domain infrastructure error
+2026-11-19T08:04:01.3462200Z   ---
+2026-11-19T08:04:01.3462480Z   duration_ms: 77.860417
+2026-11-19T08:04:01.3462850Z   type: 'test'
+2026-11-19T08:04:01.3463090Z   ...
+2026-11-19T08:04:01.7299160Z # Subtest: record verification performs no network connection and help needs no setup
+2026-11-19T08:04:01.7301540Z ok 17 - record verification performs no network connection and help needs no setup
+2026-11-19T08:04:01.7302230Z   ---
+2026-11-19T08:04:01.7302570Z   duration_ms: 383.71775
+2026-11-19T08:04:01.7303720Z   type: 'test'
+2026-11-19T08:04:01.7305240Z   ...
+2026-11-19T08:04:01.7402470Z # Subtest: worker pre-caches only fixed public assets without credentials
+2026-11-19T08:04:01.7403180Z ok 18 - worker pre-caches only fixed public assets without credentials
+2026-11-19T08:04:01.7403530Z   ---
+2026-11-19T08:04:01.7403810Z   duration_ms: 40.497375
+2026-11-19T08:04:01.7404050Z   type: 'test'
+2026-11-19T08:04:01.7404350Z   ...
+2026-11-19T08:04:01.7404890Z # Subtest: failed precache rejects installation and deletes only the incomplete new cache
+2026-11-19T08:04:01.7405730Z ok 19 - failed precache rejects installation and deletes only the incomplete new cache
+2026-11-19T08:04:01.7406120Z   ---
+2026-11-19T08:04:01.7406400Z   duration_ms: 1.224167
+2026-11-19T08:04:01.7406640Z   type: 'test'
+2026-11-19T08:04:01.7406930Z   ...
+2026-11-19T08:04:01.7407420Z # Subtest: activation only removes old versions owned by the same application scope
+2026-11-19T08:04:01.7408990Z ok 20 - activation only removes old versions owned by the same application scope
+2026-11-19T08:04:01.7409460Z   ---
+2026-11-19T08:04:01.7409660Z   duration_ms: 0.523708
+2026-11-19T08:04:01.7409920Z   type: 'test'
+2026-11-19T08:04:01.7410170Z   ...
+2026-11-19T08:04:01.7410610Z # Subtest: private paths, queries, other origins and writes never enter worker handling
+2026-11-19T08:04:01.7411320Z ok 21 - private paths, queries, other origins and writes never enter worker handling
+2026-11-19T08:04:01.7412260Z   ---
+2026-11-19T08:04:01.7412530Z   duration_ms: 0.652333
+2026-11-19T08:04:01.7412790Z   type: 'test'
+2026-11-19T08:04:01.7413000Z   ...
+2026-11-19T08:04:01.7413400Z # Subtest: runtime and package manager compatibility fail closed
+2026-11-19T08:04:01.7413930Z ok 22 - runtime and package manager compatibility fail closed
+2026-11-19T08:04:01.7414440Z   ---
+2026-11-19T08:04:01.7415640Z   duration_ms: 3.046791
+2026-11-19T08:04:01.7416130Z   type: 'test'
+2026-11-19T08:04:01.7416400Z   ...
+2026-11-19T08:04:01.7417060Z # Subtest: setup accepts validated explicit flags only
+2026-11-19T08:04:01.7417640Z ok 23 - setup accepts validated explicit flags only
+2026-11-19T08:04:01.7418230Z   ---
+2026-11-19T08:04:01.7418550Z   duration_ms: 1.842709
+2026-11-19T08:04:01.7418950Z   type: 'test'
+2026-11-19T08:04:01.7419340Z   ...
+2026-11-19T08:04:01.7419920Z # Subtest: setup preserves config byte-for-byte and unrelated data on repeat
+2026-11-19T08:04:01.7420580Z ok 24 - setup preserves config byte-for-byte and unrelated data on repeat
+2026-11-19T08:04:01.7420880Z   ---
+2026-11-19T08:04:01.7421150Z   duration_ms: 42.706834
+2026-11-19T08:04:01.7421440Z   type: 'test'
+2026-11-19T08:04:01.7421620Z   ...
+2026-11-19T08:04:01.7422230Z # Subtest: concurrent setups and interrupted temporary files never corrupt config
+2026-11-19T08:04:01.7422830Z ok 25 - concurrent setups and interrupted temporary files never corrupt config
+2026-11-19T08:04:01.7423230Z   ---
+2026-11-19T08:04:01.7423480Z   duration_ms: 17.810208
+2026-11-19T08:04:01.7423730Z   type: 'test'
+2026-11-19T08:04:01.7423990Z   ...
+2026-11-19T08:04:01.7424410Z # Subtest: invalid existing config is preserved and missing config is actionable
+2026-11-19T08:04:01.7425050Z ok 26 - invalid existing config is preserved and missing config is actionable
+2026-11-19T08:04:01.7425450Z   ---
+2026-11-19T08:04:01.7425690Z   duration_ms: 6.613292
+2026-11-19T08:04:01.7425980Z   type: 'test'
+2026-11-19T08:04:01.7426180Z   ...
+2026-11-19T08:04:01.7426610Z # Subtest: setup fails clearly when config path is not a directory
+2026-11-19T08:04:01.7427100Z ok 27 - setup fails clearly when config path is not a directory
+2026-11-19T08:04:01.7427470Z   ---
+2026-11-19T08:04:01.7427740Z   duration_ms: 3.66075
+2026-11-19T08:04:01.7427930Z   type: 'test'
+2026-11-19T08:04:01.7428190Z   ...
+2026-11-19T08:04:01.7428500Z # Subtest: occupied port is a blocking diagnostic
+2026-11-19T08:04:01.7428990Z ok 28 - occupied port is a blocking diagnostic
+2026-11-19T08:04:01.7429270Z   ---
+2026-11-19T08:04:01.7429590Z   duration_ms: 9.813542
+2026-11-19T08:04:01.7429880Z   type: 'test'
+2026-11-19T08:04:01.7430080Z   ...
+2026-11-19T08:04:01.7430640Z # Subtest: preview serves only public output with security headers, correct base and methods
+2026-11-19T08:04:01.7431290Z ok 29 - preview serves only public output with security headers, correct base and methods
+2026-11-19T08:04:01.7431780Z   ---
+2026-11-19T08:04:01.7432090Z   duration_ms: 59.336667
+2026-11-19T08:04:01.7432350Z   type: 'test'
+2026-11-19T08:04:01.7432640Z   ...
+2026-11-19T08:04:01.7433030Z # Subtest: CLI failures exit nonzero and help is available without setup
+2026-11-19T08:04:01.7433610Z ok 30 - CLI failures exit nonzero and help is available without setup
+2026-11-19T08:04:01.7434020Z   ---
+2026-11-19T08:04:01.7434220Z   duration_ms: 277.524042
+2026-11-19T08:04:01.7434510Z   type: 'test'
+2026-11-19T08:04:01.7434700Z   ...
+2026-11-19T08:04:01.7435210Z # Subtest: explicit configure changes only validated fields and preserves on failure
+2026-11-19T08:04:01.7436420Z ok 31 - explicit configure changes only validated fields and preserves on failure
+2026-11-19T08:04:01.7436850Z   ---
+2026-11-19T08:04:01.7437080Z   duration_ms: 32.332708
+2026-11-19T08:04:01.7437310Z   type: 'test'
+2026-11-19T08:04:01.7437550Z   ...
+2026-11-19T08:04:01.7439980Z # ✘ [ERROR] Expected ";" but found "is"
+2026-11-19T08:04:01.7440800Z #     ../../../../../private/var/folders/q2/p1t6rgxj5fj32g1dc7dmd49r0000gn/T/classrup setup with spaces FneDKi/apps/pwa/src/main.ts:1:5:
+2026-11-19T08:04:01.7441600Z #       1 │ this is invalid typescript !
+2026-11-19T08:04:01.7442190Z #         │      ~~
+2026-11-19T08:04:01.7442610Z #         ╵      ;
+2026-11-19T08:04:01.7443080Z # Subtest: build failure preserves prior output and successful build removes stale assets
+2026-11-19T08:04:01.7443800Z ok 32 - build failure preserves prior output and successful build removes stale assets
+2026-11-19T08:04:01.7444300Z   ---
+2026-11-19T08:04:01.7444500Z   duration_ms: 92.132792
+2026-11-19T08:04:01.7444770Z   type: 'test'
+2026-11-19T08:04:01.7445040Z   ...
+2026-11-19T08:04:01.7445250Z 1..32
+2026-11-19T08:04:01.7445530Z # tests 32
+2026-11-19T08:04:01.7445800Z # suites 0
+2026-11-19T08:04:01.7447180Z # pass 32
+2026-11-19T08:04:01.7447830Z # fail 0
+2026-11-19T08:04:01.7448400Z # cancelled 0
+2026-11-19T08:04:01.7449180Z # skipped 0
+2026-11-19T08:04:01.7449700Z # todo 0
+2026-11-19T08:04:01.7450390Z # duration_ms 13066.991333
+2026-11-19T08:04:01.7616240Z ##[group]Run corepack pnpm run setup --non-interactive
+2026-11-19T08:04:01.7616900Z [36;1mcorepack pnpm run setup --non-interactive[0m
+2026-11-19T08:04:01.7713260Z shell: /bin/bash -e {0}
+2026-11-19T08:04:01.7713580Z ##[endgroup]
+2026-11-19T08:04:02.2111140Z 
+2026-11-19T08:04:02.2112680Z > classrup@ setup /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T08:04:02.2114150Z > node tools/cli/classrup.mjs setup --non-interactive
+2026-11-19T08:04:02.2114930Z 
+2026-11-19T08:04:02.4105470Z Created .classrup/local.json. Browser vault data is untouched.
+2026-11-19T08:04:02.4291440Z ##[group]Run corepack pnpm run setup --non-interactive
+2026-11-19T08:04:02.4291840Z [36;1mcorepack pnpm run setup --non-interactive[0m
+2026-11-19T08:04:02.4369090Z shell: /bin/bash -e {0}
+2026-11-19T08:04:02.4369670Z ##[endgroup]
+2026-11-19T08:04:02.8039710Z 
+2026-11-19T08:04:02.8040320Z > classrup@ setup /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T08:04:02.8040930Z > node tools/cli/classrup.mjs setup --non-interactive
+2026-11-19T08:04:02.8041150Z 
+2026-11-19T08:04:02.8897270Z Preserved .classrup/local.json. Browser vault data is untouched.
+2026-11-19T08:04:02.9042030Z ##[group]Run corepack pnpm run doctor
+2026-11-19T08:04:02.9042480Z [36;1mcorepack pnpm run doctor[0m
+2026-11-19T08:04:02.9076760Z shell: /bin/bash -e {0}
+2026-11-19T08:04:02.9076970Z ##[endgroup]
+2026-11-19T08:04:03.2035430Z 
+2026-11-19T08:04:03.2052080Z > classrup@ doctor /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T08:04:03.2066720Z > node tools/cli/classrup.mjs doctor
+2026-11-19T08:04:03.2089170Z 
+2026-11-19T08:04:03.3273510Z Local prerequisites ready. Relay: optional; no relay required or configured.
+2026-11-19T08:04:03.3412470Z ##[group]Run corepack pnpm build
+2026-11-19T08:04:03.3412740Z [36;1mcorepack pnpm build[0m
+2026-11-19T08:04:03.3449690Z shell: /bin/bash -e {0}
+2026-11-19T08:04:03.3449920Z ##[endgroup]
+2026-11-19T08:04:03.7351000Z 
+2026-11-19T08:04:03.7472450Z > classrup@ build /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T08:04:03.7473650Z > node packages/platform/scripts/gen-registry.mjs --check --strict && node tools/cli/classrup.mjs build
+2026-11-19T08:04:03.7574660Z 
+2026-11-19T08:04:04.6078420Z registry: 18 features, 148 modules, 565 edges, acyclic, 0 specs missing, 66579 bytes, hash sha256-tTCcMiLdFtldMU8BIh3ooR6qsHOe4UE6OddOcSPQwWQ, generation_ms 568, up to date
+2026-11-19T08:04:04.7896370Z Built dist/. Publish these public assets over HTTPS.
+2026-11-19T08:04:04.8023380Z ##[group]Run echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/pw-browsers" >> "$GITHUB_ENV"
+2026-11-19T08:04:04.8023920Z [36;1mecho "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/pw-browsers" >> "$GITHUB_ENV"[0m
+2026-11-19T08:04:04.8058760Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-11-19T08:04:04.8059050Z ##[endgroup]
+2026-11-19T08:04:04.9574050Z ##[group]Run actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+2026-11-19T08:04:04.9574430Z with:
+2026-11-19T08:04:04.9574600Z   path: /Users/runner/work/_temp/pw-browsers
+2026-11-19T08:04:04.9575050Z   key: playwright-macOS-chromium-f5b63e57905c7d4a2f94bd7a67f84379cc11f0be924c044a25107c4dd9116364
+2026-11-19T08:04:04.9575810Z   enableCrossOsArchive: false
+2026-11-19T08:04:04.9576010Z   fail-on-cache-miss: false
+2026-11-19T08:04:04.9576200Z   lookup-only: false
+2026-11-19T08:04:04.9576360Z   save-always: false
+2026-11-19T08:04:04.9576540Z env:
+2026-11-19T08:04:04.9576750Z   PLAYWRIGHT_BROWSERS_PATH: /Users/runner/work/_temp/pw-browsers
+2026-11-19T08:04:04.9577030Z ##[endgroup]
+2026-11-19T08:04:05.0700820Z (node:4224) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-19T08:04:05.0702950Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T08:04:05.2503310Z (node:4224) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-11-19T08:04:05.2914410Z Cache hit for: playwright-macOS-chromium-f5b63e57905c7d4a2f94bd7a67f84379cc11f0be924c044a25107c4dd9116364
+2026-11-19T08:04:06.4435550Z Received 37748736 of 272389724 (13.9%), 35.9 MBs/sec
+2026-11-19T08:04:07.5311820Z Received 134217728 of 272389724 (49.3%), 61.1 MBs/sec
+2026-11-19T08:04:08.5325890Z Received 218103808 of 272389724 (80.1%), 67.2 MBs/sec
+2026-11-19T08:04:09.3961670Z Received 272389724 of 272389724 (100.0%), 65.6 MBs/sec
+2026-11-19T08:04:09.3979240Z Cache Size: ~260 MB (272389724 B)
+2026-11-19T08:04:09.4055290Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/6706ac7b-eda9-4b4d-a12e-56c942cf18df/cache.tzst -P -C /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed --delay-directory-restore --use-compress-program unzstd
+2026-11-19T08:04:11.1456940Z Cache restored successfully
+2026-11-19T08:04:11.1982230Z Cache restored from key: playwright-macOS-chromium-f5b63e57905c7d4a2f94bd7a67f84379cc11f0be924c044a25107c4dd9116364
+2026-11-19T08:04:11.2318550Z ##[group]Run corepack pnpm exec playwright install --with-deps chromium
+2026-11-19T08:04:11.2319240Z [36;1mcorepack pnpm exec playwright install --with-deps chromium[0m
+2026-11-19T08:04:11.2366110Z shell: /bin/bash -e {0}
+2026-11-19T08:04:11.2366390Z env:
+2026-11-19T08:04:11.2366700Z   PLAYWRIGHT_BROWSERS_PATH: /Users/runner/work/_temp/pw-browsers
+2026-11-19T08:04:11.2367160Z ##[endgroup]
+2026-11-19T08:04:12.3838190Z ##[group]Run node tests/cli/browser-smoke.mjs
+2026-11-19T08:04:12.3838700Z [36;1mnode tests/cli/browser-smoke.mjs[0m
+2026-11-19T08:04:12.3886320Z shell: /bin/bash -e {0}
+2026-11-19T08:04:12.3886600Z env:
+2026-11-19T08:04:12.3886970Z   PLAYWRIGHT_BROWSERS_PATH: /Users/runner/work/_temp/pw-browsers
+2026-11-19T08:04:12.3887380Z ##[endgroup]
+2026-11-19T08:04:15.8522010Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T08:04:17.4562290Z preview: Chromium real-app startup, reload and offline shell passed
+2026-11-19T08:04:20.5362320Z ##[group]Run git diff --exit-code
+2026-11-19T08:04:20.5439200Z [36;1mgit diff --exit-code[0m
+2026-11-19T08:04:20.5519980Z shell: /bin/bash -e {0}
+2026-11-19T08:04:20.5520330Z env:
+2026-11-19T08:04:20.5520730Z   PLAYWRIGHT_BROWSERS_PATH: /Users/runner/work/_temp/pw-browsers
+2026-11-19T08:04:20.5521170Z ##[endgroup]
+2026-11-19T08:04:21.5019160Z Post job cleanup.
+2026-11-19T08:04:21.6663560Z Cache hit occurred on the primary key playwright-macOS-chromium-f5b63e57905c7d4a2f94bd7a67f84379cc11f0be924c044a25107c4dd9116364, not saving cache.
+2026-11-19T08:04:21.6671970Z (node:4507) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-19T08:04:21.6673130Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T08:04:21.6805410Z Post job cleanup.
+2026-11-19T08:04:21.8444400Z (node:4542) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-19T08:04:21.8544320Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-19T08:04:21.8666660Z Post job cleanup.
+2026-11-19T08:04:22.0116400Z [command]/opt/homebrew/bin/git version
+2026-11-19T08:04:22.0144950Z git version 2.56.1
+2026-11-19T08:04:22.0319080Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/3be647b8-435a-4956-bce3-f80d9e4bdc14/.gitconfig'
+2026-11-19T08:04:22.0347410Z Temporarily overriding HOME='/Users/runner/work/_temp/3be647b8-435a-4956-bce3-f80d9e4bdc14' before making global git config changes
+2026-11-19T08:04:22.0352430Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-19T08:04:22.0455440Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/CLASSifiedisRUPTed/CLASSifiedisRUPTed
+2026-11-19T08:04:22.0520370Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-19T08:04:22.0525140Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-19T08:04:22.2375740Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-19T08:04:22.2438480Z http.https://github.com/.extraheader
+2026-11-19T08:04:22.2684510Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-19T08:04:22.2877980Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-19T08:04:22.4596930Z Cleaning up orphan processes
+2026-11-19T08:04:23.1542730Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830, actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683, actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

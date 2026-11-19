@@ -1,0 +1,65 @@
+# clean-install (ubuntu-latest, 24.x) / 135392596712
+2026-11-19T07:02:29.5067275Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+2026-11-19T07:02:41.7147476Z ℹ tests 32
+2026-11-19T07:02:41.7148085Z ℹ pass 32
+2026-11-19T07:02:41.7148367Z ℹ fail 0
+2026-11-19T07:02:41.7148610Z ℹ cancelled 0
+2026-11-19T07:02:41.7148876Z ℹ skipped 0
+2026-11-19T07:02:41.7149102Z ℹ todo 0
+2026-11-19T07:06:19.5730233Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:06:20.9871185Z preview: Chromium real-app startup, reload and offline shell passed
+
+# clean-install (macos-latest, 24.x) / 135392596738
+2026-11-19T07:02:04.3604850Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+2026-11-19T07:02:12.6400950Z ℹ tests 32
+2026-11-19T07:02:12.6401400Z ℹ pass 32
+2026-11-19T07:02:12.6401600Z ℹ fail 0
+2026-11-19T07:02:12.6401790Z ℹ cancelled 0
+2026-11-19T07:02:12.6401940Z ℹ skipped 0
+2026-11-19T07:02:12.6402120Z ℹ todo 0
+2026-11-19T07:02:18.3375460Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:02:19.6707490Z preview: Chromium real-app startup, reload and offline shell passed
+
+# clean-install (windows-latest, 24.x) / 135392596764
+2026-11-19T07:01:46.1993802Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+2026-11-19T07:02:21.6753796Z ℹ tests 32
+2026-11-19T07:02:21.6754634Z ℹ pass 31
+2026-11-19T07:02:21.6754941Z ℹ fail 0
+2026-11-19T07:02:21.6755619Z ℹ cancelled 0
+2026-11-19T07:02:21.6755969Z ℹ skipped 1
+2026-11-19T07:02:21.6756269Z ℹ todo 0
+2026-11-19T07:05:47.2311472Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:05:48.8380991Z preview: Chromium real-app startup, reload and offline shell passed
+
+# clean-install (macos-latest, 22.18.0) / 135392596858
+2026-11-19T07:07:08.5000870Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+2026-11-19T07:07:26.6663700Z # tests 32
+2026-11-19T07:07:26.6664060Z # pass 32
+2026-11-19T07:07:26.6664280Z # fail 0
+2026-11-19T07:07:26.6664430Z # cancelled 0
+2026-11-19T07:07:26.6664710Z # skipped 0
+2026-11-19T07:07:26.6664940Z # todo 0
+2026-11-19T07:07:36.0544040Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:07:37.5062360Z preview: Chromium real-app startup, reload and offline shell passed
+
+# clean-install (windows-latest, 22.18.0) / 135392596892
+2026-11-19T07:02:40.8757781Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+2026-11-19T07:03:24.8349098Z # tests 32
+2026-11-19T07:03:24.8351117Z # pass 31
+2026-11-19T07:03:24.8351403Z # fail 0
+2026-11-19T07:03:24.8351705Z # cancelled 0
+2026-11-19T07:03:24.8352866Z # skipped 1
+2026-11-19T07:03:24.8353138Z # todo 0
+2026-11-19T07:06:45.6612759Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:06:47.2566365Z preview: Chromium real-app startup, reload and offline shell passed
+
+# clean-install (ubuntu-latest, 22.18.0) / 135392597135
+2026-11-19T07:10:12.1170934Z HEAD is now at 101265f Merge a111eefb907a9f039f56777715e20b4976ea3d87 into 044c213d90d62f1f06edb8ca1b9c2141d3991c27
+2026-11-19T07:10:32.1638449Z # tests 32
+2026-11-19T07:10:32.1639041Z # pass 32
+2026-11-19T07:10:32.1639237Z # fail 0
+2026-11-19T07:10:32.1639555Z # cancelled 0
+2026-11-19T07:10:32.1639847Z # skipped 0
+2026-11-19T07:10:32.1640117Z # todo 0
+2026-11-19T07:11:09.0578968Z dev: Chromium real-app startup, reload and offline shell passed
+2026-11-19T07:11:10.5752757Z preview: Chromium real-app startup, reload and offline shell passed

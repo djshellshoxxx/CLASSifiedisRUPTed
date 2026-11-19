@@ -15,9 +15,10 @@ repairs; unrelated feature implementation belongs in subsequent work.
   and hardware acceptance remain distinct below.
 - Feature-registry extraction from PR #8 through PR #48, including strict safe
   generation and read-only catalog queries. Runtime activation is still pending.
-- The consolidation branch preserves PR #51 test improvements and PR #53's F1a
-  public-record verification command. Its main-merge/qualification status belongs
-  to the linked consolidation record; broader CLI phases remain open.
+- Main now includes PR #51 test improvements and PR #53's F1a public-record
+  verification command through the verified source merge in PR #54. Its exact
+  main qualification and documentation-closeout status belongs to the linked
+  consolidation record; broader CLI phases remain open.
 
 ## Priority and dependency register
 

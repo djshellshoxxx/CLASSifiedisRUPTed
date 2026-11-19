@@ -1,0 +1,42 @@
+[
+  {
+    "name": "backup",
+    "command": [
+      "corepack",
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "tests/integration/alpha-security.test.ts",
+      "--pool=forks",
+      "--maxWorkers=1",
+      "--testNamePattern",
+      "restores an encrypted signed backup and rejects a bad later record without initializing the target",
+      "--reporter=verbose",
+      "--reporter=json",
+      "--outputFile=../evidence/isolated-backup.json"
+    ],
+    "exit_code": 0,
+    "seconds": 21.26
+  },
+  {
+    "name": "withdrawal",
+    "command": [
+      "corepack",
+      "pnpm",
+      "exec",
+      "vitest",
+      "run",
+      "tests/integration/mutiny-persistence.test.ts",
+      "--pool=forks",
+      "--maxWorkers=1",
+      "--testNamePattern",
+      "keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget",
+      "--reporter=verbose",
+      "--reporter=json",
+      "--outputFile=../evidence/isolated-withdrawal.json"
+    ],
+    "exit_code": 0,
+    "seconds": 61.41
+  }
+]

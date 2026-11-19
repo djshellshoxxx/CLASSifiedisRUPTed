@@ -1,0 +1,31 @@
+[
+  {
+    "name": "tooling",
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "tests/tooling/ci-plan.test.mjs",
+      "tests/tooling/feature-registry.test.mjs",
+      "tests/tooling/status.test.mjs",
+      "tests/tooling/trace.test.mjs"
+    ],
+    "exit_code": 0,
+    "seconds": 37.05
+  },
+  {
+    "name": "cli",
+    "command": [
+      "node",
+      "--test",
+      "--test-concurrency=1",
+      "tests/cli/public-nested-assets.test.mjs",
+      "tests/cli/public-symlink.test.mjs",
+      "tests/cli/records.test.mjs",
+      "tests/cli/serviceworker.test.mjs",
+      "tests/cli/setup.test.mjs"
+    ],
+    "exit_code": 0,
+    "seconds": 46.37
+  }
+]

@@ -1,6 +1,77 @@
 # Comprehensive branch consolidation
 
-## Scope and current checkpoint
+## Final runtime qualification and documentation closeout — November 19, 2026
+
+PR [#54](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/54) merged into
+main at **2026-11-19 07:30:13 UTC**, as
+`d7c03a28c93db0d6a0b33a7127b35f10b6faa5a8`. The actual merge preserves parents
+`044c213d90d62f1f06edb8ca1b9c2141d3991c27` and
+`a111eefb907a9f039f56777715e20b4976ea3d87`; its tree
+`7a791921eb6a820bf4cd4d203e31a76f6fe5cd4a` exactly matches the tested candidate.
+This checkpoint supersedes the initial publication-state observations below.
+The code consolidation and both fresh qualification stages are complete.
+Documentation PR [#55](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/55)
+carries this final evidence; its actual GitHub merge result identifies the final
+main commit after the documentation-only closeout.
+
+- Source PR [#53](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/53) at `d81094688ac116c84c09f3105c7b3f6b4c472793` and its PR [#51](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51) ancestor `7b729df38dddf59c4e60e245bdf1ca43546b1e7b` are verified ancestors of actual main. GitHub automatically marked #53 merged at `07:30:15 UTC` and #51 at `07:30:16 UTC`. These are two incorporated source heads and two automatic PR resolutions, from one explicit consolidation merge action.
+- Dedicated integration head: `a111eefb907a9f039f56777715e20b4976ea3d87`. Remote source merge `098d970dd9515d6c43b779aee07cab6d696acd8d` retains the original source parents. Local source merge `2401a6cc` is a distinct commit with the same source tree and parents.
+- Fresh [CLI workflow 44474363663](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663): **success**, first attempt, all six OS/Node jobs. **190 repeated platform assertions passed, zero failed, two intentional Windows POSIX-only skips**. Setup, repeat setup, doctor, production build, real development/preview browser smoke and tracked-file checks passed everywhere.
+- Fresh [Alpha workflow 44474363888](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363888): **success**, first attempt. **701 domain assertions, 27 tooling tests and 72 Chromium/Firefox/WebKit journeys passed**, with zero failed/skipped tests. Typecheck, all 148 specifications, dependency/registry checks, 331 independent money vectors, bundle budget, setup and build passed. Both workflows tested `101265f1fa9dee9e59d177174e4b55bd3ce3bf26`, whose tree is identical to actual main.
+- [Complete combined qualification and nine raw job logs](evidence/20261118/pr54-ci/final-qualification.json) preserve exact checkouts, job identities, counts, byte sizes and SHA-256 digests. [Alpha excerpts](evidence/20261118/pr54-ci/alpha-excerpts.txt) and [CLI excerpts](evidence/20261118/pr54-ci/cli-excerpts.txt) provide concise output. The prior CLI-only checkpoint remains archived separately.
+- Actual main push runs [Alpha 44480107217](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107217) and [CLI 44480107222](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44480107222): **success**, first attempt, all nine jobs, independently verified from their own `d7c03a28` checkouts and full logs. Main passed **701 domain assertions, 27 tooling tests, all 72 browser journeys, and 190 repeated CLI assertions**, with zero failures and only the two intended Windows POSIX test skips. All static/vector/setup/build/smoke checks passed. [Complete main qualification and nine raw job logs](evidence/20261118/main-ci/final-qualification.json), [main log excerpts](evidence/20261118/main-ci/final-excerpts.txt), and [archive SHA-256 manifest](evidence/20261118/main-ci/SHA256SUMS.txt) preserve the actual post-merge evidence. The [initial queued observation](evidence/20261118/post-integration-state.json) remains a historical checkpoint, not the final result.
+- [Local qualification](evidence/20261118/LOCAL_QUALIFICATION.md): typecheck, 148 specifications, boundaries, registry, vectors/bundle budget, dependency audit, setup/build, 27 tooling tests, 32 CLI tests and ten independent probes passed. The complete domain invocation had 699 passes and two timeouts; both cases subsequently passed individually at the original limits. All 24 local browser cases failed at launch because the command sandbox denied Chromium's socket; zero app journeys ran locally. The standard escalation request was rejected by the environment policy. Initial unsuccessful/incomplete observations remain archived.
+
+### Final branch dispositions
+
+The two initial A source histories are now fully incorporated into main. The
+initial 50 D, four C and one E classifications remain immutable discovery
+observations. No new partial recovery or source repair is counted; prior
+registry extraction and the prior macOS rerun are historical work. All
+pre-existing remote branches are preserved.
+
+The [completed ref/PR reconciliation](evidence/20261118/final-reconciliation.md)
+confirms **52 original cleanup candidates**: the 50 initial D histories plus
+the two newly incorporated A source heads. All 57 original non-main refs
+remain unchanged and no candidate is needed as an open PR source or base.
+**34 original non-main heads are now ancestors of main**, comprising 32 prior
+heads plus the two newly integrated sources. Four unfinished product/specification
+heads and one diagnostic head remain preserved. No branches have been deleted.
+
+The final original-branch accounting is disjoint:
+
+| Disposition of original branch names | Count |
+|---|---:|
+| Heads ancestral to main (32 prior plus 2 newly incorporated) | 34 |
+| Contributions previously integrated by content; source heads non-ancestral | 6 |
+| Superseded or adapted historical references | 12 |
+| Preserved product/specification branches requiring development | 4 |
+| Preserved diagnostic branch | 1 |
+| Main target | 1 |
+| **Total original branches** | **58** |
+
+The 12 reference histories comprise ten older source/status heads, one adapted
+CLI proposal and one superseded stacked documentation head. Together with the
+32 prior ancestors and six content-integrated histories, they formed the
+50 initial D branches. These are branch-name counts, including historical
+aliases; they are not counts of unique commits or independent merge operations.
+
+The two new task branches,
+`integration/comprehensive-consolidation` and
+`docs/consolidation-qualification-20261118`, are outside the original 58-branch
+discovery denominator. Documentation PR [#55](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/55)
+contains the final post-main evidence. Once its merge is recorded, both new task
+branches may also enter the cleanup review list, giving **54 total candidates
+including the 52 original candidates**. No deletion is performed. The
+[final pre-closeout ref check](evidence/20261118/closeout-ref-check.json) preserves
+the last original-ref/PR reconciliation before publication; the final merge
+identity and post-closeout observation are recorded in PR #55.
+
+The completion record, source provenance and exact closeout guards are in the
+[continuation handoff](CONSOLIDATION_HANDOFF.md). Product priorities remain in
+[REMAINING_WORK.md](REMAINING_WORK.md). No deployment or release occurred.
+
+## Scope and initial publication checkpoint
 
 This is the November 18, 2026 (America/Los_Angeles) consolidation of
 [`djshellshoxxx/CLASSifiedisRUPTed`](https://github.com/djshellshoxxx/CLASSifiedisRUPTed).
@@ -120,16 +191,18 @@ import, export and decryption are not retried or silently replaced.
 
 ### Execution record
 
-Final local, consolidation-PR and post-merge evidence will be recorded here as
-each stage completes. A queued, killed or cancelled check is not a passing test.
+Final local, consolidation-PR and actual main push evidence is recorded in the
+qualification section above and its linked raw logs and machine-readable reports.
+Initial queued, killed, cancelled or timed-out observations remain historical
+results and are never relabeled as passing executions.
 No dedicated lint script is configured in this repository; type/spec/dependency
 checks and existing security regressions are the available automated gates.
 
 ## Branch cleanup
 
-The 50 initial D branches are review candidates, not deletion instructions.
-Once PR #53/51 are confirmed on main, their two source branches may join that
-candidate list. Before any later deletion, re-read the exact head, open PRs and
+The 52 original candidates comprise the 50 initial D histories and the two
+source heads verified on main through PR #54. They are review candidates, not
+deletion instructions. Before any later deletion, re-read the exact head, open PRs and
 recent activity; verify ancestry or the documented semantic replacement and
 confirm no release or concurrent worker still needs the branch. A candidate
 list does not authorize overwriting new work.

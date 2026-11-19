@@ -1,0 +1,96 @@
+{
+  "observedAt": "2026-11-19 06:46:14 UTC",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "pr": 54,
+  "source": "a111eefb907a9f039f56777715e20b4976ea3d87",
+  "base": "044c213d90d62f1f06edb8ca1b9c2141d3991c27",
+  "mergeRef": "101265f1fa9dee9e59d177174e4b55bd3ce3bf26",
+  "draft": true,
+  "mergeable": true,
+  "runs": [
+    {
+      "id": 44474363888,
+      "name": "Alpha verification",
+      "head_sha": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "status": "queued",
+      "conclusion": null,
+      "event": "pull_request",
+      "created_at": "2026-11-19T06:44:23Z",
+      "updated_at": "2026-11-19T06:44:23Z",
+      "run_attempt": 1,
+      "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363888",
+      "jobs": [
+        {
+          "id": 135391198362,
+          "run_id": 44474363888,
+          "workflow_name": "Alpha verification",
+          "head_branch": "integration/comprehensive-consolidation",
+          "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363888",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOVTfRFs8AAAAfhfG8mg",
+          "head_sha": "a111eefb907a9f039f56777715e20b4976ea3d87",
+          "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135391198362",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363888/job/135391198362",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-19T06:44:24Z",
+          "started_at": "2026-11-19T06:44:24Z",
+          "completed_at": null,
+          "name": "plan",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135391198362",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        }
+      ]
+    },
+    {
+      "id": 44474363663,
+      "name": "CLI setup",
+      "head_sha": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "status": "queued",
+      "conclusion": null,
+      "event": "pull_request",
+      "created_at": "2026-11-19T06:44:23Z",
+      "updated_at": "2026-11-19T06:44:23Z",
+      "run_attempt": 1,
+      "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663",
+      "jobs": [
+        {
+          "id": 135391197916,
+          "run_id": 44474363663,
+          "workflow_name": "CLI setup",
+          "head_branch": "integration/comprehensive-consolidation",
+          "run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663",
+          "run_attempt": 1,
+          "node_id": "CR_kwDOVTfRFs8AAAAfhfG63A",
+          "head_sha": "a111eefb907a9f039f56777715e20b4976ea3d87",
+          "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/actions/jobs/135391197916",
+          "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44474363663/job/135391197916",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-19T06:44:23Z",
+          "started_at": "2026-11-19T06:44:23Z",
+          "completed_at": null,
+          "name": "plan",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/check-runs/135391197916",
+          "labels": [
+            "ubuntu-latest"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        }
+      ]
+    }
+  ],
+  "interpretation": "Both workflows scheduled. Both planning jobs queued with runner_id=0, empty runner_name and zero steps; no setup or test execution occurred. Queue cause is unknown. This is not a successful or failed source qualification.",
+  "collectionCaveat": "The initial head-filtered workflow run list returned only Alpha, while commit check-runs and direct CLI run retrieval confirmed the CLI run."
+}

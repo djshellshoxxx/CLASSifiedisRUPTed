@@ -1,0 +1,47 @@
+✔ CLI rejects a symbolic link nested in the public asset tree without reading the external file (122.620302ms)
+✔ CLI rejects a linked public directory before touching existing dist output (49.733969ms)
+✔ CLI build rejects linked public assets before reading or modifying external targets (108.429797ms)
+✔ independent Ed25519 listing fixture verifies without configuration, persistence or payload disclosure (774.807547ms)
+✔ human output contains only verified metadata and explicit evidence limits (994.547641ms)
+✔ standalone signed withdrawal verifies without claiming its target or sequence history is known (1193.198125ms)
+✔ subprocess rejects tampering, wrong CID, invalid signature and unknown envelope fields (4814.989885ms)
+✔ subprocess rejects correctly signed unsupported types, substituted owners, private fields and expired records (8383.385173ms)
+✔ shared validation preserves PWA retain acceptance and exact rejection codes (204.819146ms)
+✔ malformed JSON, invalid UTF-8, empty input and private input errors are redacted (3026.104365ms)
+✔ input size is bounded and overcomplex signed-domain JSON fails without disclosure (1570.883976ms)
+✔ actual descriptor read cap rejects a file that grows after both metadata checks (24.585222ms)
+✔ directories, final symlinks and missing files fail with stable exits (2806.869767ms)
+✔ FIFO and device inputs fail promptly without opening a stream (2804.833025ms)
+✔ unknown, repeated, missing, network and stdin options never echo supplied values (13380.163611ms)
+✔ runtime dependency failures use the fixed domain infrastructure error (274.99643ms)
+✔ record verification performs no network connection and help needs no setup (1533.973336ms)
+✔ worker pre-caches only fixed public assets without credentials (18.9616ms)
+✔ failed precache rejects installation and deletes only the incomplete new cache (7.256202ms)
+✔ activation only removes old versions owned by the same application scope (18.23723ms)
+✔ private paths, queries, other origins and writes never enter worker handling (2.277883ms)
+✔ runtime and package manager compatibility fail closed (3.035334ms)
+✔ setup accepts validated explicit flags only (2.008657ms)
+✔ setup preserves config byte-for-byte and unrelated data on repeat (50.79099ms)
+✔ concurrent setups and interrupted temporary files never corrupt config (15.124741ms)
+✔ invalid existing config is preserved and missing config is actionable (18.915199ms)
+✔ setup fails clearly when config path is not a directory (2.867198ms)
+✔ occupied port is a blocking diagnostic (17.713177ms)
+✔ preview serves only public output with security headers, correct base and methods (133.753795ms)
+✔ CLI failures exit nonzero and help is available without setup (738.816414ms)
+✔ explicit configure changes only validated fields and preserves on failure (67.272161ms)
+✘ [ERROR] Expected ";" but found "is"
+
+    ../../../../tmp/classrup setup with spaces 2TffLf/apps/pwa/src/main.ts:1:5:
+      1 │ this is invalid typescript !
+        │      ~~
+        ╵      ;
+
+✔ build failure preserves prior output and successful build removes stale assets (220.103322ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 46156.44627

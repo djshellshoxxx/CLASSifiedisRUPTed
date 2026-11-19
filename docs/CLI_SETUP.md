@@ -1,6 +1,6 @@
 # Command-line setup
 
-ClassRup is a browser application with user-held keys and local browser storage. The terminal builds and serves public assets and verifies explicitly selected signed public files. It does not create accounts, unlock vaults or hold private keys. No relay, paid service, Docker, database or global ClassRup installation is required.
+ClassRup is a browser application with user-held keys and local browser storage. The terminal builds and serves public assets, verifies explicitly selected signed public files, and lists or searches their public listings. It does not create accounts, unlock vaults or hold private keys. No relay, paid service, Docker, database or global ClassRup installation is required.
 
 Required toolchain: Node **22.18.0 or newer**, pinned **pnpm 10.28.0**, and Git. Use `corepack pnpm` to select the version recorded in `package.json`; do not update the lockfile during installation. Node 22.18.0 distributions include Corepack. On Node distributions without Corepack, install Corepack using your existing package-management policy, or use the Node bootstrap below.
 
@@ -138,9 +138,140 @@ than reported as supported public verification.
 Version 1 error codes are `USAGE`, `FILE_INVALID`, `FILE_TOO_LARGE`,
 `FILE_UNREADABLE`, `INVALID_JSON`, `INVALID_RECORD` and
 `INFRASTRUCTURE_FAILURE`. Existing setup-tool exit behavior is unchanged.
-`record verify --help` displays usage. Listing/search commands, private vault
-operations and complete UI/CLI parity remain planned in the
+`record verify --help` displays usage. The public listing/search commands below
+provide the next files-only slice. Private vault operations, persisted-cache
+access and complete UI/CLI parity remain planned in the
 [domain CLI specification](future-cli-spec.md).
+
+## List, show and search public listing files
+
+F1b reads explicitly selected signed public files and builds a temporary view
+using the same retention and search handlers as the PWA. Each `--file` selects
+one existing public listing or signed withdrawal. Repeat it for additional
+files; the command does not scan directories, discover files or contact relays.
+Setup and an open browser vault are unnecessary.
+
+```text
+node tools/cli/classrup.mjs listing list --file "bicycle.json" --file "boots.json" --json
+node tools/cli/classrup.mjs search --file "bicycle.json" --file "boots.json" --query "winter" --region c2b2 --json
+node tools/cli/classrup.mjs search --file "bicycle.json" --currency CAD --min-price 1000 --max-price 3000 --barter-only
+```
+
+To show one listing, copy its exact `author` and `listing.listingId` values from
+the JSON listing result and supply them as `--owner DID --id UUID`:
+
+```text
+node tools/cli/classrup.mjs listing show --file "bicycle.json" --owner "DID_FROM_LIST_RESULT" --id "UUID_FROM_LIST_RESULT" --json
+```
+
+The two quoted selector values above are placeholders. Both selectors are
+required because different authors can use the same listing ID. `show` includes
+an unavailable publication, but a supplied valid withdrawal suppresses its
+listing. `list` and `search` exclude unavailable listings unless
+`--include-unavailable` is present. An empty list/search succeeds with exit 0;
+`show` returns exit 4 if the selected subject has no current publication in the
+supplied files. This says nothing about unseen files or another user's vault.
+
+### Verification, revisions and limits
+
+Every selected record must pass the existing envelope verifier and shared public
+payload, author-binding and expiry checks before any result is emitted. An
+invalid, unsupported, expired or tampered file fails the whole invocation,
+including when its text would not match the search. Expired historical files
+are not silently accepted into this view: select the supported, unexpired
+publications and withdrawals you intend to inspect. Expiry uses one local
+check time for the invocation and retains the existing five-minute future-clock
+allowance for envelope timestamps.
+
+The view deduplicates verified CIDs and applies revisions in deterministic
+owner/listing/revision order through the shared PWA handlers. Repeating a file
+or supplying a second copy of the same signed record does not duplicate its
+listing. A valid higher revision replaces the earlier selected publication.
+A signed withdrawal suppresses its own owner's subject and, when a prior record
+is selected, must target that record's CID. A standalone withdrawal has no
+independently established target history. Same-revision forks and inconsistent
+withdrawal targets fail the whole invocation with `HISTORY_CONFLICT`; the CLI
+does not pick one side of a conflict. It does not verify author-stream continuity,
+revocation or unseen later revisions, and cannot establish present ownership or
+trust. A different owner's signed withdrawal cannot suppress another owner.
+
+The supported input is at most **128 files**, at most **1,048,576 bytes per
+file**, and at most **16,777,216 bytes in total**. Repeated files count toward
+both limits. Each selected file uses the same regular-file, descriptor, UTF-8,
+size and local-path checks as `record verify`. Only transient memory is written:
+no public cache, import history, browser storage, configuration, keys or other
+persistent state is created. The original files remain unchanged. Already
+mounted filesystems retain their normal filesystem behavior; these commands
+make no network requests themselves.
+
+### Search options
+
+Search uses the PWA's substring matching and public-listing filters. It is not a
+remote search, taxonomy expansion, full-text index or proof of exact distance.
+
+| Option | Meaning |
+| --- | --- |
+| `--query TEXT` | Case-insensitive substring across title, description and tags; maximum 120 characters. Omit it or use an empty string for all eligible listings. |
+| `--region CELL` | Lowercase 4–5 character geohash prefix of the published coarse region. |
+| `--category UUID` | Exact category UUID, without descendant expansion. |
+| `--kind KIND` | `sell`, `wanted` or `giveaway`. |
+| `--condition CONDITION` | `new`, `like_new`, `good`, `fair`, `poor` or `for_parts`. |
+| `--currency CODE` | Match the declared currency; no conversion or settlement inference. |
+| `--min-price N`, `--max-price N` | Inclusive decimal-string minor-unit bounds, up to 78 digits; require `--currency`. Zero is supported; leading zeros and negative values are rejected. |
+| `--barter-only` | Require the signed publication's barter opt-in. |
+| `--include-unavailable` | Include unavailable publications; also supported by `listing list`. Withdrawals remain excluded. |
+
+### Pagination and output
+
+List/search results sort by owner DID and then listing UUID in ascending code-unit
+order, independent of argument order, filesystem order and locale. They accept
+`--limit N` (1–100, default 20) and `--offset N` (0–128, default 0). The response
+reports the total eligible subjects and `nextOffset`, or `null` at the end.
+An offset beyond the result set returns an empty successful page.
+
+For successive pages, repeat the same file selections and search options, use
+the reported `nextOffset`, and pass `--snapshot HASH` with the preceding
+`source.snapshot`. The snapshot binds the unique signed CIDs, command and
+query/selector options; it is independent of file names, duplicate copies,
+argument order, page size and offset. Changed records or query options fail with
+`SNAPSHOT_CHANGED`, rather than silently continuing a different view. Each page
+still rechecks the selected files and their expiry against its local clock.
+
+JSON mode writes one schema-version-1 object to stdout on success or failure.
+Human failures use stderr and leave stdout empty. Errors contain fixed messages,
+without selected paths, native error details or input excerpts.
+
+| JSON field | Contract in schema version 1 |
+| --- | --- |
+| `schemaVersion`, `command`, `ok` | Version `1`; command `listing.list`, `listing.show` or `search`; success discriminator. Invalid listing subcommands use the fixed command name `listing`. |
+| `source` | Success only: `kind: "explicit-public-files"`, `filesRead`, `uniqueRecords`, and query-bound `snapshot`. |
+| `verification` | Success only: the local `checkedAt`, valid signature/hash/payload/author binding, unexpired selected listings, `history: "selected-files-only"`, unchecked chain/revocation, unestablished ownership/trust and `persistence: "none"`. |
+| `items` | List/search success only: the requested page of public projections. |
+| `item` | Show success only: the selected public projection. |
+| `pagination` | List/search success only: `offset`, `limit`, `total`, `nextOffset`. |
+| `excludedSubjects` | List/search success only: selected subjects excluded by withdrawal, availability or search filters; not an estimate of unseen records. |
+| `error` | Failure only: stable `code` and fixed `message`. |
+
+Each item contains `cid`, `author`, `createdAt`, `sequence`, `previousCid` and
+the verified public `listing` payload. This includes the signed description,
+tags, declared value and coarse region. Extension fields, raw envelopes, input
+paths and local observation metadata are omitted. Human text escapes terminal
+controls and directional formatting. JSON escapes those characters without
+changing the values produced by a JSON parser.
+
+| Exit | Meaning for listing/search |
+| --- | --- |
+| `0` | Successful view, including an empty list or search result. |
+| `2` | Invalid arguments/input, rejected record, conflicting history, exceeded limits or changed snapshot. |
+| `3` | Input read failure, runtime/dependency failure or inability to evaluate the temporary view. |
+| `4` | `listing show` has no matching current publication in the supplied files. |
+
+Stable errors are `USAGE`, `FILE_INVALID`, `FILE_TOO_LARGE`, `FILE_UNREADABLE`,
+`INVALID_JSON`, `INVALID_RECORD`, `INPUT_LIMIT`, `HISTORY_CONFLICT`,
+`SNAPSHOT_CHANGED`, `NOT_FOUND`, `QUERY_FAILED` and `INFRASTRUCTURE_FAILURE`.
+The files-only F1b slice does not read a PWA retained-cache export, browser vault,
+encrypted backup or private working copy. Those adapters and mutation commands
+remain separate future work.
 
 ## Updating and troubleshooting
 

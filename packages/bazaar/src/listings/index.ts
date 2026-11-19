@@ -64,13 +64,18 @@ export function bazaarDefinitions(options: BazaarOptions) {
     },
   });
   const edit = defineCommand({ name: 'bazaar.listing.edit', module: 'F01.S01.M02', capability: 'bazaar.listing.edit', idempotent: true,
-    input: z.strictObject({ ...fields, listingId: uuidv7(), expectedRevision: z.int().min(1) }),
+    input: z.strictObject({ ...fields, listingId: uuidv7(), expectedRevision: z.int().min(1), removeValue: z.boolean().optional() })
+      .refine(input => !input.removeValue || input.value === undefined, { path: ['removeValue'], message: 'Remove or replace the declared value, not both.' }),
     async handler(ctx, input) {
       const found = owned(ctx, input.listingId); if (!found.ok) return found;
-      if (found.value.data.status !== 'draft' && found.value.data.status !== 'unpublished') return err(appError('CONFLICT_STATE'));
+      if ((found.value.data.status !== 'draft' && found.value.data.status !== 'unpublished') || held(ctx, input.listingId)) return err(appError('CONFLICT_STATE'));
       if (!options.categoryAllowed(input.categoryId) || (found.value.data.kind !== 'wanted' && !input.condition)) return err(appError('PRECONDITION_FAILED'));
-      const { listingId, expectedRevision, ...data } = input;
-      const saved = ctx.tx.repo(listingRepo).put(listingId, { ...found.value.data, ...data }, { expectedRevision });
+      const { listingId, expectedRevision, removeValue, value, ...data } = input;
+      const next: Listing = { ...found.value.data, ...data };
+      // Omission keeps the existing value; only explicit removal deletes it. Zero remains a value.
+      if (removeValue) delete next.value;
+      else if (value !== undefined) next.value = value;
+      const saved = ctx.tx.repo(listingRepo).put(listingId, next, { expectedRevision });
       if (!saved.ok) return saved;
       const changedFields = changedPublicFields(found.value.data, saved.value.data);
       if (found.value.data.publicationCid && changedFields.length) {

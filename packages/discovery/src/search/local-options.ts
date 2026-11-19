@@ -10,7 +10,10 @@ export const localSearchOptionsSchema = z.strictObject({
   kind: z.enum(['sell', 'wanted', 'giveaway']).optional(),
   condition: z.enum(['new', 'like_new', 'good', 'fair', 'poor', 'for_parts']).optional(),
   price: z.strictObject({ currency: z.string().regex(/^[A-Z][A-Z0-9]{2,9}$/), min: amount.optional(), max: amount.optional() })
-    .refine(p => p.min === undefined || p.max === undefined || BigInt(p.min) <= BigInt(p.max)).optional(),
+    // Refinements can still run after a string-format issue. Check the bounded
+    // decimal grammar before BigInt so malformed input remains a validation result.
+    .refine(p => p.min === undefined || p.max === undefined
+      || (amount.safeParse(p.min).success && amount.safeParse(p.max).success && BigInt(p.min) <= BigInt(p.max))).optional(),
   centerCell: z.string().regex(/^[0123456789bcdefghjkmnpqrstuvwxyz]{4,5}$/).optional(),
   distanceKm: z.union([z.literal(5), z.literal(10), z.literal(25), z.literal(50), z.literal(100)]).optional(),
   seenWithinDays: z.union([z.literal(1), z.literal(7), z.literal(30)]).optional(),

@@ -1,6 +1,6 @@
 import { IDBFactory, IDBDatabase as FakeDatabase } from 'fake-indexeddb';
 import { describe, expect, it, vi } from 'vitest';
-import { ok } from '@classrup/kernel';
+import { ok, type Tx } from '@classrup/kernel';
 import { openIndexedDbStorage } from '@classrup/kernel/browser';
 import { createIdentity } from '@classrup/identity';
 import { openVault } from './vault.ts';
@@ -52,6 +52,29 @@ async function mutate(factory: IDBFactory, name: string, change: (store: IDBObje
 const put = (tenant: string, id: string, text = 'secret') => ({ tenant, type: 'test.secret', id, data: { text }, idx: [text, null, null, null] as const, expectedRevision: 0, now: Date.now() });
 
 describe('encrypted domain persistence', () => {
+  it('revokes retained transaction handles on lock without altering the reopened encrypted vault', async () => {
+    const indexedDB = new IDBFactory();
+    const vault = await openVault({ name: 'retained-transaction', indexedDB });
+    const session = await vault.create(passphrase);
+    const principal = session.principal;
+    let retained!: Tx;
+    await session.storage.transaction(tx => {
+      retained = tx;
+      return tx.records.put(put(principal, 'saved', 'preserved private record'));
+    });
+    const read = retained.records.get;
+    const write = retained.records.put;
+    await session.lock();
+    expect(() => read(principal, 'test.secret', 'saved')).toThrow('Transaction is no longer active');
+    expect(() => write(put(principal, 'late'))).toThrow('Transaction is no longer active');
+    const reopened = await openVault({ name: 'retained-transaction', indexedDB });
+    const fresh = await reopened.unlock(passphrase);
+    expect(fresh.principal).toBe(principal);
+    expect(await fresh.storage.read(tx => tx.records.get(principal, 'test.secret', 'saved')?.data)).toEqual({ text: 'preserved private record' });
+    expect(await fresh.storage.read(tx => tx.records.get(principal, 'test.secret', 'late'))).toBeUndefined();
+    await fresh.lock();
+  }, 30000);
+
   it('encrypts row contents and indexes, restores them on unlock, and rejects a wrong passphrase without modifying storage', async () => {
     const indexedDB = new IDBFactory();
     const vault = await openVault({ name: 'encrypted', indexedDB });

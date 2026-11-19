@@ -40,6 +40,8 @@ Export the encrypted alpha backup before substantial updates and preserve the or
 4. Review retained peer listings and their verification status. A signature establishes control of a signing key; it does not prove ownership or physical availability of an item.
 5. Close, unpublish or archive your own listings as appropriate and share signed withdrawal evidence where generated. A download does not prove a recipient received it.
 
+To remove an optional declared value, select **Remove declared value** in the editor and save. Clearing the amount alone does not remove it; `0` remains a value. Cancel or lock to discard an unsaved removal. Sale listings still need a declared value before publication. Wanted and giveaway listings can be republished without one. Existing signed files and history retain their previous values. See [declared-value editing](../LISTING_VALUE_EDITING.md) for the exact behavior.
+
 Owner history records public-field snapshots and publication-state changes beginning with the implemented history version. Owner listing pages show 50 items at a time. New archive records have a 90-day local-clock restore window; restoring returns the listing unpublished. Existing legacy archives do not receive an invented deadline. Expiry and archive maintenance runs while the vault is unlocked. Complete purge remains unfinished.
 
 ## Local barter

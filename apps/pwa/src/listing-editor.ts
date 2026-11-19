@@ -5,8 +5,9 @@ export interface EditableListing { readonly id: string; readonly revision: numbe
 /** Preserve fields this editor does not expose, including exact currency and private metadata. */
 export function listingEditInput(row: EditableListing, data: FormData) {
   const amount = String(data.get('amount') ?? '');
-  if (row.data.value && !amount) throw new Error('Enter the declared value in minor units.');
-  if (amount && !/^(0|[1-9][0-9]*)$/.test(amount)) throw new Error('Use whole, non-negative minor units without separators.');
+  const removeValue = data.get('remove-value') === 'on';
+  if (!removeValue && row.data.value && !amount) throw new Error('Enter the declared value in minor units, or select Remove declared value.');
+  if (!removeValue && amount && !/^(0|[1-9][0-9]*)$/.test(amount)) throw new Error('Use whole, non-negative minor units without separators.');
   const condition = String(data.get('condition') ?? '');
   if (!condition && (row.data.condition || row.data.kind !== 'wanted')) throw new Error('Choose a condition for this listing.');
   const region = String(data.get('region') ?? '');
@@ -16,7 +17,7 @@ export function listingEditInput(row: EditableListing, data: FormData) {
     categoryId: row.data.categoryId, tags: [...row.data.tags], locale: row.data.locale,
     ...(condition ? { condition } : {}), ...(region ? { regionCell: region } : {}),
     barterOptIn: data.get('barter') === 'on', privateNotes: String(data.get('notes') ?? ''),
-    ...(amount ? { value: { amount, currency: row.data.value?.currency ?? 'CAD' } } : {}),
+    ...(removeValue ? { removeValue: true } : amount ? { value: { amount, currency: row.data.value?.currency ?? 'CAD' } } : {}),
   };
 }
 
@@ -55,6 +56,15 @@ export function mountListingEditor(ports: EditorPorts) {
   const amount = node('input'); amount.name = 'amount'; amount.inputMode = 'numeric'; amount.pattern = '[0-9]+';
   amountLabel.append(amount); form.append(amountLabel);
   const currency = node('p'); form.append(currency);
+  const removeLabel = node('label', 'Remove declared value'); removeLabel.className = 'check';
+  const removeValue = node('input'); removeValue.name = 'remove-value'; removeValue.type = 'checkbox';
+  removeLabel.prepend(removeValue); form.append(removeLabel);
+  const valueHelp = node('p'); valueHelp.id = 'listing-value-help';
+  removeValue.setAttribute('aria-describedby', valueHelp.id); form.append(valueHelp);
+  removeValue.addEventListener('change', () => {
+    amount.disabled = removeValue.checked;
+    amount.required = !!editing?.data.value && !removeValue.checked;
+  });
   const barterLabel = node('label', 'Allow edited listing in barter'); barterLabel.className = 'check';
   const barter = node('input'); barter.name = 'barter'; barter.type = 'checkbox'; barterLabel.prepend(barter); form.append(barterLabel);
   const notes = field('Private listing notes', 'notes', true); notes.maxLength = 2000;
@@ -63,7 +73,10 @@ export function mountListingEditor(ports: EditorPorts) {
   const save = node('button', 'Save listing changes'); save.type = 'submit';
   const cancel = node('button', 'Cancel editing'); cancel.type = 'button';
   buttons.append(save, cancel); form.append(buttons);
-  const clear = () => { editing = undefined; form.reset(); ports.container.hidden = true; };
+  const clear = () => {
+    editing = undefined; form.reset(); amount.disabled = false; amount.required = false;
+    removeValue.checked = false; removeLabel.hidden = true; valueHelp.textContent = ''; ports.container.hidden = true;
+  };
   cancel.addEventListener('click', clear);
   form.addEventListener('submit', event => {
     event.preventDefault(); const row = editing; const data = new FormData(form);
@@ -85,8 +98,10 @@ export function mountListingEditor(ports: EditorPorts) {
       condition.required = row.data.kind !== 'wanted' || !!row.data.condition;
       condition.options[0]!.disabled = condition.required;
       region.value = row.data.regionCell ?? ''; region.required = !!row.data.regionCell;
-      amount.value = row.data.value?.amount ?? ''; amount.required = !!row.data.value;
+      amount.value = row.data.value?.amount ?? ''; amount.required = !!row.data.value; amount.disabled = false;
+      removeValue.checked = false; removeLabel.hidden = !row.data.value;
       currency.textContent = `Currency: ${row.data.value?.currency ?? 'CAD'}. Enter the exact amount in minor units.`;
+      valueHelp.textContent = `${row.data.value ? 'Select Remove declared value to delete it when you save. Uncheck it to keep or edit the amount. ' : ''}${row.data.kind === 'sell' ? 'Sale listings require a declared value before publication.' : 'A declared value is optional for this listing.'}`;
       barter.checked = row.data.barterOptIn; notes.value = row.data.privateNotes;
       ports.container.hidden = false; name.focus(); ports.container.scrollIntoView({ block: 'nearest' });
     },

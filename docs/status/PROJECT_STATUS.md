@@ -1,5 +1,34 @@
 # Project status
 
+## November 18, 2026 public-record CLI continuation
+
+The F1a command `node tools/cli/classrup.mjs record verify --file FILE [--json]`
+verifies existing signed public listing and withdrawal files. The CLI and PWA
+share strict payload, author-binding and expiry checks. The command reads one
+bounded regular file, returns fixed redacted errors and creates no private keys,
+vaults or persistent records. JSON success and failure results use stdout; human
+errors use stderr. The [CLI guide](../CLI_SETUP.md#verify-a-public-signed-file)
+defines the exact output and exit contracts.
+
+Standalone verification leaves chain history and revocation unchecked. It does
+not establish current ownership, trusted identity or vault admission. Listing
+search, encrypted file-vault workflows and full UI/CLI parity remain unfinished.
+Independent review found and repaired mixed-separator Windows UNC-path handling
+before publication and exercised twelve additional adversarial probes.
+
+This continuation also retains the compatible test improvements from
+[PR #51](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51): strict
+Base64url regression coverage, shared DOM test support, enforced CI symlink
+checks and accurate test-discovery paths. Its original source remains an
+ancestor of the combined candidate. Qualification belongs to that combined
+candidate's actual tests and CI; the historical main results below are not
+reused as proof of these new changes. The POSIX FIFO/device CLI test does not
+apply on Windows and is explicitly reported as skipped there.
+
+The project remains a development alpha. Draft #8's remaining incompatible
+runtime work, wider product workflows and previously recorded release/security
+evidence requirements remain open.
+
 ## November 17–18, 2026 exhaustive consolidation
 
 Runtime main is `5a502aa9ebccb3de9cf78332e9ae6335ed6b6a54`, merged through

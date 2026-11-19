@@ -5,6 +5,20 @@ describe what is integrated into main, with the pull request that introduced eac
 
 ## Unreleased
 
+### Public-record CLI continuation (2026-11-18)
+
+- Verify supported public listing and withdrawal files with
+  `node tools/cli/classrup.mjs record verify --file FILE [--json]`.
+  Shared PWA validation checks payloads, author binding and expiry after native
+  signature and content-hash verification. Bounded file reads and fixed errors
+  preserve the command's local, read-only scope.
+- Versioned JSON success and error results use stdout. Human errors use stderr.
+  Chain history, revocation, current ownership and trust remain unestablished;
+  private vault commands and complete CLI parity remain planned.
+- Preserve [PR #51](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/51)'s
+  strict Base64url tests, shared DOM test helper, CI symlink enforcement and
+  test-discovery cleanup in the combined continuation candidate.
+
 ### Exhaustive consolidation (2026-11-18)
 
 - [PR #48](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/48) extracts the

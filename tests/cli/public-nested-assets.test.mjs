@@ -5,6 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { build, setup } from '../../tools/cli/classrup.mjs';
 
+// Local runners without symlink rights may skip; CI must never silently skip.
+function skipOrFailInCi(t, reason) {
+  if (process.env.CI) {
+    throw new Error(`Symlink test "${t.name}" cannot run on this CI runner (${reason}). Skipping is forbidden when CI is set; provide a runner that can create symbolic links.`);
+  }
+  t.diagnostic(`SKIPPED locally: "${t.name}" needs symbolic links (${reason}). It is enforced in CI.`);
+  t.skip(reason);
+}
+
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'classrup-nested-assets-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
@@ -34,7 +43,7 @@ test('CLI rejects a symbolic link nested in the public asset tree without readin
     await fs.symlink(external, path.join(publicDir, 'css', 'linked.css'));
   } catch (error) {
     if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) {
-      t.skip('This runner cannot create symbolic file links');
+      skipOrFailInCi(t, 'This runner cannot create symbolic file links');
       return;
     }
     throw error;
@@ -53,7 +62,7 @@ test('CLI rejects a linked public directory before touching existing dist output
     await fs.symlink(privateDir, linked, process.platform === 'win32' ? 'junction' : 'dir');
   } catch (error) {
     if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) {
-      t.skip('This runner cannot create symbolic directory links');
+      skipOrFailInCi(t, 'This runner cannot create symbolic directory links');
       return;
     }
     throw error;

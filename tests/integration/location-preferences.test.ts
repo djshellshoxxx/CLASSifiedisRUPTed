@@ -5,6 +5,7 @@ import { locationBackupCodecs, locationDefinitions, locationSettingRepo, type Lo
 import { backupCodec, openVault, type UnlockedVault } from '../../packages/vault/src/index.ts';
 import { mountLocationPreferences, requestCoarsePosition } from '../../apps/pwa/src/location-preferences.ts';
 import { createActionQueue } from '../../apps/pwa/src/action-queue.ts';
+import { NodeStub } from '../support/node-stub.ts';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 const passphrase = 'location encrypted backup passphrase';
@@ -83,17 +84,6 @@ it('aborts an in-flight device request on lock and ignores any later position', 
   expect(await pending).toEqual({ ok: false, reason: 'cancelled' });
 });
 
-class NodeStub {
-  textContent = ''; id = ''; value = ''; hidden = false; children: unknown[] = [];
-  readonly listeners = new Map<string, (event: Event) => void>();
-  readonly tag: string;
-  constructor(tag: string) { this.tag = tag; }
-  setAttribute() {}
-  append(...children: unknown[]) { this.children.push(...children); }
-  replaceChildren(...children: unknown[]) { this.children = children; }
-  addEventListener(type: string, listener: (event: Event) => void) { this.listeners.set(type, listener); }
-  fire(type: string) { this.listeners.get(type)?.(new Event(type, { cancelable: true })); }
-}
 function mount(geolocation?: Pick<Geolocation, 'getCurrentPosition'>) {
   const nodes: NodeStub[] = [];
   vi.stubGlobal('document', { createElement(tag: string) { const n = new NodeStub(tag); nodes.push(n); return n; } });

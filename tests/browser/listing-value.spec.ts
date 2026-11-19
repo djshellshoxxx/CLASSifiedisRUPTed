@@ -9,10 +9,12 @@ test('optional declared value is removed only after an explicit saved edit and s
   await page.locator('[name="passphrase"]').fill(passphrase);
   await page.getByRole('button', { name: 'Create a new vault', exact: true }).click();
   await expect(page.locator('#workspace')).toBeVisible();
+  await expect(page.locator('#status')).toHaveText(/^Vault unlocked\./);
   const create = page.locator('#listing-form');
   await create.getByLabel('Title', { exact: true }).fill('Optional-value guitar');
   await create.getByLabel('Description', { exact: true }).fill('A giveaway with an optional exact declared value.');
-  await create.getByLabel('Listing type', { exact: true }).selectOption('giveaway');
+  // The label's text includes option text; the select's accessible name is just "Listing type".
+  await create.getByRole('combobox', { name: 'Listing type', exact: true }).selectOption('giveaway');
   await create.getByLabel('Declared value').fill(amount);
   await create.getByRole('button', { name: 'Save local draft', exact: true }).click();
   await expect(page.locator('#listings')).toContainText('Optional-value guitar');
@@ -49,11 +51,13 @@ test('optional declared value is removed only after an explicit saved edit and s
   await expect(page.locator('#listing-editor')).toBeEmpty();
   await page.locator('[name="passphrase"]').fill(passphrase);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  await expect(page.locator('#status')).toHaveText(/^Vault unlocked\./);
   await page.getByRole('button', { name: 'Edit listing', exact: true }).click();
   await expect(remove).not.toBeChecked(); await expect(input).toHaveValue(amount);
   await remove.check();
   await page.getByRole('button', { name: 'Save listing changes', exact: true }).click();
   await expect(page.locator('#listing-editor')).toBeHidden();
+  await expect(page.locator('#listings > article > p').filter({ hasText: /^unpublished · revision 4 · barter disabled$/ })).toHaveCount(1);
   await expect(page.locator('#listings > article > p').filter({ hasText: 'Declared value:' })).toHaveCount(0);
   const history = page.locator('#listings > article > details').filter({ has: page.getByText('Local revision history', { exact: true }) });
   await history.getByText('Local revision history', { exact: true }).click();
@@ -72,6 +76,7 @@ test('optional declared value is removed only after an explicit saved edit and s
   await page.locator('[name="vault"]').fill('optional-value');
   await page.locator('[name="passphrase"]').fill(passphrase);
   await page.getByRole('button', { name: 'Unlock', exact: true }).click();
-  await expect(page.locator('#listings')).toContainText('published');
+  await expect(page.locator('#status')).toHaveText(/^Vault unlocked\./);
+  await expect(page.locator('#listings > article > p').filter({ hasText: /^published · revision 5 · barter disabled$/ })).toHaveCount(1);
   await expect(page.locator('#listings > article > p').filter({ hasText: 'Declared value:' })).toHaveCount(0);
 });

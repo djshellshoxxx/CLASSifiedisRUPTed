@@ -1,9 +1,9 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
-import { ok } from '../../packages/kernel/src/index.ts';
+import { createMemoryStorage, ok, type Storage } from '../../packages/kernel/src/index.ts';
 import { archiveRecordRepo, RESTORE_WINDOW_MS } from '../../packages/bazaar/src/index.ts';
 import { locationBackupCodecs, locationSettingRepo } from '../../packages/discovery/src/index.ts';
-import { backupCodec, openVault } from '../../packages/vault/src/index.ts';
+import { backupCodec, openVault, vaultFromStorage } from '../../packages/vault/src/index.ts';
 import { archiveBackupCodec } from '../../apps/pwa/src/archive-backup.ts';
 import { productionBackupCodecs } from '../../apps/pwa/src/backup-codecs.ts';
 
@@ -101,5 +101,78 @@ describe('production codec backward compatibility and fail-closed recovery', () 
     const reopened = await openVault({ name: 'legacy-mixed-foreign-destination', indexedDB, codecs: productionBackupCodecs });
     expect(await reopened.isInitialized()).toBe(false);
     await reopened.close();
+  }, 30000);
+
+  it('rolls back a mixed-record restore after a later write fails, then allows a clean retry', async () => {
+    const source = vaultFromStorage(createMemoryStorage(), productionBackupCodecs);
+    const original = await source.create(passphrase);
+    const principal = original.principal;
+    const data = archived(principal);
+    const at = new Date().toISOString();
+    const location = { settingId: firstId, ownerDid: principal, homeCell5: 'u4pru',
+      publicLevel: 'L1' as const, entryMode: 'map_tile' as const,
+      changeCount24h: 1, changeTimes: [at], lastChangedAt: at };
+    const locationCodec = productionBackupCodecs.find(codec => codec.type === locationSettingRepo.type);
+    if (!locationCodec) throw new Error('Missing production location codec');
+    const message = new TextEncoder().encode('interrupted mixed restore identity');
+    const signature = await original.identity.sign(message);
+    const inserted = await original.storage.transaction(tx => {
+      const archive = tx.records.put({
+        tenant: principal, type: archiveRecordRepo.type, id: firstId, data,
+        idx: archiveBackupCodec.indexes(data), expectedRevision: 0, now: Date.parse(data.archivedAt),
+      });
+      if (!archive.ok) return archive;
+      const setting = tx.records.put({
+        tenant: principal, type: locationSettingRepo.type, id: principal, data: location,
+        idx: locationCodec.indexes(location), expectedRevision: 0, now: Date.now(),
+      });
+      if (!setting.ok) return setting;
+      return ok(undefined);
+    });
+    expect(inserted.ok).toBe(true);
+    const sealed = await original.exportBackup(passphrase);
+    await original.lock();
+
+    // Inject a deterministic exception after the first record is written inside
+    // the underlying transaction; a successful restore must be all-or-nothing.
+    const backing = createMemoryStorage();
+    let failSecondRestore = true;
+    let restoreCalls = 0;
+    const interrupted: Storage = {
+      ...backing,
+      transaction(fn, opts) {
+        return backing.transaction(tx => fn({
+          ...tx,
+          records: {
+            ...tx.records,
+            restore(record: Parameters<typeof tx.records.restore>[0],
+              idx: Parameters<typeof tx.records.restore>[1]) {
+              restoreCalls++;
+              if (failSecondRestore && restoreCalls === 2) throw new Error('injected second-record interruption');
+              return tx.records.restore(record, idx);
+            },
+          },
+        }), opts);
+      },
+    };
+    const destination = vaultFromStorage(interrupted, productionBackupCodecs);
+    await expect(destination.restoreBackup(sealed, passphrase)).rejects.toThrow('injected second-record interruption');
+    expect(restoreCalls).toBe(2);
+    expect(await destination.isInitialized()).toBe(false);
+    expect(await backing.read(tx => tx.records.get(principal, archiveRecordRepo.type, firstId))).toBeUndefined();
+    expect(await backing.read(tx => tx.records.get(principal, locationSettingRepo.type, principal))).toBeUndefined();
+
+    // Retry on the same still-open vault rather than replacing the destination.
+    failSecondRestore = false;
+    const restored = await destination.restoreBackup(sealed, passphrase);
+    try {
+      expect(restored.principal).toBe(principal);
+      expect(await restored.identity.sign(message)).toEqual(signature);
+      expect((await restored.storage.read(tx => tx.records.get(principal, archiveRecordRepo.type, firstId)))?.data).toEqual(data);
+      expect((await restored.storage.read(tx => tx.records.get(principal, locationSettingRepo.type, principal)))?.data)
+        .toMatchObject({ settingId: firstId, ownerDid: principal, homeCell5: 'u4pru', changeCount24h: 0, changeTimes: [] });
+    } finally {
+      await restored.lock();
+    }
   }, 30000);
 });

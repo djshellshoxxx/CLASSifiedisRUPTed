@@ -214,6 +214,7 @@ it('rejects malformed resolved record coverage without invoking attachment inspe
     { ...base, excludedStores: [] },
     { ...base, recordTypes: [{ type: 'private.note', count: 2 }, { type: 'private.note', count: 2 }], recordCount: 4 },
     { ...base, registeredRecordTypes: ['private.note', 'private.note'] },
+    { ...base, registeredRecordTypes: [''] },
     { ...base, typeLimitExceeded: true }, // Impossible: the source only flags truncation after 256 categories.
     { ...base, typeLimitExceeded: 'false' },
   ];

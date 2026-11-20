@@ -56,6 +56,8 @@ function isCoherentBackupCoverage(input: unknown): input is BackupCoverage {
     if (!registered.has(row.type)) unsupported.push(row.type);
   }
   return Number.isSafeInteger(total) && total === count &&
+    // The producer returns exactly the first 256 groups if additional types exist.
+    (!report.typeLimitExceeded || report.recordTypes.length === 256) &&
     report.recordLimitExceeded === (count > 10_000) &&
     unsupported.length === report.unsupportedRecordTypes.length &&
     unsupported.every((type, index) => type === report.unsupportedRecordTypes![index]);

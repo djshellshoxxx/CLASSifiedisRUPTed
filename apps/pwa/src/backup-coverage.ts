@@ -1,5 +1,27 @@
 import type { BackupCoverage, AttachmentCoverage } from '../../../packages/vault/src/index.ts';
 
+/**
+ * These are diagnostic counts, not authenticated attachment evidence. Reject
+ * malformed results rather than displaying partial, negative, or impossible
+ * totals as if the optional read succeeded. The storage contract caps holder
+ * rows at 10,000 and returns null totals on overflow.
+ */
+function isCoherentAttachmentCoverage(input: unknown): input is AttachmentCoverage {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) return false;
+  const report = input as Partial<AttachmentCoverage>;
+  if (report.holderAuthorityVerified !== false || report.includedInV1Backup !== false ||
+      typeof report.limitExceeded !== 'boolean') return false;
+  const { referencedBlobs: refs, missingBlobs: missing,
+    excludedStoredReferences: present, holderRows: holders } = report;
+  if (report.limitExceeded) {
+    return refs === null && missing === null && present === null && holders === null;
+  }
+  const validCount = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10_000;
+  return validCount(refs) && validCount(missing) && validCount(present) && validCount(holders) &&
+    missing + present === refs && holders >= refs;
+}
+
 /** A failed attachment diagnostic must not discard a valid record-coverage result. */
 export async function readBackupInspection(source: {
   backupCoverage(): Promise<BackupCoverage>;
@@ -14,7 +36,8 @@ export async function readBackupInspection(source: {
     throw new Error('Backup inspection unavailable; saved-record coverage could not be verified.');
   }
   try {
-    return { records, attachments: await source.attachmentCoverage() };
+    const attachments = await source.attachmentCoverage();
+    return { records, attachments: isCoherentAttachmentCoverage(attachments) ? attachments : null };
   } catch {
     // No error details or stale counts enter the inspection display.
     return { records, attachments: null };

@@ -1,5 +1,5 @@
 import { productionBackupCodecs } from './backup-codecs.ts';
-import { describeBackupCoverage, describeAttachmentCoverage } from './backup-coverage.ts';
+import { describeBackupCoverage, describeAttachmentCoverage, readBackupInspection } from './backup-coverage.ts';
 import { protectVaultSession, runForSession } from './vault-session.ts';
 import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
 import { createBarterRuntime } from './barter-runtime.ts';
@@ -416,10 +416,7 @@ element('reset-peer-search').addEventListener('click', () => { void vaultAction(
 element('inspect-backup').addEventListener('click', () => { void vaultAction(async () => {
   const session = current().vault;
   element('backup-coverage').textContent = '';
-  const { records, attachments } = await runForSession(session, () => unlocked, async () => ({
-    records: await session.backupCoverage(),
-    attachments: await session.attachmentCoverage(),
-  }));
+  const { records, attachments } = await runForSession(session, () => unlocked, () => readBackupInspection(session));
   // Both diagnostics are session-guarded; neither grants attachment backup eligibility.
   element('backup-coverage').textContent = `${describeBackupCoverage(records)} ${describeAttachmentCoverage(attachments)}`;
 }); });

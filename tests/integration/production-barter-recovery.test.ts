@@ -450,6 +450,7 @@ describe('production barter record recovery', () => {
       async lock() { await storage.close(); },
       async exportBackup() { throw new Error('No backup in a view fixture'); },
       async backupCoverage() { throw new Error('No coverage in a view fixture'); },
+      async attachmentCoverage() { throw new Error('No attachment coverage in a view fixture'); },
     };
     const leg = { giverId: principal, receiverId: 'view-peer', inventoryItemId: 'view-item', listingCid: 'view-listing',
       wantCid: 'view-want', valueMinor: '100', currency: 'CAD', distanceBucket: 0, wantCreatedAt: clock.now() };

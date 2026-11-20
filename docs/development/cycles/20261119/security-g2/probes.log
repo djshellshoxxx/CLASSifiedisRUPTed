@@ -1,0 +1,13 @@
+{
+  "completed": 8,
+  "probes": [
+    "memory: 257-entry overflow sentinel, exact tenant and payload-free counts",
+    "memory: inventory observes transaction rollback",
+    "memory: detached method and invalid limits rejected",
+    "sqlite: 257-entry overflow sentinel, exact tenant and payload-free counts",
+    "sqlite: inventory observes transaction rollback",
+    "sqlite: detached method and invalid limits rejected",
+    "memory: inventory does not deserialize payloads; normal record access still rejects malformed JSON",
+    "UI formatter: unsupported type identifiers are not interpolated"
+  ]
+}

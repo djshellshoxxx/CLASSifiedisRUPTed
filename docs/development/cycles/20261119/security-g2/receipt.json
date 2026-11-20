@@ -1,0 +1,161 @@
+{
+  "schema": "classrup.security-audit-receipt/v1",
+  "generation": 2,
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "reviewedBaseline": {
+    "commit": "30526fb2745e8d6e2bb15efae5b8106bcdcf53d0",
+    "tree": "0cc6dec4a1c84f5673f31bd845103f24622dc98a"
+  },
+  "repair": {
+    "commit": "e50198007a5381402c10671aa53c564ced29f24c",
+    "tree": "64c6b719c5057b9d46b238bd316b39507d45da4d"
+  },
+  "predecessorHandoffCommit": "bd272cba448c2771dc733f7a6b4e4f07dfb28d61",
+  "runs": [
+    {
+      "source": {
+        "productionCommit": "30526fb2745e8d6e2bb15efae5b8106bcdcf53d0",
+        "regressionTestFromCommit": "e50198007a5381402c10671aa53c564ced29f24c"
+      },
+      "command": "corepack pnpm exec vitest run packages/vault/src/backup-codecs.test.ts --maxWorkers=1 --reporter=json --outputFile=docs/development/cycles/20261119/security-g2/codec-red.json > docs/development/cycles/20261119/security-g2/codec-red.log 2>&1",
+      "exitCode": 1,
+      "startedAt": "2026-11-20T02:19:03.497000+00:00",
+      "total": 1,
+      "passed": 0,
+      "failed": 1,
+      "pending": 0,
+      "success": false
+    },
+    {
+      "source": {
+        "productionAndRegressionCommit": "e50198007a5381402c10671aa53c564ced29f24c"
+      },
+      "command": "corepack pnpm exec vitest run packages/vault/src/backup-codecs.test.ts --maxWorkers=1 --reporter=json --outputFile=docs/development/cycles/20261119/security-g2/codec-green.json > docs/development/cycles/20261119/security-g2/codec-green.log 2>&1",
+      "exitCode": 0,
+      "startedAt": "2026-11-20T02:19:33.526000+00:00",
+      "total": 1,
+      "passed": 1,
+      "failed": 0,
+      "pending": 0,
+      "success": true
+    }
+  ],
+  "probes": {
+    "command": "node docs/development/cycles/20261119/security-g2/probes.mjs > docs/development/cycles/20261119/security-g2/probes.log 2>&1",
+    "exitCode": 0,
+    "completed": 8,
+    "productionCommit": "30526fb2745e8d6e2bb15efae5b8106bcdcf53d0",
+    "adapters": [
+      "memory",
+      "sqlite"
+    ],
+    "note": "Eight named Node probes, not eight Vitest tests; target production files are unchanged by the codec repair."
+  },
+  "diffCheck": {
+    "command": "git diff --check",
+    "exitCode": 0,
+    "source": "e50198007a5381402c10671aa53c564ced29f24c"
+  },
+  "notRun": [
+    "full test suite",
+    "typecheck",
+    "hosted checks",
+    "native browser or fake IndexedDB tests",
+    "new dependency audit"
+  ],
+  "limits": [
+    "The repair captures type and callable references; caller-provided trusted closure or receiver state is not deeply immutable.",
+    "Type inventory limits output, not the work required to count existing rows.",
+    "Pending parent recovery-preflight implementation is not included in this frozen source.",
+    "Predecessor verification counts are historical and are not added to this generation."
+  ],
+  "sourceFiles": [
+    {
+      "path": "packages/vault/src/vault.ts",
+      "bytes": 18038,
+      "sha256": "930621de3400cd2b11b94f00564a3ec920569018084ef85d6f7d98fe04be99a6"
+    },
+    {
+      "path": "packages/vault/src/backup-codecs.test.ts",
+      "bytes": 3237,
+      "sha256": "e2dcc0a29db78b5b28bda3ee23e25d83f6ca5ffb6c8a4a77469128ffb2cfe8ed"
+    },
+    {
+      "path": "packages/kernel/src/storage/tx.ts",
+      "bytes": 24090,
+      "sha256": "285728e986cdf4cad6a256e7c0c75829b291b5cf57ea9a94292a9b2b92a75e02"
+    },
+    {
+      "path": "packages/kernel/src/storage/scope.ts",
+      "bytes": 6355,
+      "sha256": "ffd3c1c6fa558a88c7491cbe74657495082ce5ce113a37acf6c22575cf54281c"
+    },
+    {
+      "path": "packages/kernel/src/storage/memory-driver.ts",
+      "bytes": 14032,
+      "sha256": "8ba2df15152cbd2327dd3ae5187ba3fb1d64f9c5bd8e14c51c55578627ab3077"
+    },
+    {
+      "path": "packages/kernel/src/storage/sqlite.ts",
+      "bytes": 17296,
+      "sha256": "b3f30a8cb7c09ace08528d55e73913afe8babf13a4f77830e6a9d1e42d23b4f9"
+    },
+    {
+      "path": "packages/kernel/src/storage/indexeddb.ts",
+      "bytes": 8884,
+      "sha256": "6078d3dc6a3f85449d7cd97fa9e014d55ac0ef05b4aef6c0bd56a70b6624bdc4"
+    },
+    {
+      "path": "packages/kernel/src/storage/storage.ts",
+      "bytes": 5182,
+      "sha256": "e64ccae289524d9922f698b48544b7b8577da1d9383c9905c7631c16d7c36436"
+    },
+    {
+      "path": "apps/pwa/src/main.ts",
+      "bytes": 30891,
+      "sha256": "8c0d2080fc56f58cbda72f0fd926dc2bdc6be41db9c1db4ee15dd82dd80e27ed"
+    },
+    {
+      "path": "apps/pwa/src/backup-coverage.ts",
+      "bytes": 1168,
+      "sha256": "76e9e2b66774373a8c29412c6f2990e021da5bc3906227e74895bb7f5b71bbba"
+    },
+    {
+      "path": "apps/pwa/src/vault-session.ts",
+      "bytes": 1870,
+      "sha256": "f21341f1f2ee01b22327095116c626cbdb52c1b6fe64fbb54e8afefbe3e1dfc2"
+    }
+  ],
+  "evidenceFiles": [
+    {
+      "path": "docs/development/cycles/20261119/security-g2/codec-green.json",
+      "bytes": 1041,
+      "sha256": "6499e8faf8463d33ef78475b8fd6adee5a840116e0a03ec64feabc8e2477d703"
+    },
+    {
+      "path": "docs/development/cycles/20261119/security-g2/codec-green.log",
+      "bytes": 138,
+      "sha256": "15bb655c30d30341810ef0700dc459891fe0e2d3d12320b9d75c3f2d8951f566"
+    },
+    {
+      "path": "docs/development/cycles/20261119/security-g2/codec-red.json",
+      "bytes": 1863,
+      "sha256": "530b8e28a005fa933ae0cf86fb58a883d4b06fd013c3027d65cfa80c6f354d7e"
+    },
+    {
+      "path": "docs/development/cycles/20261119/security-g2/codec-red.log",
+      "bytes": 136,
+      "sha256": "112e36caf34ebdf94d7813c1b0d64827c167d93c721e5ba8398c615545c85414"
+    },
+    {
+      "path": "docs/development/cycles/20261119/security-g2/probes.log",
+      "bytes": 606,
+      "sha256": "cc6c00b5ab9aab580a95b516de04aebb5115aec18e323bd73e50c7889ed29fab"
+    },
+    {
+      "path": "docs/development/cycles/20261119/security-g2/probes.mjs",
+      "bytes": 4174,
+      "sha256": "de71c2fb17f50f72911d684be4a5b7e6dc511a52580993123c988471634e987e"
+    }
+  ]
+}

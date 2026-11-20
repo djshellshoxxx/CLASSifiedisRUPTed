@@ -1,0 +1,15 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "money-vectors",
+  "command": [
+    "python",
+    "-I",
+    "packages/commerce/test/check_money_vectors.py"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 180,
+  "seconds": 0.126,
+  "log_bytes": 72,
+  "log_sha256": "413c70fc685fea3e6b4a09b95eda0237fcbefc2679353a99c97e50eba6a64bd2"
+}

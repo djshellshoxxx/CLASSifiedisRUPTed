@@ -1,0 +1,200 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "checks": [
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "specification",
+      "command": [
+        "node",
+        "tools/specgen/specgen.mjs",
+        "check"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 1.883,
+      "log_bytes": 48,
+      "log_sha256": "8b9ba7ae8d9683b9b5fb588f2ab3c07b905c848a93a045c538eaf902ab6ea865"
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "dependency-boundaries",
+      "command": [
+        "node",
+        "tools/deps/deps.mjs"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 0.281,
+      "log_bytes": 27,
+      "log_sha256": "18ccefde637fed45e661c7a82351c243d90de5057a27cb8012b80148037554ae"
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "feature-registry",
+      "command": [
+        "node",
+        "packages/platform/scripts/gen-registry.mjs",
+        "--check",
+        "--strict"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 1.817,
+      "log_bytes": 174,
+      "log_sha256": "8529e632e17e854210cdda08da8c95f23d13533cbb972b5d4e4624657af4cb6b"
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "money-vectors",
+      "command": [
+        "python",
+        "-I",
+        "packages/commerce/test/check_money_vectors.py"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 0.126,
+      "log_bytes": 72,
+      "log_sha256": "413c70fc685fea3e6b4a09b95eda0237fcbefc2679353a99c97e50eba6a64bd2"
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "money-bundle",
+      "command": [
+        "node",
+        "packages/commerce/test/check_money_bundle.mjs"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 0.283,
+      "log_bytes": 43,
+      "log_sha256": "3df467e263fc9592e3ef73f7a1f172476474e3809ca257d409201d4f89497595"
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "tooling",
+      "command": [
+        "node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-reporter=tap",
+        "tests/tooling/ci-plan.test.mjs",
+        "tests/tooling/feature-registry.test.mjs",
+        "tests/tooling/status.test.mjs",
+        "tests/tooling/trace.test.mjs"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 300,
+      "seconds": 14.205,
+      "log_bytes": 5874,
+      "log_sha256": "810ae791cc8af8a706ec4dc03325a9debcd31c74f139c19536fa890ee1cb13e5",
+      "tap_counts": {
+        "tests": 27,
+        "pass": 27,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "cli",
+      "command": [
+        "node",
+        "--test",
+        "--test-concurrency=1",
+        "--test-reporter=tap",
+        "tests/cli/listings.test.mjs",
+        "tests/cli/public-nested-assets.test.mjs",
+        "tests/cli/public-symlink.test.mjs",
+        "tests/cli/records.test.mjs",
+        "tests/cli/serviceworker.test.mjs",
+        "tests/cli/setup.test.mjs"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 300,
+      "seconds": 49.434,
+      "log_bytes": 11128,
+      "log_sha256": "1c38b7d77cb767a913266bbf4276c6de6a832f72d9b76ec7cc0668bd8415266a",
+      "tap_counts": {
+        "tests": 46,
+        "pass": 46,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      }
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "setup",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "setup",
+        "--non-interactive"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 0.116,
+      "log_bytes": 63,
+      "log_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939"
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "repeat-setup",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "setup",
+        "--non-interactive"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 0.115,
+      "log_bytes": 65,
+      "log_sha256": "2230cdca193676d08f76c0bbeea2d9bff7fb8b6c9922ed3c3f7c72b9f04ca5e9"
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "doctor",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "doctor"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 0.269,
+      "log_bytes": 77,
+      "log_sha256": "a2e2156a0ac8de668d8a4d5452a7f86a103e490efb8d7b88b62a3e3fba3b80aa"
+    },
+    {
+      "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+      "name": "build",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "build"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "exit_code": 0,
+      "process_timeout_seconds": 180,
+      "seconds": 0.321,
+      "log_bytes": 53,
+      "log_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60"
+    }
+  ],
+  "complete_pass": true
+}

@@ -1,0 +1,15 @@
+{
+  "source": "38ada90037d8176b0e0e319651b712cc396cad5d",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/pr58-domain.json"
+  ],
+  "node_options": "--max-old-space-size=2048",
+  "exit_code": -9,
+  "seconds": 257.938
+}

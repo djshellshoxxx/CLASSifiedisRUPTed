@@ -1,0 +1,40 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "tree": "0238e6ad6a9add7d712e3b5bf5ff0eabf993d870",
+  "shard": 2,
+  "shard_count": 8,
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--shard=2/8",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-domain-shards/part-02.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 49.887,
+  "log_sha256": "38053fa7326cb37c67e227de93ce107a963e637d27b11be0e6682620d8304f93",
+  "files": [
+    "packages/discovery/src/search/local-search.test.ts",
+    "packages/kernel/src/machine/machine.test.ts",
+    "packages/kernel/src/observability/redact.test.ts",
+    "packages/kernel/src/storage/indexeddb.test.ts",
+    "packages/kernel/src/storage/storage.contract.test.ts",
+    "packages/kernel/src/sync/sender.expiry-boundary.test.ts",
+    "packages/kernel/src/sync/sender.test.ts",
+    "packages/kernel/src/validation/validation.test.ts",
+    "tests/integration/identity-keygen-recovery.test.ts",
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 60
+  },
+  "report_success": true,
+  "report_sha256": "9189d5deea416649c2e35881c2b56cdbe2f4736cf6589e875f2b709c98033bf5"
+}

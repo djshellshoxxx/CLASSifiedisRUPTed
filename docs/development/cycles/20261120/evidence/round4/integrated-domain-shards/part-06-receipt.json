@@ -1,0 +1,40 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "tree": "0238e6ad6a9add7d712e3b5bf5ff0eabf993d870",
+  "shard": 6,
+  "shard_count": 8,
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--shard=6/8",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-domain-shards/part-06.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 14.094,
+  "log_sha256": "aac4dff94a903116bf9ae01c4610ee7f0564b1072b2f53906c4696d8cd18bd6e",
+  "files": [
+    "packages/commerce/src/valuation/precision/precision.test.ts",
+    "packages/i18n/src/internationalization/currencies/currencies.test.ts",
+    "packages/kernel/src/observability/diagnostic-privacy.test.ts",
+    "packages/kernel/src/observability/logger.test.ts",
+    "packages/kernel/src/storage/record-types.test.ts",
+    "packages/kernel/src/storage/sqlite.test.ts",
+    "packages/kernel/src/storage/storage.lifecycle.test.ts",
+    "packages/moderation/src/antifraud/limits/limits.test.ts",
+    "packages/mutiny/src/cycle_matching/matching.test.ts",
+    "packages/vault/src/session-policy.test.ts",
+    "tests/integration/vault-session.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 92
+  },
+  "report_success": true,
+  "report_sha256": "ffa3d684b78d71f2608a90579e34f84421996f1da013bd48e61aba72f2b6d5e6"
+}

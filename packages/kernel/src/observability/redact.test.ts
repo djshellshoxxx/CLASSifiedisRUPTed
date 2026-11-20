@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createFakeClock } from '../clock/clock.ts';
 import { truncateIp } from './ip.ts';
+import { createLogger, createRingBufferSink } from './logger.ts';
 import { redact, REDACTED } from './redact.ts';
 
 describe('log redaction (CTR-OBS-001 OBS-1)', () => {
@@ -40,5 +42,64 @@ describe('log redaction (CTR-OBS-001 OBS-1)', () => {
       clientIp: REDACTED,
       peer: '192.0.2.0/24',
     });
+  });
+
+  it('drops conventional credential fields and documented secret namespaces from nested structured data', () => {
+    const input = {
+      operation: 'restore',
+      connection: {
+        credential: 'placeholder-credential', credentials: { account: 'example-account' },
+        PWD: 'placeholder-password', Bearer: 'placeholder-token', hostLabel: 'local',
+      },
+      signing: {
+        deviceSigningKey: 'placeholder-signing-key', vault_data_key: 'placeholder-data-key',
+        recoverySecretKey: 'placeholder-secret-key', operatorAccessKey: 'placeholder-access-key',
+        'service-api-key': 'placeholder-api-key', audit_pepper: 'placeholder-pepper',
+        smtpPasswd: 'placeholder-password', keyId: 'key-reference',
+      },
+      nested: [{ requestId: 'request-1', RELAY_SECRET_DELIVERY_FILE: 'placeholder-path',
+        CLASSRUP_SECRET_DATA_KEY_V2_FILE: 'placeholder-path' }],
+    };
+    const before = structuredClone(input);
+
+    expect(redact(input)).toEqual({
+      operation: 'restore', connection: { hostLabel: 'local' }, signing: { keyId: 'key-reference' },
+      nested: [{ requestId: 'request-1' }],
+    });
+    expect(input).toEqual(before);
+  });
+
+  it('preserves public references, policy names and secret inventory metadata', () => {
+    const metadata = {
+      publicKey: 'public-reference', keyId: 'key-reference', tokenCount: 2,
+      passwordPolicy: 'local-only', authorizationMode: 'local', credentialId: 'credential-reference',
+      secretKeyVersion: 2, name: 'CLASSRUP_SECRET_DATA_KEY_V2', source: 'file', bytes: 32,
+      correlationId: 'request-1', module: 'F16.S01.M02', code: 'OK', durationMs: 3,
+    };
+    expect(redact(metadata)).toEqual(metadata);
+  });
+
+  it('applies credential field rules to child logger bindings and event fields without changing diagnostic safeguards', () => {
+    const clock = createFakeClock('2026-11-20T10:00:00.000Z');
+    const ring = createRingBufferSink();
+    const log = createLogger({ sink: ring.sink, clock })
+      .child({ module: 'F16.S01.M02', serviceApiKey: 'placeholder-api-key' })
+      .child({ credentials: { account: 'example-account' }, correlationId: 'request-1' });
+    log.info('vault.recovery.checked', {
+      durationMs: 3, publicKey: 'public-reference', clientIp: '198.51.100.9',
+      nested: [{ signingKey: 'placeholder-signing-key', ok: true }],
+      err: Object.assign(new Error('placeholder error detail'), { code: 'E_SAMPLE' }),
+    });
+    log.warn('placeholder freeform message');
+
+    expect(ring.records()).toEqual([
+      {
+        ts: clock.iso(), level: 'info', msg: 'vault.recovery.checked', correlationId: 'request-1',
+        module: 'F16.S01.M02', durationMs: 3, publicKey: 'public-reference',
+        clientIp: '198.51.100.0/24', nested: [{ ok: true }], err: { name: 'Error', code: 'E_SAMPLE' },
+      },
+      { ts: clock.iso(), level: 'warn', msg: REDACTED, correlationId: 'request-1', module: 'F16.S01.M02' },
+    ]);
+    expect(log.dropped()).toBe(0);
   });
 });

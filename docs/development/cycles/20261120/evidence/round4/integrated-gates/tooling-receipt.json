@@ -1,0 +1,28 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "tooling",
+  "command": [
+    "node",
+    "--test",
+    "--test-concurrency=1",
+    "--test-reporter=tap",
+    "tests/tooling/ci-plan.test.mjs",
+    "tests/tooling/feature-registry.test.mjs",
+    "tests/tooling/status.test.mjs",
+    "tests/tooling/trace.test.mjs"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 300,
+  "seconds": 14.205,
+  "log_bytes": 5874,
+  "log_sha256": "810ae791cc8af8a706ec4dc03325a9debcd31c74f139c19536fa890ee1cb13e5",
+  "tap_counts": {
+    "tests": 27,
+    "pass": 27,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  }
+}

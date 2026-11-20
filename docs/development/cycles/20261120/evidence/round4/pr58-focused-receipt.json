@@ -1,0 +1,23 @@
+{
+  "source": "38ada90037d8176b0e0e319651b712cc396cad5d",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/pr58-focused.json"
+  ],
+  "exit_code": 0,
+  "seconds": 42.561,
+  "counts": {
+    "numTotalTests": 4,
+    "numPassedTests": 4,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "success": true
+  }
+}

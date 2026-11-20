@@ -1,0 +1,14 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "dependency-boundaries",
+  "command": [
+    "node",
+    "tools/deps/deps.mjs"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 180,
+  "seconds": 0.281,
+  "log_bytes": 27,
+  "log_sha256": "18ccefde637fed45e661c7a82351c243d90de5057a27cb8012b80148037554ae"
+}

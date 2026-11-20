@@ -1,0 +1,28 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/production-recovery-readers.test.ts",
+    "packages/kernel/src/observability/redact.test.ts",
+    "packages/kernel/src/observability/logger.test.ts",
+    "packages/kernel/src/observability/diagnostic-privacy.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-focused.json"
+  ],
+  "exit_code": 0,
+  "seconds": 33.528,
+  "counts": {
+    "numTotalTests": 11,
+    "numPassedTests": 11,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "success": true
+  },
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 240
+}

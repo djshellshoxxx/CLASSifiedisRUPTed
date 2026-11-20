@@ -1,0 +1,14 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "money-bundle",
+  "command": [
+    "node",
+    "packages/commerce/test/check_money_bundle.mjs"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 180,
+  "seconds": 0.283,
+  "log_bytes": 43,
+  "log_sha256": "3df467e263fc9592e3ef73f7a1f172476474e3809ca257d409201d4f89497595"
+}

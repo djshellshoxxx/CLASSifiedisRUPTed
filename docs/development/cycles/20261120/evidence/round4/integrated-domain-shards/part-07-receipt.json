@@ -1,0 +1,40 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "tree": "0238e6ad6a9add7d712e3b5bf5ff0eabf993d870",
+  "shard": 7,
+  "shard_count": 8,
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--shard=7/8",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-domain-shards/part-07.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 30.254,
+  "log_sha256": "e3b2e4f5970be6408181c4527ac50b92d5daa98823d044a7361d5d2fe27b9255",
+  "files": [
+    "packages/bazaar/src/listings/lifecycle.test.ts",
+    "packages/discovery/src/geoprivacy/coarse/coarse.test.ts",
+    "packages/governance/src/policy/goods/goods.test.ts",
+    "packages/identity/src/identity.test.ts",
+    "packages/kernel/src/bus/access.test.ts",
+    "packages/kernel/src/events/envelope.test.ts",
+    "packages/kernel/src/outbox/dispatcher.test.ts",
+    "packages/kernel/src/storage/scope.test.ts",
+    "packages/kernel/src/storage/storage.blob-snapshot.test.ts",
+    "packages/kernel/src/storage/storage.lifetime.test.ts",
+    "tests/integration/notification-lifecycle.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 129
+  },
+  "report_success": true,
+  "report_sha256": "0357086cbbe5e7a1e62ca0fba732dab241dcba97f9abc8a5b7ab5934a38822be"
+}

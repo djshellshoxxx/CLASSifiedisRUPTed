@@ -1,0 +1,40 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "tree": "0238e6ad6a9add7d712e3b5bf5ff0eabf993d870",
+  "shard": 3,
+  "shard_count": 8,
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--shard=3/8",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-domain-shards/part-03.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 100.413,
+  "log_sha256": "ea2880a2d9c17a6275223fc64628db021191e1e3417d3bac76489349432d1270",
+  "files": [
+    "packages/kernel/src/bus/perf.test.ts",
+    "packages/kernel/src/http/server.test.ts",
+    "packages/moderation/src/antifraud/rate/rate.test.ts",
+    "packages/privacy/src/security_boundaries/metadata/metadata.test.ts",
+    "packages/vault/src/backup-preflight.test.ts",
+    "packages/vault/src/encrypted-storage.test.ts",
+    "tests/integration/action-queue.test.ts",
+    "tests/integration/notification-delivery.test.ts",
+    "tests/integration/publication-backup.test.ts",
+    "tests/integration/ranking-publication.test.ts",
+    "tests/integration/retained-backup.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 74
+  },
+  "report_success": true,
+  "report_sha256": "8ceebc8207403d1424c6008f01b0de6e8c00b3ca9201590593942e15fe37320c"
+}

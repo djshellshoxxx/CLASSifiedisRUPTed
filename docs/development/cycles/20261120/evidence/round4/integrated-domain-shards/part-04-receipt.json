@@ -1,0 +1,40 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "tree": "0238e6ad6a9add7d712e3b5bf5ff0eabf993d870",
+  "shard": 4,
+  "shard_count": 8,
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--shard=4/8",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-domain-shards/part-04.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 41.395,
+  "log_sha256": "aae5a0e35a7532d0b88526ef0d3772b518624993f7e1571b865b39108bc1979e",
+  "files": [
+    "packages/commerce/src/valuation/currency/currency.test.ts",
+    "packages/comms/src/negotiation/consent/consent.test.ts",
+    "packages/discovery/src/ranking/fairness/fairness.test.ts",
+    "packages/discovery/src/search/filter/filter.test.ts",
+    "packages/discovery/src/search/retained-key.test.ts",
+    "packages/governance/src/policy/prohibited/prohibited.test.ts",
+    "packages/kernel/src/observability/perf.test.ts",
+    "packages/mutiny/src/cycle_matching/admission.test.ts",
+    "tests/integration/barter-want-intent.test.ts",
+    "tests/integration/listing-editor.test.ts",
+    "tests/integration/privacy-notify.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 97
+  },
+  "report_success": true,
+  "report_sha256": "5f6a11f011e2099c152108e4a1c6936a489e10d189c1ea7153c990f287e509aa"
+}

@@ -1,0 +1,15 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "specification",
+  "command": [
+    "node",
+    "tools/specgen/specgen.mjs",
+    "check"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 180,
+  "seconds": 1.883,
+  "log_bytes": 48,
+  "log_sha256": "8b9ba7ae8d9683b9b5fb588f2ab3c07b905c848a93a045c538eaf902ab6ea865"
+}

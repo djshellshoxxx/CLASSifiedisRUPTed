@@ -1,0 +1,14 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "command": [
+    "node",
+    "node_modules/typescript/bin/tsc",
+    "-p",
+    "tsconfig.json",
+    "--noEmit"
+  ],
+  "exit_code": 0,
+  "seconds": 9.688,
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 240
+}

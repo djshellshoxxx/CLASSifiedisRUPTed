@@ -12,8 +12,10 @@ export interface Storage {
   /**
    * Runs fn in one transaction. Commits when fn returns ok (write mode), rolls back on err or
    * exception (rethrown). Transactions are serialized; do not call transaction() from inside fn.
-   * Await all work inside fn. Its transaction, stores and methods expire when fn settles;
-   * retaining them never permits access during a later transaction or after storage closes.
+   * Await all work inside fn. Synchronous callbacks are revoked before yielding; returned
+   * promises are revoked when this wrapper observes their settlement, before commit/rollback.
+   * Already queued microtasks can run before that observation, so the guard is not a substitute
+   * for awaiting transaction work. Retained handles cannot access a later transaction or closed storage.
    */
   transaction<T, E>(fn: (tx: Tx) => Result<T, E> | Promise<Result<T, E>>, opts?: { readonly mode?: TxMode }): Promise<Result<T, E>>;
   /** Read-only transaction; always rolled back. */

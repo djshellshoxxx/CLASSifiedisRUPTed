@@ -46,6 +46,26 @@ for (const [name, open] of adapters) describe(`${name} transaction lifetime`, ()
     } finally { await storage.close(); }
   });
 
+  it('documents the queued-microtask window before asynchronous completion is observed', async () => {
+    const storage = await open();
+    let retained!: Tx;
+    let queued!: Promise<unknown>;
+    try {
+      await storage.transaction(async tx => {
+        retained = tx;
+        // Deliberately violates the caller's await-all-work contract. This job is already
+        // queued before runTx can observe the returned promise's settlement.
+        queued = new Promise(resolve => queueMicrotask(() => {
+          try { resolve(tx.records.put(put('before-observation'))); } catch (error) { resolve(error); }
+        }));
+        return ok(undefined);
+      });
+      expect(await queued).toMatchObject({ ok: true });
+      expect(await storage.read(tx => tx.records.get('owner', 'test.note', 'before-observation')?.revision)).toBe(1);
+      expect(() => retained.records.get('owner', 'test.note', 'before-observation')).toThrow('Transaction is no longer active');
+    } finally { await storage.close(); }
+  });
+
   it('preserves null, plain values and thenables returned by a read callback', async () => {
     const storage = await open();
     try {

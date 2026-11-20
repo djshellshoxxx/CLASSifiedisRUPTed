@@ -58,6 +58,12 @@ the public transaction and its underlying driver methods, revoking access before
 commit or rollback. It also blocks delayed blob writes and queued microtasks
 after synchronous transaction/read callbacks return.
 
+For an asynchronous callback, revocation occurs when the wrapper observes its
+returned promise's settlement. A microtask queued before that observation can
+still execute inside the current transaction. Callers must await all transaction
+work; the lifetime guard is not a replacement for that requirement. Retained
+handles remain revoked before persistence and during later transactions.
+
 Awaited asynchronous callbacks and plain/null/thenable read results preserve
 their behavior. A real encrypted-vault lock/reopen regression checks that the
 identity and committed record survive while the stale handle cannot add a row.

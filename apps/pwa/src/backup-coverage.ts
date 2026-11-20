@@ -39,7 +39,7 @@ function isCoherentBackupCoverage(input: unknown): input is BackupCoverage {
       typeof report.typeLimitExceeded !== 'boolean' || typeof report.recordLimitExceeded !== 'boolean') return false;
   const count = report.recordCount;
   if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) return false;
-  if (report.registeredRecordTypes.some(type => typeof type !== 'string') ||
+  if (report.registeredRecordTypes.some(type => typeof type !== 'string' || type.length === 0) ||
       report.unsupportedRecordTypes.some(type => typeof type !== 'string') ||
       report.excludedStores.some(store => typeof store !== 'string') ||
       !report.excludedStores.includes('blobs') || !report.excludedStores.includes('blob_refs')) return false;

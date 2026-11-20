@@ -1,4 +1,7 @@
 import { archiveBackupCodec } from './archive-backup.ts';
+import { publicationBackupCodec } from './publication-backup.ts';
+import { retainedBackupCodec } from './retained-backup.ts';
+import { describeBackupCoverage } from './backup-coverage.ts';
 import { protectVaultSession, runForSession } from './vault-session.ts';
 import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
 import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
@@ -16,8 +19,8 @@ import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.t
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
 import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
-import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
-import { discoveryDefinitions, locationDefinitions, locationBackupCodecs, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
+import { bazaarDefinitions, listingSchema, listingRepo, inventoryHoldRepo, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
+import { discoveryDefinitions, locationDefinitions, locationBackupCodecs, type RetainedListing } from '../../../packages/discovery/src/index.ts';
 
 const codecs = [
   ...locationBackupCodecs(backupCodec),
@@ -45,7 +48,7 @@ const codecs = [
       return data;
     },
   },
-  { ...backupCodec(publicationRepo), validate: (input: unknown) => validatePublicationRecord(input, verifyEnvelope) },
+  publicationBackupCodec,
   {
     ...backupCodec(inventoryHoldRepo),
     async restoreData(input: unknown, principal: string) {
@@ -54,7 +57,7 @@ const codecs = [
       return data;
     },
   },
-  { ...backupCodec(retainedListingRepo), validate: (input: unknown) => validateRetainedRecord(input, verifyEnvelope) },
+  retainedBackupCodec,
 ];
 const CATEGORY = '0195aaaa-0000-7000-8000-000000000001';
 const ids = createUuidV7Generator();
@@ -352,7 +355,7 @@ function clearVaultViews(): void {
   element('workspace').hidden = true; element('access').hidden = false;
   element('listings').replaceChildren(); element('peers').replaceChildren(); element('principal').textContent = '';
   element('error').hidden = true; element('error').textContent = '';
-  element<HTMLInputElement>('backup-password').value = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
+  element<HTMLInputElement>('backup-password').value = ''; element('backup-coverage').textContent = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
 }
 async function finishStorageClose(close: () => Promise<void>): Promise<void> {
   const previous = closingSession;
@@ -447,6 +450,11 @@ element<HTMLFormElement>('peer-search-form').addEventListener('submit', event =>
 });
 element('reset-peer-search').addEventListener('click', () => { void vaultAction(async () => {
   resetPeerSearch(); await refreshPeers();
+}); });
+element('inspect-backup').addEventListener('click', () => { void vaultAction(async () => {
+  const session = current().vault;
+  const coverage = await runForSession(session, () => unlocked, () => session.backupCoverage());
+  element('backup-coverage').textContent = describeBackupCoverage(coverage);
 }); });
 element('backup').addEventListener('click', () => { void vaultAction(async () => {
   const password = element<HTMLInputElement>('backup-password');

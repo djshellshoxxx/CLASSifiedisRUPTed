@@ -146,6 +146,9 @@
 </section>
 <section>
 <h2>Backup and restore</h2>
+<p class="note">This backup includes your signing identity and supported saved records. Attachments, pending deliveries, temporary coordination locks and retry history are excluded. After restoring, check peer availability and coordination again.</p>
+<button id="inspect-backup" type="button" class="secondary">Check backup coverage</button>
+<p id="backup-coverage" role="status" aria-live="polite"></p>
 <label>Original vault passphrase<input id="backup-password" type="password" minlength="12" autocomplete="new-password">
 </label>
 <button id="backup">Download encrypted backup</button>

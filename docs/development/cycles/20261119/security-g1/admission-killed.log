@@ -1,0 +1,2 @@
+undefined
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command was killed with SIGKILL (Forced termination): vitest run tests/integration/alpha-security.test.ts packages/security/src/cryptography/base64url.test.ts packages/mutiny/src/cycle_matching/admission.test.ts --maxWorkers=1 --reporter=json --outputFile=/workspace/scratch/06c5fd0c70c0/security-evidence/admission-green.json

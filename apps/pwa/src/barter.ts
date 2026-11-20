@@ -105,15 +105,22 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
     const previous = (await coordinationRows()).find(row => row.id === payload.subjectId);
     await options.command('mutiny.coordination.ingest', { envelope: verified, expectedRevision: previous?.revision ?? 0 });
   }
-  wantForm.addEventListener('submit', event => { event.preventDefault(); run(async () => {
-    const current = await load();
-    const local = current.listings.find(row => row.data.publicationCid === offered.value && row.data.ownerId === session.principal && row.data.status === 'published' && row.data.barterOptIn);
-    const peer = current.retained.find(row => row.data.cid === requested.value && row.data.projection && !row.data.conflicted && row.data.ownerId !== session.principal);
-    if (!local || !peer || !peer.data.projection || Date.parse(peer.data.projection.expiresAt) <= Date.now()) throw new Error('Choose currently published own and peer items.');
-    const envelope = await signed(WANT_TYPE, { offeringListingCid: offered.value, requestedListingCid: requested.value, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() });
-    await ingest(envelope); options.download(`want-${envelope.cid}.json`, envelope);
-    options.message('Want signed and saved locally. Share its file and the referenced listings; matching starts after the 15-minute aging period.'); await refresh();
-  }); });
+  wantForm.addEventListener('submit', event => {
+    event.preventDefault();
+    // A queued action signs the submitted pair, even if the selects change while
+    // another action or the fresh record read is pending.
+    const offeringListingCid = offered.value;
+    const requestedListingCid = requested.value;
+    run(async () => {
+      const current = await load();
+      const local = current.listings.find(row => row.data.publicationCid === offeringListingCid && row.data.ownerId === session.principal && row.data.status === 'published' && row.data.barterOptIn);
+      const peer = current.retained.find(row => row.data.cid === requestedListingCid && row.data.projection && !row.data.conflicted && row.data.ownerId !== session.principal);
+      if (!local || !peer || !peer.data.projection || Date.parse(peer.data.projection.expiresAt) <= Date.now()) throw new Error('Choose currently published own and peer items.');
+      const envelope = await signed(WANT_TYPE, { offeringListingCid, requestedListingCid, expiresAt: new Date(Date.now() + 7 * 86400000).toISOString() });
+      await ingest(envelope); options.download(`want-${envelope.cid}.json`, envelope);
+      options.message('Want signed and saved locally. Share its file and the referenced listings; matching starts after the 15-minute aging period.'); await refresh();
+    });
+  });
   file.addEventListener('change', () => {
     const selected = file.files?.[0];
     run(async () => {

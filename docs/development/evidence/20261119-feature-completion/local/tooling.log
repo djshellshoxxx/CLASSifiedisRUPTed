@@ -1,0 +1,39 @@
+
+> classrup@ test:tooling /workspace/scratch/b3afde5215ae/classrupted
+> node --test tests/tooling/*.test.mjs
+
+✔ pushes, manual runs and unknown change lists get every OS and every browser (14.399346ms)
+✔ a domain-only pull request runs the Linux gate with Chromium (9.434323ms)
+✔ CLI, build and toolchain changes bring back Windows and macOS (0.477107ms)
+✔ PWA, browser storage and cryptography changes bring back Firefox and WebKit (0.465155ms)
+✔ the script prints GITHUB_OUTPUT lines and refuses a missing event (1444.169959ms)
+✔ workflows parse, pin actions by commit, declare least privilege and cancel stale runs (217.692545ms)
+✔ real catalog generates the checked-in immutable graph within the raw and gzip size budgets (7527.11746ms)
+✔ stale checks never write; a valid source change requires explicit regeneration (105.469487ms)
+✔ parse and graph failures preserve the previous generated output (38.372883ms)
+✔ a catalog entry cannot use a different module specification or a null dependency list (53.829881ms)
+✔ catalog path traversal is rejected before calling the injected spec reader (44.741037ms)
+✔ the filesystem adapter rejects traversal for reads and writes (9.72494ms)
+✔ spec and output symlinks cannot read or replace an external file (5.677987ms)
+✔ a symbolic-link directory cannot redirect the registry reader (9.441909ms)
+✔ an interrupted temporary file survives a failed replacement and the prior output stays intact (39.710636ms)
+✔ a partial write failure cleans up its own temporary file and permits retry (1862.363184ms)
+✔ read errors and invalid output paths return structured failures without writing (0.429366ms)
+✔ generator CLI rejects unknown arguments and the documented build retains the stale gate (7254.115994ms)
+✔ Git preserves exact registry input and output line endings on Windows checkouts (41.809056ms)
+✔ status without execution results reports zero requirement coverage (9585.36837ms)
+✔ interface counts come from non-test source definitions and never exceed the specification (9049.584357ms)
+✔ only passing mapped tests raise requirement coverage (12856.284551ms)
+✔ CLI rejects a missing --results argument (1683.747834ms)
+✔ source references and comments never establish passing execution (3998.422186ms)
+✔ missing or malformed results fail closed (2.069132ms)
+✔ only passed assertions count and skipped/failed duplicates win (3.956533ms)
+✔ CLI rejects missing --results argument rather than using source inventory (370.857763ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 34931.455451

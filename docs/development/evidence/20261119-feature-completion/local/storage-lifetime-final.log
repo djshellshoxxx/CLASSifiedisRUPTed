@@ -1,0 +1,9 @@
+
+ RUN  v5.1.0 /workspace/scratch/b3afde5215ae/classrupted-storage
+
+
+ Test Files  2 passed (2)
+      Tests  30 passed (30)
+   Start at  02:09:17
+   Duration  1.14s (transform 42%, import 30%, tests 25%, worker 3%)
+

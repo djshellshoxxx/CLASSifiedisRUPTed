@@ -1,0 +1,66 @@
+{
+  "base_commit": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+  "scope_fix_commit": "c3c2c341c22bcaca113787743523663dfe948088",
+  "scope_test_sha256": "ee0f8f13d1cc87ffcb3f34e96dcf43567e667f59f93c96e8e96617b9f079e6d7",
+  "lockfile_sha256": "d72caa3b730141025fcbb083eedea8d5c1bf6774c5f2b7ed3e8e145f10308773",
+  "commands": {
+    "install": {
+      "command": "corepack pnpm install --frozen-lockfile --offline --ignore-scripts",
+      "exit_code": 0
+    },
+    "red": {
+      "command": "corepack pnpm exec vitest run packages/kernel/src/storage/scope.test.ts --maxWorkers=1 --reporter=json --outputFile=<scope-red.json>",
+      "exit_code": 1,
+      "passed": 1,
+      "failed": 2,
+      "pending": 0,
+      "source": "Base commit plus the exact test file from scope_fix_commit; implementation unchanged."
+    },
+    "green": {
+      "command": "corepack pnpm exec vitest run packages/kernel/src/storage/scope.test.ts packages/kernel/src/storage/storage.contract.test.ts --maxWorkers=1 --reporter=json --outputFile=<scope-green.json>",
+      "exit_code": 0,
+      "passed": 33,
+      "failed": 0,
+      "pending": 0
+    },
+    "audit": {
+      "command": "corepack pnpm audit --json",
+      "exit_code": 0,
+      "reported_advisories": 0,
+      "muted_advisories": 0,
+      "dependency_count": 142
+    },
+    "admission_followup": {
+      "command": "corepack pnpm exec vitest run tests/integration/alpha-security.test.ts packages/security/src/cryptography/base64url.test.ts packages/mutiny/src/cycle_matching/admission.test.ts --maxWorkers=1 --reporter=json --outputFile=<admission-green.json>",
+      "exit_code": 1,
+      "outcome": "pnpm reports SIGKILL; no final JSON report produced. No assertion count established."
+    },
+    "typecheck": {
+      "command": "GOMAXPROCS=2 GOMEMLIMIT=256MiB corepack pnpm exec tsc -p tsconfig.json --noEmit --singleThreaded",
+      "exit_code": 130,
+      "outcome": "Interrupted after remaining without output, at integration owner request to release shared resources. Not a typecheck pass."
+    }
+  },
+  "evidence": {
+    "scope-red.json": {
+      "bytes": 4025,
+      "sha256": "5cb53e6a0e9415598dddabe5cfecbdc7e73704eef7871edda39b19854b059c05"
+    },
+    "scope-green.json": {
+      "bytes": 14420,
+      "sha256": "2d87115d5ddd296a5c80962e1a9945f1876df8fa3465545a0c2b167e50eb37f9"
+    },
+    "pnpm-audit-initial.json": {
+      "bytes": 310,
+      "sha256": "f05f9b1b6661fd01ff7b54e26b8832afbc7f352434ffcfbc8fa0229dbf42b943"
+    },
+    "advisory-withdrawal.json": {
+      "bytes": 762,
+      "sha256": "1de3a9498bbe3218d74567bbcd36bbd1c7501f0df592d5333a7d432b99c567cc"
+    },
+    "admission-killed.log": {
+      "bytes": 378,
+      "sha256": "40bfa6b686a7e191ee885a1a06b82edc1a5d1d871c8b84e25139583a76554b34"
+    }
+  }
+}

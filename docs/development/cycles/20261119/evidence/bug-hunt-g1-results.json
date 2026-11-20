@@ -1,0 +1,72 @@
+{
+  "source_commit": "4b46abc9240c83a9da9f3800d45b38507d37e331",
+  "base_commit": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+  "baseline_regressions": {
+    "exit_code": 1,
+    "passed": 1,
+    "failed": 3,
+    "log": "bug-hunt-g1-red.log.gz"
+  },
+  "final_regressions": {
+    "exit_code": 0,
+    "passed": 4,
+    "failed": 0,
+    "log": "bug-hunt-g1-final.log.gz"
+  },
+  "full_typecheck": {
+    "command": "corepack pnpm typecheck",
+    "exit_code": 137,
+    "passed": false,
+    "diagnostic": "Killed before compiler diagnostics"
+  },
+  "focused_typecheck": {
+    "exit_code": 0,
+    "command": "timeout 90s env NODE_OPTIONS=--max-old-space-size=512 corepack pnpm exec tsc -p /tmp/classrup-bug-hunt-g1.tsconfig.json",
+    "config": {
+      "extends": "tsconfig.base.json",
+      "compilerOptions": {
+        "typeRoots": [
+          "node_modules/@types"
+        ]
+      },
+      "include": [
+        "apps/pwa/src/barter.ts",
+        "tests/integration/barter-want-intent.test.ts"
+      ]
+    },
+    "scope": "Included TypeScript files and their transitive imports; not the full repository",
+    "stdout_stderr_bytes": 0
+  },
+  "logs": [
+    {
+      "file": "bug-hunt-g1-baseline-capture-interrupted.log.gz",
+      "decoded_bytes": 66,
+      "decoded_sha256": "d42d5aec775cc79d91b8bc8b0837504dbe455869717f87a459095d62fe922580"
+    },
+    {
+      "file": "bug-hunt-g1-final.log.gz",
+      "decoded_bytes": 714,
+      "decoded_sha256": "1698ce2785b49174efbff4e6921f4b3a48cf22aadc01ccca6c5c8115cd6a8fa6"
+    },
+    {
+      "file": "bug-hunt-g1-green.log.gz",
+      "decoded_bytes": 714,
+      "decoded_sha256": "63af9e7b0bb538148ae5c5451ab31649358dff1cd5cbfcc7cdd86ba7b2eda6c5"
+    },
+    {
+      "file": "bug-hunt-g1-red.log.gz",
+      "decoded_bytes": 4151,
+      "decoded_sha256": "460552a6252619713f7922fad30ec970d4a058dc4525a302b9be3ee48fc339cf"
+    },
+    {
+      "file": "bug-hunt-g1-typecheck-config-error.log.gz",
+      "decoded_bytes": 165,
+      "decoded_sha256": "22d754e33e5e414d820e237c9e477c81ec8db495c45ab51f7665351a89a3c783"
+    },
+    {
+      "file": "bug-hunt-g1-unpinned-diagnostic.log.gz",
+      "decoded_bytes": 714,
+      "decoded_sha256": "d3f1bd40e5a64a3c416120f4a17cdda7fd544047f5f4f0860a19c888d223331b"
+    }
+  ]
+}

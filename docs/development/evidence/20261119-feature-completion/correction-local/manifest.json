@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "localCheckpoint": "b5e251c76159d262e3db46a70ff9bd2817220114",
+    "publishedHead": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+    "sourceTree": "92a6452b4241fbcafe13b334a154765bbac63c3e",
+    "localAndPublishedTreeEqualityVerified": true
+  },
+  "typecheck": {
+    "script": "tsc -p tsconfig.json --noEmit",
+    "exitCode": 137,
+    "result": "killed",
+    "passingResultClaimed": false
+  },
+  "scope": "This local typecheck invocation belongs to the browser-test correction. It is separate from the first-head hosted evidence and supplies no passing qualification.",
+  "files": [
+    {
+      "path": "typecheck-browser-fix.log",
+      "bytes": 159,
+      "sha256": "5e740f989f40f7ec8b70d34d1025d91053756e56c6f3773d12dd78f93a0d6196"
+    }
+  ]
+}

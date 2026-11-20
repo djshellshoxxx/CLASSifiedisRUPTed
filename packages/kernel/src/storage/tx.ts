@@ -119,6 +119,10 @@ function casCheck(current: RecordRow | undefined, expected: number): Result<numb
 
 function recordStore(d: DriverTx) {
   return {
+    listTypes(tenant: string, limit: number) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10001) throw new RangeError('Record type limit must be 1–10001');
+      return d.records.listTypes(tenant, limit);
+    },
     get<T = unknown>(tenant: string, type: string, id: string): StoredRecord<T> | undefined {
       const row = d.records.get(tenant, type, id);
       return row ? toStored<T>(row) : undefined;
@@ -135,7 +139,8 @@ function recordStore(d: DriverTx) {
         id: input.id,
         revision: cas.value + 1,
         data: jsonText(input.data, 'record data'),
-        idx: input.idx,
+        // Retained caller tuples must not mutate indexes outside a versioned write.
+        idx: [input.idx[0], input.idx[1], input.idx[2], input.idx[3]],
         createdAt: current?.createdAt ?? now,
         updatedAt: now,
       };
@@ -162,7 +167,7 @@ function recordStore(d: DriverTx) {
       const data = jsonText(rec.data, 'record data');
       const current = d.records.get(rec.tenantId, rec.type, rec.id);
       if (current) return current.revision === rec.revision && current.data === data ? ok('identical') : err(appError('CONFLICT_REVISION', { params: { currentRevision: current.revision } }));
-      d.records.upsert({ tenant: rec.tenantId, type: rec.type, id: rec.id, revision: rec.revision, data, idx, createdAt: rec.createdAt, updatedAt: rec.updatedAt });
+      d.records.upsert({ tenant: rec.tenantId, type: rec.type, id: rec.id, revision: rec.revision, data, idx: [idx[0], idx[1], idx[2], idx[3]], createdAt: rec.createdAt, updatedAt: rec.updatedAt });
       return ok('restored');
     },
   };
@@ -484,15 +489,23 @@ function blobStore(d: DriverTx, kind: DriverKind) {
      * a more public class (e.g. a draft photo being published) lowers the stored class.
      */
     async put(input: PutBlobInput): Promise<Result<BlobInfo, AppError>> {
-      const bad = blobCheck(input, kind);
+      // Admission and persistence must use the same invocation snapshot. The caller
+      // can reuse its byte view or change metadata while the digest is pending.
+      const admitted: PutBlobInput = {
+        tenant: input.tenant, bytes: input.bytes, contentType: input.contentType,
+        privacy: input.privacy, encrypted: input.encrypted === true, now: input.now,
+      };
+      const bad = blobCheck(admitted, kind);
       if (bad) return err(bad);
-      const ref = await blobRefOf(input.bytes);
-      const existing = d.blobs.get(input.tenant, ref);
-      if (existing && input.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: input.privacy });
-      if (existing) return ok(toBlobInfo({ ...existing, privacy: input.privacy < existing.privacy ? input.privacy : existing.privacy }, d.blobs.holders(input.tenant, ref)));
-      const row: BlobRow = { tenant: input.tenant, ref, bytes: input.bytes, size: input.bytes.byteLength, contentType: input.contentType, privacy: input.privacy, encrypted: input.encrypted === true, createdAt: toIso(input.now) };
+      // Uint8Array construction also copies a Node Buffer; Buffer.slice() would alias it.
+      const snapshot = { ...admitted, bytes: new Uint8Array(admitted.bytes) };
+      const ref = await blobRefOf(snapshot.bytes);
+      const existing = d.blobs.get(snapshot.tenant, ref);
+      if (existing && snapshot.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: snapshot.privacy });
+      if (existing) return ok(toBlobInfo({ ...existing, privacy: snapshot.privacy < existing.privacy ? snapshot.privacy : existing.privacy }, d.blobs.holders(snapshot.tenant, ref)));
+      const row: BlobRow = { tenant: snapshot.tenant, ref, bytes: snapshot.bytes, size: snapshot.bytes.byteLength, contentType: snapshot.contentType, privacy: snapshot.privacy, encrypted: snapshot.encrypted === true, createdAt: toIso(snapshot.now) };
       d.blobs.upsert(row);
-      return ok(toBlobInfo(row, d.blobs.holders(input.tenant, ref)));
+      return ok(toBlobInfo(row, d.blobs.holders(snapshot.tenant, ref)));
     },
     get(tenant: string, ref: string): MediaBlob | undefined {
       const b = d.blobs.get(tenant, ref);
@@ -522,9 +535,10 @@ function blobStore(d: DriverTx, kind: DriverKind) {
 }
 
 function migrationStore(d: DriverTx) {
+  const copy = (row: MigrationRow): MigrationRow => ({ id: row.id, checksum: row.checksum, appliedAt: row.appliedAt });
   return {
-    list: (): MigrationRow[] => d.migrations.list(),
-    insert: (row: MigrationRow): void => d.migrations.insert(row),
+    list: (): MigrationRow[] => d.migrations.list().map(copy),
+    insert: (row: MigrationRow): void => d.migrations.insert(copy(row)),
   };
 }
 

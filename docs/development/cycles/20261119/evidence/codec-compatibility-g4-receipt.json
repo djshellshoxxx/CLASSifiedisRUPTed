@@ -1,0 +1,142 @@
+{
+  "schema": "classrup.codec-compatibility-review/v1",
+  "generation": 4,
+  "createdAt": "2026-11-20T02:41:01.643Z",
+  "baseline": "eeee923adbd4dee3634898d035c74072803ea2f0",
+  "retainedPatch": "5c916f7e7779119d9230fd13f5297d67b78e7640",
+  "publicationPatch": "19a3b5985fa8afa4a75187586d061b010201a878",
+  "reviewedSourceTree": "e33bf57c19dc6df3df56cc7f2beb34c876dce965",
+  "isolatedCherryPick": "fe618df0eaf0a58c433ccc4a6401424b2db64183",
+  "isolatedBranch": "codex/codec-compatibility-g4",
+  "conclusion": "No demonstrated compatibility defect in the two codec key patches.",
+  "productionSourceChanges": [],
+  "setup": {
+    "command": "corepack pnpm install --offline --frozen-lockfile --ignore-scripts",
+    "exitCode": 0,
+    "lockfileChanged": false,
+    "node": "v24.22.3",
+    "pnpm": "10.28.0",
+    "workspaceDependenciesResolveWithinOwnWorktree": true
+  },
+  "invocation": {
+    "command": "env NODE_OPTIONS=--max-old-space-size=384 timeout 180s node docs/development/cycles/20261119/evidence/codec-compatibility-g4-positive.mjs > docs/development/cycles/20261119/evidence/codec-compatibility-g4-positive.log 2>&1",
+    "exitCode": 0,
+    "attempts": 1,
+    "cryptographyMocked": false,
+    "adapter": "memory",
+    "outcome": "passed",
+    "groups": 4,
+    "records": 8,
+    "publicationRecords": 3,
+    "retainedRecords": 2,
+    "codecTypes": [
+      "bazaar.inventory_hold",
+      "bazaar.listing",
+      "bazaar.listing_revision",
+      "bazaar.publication",
+      "discovery.retained_listing"
+    ],
+    "node": "v24.22.3",
+    "maxRssKiB": 238720
+  },
+  "staticEvidence": {
+    "unchangedPaths": [
+      "packages/bazaar/src",
+      "packages/vault/src",
+      "packages/identity/src",
+      "packages/federation/src",
+      "packages/kernel/src",
+      "pnpm-lock.yaml"
+    ],
+    "unchangedValidators": [
+      {
+        "path": "packages/discovery/src/search/index.ts",
+        "function": "validateRetainedRecord",
+        "identicalToBaseline": true,
+        "sha256": "db469af5897b159a94468bf38ee640a910afce086af4af78a3ae3efe0c98bd37"
+      },
+      {
+        "path": "packages/bazaar/src/listings/index.ts",
+        "function": "validatePublicationRecord",
+        "identicalToBaseline": true,
+        "sha256": "48f60e8d88cbea8b06c104e780173217caf437043e73a2ec1bfb88465c22db1a"
+      }
+    ],
+    "sourceTreeMatchesFrozenPublicationCandidate": true
+  },
+  "counts": {
+    "nativeProbeGroups": 4,
+    "vitestTestsExecutedByThisWorker": 0,
+    "productTestFailures": 0,
+    "probeSetupFailures": 0
+  },
+  "limitations": [
+    "The former target codec definitions are copied from the identified baseline. No artifact from a historical released binary was used.",
+    "The scenario uses a five-codec subset containing all eight records produced by its ordinary commands; complete PWA composition was source-reviewed.",
+    "No negative-input or admission-gap reproductions were created or run.",
+    "No full-suite, TypeScript, build, browser, IndexedDB, remote CI, or large-vault test was executed by this worker.",
+    "Predecessor audit results and the repair worker focused-suite count are not included in these probe counts."
+  ],
+  "files": [
+    {
+      "path": "apps/pwa/src/main.ts",
+      "bytes": 30738,
+      "sha256": "b89f9720b5f2c6bde3fdedf3f4c725215624b39e266878b334f92ccaba4c4b2f"
+    },
+    {
+      "path": "apps/pwa/src/retained-backup.ts",
+      "bytes": 683,
+      "sha256": "47f2bb0ca8df9aadc42d2607f55f6e81aed5fd56370e85aed428d3756392f669"
+    },
+    {
+      "path": "apps/pwa/src/publication-backup.ts",
+      "bytes": 610,
+      "sha256": "fda24671569a4487e347b44d06133d39aec56c6ce0dc229afcd88d6d095e9b65"
+    },
+    {
+      "path": "packages/discovery/src/search/index.ts",
+      "bytes": 10366,
+      "sha256": "2b9d475d734026c29c01998d2671406e253356d94ed34f8af4344973411fe5a8"
+    },
+    {
+      "path": "packages/bazaar/src/listings/index.ts",
+      "bytes": 19349,
+      "sha256": "95fa0754809b27e79d8b24e4be8828197f06d68d034deba48c84abb727da61f8"
+    },
+    {
+      "path": "packages/bazaar/src/listings/model.ts",
+      "bytes": 1977,
+      "sha256": "02e6d9052229b12f41b8416d74d0a2ed6239ced8f7ce56cf7a1434d05bc6ca96"
+    },
+    {
+      "path": "packages/bazaar/src/listings/lifecycle.ts",
+      "bytes": 12134,
+      "sha256": "a92637eb3caa8f62a3b16042670f387e2caf80a64e73c104772d9a2ce3ddc159"
+    },
+    {
+      "path": "packages/vault/src/vault.ts",
+      "bytes": 18684,
+      "sha256": "c0dc06d8621a292b35068f90c4196eead631f1d85c076e6cc61f710832789afd"
+    },
+    {
+      "path": "packages/identity/src/identity.ts",
+      "bytes": 8349,
+      "sha256": "56f4961d4c863bb16874d6108e386cb1fb3c1d13f466165316c125af0be96ba9"
+    },
+    {
+      "path": "docs/development/cycles/20261119/evidence/codec-compatibility-g4-positive.mjs",
+      "bytes": 12430,
+      "sha256": "cb8c1beaa59be125bb8611d954c866092e659d340f5afc1470df836569e3931f"
+    },
+    {
+      "path": "docs/development/cycles/20261119/evidence/codec-compatibility-g4-positive.log",
+      "bytes": 664,
+      "sha256": "affec8d3b2a8e6885b394c9fcd4ad0a5aaa8f548cd5796a0967db9515fe59b5c"
+    },
+    {
+      "path": "docs/development/cycles/20261119/evidence/codec-compatibility-g4-install.log",
+      "bytes": 568,
+      "sha256": "6bd0832f030c9262376d017feb035b3956409c949ecb0d4a9b17689f6d21acbb"
+    }
+  ]
+}

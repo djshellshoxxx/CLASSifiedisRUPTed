@@ -38,6 +38,10 @@ const retainedSchema = z.strictObject({
 });
 export type RetainedListing = z.output<typeof retainedSchema>;
 export const retainedListingRepo = defineRepo({ type: 'discovery.retained_listing', schema: retainedSchema, indexes: { owner: d => d.ownerId } });
+/** Canonical retained-record key, shared by normal retention and backup admission. */
+export function retainedListingId(ownerId: string, listingId: string): string {
+  return `${ownerId}/${listingId}`;
+}
 const retained = defineEvent('discovery.listing.retained', 1, 'P2', z.strictObject({ listingId: z.string(), conflicted: z.boolean() }));
 export const MAX_RETAINED_LISTINGS = 2000;
 function allRetained(repo: ReadRepo<RetainedListing, 'owner'>): RetainedListing[] {
@@ -64,7 +68,7 @@ export function discoveryDefinitions(options: DiscoveryOptions) {
       if (!validated.ok) return validated;
       const { isTombstone, data, projection } = validated.value;
       const repo = ctx.tx.repo(retainedListingRepo);
-      const key = `${data.ownerId}/${data.listingId}`;
+      const key = retainedListingId(data.ownerId, data.listingId);
       const previous = repo.get(key);
       if (isTombstone && previous && previous.data.cid !== envelope.cid && tombstoneSchema.parse(envelope.payload).target !== previous.data.cid) return err(appError('CONFLICT_REVISION'));
       if (previous?.data.cid === envelope.cid) return ok({ state: previous.data.conflicted ? 'conflicted' : 'retained', cid: envelope.cid });

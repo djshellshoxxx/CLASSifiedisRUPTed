@@ -44,6 +44,16 @@ Use `backupCodec(repo)` and attach a `validate` callback for records containing
 peer evidence. The application must register every supported domain record type;
 unknown types are rejected. Indexes are regenerated from current schemas.
 
+`backupCoverage()` reports populated record types and counts for the unlocked
+principal without returning record payloads. The PWA exposes this as **Check
+backup coverage** and clears the result on lock. Export rechecks actual types in
+its own read transaction and refuses unknown types instead of silently omitting
+saved data. Coverage is bounded to 256 types and 10,000 records; the report marks
+overflow explicitly. Successful coverage does not waive schema, signature,
+passphrase or envelope-size validation. The accepted codec registry is copied
+when the vault opens, so caller mutation cannot change export coverage.
+See [the coverage contract](../../../docs/development/BACKUP_SCOPE.md).
+
 This is an explicitly scoped `classrup.vault.alpha_backup/v1` format, **not** a
 complete CTR-IOX-001 export or the 24-word recovery protocol. It excludes blobs,
 outbox/inbox, lease and delivery state. Export is bounded by the federation

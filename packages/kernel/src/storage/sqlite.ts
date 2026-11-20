@@ -93,6 +93,7 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
   const run = (sql: string, ...p: SQLInputValue[]) => stmt(sql).run(...p);
   return {
     records: {
+      listTypes: (tenant, limit) => all('SELECT type, COUNT(*) AS count FROM records WHERE tenant = ? GROUP BY type ORDER BY type COLLATE BINARY LIMIT ?', [tenant, limit]).map(row => ({ type: s(row['type']), count: n(row['count']) })),
       get: (t, ty, id) => {
         const r = one('SELECT * FROM records WHERE tenant = ? AND type = ? AND id = ?', t, ty, id);
         return r ? toRecord(r) : undefined;

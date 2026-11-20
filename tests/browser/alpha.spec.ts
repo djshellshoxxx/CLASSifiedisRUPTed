@@ -27,6 +27,24 @@ async function listing(page: Page, title: string, amount = '12500') {
   await expect(page.locator('#listings').getByRole('heading', { name: title, exact: true })).toBeVisible();
 }
 
+test('backup coverage explains excluded data and clears private counts on lock', async ({ page }) => {
+  await create(page, 'coverage');
+  await listing(page, 'Counted private listing');
+  await page.getByRole('button', { name: 'Check backup coverage', exact: true }).click();
+  await expect(page.locator('#backup-coverage')).toHaveText(/At last check: [1-9]\d* saved records? across [1-9]\d* supported categor(?:y|ies)\./);
+  const checked = await page.locator('#backup-coverage').textContent();
+  expect(checked).not.toContain('Counted private listing');
+  await expect(page.getByText(/Attachments, pending deliveries, temporary coordination locks/)).toBeVisible();
+  await page.locator('#backup-password').fill(password);
+  await page.getByRole('button', { name: 'Lock vault', exact: true }).click();
+  await expect(page.locator('#backup-coverage')).toBeEmpty();
+  await expect(page.locator('#backup-password')).toHaveValue('');
+  await unlock(page, 'coverage');
+  await expect(page.locator('#backup-coverage')).toBeEmpty();
+  await page.getByRole('button', { name: 'Check backup coverage', exact: true }).click();
+  await expect(page.locator('#backup-coverage')).toHaveText(checked!);
+});
+
 test('idle vault lock clears private views and preserves saved listings', async ({ page }) => {
   await page.clock.install();
   await create(page, 'idle-lock');

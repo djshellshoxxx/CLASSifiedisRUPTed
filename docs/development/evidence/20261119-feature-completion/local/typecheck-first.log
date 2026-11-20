@@ -1,0 +1,6 @@
+
+> classrup@ typecheck /workspace/scratch/b3afde5215ae/classrupted
+> tsc -p tsconfig.json --noEmit
+
+packages/bazaar/src/listings/value-removal.test.ts(159,34): error TS2741: Property 'idempotent' is missing in type '{ name: string; module: string; capability: string; input: ZodObject<{}, $strict>; handler: (ctx: CommandContext) => Result<StoredRecord<{ listingId: string; ownerId: string; subjectId: string; revisionHash: string; expiresAt: string; state: "active" | "released"; }>, AppError>; }' but required in type 'CommandSpec<ZodObject<{}, $strict>, unknown>'.
+ ELIFECYCLE  Command failed with exit code 1.

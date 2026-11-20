@@ -9,18 +9,32 @@ const KEY_TENANT = 'local-vault';
 const KEY_TYPE = 'vault.identity';
 const KEY_ID = 'root';
 const MAX_RECORDS = 10000;
+const MAX_RECORD_TYPES = 256;
 const MAX_BACKUP_BYTES = 16 * 1024 * 1024;
 const encoder = new TextEncoder();
 const STORAGE_IDENTITY_FORMAT = 'classrup.vault-identity/v2';
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const unlockBackoffs = new WeakMap<object, Map<string, UnlockBackoff>>();
+const excludedStores = Object.freeze(['blobs', 'blob_refs', 'outbox', 'inbox', 'idempotency', 'leases', 'dead_letter', 'sync_outbox', 'schema_migrations', 'meta']);
+
+/** Inventory of record coverage only; schema/signature/size checks still run during export. */
+export interface BackupCoverage {
+  readonly recordTypes: readonly { readonly type: string; readonly count: number }[];
+  readonly registeredRecordTypes: readonly string[];
+  readonly unsupportedRecordTypes: readonly string[];
+  /** A lower bound when typeLimitExceeded is true. */
+  readonly recordCount: number;
+  readonly typeLimitExceeded: boolean;
+  readonly recordLimitExceeded: boolean;
+  readonly excludedStores: readonly string[];
+}
 
 /** Explicit domain schema and indexes; unknown record types never pass restore. */
 export interface BackupCodec {
   readonly type: string;
   parse(input: unknown): unknown;
   validate?(input: unknown): Promise<void>;
-  /** Rebuild derived state after trust validation; applied only during restore. */
+  /** Rebuild derived state on detached export preflight data and during restore. */
   restoreData?(input: unknown, principal: string): Promise<unknown>;
   /** Optional canonical storage key for data with a compound uniqueness invariant. */
   recordId?(input: unknown): string;
@@ -45,6 +59,8 @@ export interface UnlockedVault {
   readonly storage: Storage;
   /** Closes this connection and revokes this session; reopen before unlocking again. */
   lock(): Promise<void>;
+  /** Inspect current-principal record coverage without exporting payloads or keys. */
+  backupCoverage(): Promise<BackupCoverage>;
   /** Alpha record backup, not the complete IOX export/recovery/rotation protocol. */
   exportBackup(passphrase: string): Promise<Sealed>;
 }
@@ -69,8 +85,30 @@ export async function openVault(options: VaultOptions): Promise<Vault> {
 
 /** Composition seam for contract tests; production callers use openVault's IndexedDB adapter. */
 export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = [], unlockStorage?: (passphrase: string, required: boolean, replacement?: object) => Promise<void>, backoff = createUnlockBackoff()): Vault {
-  const byType = new Map(codecs.map(codec => [codec.type, codec]));
-  if (byType.size !== codecs.length || byType.has(KEY_TYPE)) throw new Error('Invalid backup codecs');
+  // Capture callable references with their receiver: codecs may use prototype
+  // methods or private class state. Their trusted closure behavior is not frozen.
+  const registeredCodecs = Object.freeze(codecs.map(codec => {
+    const { type, parse, indexes, validate, restoreData, recordId } = codec;
+    return Object.freeze({ type, parse: parse.bind(codec), indexes: indexes.bind(codec),
+      ...(validate === undefined ? {} : { validate: validate.bind(codec) }),
+      ...(restoreData === undefined ? {} : { restoreData: restoreData.bind(codec) }),
+      ...(recordId === undefined ? {} : { recordId: recordId.bind(codec) }),
+    });
+  }));
+  const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
+  if (byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
+  const registeredRecordTypes = Object.freeze([...byType.keys()].sort());
+  const coverage = (tx: Tx, principal: string): BackupCoverage => {
+    const found = tx.records.listTypes(principal, MAX_RECORD_TYPES + 1);
+    const recordTypes = Object.freeze(found.slice(0, MAX_RECORD_TYPES).map(row => Object.freeze({ ...row })));
+    const recordCount = recordTypes.reduce((total, row) => total + row.count, 0);
+    return Object.freeze({
+      recordTypes, registeredRecordTypes,
+      unsupportedRecordTypes: Object.freeze(recordTypes.filter(row => !byType.has(row.type)).map(row => row.type)),
+      recordCount, typeLimitExceeded: found.length > MAX_RECORD_TYPES,
+      recordLimitExceeded: recordCount > MAX_RECORDS, excludedStores,
+    });
+  };
   let session: UnlockedVault | undefined;
   let closed = false;
   let opening = false;
@@ -94,6 +132,41 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
     opening = true;
     try { return await fn(); } finally { opening = false; }
   };
+  /** Shared recovery admission. Normalizers and validators receive detached payloads. */
+  async function preflightRecords(inputs: readonly unknown[], principal: string, recordTypes: readonly string[], guard: () => void = check, validateOriginal = false) {
+    guard();
+    if (inputs.length > MAX_RECORDS) throw new Error('Backup record limit exceeded');
+    const ids = new Set<string>();
+    const records = inputs.map((input: unknown) => {
+      if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid backup record');
+      const row = input as Record<string, unknown>;
+      if (Object.keys(row).sort().join(',') !== 'createdAt,data,id,revision,tenantId,type,updatedAt' || row.tenantId !== principal || typeof row.type !== 'string' || typeof row.id !== 'string' || row.id.length < 1 || row.id.length > 256 || /[\u0000-\u001f\u007f]/u.test(row.id) || !Number.isSafeInteger(row.revision) || (row.revision as number) < 1 || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string' || !Number.isFinite(Date.parse(row.createdAt)) || !Number.isFinite(Date.parse(row.updatedAt)) || new Date(row.createdAt).toISOString() !== row.createdAt || new Date(row.updatedAt).toISOString() !== row.updatedAt || row.updatedAt < row.createdAt) throw new Error('Invalid backup record');
+      const codec = byType.get(row.type);
+      if (!codec || !recordTypes.includes(row.type)) throw new Error('Unsupported backup record type');
+      const id = `${row.type}\u0000${row.id}`;
+      if (ids.has(id)) throw new Error('Duplicate backup record');
+      ids.add(id);
+      const parsedData = codec.parse(structuredClone(row.data));
+      if (codec.recordId && codec.recordId(parsedData) !== row.id) throw new Error('Backup record key mismatch');
+      return { record: { ...row, data: parsedData } as unknown as StoredRecord, idx: codec.indexes(parsedData) };
+    });
+    for (const entry of records) {
+      guard();
+      const codec = byType.get(entry.record.type)!;
+      if (codec.restoreData) {
+        // Keep export's original evidence validation before checking normalized recovery data.
+        if (validateOriginal) { await codec.validate?.(structuredClone(entry.record.data)); guard(); }
+        const normalized = codec.parse(await codec.restoreData(entry.record.data, principal));
+        guard();
+        entry.record = { ...entry.record, data: normalized };
+        entry.idx = codec.indexes(normalized);
+        if (codec.recordId && codec.recordId(normalized) !== entry.record.id) throw new Error('Backup record key mismatch');
+      }
+      await codec.validate?.(structuredClone(entry.record.data));
+      guard();
+    }
+    return records;
+  }
   function activate(identity: UnlockedIdentity, protectedIdentity: ProtectedIdentity): UnlockedVault {
     if (closed) { identity.lock(); throw new Error('Vault closed'); }
     let active = true;
@@ -111,6 +184,12 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
     const unlocked: UnlockedVault = {
       principal: identity.principal, identity, storage,
       async lock() { active = false; identity.lock(); await close(); },
+      async backupCoverage() {
+        guard();
+        const result = await storage.read(tx => coverage(tx, identity.principal));
+        guard();
+        return result;
+      },
       async exportBackup(passphrase) {
         guard();
         // Confirm the entered passphrase really decrypts this identity. Never emit an unusable kit.
@@ -118,8 +197,13 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         checked.lock();
         guard();
         const records = await storage.read(tx => {
+          // Recheck against the same snapshot as the export, not an earlier UI inventory.
+          const scope = coverage(tx, identity.principal);
+          if (scope.typeLimitExceeded) throw new Error('Backup record type limit exceeded');
+          if (scope.unsupportedRecordTypes.length) throw new Error('Backup contains unsupported record types. Open a compatible application version before exporting.');
+          if (scope.recordLimitExceeded) throw new Error('Backup record limit exceeded');
           const out: StoredRecord[] = [];
-          for (const codec of codecs) {
+          for (const codec of registeredCodecs) {
             const rows = tx.records.query({ tenant: identity.principal, type: codec.type, filters: [], orderSlot: 0, dir: 'asc', limit: MAX_RECORDS + 1 });
             for (const row of rows) {
               const data = codec.parse(row.data);
@@ -130,9 +214,9 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           }
           return out;
         });
-        for (const row of records) await byType.get(row.type)?.validate?.(row.data);
+        await preflightRecords(records, identity.principal, registeredRecordTypes, guard, true);
         const exportedAt = new Date().toISOString();
-        const manifest = await signEnvelope(identity, { type: 'classrup.vault.alpha_backup/v1', createdAt: exportedAt, seq: 1, prev: null, payload: { principal: identity.principal, protectedIdentity, recordTypes: codecs.map(c => c.type).sort(), records } });
+        const manifest = await signEnvelope(identity, { type: 'classrup.vault.alpha_backup/v1', createdAt: exportedAt, seq: 1, prev: null, payload: { principal: identity.principal, protectedIdentity, recordTypes: registeredRecordTypes, records } });
         const plaintext = encoder.encode(JSON.stringify(manifest));
         try { const result = await seal(plaintext, passphrase); guard(); return result; }
         finally { plaintext.fill(0); }
@@ -203,30 +287,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
       const identity = await unlockIdentity(data.protectedIdentity, passphrase);
       try {
         if (identity.principal !== envelope.author) throw new Error('Backup identity mismatch');
-        const ids = new Set<string>();
-        const records = data.records.map((input: unknown) => {
-          if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid backup record');
-          const row = input as Record<string, unknown>;
-          if (Object.keys(row).sort().join(',') !== 'createdAt,data,id,revision,tenantId,type,updatedAt' || row.tenantId !== identity.principal || typeof row.type !== 'string' || typeof row.id !== 'string' || row.id.length < 1 || row.id.length > 256 || /[\u0000-\u001f\u007f]/u.test(row.id) || !Number.isSafeInteger(row.revision) || (row.revision as number) < 1 || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string' || !Number.isFinite(Date.parse(row.createdAt)) || !Number.isFinite(Date.parse(row.updatedAt)) || new Date(row.createdAt).toISOString() !== row.createdAt || new Date(row.updatedAt).toISOString() !== row.updatedAt || row.updatedAt < row.createdAt) throw new Error('Invalid backup record');
-          const codec = byType.get(row.type);
-          if (!codec || !(data.recordTypes as unknown[]).includes(row.type)) throw new Error('Unsupported backup record type');
-          const id = `${row.type}\u0000${row.id}`;
-          if (ids.has(id)) throw new Error('Duplicate backup record');
-          ids.add(id);
-          const parsedData = codec.parse(row.data);
-          if (codec.recordId && codec.recordId(parsedData) !== row.id) throw new Error('Backup record key mismatch');
-          return { record: { ...row, data: parsedData } as unknown as StoredRecord, idx: codec.indexes(parsedData) };
-        });
-        for (const entry of records) {
-          const codec = byType.get(entry.record.type)!;
-          if (codec.restoreData) {
-            const normalized = codec.parse(await codec.restoreData(entry.record.data, identity.principal));
-            entry.record = { ...entry.record, data: normalized };
-            entry.idx = codec.indexes(normalized);
-            if (codec.recordId && codec.recordId(normalized) !== entry.record.id) throw new Error('Backup record key mismatch');
-          }
-          await codec.validate?.(entry.record.data);
-        }
+        const records = await preflightRecords(data.records, identity.principal, data.recordTypes as string[]);
         check();
         const persistedIdentity = await wrapIdentity(data.protectedIdentity as ProtectedIdentity, passphrase);
         await unlockStorage?.(passphrase, false);

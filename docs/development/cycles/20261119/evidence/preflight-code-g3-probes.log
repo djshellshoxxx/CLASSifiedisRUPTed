@@ -1,0 +1,11 @@
+{
+  "sourceCommit": "2917cb4751786bd475df2b34441cb40e1dfbc43f",
+  "completed": 5,
+  "probes": [
+    "export rejects original evidence before invoking recovery normalization",
+    "export rejects normalized evidence and preserves source rows and signing identity",
+    "successful export signs original v1 records despite mutating normalizer and validator",
+    "restore conflict rolls back the new identity, earlier normalized rows and rebuilt indexes",
+    "retry restores the older subset scope with preserved identity and metadata, normalized-only validation and rebuilt indexes"
+  ]
+}

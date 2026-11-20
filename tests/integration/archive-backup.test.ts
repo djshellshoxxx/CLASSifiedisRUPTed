@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryStorage } from '../../packages/kernel/src/index.ts';
-import { vaultFromStorage } from '../../packages/vault/src/vault.ts';
+import { vaultFromStorage, backupCodec, openVault } from '../../packages/vault/src/vault.ts';
+import { IDBFactory } from 'fake-indexeddb';
 import { archiveRecordRepo, RESTORE_WINDOW_MS } from '../../packages/bazaar/src/index.ts';
 import { archiveBackupCodec } from '../../apps/pwa/src/archive-backup.ts';
 
@@ -27,16 +28,32 @@ describe('production archive backup codec', () => {
     await restored.lock(); await session.lock();
   });
   it('refuses foreign owner evidence before initializing a backup destination', async () => {
-    const source = vaultFromStorage(createMemoryStorage(), [archiveBackupCodec]);
+    // Emulate the older export path that checked the schema without recovery ownership.
+    const source = vaultFromStorage(createMemoryStorage(), [backupCodec(archiveRecordRepo)]);
     const session = await source.create(password);
     const data = row('did:key:foreign-owner');
     await session.storage.transaction(tx => tx.records.put({ tenant: session.principal, type: archiveRecordRepo.type, id, data,
       idx: archiveBackupCodec.indexes(data), expectedRevision: 0, now: Date.parse(archivedAt) }));
     const backup = await session.exportBackup(password);
-    const destination = vaultFromStorage(createMemoryStorage(), [archiveBackupCodec]);
+    const indexedDB = new IDBFactory();
+    const destination = await openVault({ name: 'invalid-archive', indexedDB, codecs: [archiveBackupCodec] });
     await expect(destination.restoreBackup(backup, password)).rejects.toThrow('Backup archive belongs to another principal');
     expect(await destination.isInitialized()).toBe(false);
     await destination.close(); await session.lock();
+    const reopened = await openVault({ name: 'invalid-archive', indexedDB, codecs: [archiveBackupCodec] });
+    expect(await reopened.isInitialized()).toBe(false);
+    await reopened.close();
+  });
+  it('refuses foreign owner evidence during production export before returning an unusable backup', async () => {
+    const source = vaultFromStorage(createMemoryStorage(), [archiveBackupCodec]);
+    const session = await source.create(password);
+    try {
+      const data = row('did:key:foreign-owner');
+      await session.storage.transaction(tx => tx.records.put({ tenant: session.principal, type: archiveRecordRepo.type, id, data,
+        idx: archiveBackupCodec.indexes(data), expectedRevision: 0, now: Date.parse(archivedAt) }));
+      await expect(session.exportBackup(password)).rejects.toThrow('Backup archive belongs to another principal');
+      expect(await session.storage.read(tx => tx.records.get(session.principal, archiveRecordRepo.type, id)?.data)).toEqual(data);
+    } finally { await session.lock(); }
   });
   it('rejects extended restore deadlines and mismatched restored lifecycle dates', () => {
     expect(archiveRecordRepo.schema.safeParse({ ...row('did:key:owner'), restoreUntil: '2100-01-01T00:00:00.000Z' }).success).toBe(false);

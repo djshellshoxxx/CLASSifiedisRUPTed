@@ -1,0 +1,73 @@
+{
+  "reviewedCandidate": "2917cb4751786bd475df2b34441cb40e1dfbc43f",
+  "sourceBlobs": {
+    "apps/pwa/src/backup-coverage.ts": "e5dd2bc2ad60d660965b342db1117c58a9ba1d5e",
+    "apps/pwa/src/main.ts": "26595d77976819925cc362de14e61b4722c8e581",
+    "apps/pwa/index.html": "428ee98ebdcd8552304b6299322c2ffff4c47f5d",
+    "apps/pwa/src/action-queue.ts": "ca7132ab9b13f641e171b13d8058e7e2d92e20a2",
+    "apps/pwa/src/vault-session.ts": "240d8c30774f78fb9c72dff92dab21dbd8f2dfaf",
+    "packages/vault/src/vault.ts": "8d133151f348cf8213d923cf7098ca9928481f98",
+    "packages/vault/src/backup-coverage.test.ts": "26d46648b0f1f66482c4f813ede95f899ef723e1",
+    "tests/integration/backup-coverage.test.ts": "1a260e40c1503ce28d03d418242b66c34575a130",
+    "tests/browser/alpha.spec.ts": "63195c8d131b461082cc1cd1af53e7bc96fb1cb2"
+  },
+  "command": "env NODE_OPTIONS=--max-old-space-size=128 timeout 15s node docs/development/cycles/20261119/evidence/coverage-bug-g3-probe.mjs",
+  "attempts": [
+    {
+      "name": "setup",
+      "exitCode": 1,
+      "behavioralChecks": 0,
+      "reason": "Incorrect source extraction end-comment marker; stopped before behavioral checks.",
+      "log": "coverage-bug-g3-setup.log.gz"
+    },
+    {
+      "name": "corrected probe",
+      "exitCode": 0,
+      "checks": 8,
+      "passed": 8,
+      "failed": 0,
+      "node": "v24.22.3",
+      "maxRSSKiB": 52764,
+      "approximateWallSeconds": 0.06,
+      "log": "coverage-bug-g3-probe.log.gz",
+      "harnessSha256": "40bc8d0edf946b0d4fdd12d8a1654772d897073c3edf47544cdac3d0bad9eda4"
+    },
+    {
+      "name": "final probe after fixture cleanup",
+      "exitCode": 0,
+      "checks": 8,
+      "passed": 8,
+      "failed": 0,
+      "node": "v24.22.3",
+      "maxRSSKiB": 52836,
+      "approximateWallSeconds": 0.33,
+      "log": "coverage-bug-g3-final-probe.log.gz",
+      "harnessSha256": "cc1603a51af7e28b30ad863780feff7efed87392218e4f5fcea1760e65533779",
+      "change": "Registered-type fixture lists now include each populated type plus an unused category; production source unchanged."
+    }
+  ],
+  "harnessSha256": "cc1603a51af7e28b30ad863780feff7efed87392218e4f5fcea1760e65533779",
+  "logs": [
+    {
+      "file": "coverage-bug-g3-setup.log.gz",
+      "decodedBytes": 810,
+      "decodedSha256": "e16a63e263863e7174e9160db17a9dbce7133e400150305b9177912630df368e"
+    },
+    {
+      "file": "coverage-bug-g3-probe.log.gz",
+      "decodedBytes": 900,
+      "decodedSha256": "8cfc5105de341a807c8e813de422c90b1ac4d1a4fb49990d368f9c60f537296a"
+    },
+    {
+      "file": "coverage-bug-g3-final-probe.log.gz",
+      "decodedBytes": 900,
+      "decodedSha256": "bd7c77c8e67c3f9e7bb9789c149ea903b57315734fe50b9343e84a006f0bc202"
+    }
+  ],
+  "changedProductionSource": false,
+  "limits": [
+    "Controlled DOM and session promises; exact source fragments, not full mounted application",
+    "No Vitest, browser, IndexedDB, cryptographic export/restore, build, typecheck or dependency installation in this worker",
+    "Boundary formatter fixtures are not real vault inventories"
+  ]
+}

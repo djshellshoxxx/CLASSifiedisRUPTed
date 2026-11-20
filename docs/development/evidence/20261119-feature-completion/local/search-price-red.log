@@ -1,0 +1,34 @@
+
+ RUN  v5.1.0 /workspace/scratch/b3afde5215ae/classrupted
+
+ ❯ packages/discovery/src/search/local-search.test.ts (7 tests | 1 failed | 6 skipped) 162ms
+   ❯ retained search options through the public query (7)
+     × returns validation failures for malformed paired price bounds instead of throwing during bigint conversion 147ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/discovery/src/search/local-search.test.ts > retained search options through the public query > returns validation failures for malformed paired price bounds instead of throwing during bigint conversion
+AssertionError: expected [Function] to not throw an error but 'SyntaxError: Cannot convert not-a-num…' was thrown
+
+- Expected:
+undefined
+
++ Received:
+"SyntaxError: Cannot convert not-a-number to a BigInt"
+
+ ❯ packages/discovery/src/search/local-search.test.ts:111:73
+    109|     for (const invalid of ['not-a-number', '1.5', '1e6', '', '-1', '01…
+    110|       for (const price of [{ currency: 'CAD', min: invalid, max: '20' …
+    111|         expect(() => localSearchOptionsSchema.safeParse({ price })).no…
+       |                                                                         ^
+    112|         expect(localSearchOptionsSchema.safeParse({ price }).success).…
+    113|         await expect(k.ask('discovery.listing.search', { options: { pr…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  02:11:18
+   Duration  3.20s (transform 75%, import 19%, tests 6%)
+

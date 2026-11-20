@@ -75,7 +75,10 @@ export function readScope(o: Pick<ScopeOptions, 'tx' | 'tenantId' | 'clock'>): R
 function scopedBlobs(o: ScopeOptions): ScopedBlobs {
   return {
     ...readBlobs(o.tx, o.tenantId),
-    put: (bytes, meta) => o.tx.blobs.put({ tenant: o.tenantId, bytes, ...meta, now: o.clock.now() }),
+    // Structural typing permits extra metadata keys; never let them replace scope authority or bytes.
+    put: (bytes, meta) => o.tx.blobs.put({ tenant: o.tenantId, bytes,
+      contentType: meta.contentType, privacy: meta.privacy,
+      ...(meta.encrypted === undefined ? {} : { encrypted: meta.encrypted }), now: o.clock.now() }),
     attach: (ref, holder) => o.tx.blobs.attach(o.tenantId, ref, holder),
     detach: (ref, holder) => o.tx.blobs.detach(o.tenantId, ref, holder),
     shredded: () => o.tx.blobs.shredded().filter((b) => b.tenant === o.tenantId).map((b) => b.ref),

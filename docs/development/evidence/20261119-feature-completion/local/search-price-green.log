@@ -1,0 +1,9 @@
+
+ RUN  v5.1.0 /workspace/scratch/b3afde5215ae/classrupted
+
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  02:11:40
+   Duration  2.39s (transform 43%, import 29%, tests 26%, worker 1%)
+

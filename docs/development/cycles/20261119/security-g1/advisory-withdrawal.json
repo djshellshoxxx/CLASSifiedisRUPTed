@@ -1,0 +1,13 @@
+{
+  "ghsa_id": "GHSA-fc5q-39xc-vjpf",
+  "cve_id": "CVE-2026-112366",
+  "summary": "Withdrawn Advisory: picomatch vulnerable to ReDoS through single-branch repeated extglobs",
+  "html_url": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+  "published_at": "2026-10-19T18:32:12Z",
+  "updated_at": "2026-11-19T16:07:41Z",
+  "withdrawn_at": "2026-11-18T15:38:56Z",
+  "retrieved_at_utc": "2026-11-20T02:07:38Z",
+  "source": "https://api.github.com/advisories/GHSA-fc5q-39xc-vjpf",
+  "raw_response_sha256": "6f6bd45c701eeedab919e473f767fb257e591a216b76478192425c76ee778070",
+  "disposition": "The GitHub-reviewed advisory is withdrawn. The current description states that this is not a security issue. No dependency update or advisory suppression was applied."
+}

@@ -1,0 +1,22 @@
+{
+  "phase": "typecheck",
+  "source": "ce8251947a87bc55d8919b79f07e21c5a0b63ec4",
+  "tree": "425b10ff48e6ef54c7579a41e457a5ea020a1121",
+  "started_at": "2026-11-20T02:41:46.631802+00:00",
+  "gates": [
+    {
+      "name": "typecheck",
+      "command": [
+        "corepack",
+        "pnpm",
+        "typecheck"
+      ],
+      "process_cap_seconds": 180,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 3.9,
+      "log": "typecheck.log"
+    }
+  ],
+  "completed_at": "2026-11-20T02:41:50.531923+00:00"
+}

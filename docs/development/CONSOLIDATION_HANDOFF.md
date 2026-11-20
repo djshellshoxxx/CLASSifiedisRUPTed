@@ -1,6 +1,15 @@
 # Consolidation completion and provenance
 
-## Current state
+## New owner-directed continuation
+
+The owner subsequently requested continuing incomplete features and successive
+fresh code, bug and security reviews. The [November 19 engineering handoff](cycles/20261119/HANDOFF.md)
+is the current continuation record. It supersedes the finite-task stop direction
+below for this newly authorized work. The older paused automation remains paused.
+PR #56 is now merged after its own qualification; the next engineering candidate
+is tracked separately. Preserve the prior evidence and all existing branches.
+
+## Prior finite consolidation state
 
 The authorized runtime consolidation and both fresh qualification stages are
 complete. PR #54 merged normally into main, and main's own Alpha and six-platform

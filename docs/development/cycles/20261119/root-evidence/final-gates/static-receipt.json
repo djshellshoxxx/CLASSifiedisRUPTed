@@ -1,0 +1,118 @@
+{
+  "phase": "static",
+  "source": "ce8251947a87bc55d8919b79f07e21c5a0b63ec4",
+  "tree": "425b10ff48e6ef54c7579a41e457a5ea020a1121",
+  "started_at": "2026-11-20T02:42:03.578134+00:00",
+  "gates": [
+    {
+      "name": "spec",
+      "command": [
+        "corepack",
+        "pnpm",
+        "spec:check"
+      ],
+      "process_cap_seconds": 180,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 2.157,
+      "log": "spec.log"
+    },
+    {
+      "name": "dependencies",
+      "command": [
+        "corepack",
+        "pnpm",
+        "deps:check"
+      ],
+      "process_cap_seconds": 120,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 0.453,
+      "log": "dependencies.log"
+    },
+    {
+      "name": "registry",
+      "command": [
+        "corepack",
+        "pnpm",
+        "registry:check"
+      ],
+      "process_cap_seconds": 180,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 1.728,
+      "log": "registry.log"
+    },
+    {
+      "name": "money-vectors",
+      "command": [
+        "python3",
+        "-I",
+        "packages/commerce/test/check_money_vectors.py"
+      ],
+      "process_cap_seconds": 120,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 0.04,
+      "log": "money-vectors.log"
+    },
+    {
+      "name": "money-bundle",
+      "command": [
+        "node",
+        "packages/commerce/test/check_money_bundle.mjs"
+      ],
+      "process_cap_seconds": 120,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 0.1,
+      "log": "money-bundle.log"
+    },
+    {
+      "name": "tooling",
+      "command": [
+        "node",
+        "--test",
+        "--test-concurrency=1",
+        "tests/tooling/ci-plan.test.mjs",
+        "tests/tooling/feature-registry.test.mjs",
+        "tests/tooling/status.test.mjs",
+        "tests/tooling/trace.test.mjs"
+      ],
+      "process_cap_seconds": 180,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 9.806,
+      "log": "tooling.log"
+    },
+    {
+      "name": "setup",
+      "command": [
+        "corepack",
+        "pnpm",
+        "run",
+        "setup",
+        "--non-interactive"
+      ],
+      "process_cap_seconds": 180,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 0.383,
+      "log": "setup.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "corepack",
+        "pnpm",
+        "build"
+      ],
+      "process_cap_seconds": 180,
+      "exit_code": 0,
+      "process_timed_out": false,
+      "elapsed_seconds": 1.751,
+      "log": "build.log"
+    }
+  ],
+  "completed_at": "2026-11-20T02:42:20.000448+00:00"
+}

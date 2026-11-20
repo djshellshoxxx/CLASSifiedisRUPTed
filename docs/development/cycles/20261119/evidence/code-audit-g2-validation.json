@@ -1,0 +1,63 @@
+{
+  "baseline": "30526fb2745e8d6e2bb15efae5b8106bcdcf53d0",
+  "source_commit": "085aa1e4f10184e3dd549d5577e2415b92ee77f1",
+  "source_tree": "158158ac41adce78c5b324551564c41c43a4e3cd",
+  "source_sha256": {
+    "packages/kernel/src/storage/tx.ts": "3cbad7e2434b1ad0ead57a9502d14403a5780ecb2f92164fb9b158429bb6c10a",
+    "packages/kernel/src/storage/storage.reference-isolation.test.ts": "b657e66c33375412f2619f398fe173e60cd19f2c6ac4f767927790c000eea2af"
+  },
+  "invocations": [
+    {
+      "command": "corepack pnpm exec vitest run packages/kernel/src/storage/storage.reference-isolation.test.ts --maxWorkers=1",
+      "source": "unchanged production baseline with new tests",
+      "passed": 4,
+      "failed": 8,
+      "skipped": 0,
+      "exit_code": 1
+    },
+    {
+      "command": "corepack pnpm exec vitest run packages/kernel/src/storage/storage.reference-isolation.test.ts packages/kernel/src/storage/storage.contract.test.ts packages/kernel/src/storage/storage.lifetime.test.ts --maxWorkers=1",
+      "source": "fixed production source",
+      "passed": 73,
+      "failed": 0,
+      "skipped": 0,
+      "exit_code": 0
+    },
+    {
+      "command": "corepack pnpm exec vitest run packages/kernel/src/storage/sqlite.test.ts -t TEST-PS-119-09.T14 --maxWorkers=1",
+      "source": "fixed production source",
+      "passed": 1,
+      "failed": 0,
+      "skipped_by_name_filter": 3,
+      "exit_code": 0
+    }
+  ],
+  "logs": [
+    {
+      "path": "code-g2-reference-red.log.gz",
+      "raw_bytes": 4850,
+      "raw_sha256": "9058cfe6152ccccb1f9bb2c1dcf741d3e622e8cebd0b6bdd444cd6bea6cda1f7",
+      "archive_bytes": 1132,
+      "archive_sha256": "123e7ba3544ddcd1749de50ec6e6ba9f8b127e2268d822eee69b430b9a1d10cf"
+    },
+    {
+      "path": "code-g2-reference-green.log.gz",
+      "raw_bytes": 410,
+      "raw_sha256": "c75cd99b31159070ce42d7f0889b291bbc8332f28d8571124cc9c562ae4c9f54",
+      "archive_bytes": 297,
+      "archive_sha256": "71234e5e5068e1b7a71fbf15b35b88ed4e905d5a6a0302131b76aaf3656d5d5f"
+    },
+    {
+      "path": "code-g2-migrations-green.log.gz",
+      "raw_bytes": 220,
+      "raw_sha256": "5f18d056040cf99254964cfb27b35977b124a49663dd55b0009f666dbb41eebc",
+      "archive_bytes": 188,
+      "archive_sha256": "48ad7771e6735e3ed8d8a0df8521036be981b26bd2250261b6b5b6def9a98374"
+    }
+  ],
+  "limitations": [
+    "No full typecheck or full suite in this worker.",
+    "No native browser or encrypted-vault execution in this worker.",
+    "Root owns independent review and combined qualification."
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "source": "99cce1075e066acaefd863d59d23a6fea51f988c",
+  "tree": "ba98ba4ef99f35a32068b1adc5725a4204c76ed9",
+  "records": [
+    {
+      "path": "g11-full-registry-recovery/production-recovery-interaction-receipt.json",
+      "original_bytes": 1243,
+      "original_sha256": "1e65b69f8cbd2cb47c738dbdeb6deda3e7a89b40c09b7c3a2743fb8b0668f2a3",
+      "stored_bytes": 1243,
+      "stored_sha256": "1e65b69f8cbd2cb47c738dbdeb6deda3e7a89b40c09b7c3a2743fb8b0668f2a3"
+    },
+    {
+      "path": "g11-full-registry-recovery/production-recovery-interaction.json.gz",
+      "original_bytes": 4874,
+      "original_sha256": "8b6d740c3a04571534ff6b81462d99158ecef6c4cba7692897f268496c7be9f8",
+      "stored_bytes": 979,
+      "stored_sha256": "282e237db3060e928a3930efcfa476ce46f0c913ad0bf22788e6186b23a25e87"
+    },
+    {
+      "path": "g11-full-registry-recovery/production-recovery-interaction.log.gz",
+      "original_bytes": 139,
+      "original_sha256": "f1f91c11939eb33af407178ba826606b4602ef074992a3ee57effa1fa5c31ec0",
+      "stored_bytes": 136,
+      "stored_sha256": "0aecaa5bcbd98b8b18465a6c205be94eeb4dad9130c5565ccc7621bd5f5bad20"
+    },
+    {
+      "path": "g11-full-registry-recovery/summary.json",
+      "original_bytes": 2758,
+      "original_sha256": "621fd381f8989e55d7192eb044d11f4e06e6a35b42e5a8c8ac0c3d98201c7141",
+      "stored_bytes": 2758,
+      "stored_sha256": "621fd381f8989e55d7192eb044d11f4e06e6a35b42e5a8c8ac0c3d98201c7141"
+    },
+    {
+      "path": "g11-full-registry-recovery/typecheck-receipt.json",
+      "original_bytes": 474,
+      "original_sha256": "a151dca05de02d8cb442157ca571dfb1c234a906f40b66d8b9d0b440fb87a9a8",
+      "stored_bytes": 474,
+      "stored_sha256": "a151dca05de02d8cb442157ca571dfb1c234a906f40b66d8b9d0b440fb87a9a8"
+    },
+    {
+      "path": "g11-full-registry-recovery/typecheck.log.gz",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_bytes": 20,
+      "stored_sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+    }
+  ],
+  "total_original_bytes": 9488,
+  "total_stored_bytes": 5610
+}

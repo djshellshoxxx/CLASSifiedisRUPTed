@@ -1,0 +1,87 @@
+{
+  "source": "4a693cba0483b92b0df2459f8c9794be202b7c9a",
+  "tree": "bccd3e4c94abfc05f2c39d0072264e6f14a9df6b",
+  "scope": "selected production recovery interaction and adjacent recovery scenarios only",
+  "selected_files": [
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-recovery-readers.test.ts"
+  ],
+  "reported_files": [
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-recovery-readers.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 9
+  },
+  "missing_files": [],
+  "unexpected_files": [],
+  "duplicate_files": [],
+  "checks": [
+    {
+      "source": "4a693cba0483b92b0df2459f8c9794be202b7c9a",
+      "tree": "bccd3e4c94abfc05f2c39d0072264e6f14a9df6b",
+      "name": "typecheck",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.json",
+        "--noEmit"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "native_runtime_limits": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB"
+      },
+      "process_timeout_seconds": 300,
+      "exit_code": 0,
+      "seconds": 13.447,
+      "max_child_rss_kib": 728624,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "4a693cba0483b92b0df2459f8c9794be202b7c9a",
+      "tree": "bccd3e4c94abfc05f2c39d0072264e6f14a9df6b",
+      "name": "production-recovery-interaction",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/integration/production-barter-recovery.test.ts",
+        "tests/integration/production-notification-recovery.test.ts",
+        "tests/integration/production-recovery-readers.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g11-full-registry-recovery-round2-native/production-recovery-interaction.json"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "native_runtime_limits": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB"
+      },
+      "process_timeout_seconds": 900,
+      "exit_code": 0,
+      "seconds": 24.76,
+      "max_child_rss_kib": 728624,
+      "log_bytes": 153,
+      "log_sha256": "b0b481fb5833ae63cc14789153d6b73c26e448b6c6ad547aeba69bb285978aa0",
+      "files": [
+        "tests/integration/production-barter-recovery.test.ts",
+        "tests/integration/production-notification-recovery.test.ts",
+        "tests/integration/production-recovery-readers.test.ts"
+      ],
+      "assertion_counts": {
+        "passed": 9
+      },
+      "report_success": true,
+      "report_sha256": "79c0fa869c52b4438b49e2cb8bd1c4a8f4bd8a518f84a5d3a97033a9c54d37fd"
+    }
+  ],
+  "all_checks_passed": true,
+  "complete_selected_pass": true
+}

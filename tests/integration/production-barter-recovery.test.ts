@@ -1,21 +1,25 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createBus, createDeterministicIds, createFakeClock, createMemoryStorage, createRegistry,
+  collectingSink, createBus, createDeterministicIds, createFakeClock, createMemoryStorage, createOutboxDispatcher, createRegistry,
   type FakeClock, type IdGen, type Page, type SignedEnvelope, type StoredRecord,
 } from '../../packages/kernel/src/index.ts';
 import { didFromPublicKey, type UnlockedIdentity } from '../../packages/identity/src/index.ts';
 import { signEnvelope, verifyEnvelope } from '../../packages/federation/src/index.ts';
-import { bazaarDefinitions, inventoryHoldRepo, listingRepo, listingRevisionRepo, publicationRepo } from '../../packages/bazaar/src/index.ts';
-import { discoveryDefinitions, retainedListingRepo } from '../../packages/discovery/src/index.ts';
+import { archiveRecordRepo, bazaarDefinitions, inventoryHoldRepo, listingRepo, listingRevisionRepo, publicationRepo,
+  type Listing, type ListingRevision } from '../../packages/bazaar/src/index.ts';
+import { discoveryDefinitions, locationDefinitions, locationSettingRepo, retainedListingRepo,
+  type LocationSetting, type LocationView, type RetainedListing } from '../../packages/discovery/src/index.ts';
 import {
   admitSignedGraph, coordinationRepo, discoverCycles, prepareProposal, PROPOSAL_TYPE, WANT_TYPE, WITHDRAWAL_TYPE, wantRepo, validateCoordinationRecord,
   type CoordinationState,
 } from '../../packages/mutiny/src/index.ts';
+import { inApp, localNotificationDefinitions, preferences } from '../../packages/notify/src/index.ts';
 import { openVault, type UnlockedVault, type Vault } from '../../packages/vault/src/index.ts';
 import { createBarterRuntime, type BarterInputs } from '../../apps/pwa/src/barter-runtime.ts';
 import { mountBarter } from '../../apps/pwa/src/barter.ts';
 import { productionBackupCodecs } from '../../apps/pwa/src/backup-codecs.ts';
+import { drainNotificationDelivery } from '../../apps/pwa/src/notification-delivery.ts';
 import { NodeStub } from '../support/node-stub.ts';
 
 const HOUR = 3600000;
@@ -23,6 +27,14 @@ const DAY = 24 * HOUR;
 const passphrase = 'production barter recovery acceptance passphrase';
 type CoordinationRecord = { ownerId: string; state: CoordinationState };
 type WantRecord = { ownerId: string; envelope: SignedEnvelope; receivedAtLocal: number };
+type NotificationView = inApp.Notification & { id: string; revision: number };
+interface NotificationPage { items: NotificationView[]; nextCursor?: string }
+interface PreferenceMatrix {
+  cells: Array<preferences.NotificationPreference & { id: string; revision: number }>;
+  channelStatus: { push: boolean; email: boolean };
+  defaultsVersion: number;
+  mirrorRef: string | null;
+}
 
 // The peer supplies real signed statements; its key encryption is outside this owner's recovery case.
 async function peerIdentity(): Promise<UnlockedIdentity> {
@@ -37,6 +49,9 @@ async function peerIdentity(): Promise<UnlockedIdentity> {
 
 function runtime(session: Pick<UnlockedVault, 'principal' | 'identity' | 'storage'>, clock: FakeClock, ids: IdGen, categoryId: string) {
   const barter = createBarterRuntime(session);
+  const notifications = localNotificationDefinitions({
+    localPrincipal: () => session.principal, isBlocked: barter.isBlocked, isThreadMuted: () => false,
+  });
   const registry = createRegistry().add(...barter.definitions,
     ...bazaarDefinitions({ categoryAllowed: id => id === categoryId,
       signProjection: async (type, payload, seq, prev) => ({
@@ -44,15 +59,24 @@ function runtime(session: Pick<UnlockedVault, 'principal' | 'identity' | 'storag
       }), verifyProjection: input => verifyEnvelope(input, { now: clock.now() }),
     }).all,
     ...discoveryDefinitions({ verifyEnvelope: input => verifyEnvelope(input, { now: clock.now() }) }).all,
+    ...locationDefinitions({ localPrincipal: () => session.principal }).all,
+    ...notifications.all,
   );
-  const bus = createBus({ registry, storage: session.storage, clock, ids,
+  const origin = `vault:${session.principal}`;
+  const events = collectingSink();
+  const bus = createBus({ registry, storage: session.storage, clock, ids, origin, eventSink: events,
     authz: { authorize: (actor, _capability, _resource, context) =>
       actor.kind === 'user' && actor.id === session.principal && context.tenantId === session.principal
         ? { allow: true } : { allow: false, code: 'FORBIDDEN' } },
   });
+  const outbox = createOutboxDispatcher({ registry, storage: session.storage, clock, ids, origin, random: () => 0.5 });
   const context = { actor: { kind: 'user' as const, id: session.principal, roles: ['member'] }, tenantId: session.principal };
   return {
     setMatchingPolicy: barter.setMatchingPolicy,
+    events: events.events,
+    // The production helper uses a bounded drain and checks outstanding/dead-letter
+    // state too: a quiet pass alone does not establish delivery completion.
+    drainNotifications: () => drainNotificationDelivery(outbox, session.storage, registry),
     async command<T = unknown>(name: string, input: unknown): Promise<T> {
       const result = await bus.dispatch(context, name, input, { idempotencyKey: ids.next() });
       if (!result.ok) throw new Error(`${name}: ${result.error.code}`);
@@ -117,6 +141,17 @@ describe('production barter record recovery', () => {
       })));
       for (const actor of actors) for (const envelope of wants) await actor.app.command('mutiny.want.retain', { envelope });
       clock.advance(HOUR); // Satisfy the existing 15-minute want admission rule.
+      // Keep the independent archive separate from the item promised by this cycle.
+      const archivedListingId = ids.next();
+      await owner.command('bazaar.listing.create', { listingId: archivedListingId, kind: 'giveaway',
+        title: 'Archived owner item', description: 'An independent archived item recovered beside the signed cycle.',
+        categoryId, condition: 'good', regionCell: 'c2b2q', barterOptIn: false });
+      await owner.command('bazaar.listing.publish', { listingId: archivedListingId, expectedRevision: 1 });
+      const archived = await owner.command<{ archiveRecordId: string; envelope: SignedEnvelope }>(
+        'bazaar.listing.archive', { listingId: archivedListingId, expectedRevision: 2 });
+      expect(archived.archiveRecordId).not.toBe(archivedListingId);
+      await owner.command('discovery.location.set_home', { cell5: 'c2b2q', publicLevel: 'L1', entryMode: 'map_tile' });
+      await owner.command('notify.preference.set', { cells: [{ category: 'offers', inApp: false, expectedRevision: 1 }] });
       const graph = await admitSignedGraph(listings, wants, {
         now: clock.now(), localPrincipal: principal, optedIn: true, includeUnknownIdentities: true,
       });
@@ -160,13 +195,94 @@ describe('production barter record recovery', () => {
       expect(codec(coordinationRepo.type).recordId(before.data)).toBe(before.id);
       const beforeInputs = await owner.query<BarterInputs>('mutiny.alpha.inputs', {});
       expect(beforeInputs.holds).toMatchObject([{ id: actors[0]!.holdId, data: { state: 'active' } }]);
+      // Only accepted peer coordination evidence drives the real inbox subscriber.
+      expect(await owner.drainNotifications()).toBe(false);
+      const peerObservations = owner.events.filter(event => event.type === 'mutiny.coordination.observed'
+        && (event.payload as { actorId: string }).actorId === peer.principal);
+      expect(peerObservations).toHaveLength(2);
+      for (const event of peerObservations) expect(event).toMatchObject({ tenantId: principal,
+        payload: { subjectId: proposal.snapshot.subjectId, actorId: peer.principal } });
+      async function ordinaryViews(app: ReturnType<typeof runtime>) {
+        return {
+          listings: await app.query<Page<Listing>>('bazaar.listing.list', {}),
+          history: await app.query<Page<ListingRevision>>('bazaar.listing_revision.list', { listingId: actors[0]!.listingId }),
+          archive: await app.query('bazaar.archive_record.get', { archiveRecordId: archived.archiveRecordId }),
+          retained: await app.query<{ items: RetainedListing[]; source: string; staleOrExcluded: number }>(
+            'discovery.listing.search', { query: 'Barter item 1', regionCell: 'c2b2q', barterOnly: true }),
+          publicLocation: await app.query<LocationView>('discovery.location.get_own', {}),
+          privateLocation: await app.query<LocationView>('discovery.location.get_own', { includeHomeCell: true }),
+          inbox: await app.query<NotificationPage>('notify.notification.list_mine', { status: 'all' }),
+          unread: await app.query('notify.notification.unread_count', {}),
+          preferences: await app.query<PreferenceMatrix>('notify.preference.get_matrix', {}),
+        };
+      }
+      const beforeViews = await ordinaryViews(owner);
+      expect(beforeViews.listings.items.map(row => row.id).sort()).toEqual([actors[0]!.listingId, archivedListingId].sort());
+      expect(beforeViews.history.items).toHaveLength(1);
+      expect(beforeViews.archive).toMatchObject({ record: { id: archived.archiveRecordId,
+        data: { listingId: archivedListingId, ownerId: principal, status: 'archived' } } });
+      expect(beforeViews.retained).toMatchObject({ source: 'locally-retained', staleOrExcluded: 0,
+        items: [{ ownerId: peer.principal, listingId: actors[1]!.listingId, cid: listings[1]!.cid }] });
+      expect(beforeViews.retained.items).toHaveLength(1);
+      expect(beforeViews.publicLocation).toMatchObject({ publicLevel: 'L1', publicCell: 'c2b2' });
+      expect(beforeViews.publicLocation).not.toHaveProperty('homeCell5');
+      expect(beforeViews.privateLocation).toMatchObject({ homeCell5: 'c2b2q' });
+      expect(beforeViews.inbox.items).toHaveLength(1);
+      const notice = beforeViews.inbox.items[0]!;
+      expect(notice).toMatchObject({ userDid: principal, category: 'cycles', status: 'unread', count: 2,
+        templateKey: 'notify.tpl.cycles.coordination_updated', ref: { type: 'cycle', id: before.id },
+        sourceEventIds: peerObservations.map(event => event.eventId) });
+      expect(beforeViews.unread).toMatchObject({ total: 1, byCategory: { cycles: 1, offers: 0 } });
+      expect(beforeViews.preferences.cells).toHaveLength(7);
+      expect(beforeViews.preferences.cells.find(cell => cell.category === 'offers')).toMatchObject({ inApp: false, revision: 2 });
+      expect(beforeViews.preferences.cells.find(cell => cell.category === 'cycles')).toMatchObject({ inApp: true });
+      expect(beforeViews.preferences).toMatchObject({ channelStatus: { push: false, email: false }, mirrorRef: null });
+      const dayKey = `${Math.floor(clock.now() / DAY)}/${peer.principal}`;
+      const preferenceKey = `edit/${Math.floor(clock.now() / HOUR)}`;
+      const notificationState = (session: UnlockedVault) => session.storage.read(tx => ({
+        seen: tx.records.query({ tenant: principal, type: inApp.seenRepo.type, filters: [], orderSlot: 0, dir: 'asc', limit: 20 }),
+        day: tx.records.get(principal, inApp.dayRepo.type, dayKey),
+        preferences: tx.records.get(principal, preferences.counterRepo.type, preferenceKey),
+        diagnostics: tx.records.get(principal, inApp.diagRepo.type, 'counters'),
+      }));
+      const beforeNotifications = await notificationState(original);
+      expect(beforeNotifications.seen.map(row => row.id).sort()).toEqual(peerObservations.map(event => event.eventId).sort());
+      for (const row of beforeNotifications.seen) expect(row.data).toEqual({ notificationId: notice.id, at: clock.iso() });
+      expect(beforeNotifications.day?.data).toEqual({ count: 2 });
+      expect(beforeNotifications.preferences?.data).toEqual({ count: 1 });
+      expect(beforeNotifications.diagnostics?.data).toEqual({ created: 1, collapsed: 1, read: 0, dropped: 0, hidden: 0, total: 1 });
+      const locationRecord = (session: UnlockedVault) => session.storage.read(tx =>
+        tx.records.get<LocationSetting>(principal, locationSettingRepo.type, principal));
+      const beforeLocation = await locationRecord(original);
+      expect(beforeLocation?.data).toMatchObject({ changeCount24h: 1, changeTimes: [clock.iso()] });
+      const { lastChangedAt, ...locationData } = beforeLocation!.data;
+      expect(lastChangedAt).toBe(clock.iso());
+      // Location's import policy resets its local window; notification counters persist.
+      const recoveredLocation = { ...beforeLocation!, data: { ...locationData, changeCount24h: 0, changeTimes: [] } };
       const populatedTypes = [listingRepo.type, listingRevisionRepo.type, publicationRepo.type, inventoryHoldRepo.type,
-        retainedListingRepo.type, wantRepo.type, coordinationRepo.type].sort();
+        retainedListingRepo.type, wantRepo.type, coordinationRepo.type, archiveRecordRepo.type, locationSettingRepo.type,
+        inApp.notificationRepo.type, inApp.seenRepo.type, inApp.dayRepo.type, inApp.diagRepo.type,
+        preferences.preferenceRepo.type, preferences.counterRepo.type].sort();
+      expect(populatedTypes).toHaveLength(15);
+      expect(productionBackupCodecs.map(item => item.type).sort()).toEqual(populatedTypes);
       expect((await original.backupCoverage()).recordTypes.map(row => row.type)).toEqual(populatedTypes);
+      const coverage = await original.backupCoverage();
+      expect(coverage).toMatchObject({ registeredRecordTypes: populatedTypes, unsupportedRecordTypes: [],
+        typeLimitExceeded: false, recordLimitExceeded: false });
+      expect(coverage.recordTypes.every(row => row.count > 0)).toBe(true);
+      const domainRecords = (session: UnlockedVault) => session.storage.read(tx => populatedTypes.flatMap(type =>
+        tx.records.query({ tenant: principal, type, filters: [], orderSlot: 0, dir: 'asc', limit: 100 })));
+      const beforeRecords = await domainRecords(original);
+      expect(beforeRecords).toHaveLength(coverage.recordCount); // The bounded reads must capture every exported domain row.
+      const beforeNotificationRecords = beforeRecords.filter(row => row.type.startsWith('notify.'));
       const message = new TextEncoder().encode('barter recovery identity');
       const signature = await original.identity.sign(message);
       const backup = await original.exportBackup(passphrase);
       expect(await coordination(owner)).toEqual(before); // Export preflight must not freeze the live source.
+      expect(await ordinaryViews(owner)).toEqual(beforeViews);
+      expect(await notificationState(original)).toEqual(beforeNotifications);
+      expect(await locationRecord(original)).toEqual(beforeLocation);
+      expect(await domainRecords(original)).toEqual(beforeRecords);
 
       // Signed evidence is genuine, but these two cached terminal reasons are
       // local decisions. Check repeated replay without treating either as signed proof.
@@ -224,12 +340,21 @@ describe('production barter record recovery', () => {
 
       const expected = { ...before, data: { ...before.data, state: { ...before.data.state,
         status: 'frozen', reason: 'restore_requires_review', committedLocallyAt: null, commitFeasibility: null } } };
+      // Independent expected exceptions; do not derive the oracle by invoking a restore codec.
+      const expectedRecords = beforeRecords.map(row => row.type === coordinationRepo.type
+        ? { ...row, data: expected.data } : row.type === locationSettingRepo.type ? recoveredLocation : row);
       const restored = await (await open('barter-recovery-destination')).restoreBackup(backup, passphrase);
       const restoredApp = runtime(restored, clock, ids, categoryId);
       expect(await coordination(restoredApp)).toEqual(expected);
       expect(await restoredApp.query('mutiny.want.list', {})).toEqual(beforeWants);
       expect(await restoredApp.query('mutiny.alpha.inputs', {})).toEqual(beforeInputs);
       expect(await restored.identity.sign(message)).toEqual(signature);
+      expect(await domainRecords(restored)).toEqual(expectedRecords);
+      expect(await ordinaryViews(restoredApp)).toEqual(beforeViews);
+      expect(await notificationState(restored)).toEqual(beforeNotifications);
+      expect(await locationRecord(restored)).toEqual(recoveredLocation);
+      expect(await restored.backupCoverage()).toEqual(coverage);
+      expect(await restoredApp.drainNotifications()).toBe(false);
       // Repeated export preflight normalization retains the review reason and canonical key.
       const normalizedAgain = await codec(coordinationRepo.type).restoreData!(expected.data, principal);
       expect(normalizedAgain).toEqual(expected.data);
@@ -243,6 +368,11 @@ describe('production barter record recovery', () => {
       expect(await coordination(recovered)).toEqual(expected);
       expect(await recovered.query('mutiny.want.list', {})).toEqual(beforeWants);
       expect(await recovered.query('mutiny.alpha.inputs', {})).toEqual(beforeInputs);
+      expect(await domainRecords(unlocked)).toEqual(expectedRecords);
+      expect(await ordinaryViews(recovered)).toEqual(beforeViews);
+      expect(await notificationState(unlocked)).toEqual(beforeNotifications);
+      expect(await locationRecord(unlocked)).toEqual(recoveredLocation);
+      expect(await unlocked.backupCoverage()).toEqual(coverage);
       recovered.setMatchingPolicy({ enabled: true, blockedOwners: [] });
       expect(await recovered.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
       const refreshed = await coordination(recovered);
@@ -251,6 +381,46 @@ describe('production barter record recovery', () => {
       expect((await recovered.query<BarterInputs>('mutiny.alpha.inputs', {})).holds)
         .toMatchObject([{ id: actors[0]!.holdId, data: { state: 'released' } }]);
       expect(await recovered.query('mutiny.want.list', {})).toEqual(beforeWants);
+      expect(await recovered.drainNotifications()).toBe(false);
+      expect(await ordinaryViews(recovered)).toEqual(beforeViews);
+      expect(await notificationState(unlocked)).toEqual(beforeNotifications);
+      expect((await domainRecords(unlocked)).filter(row => row.type.startsWith('notify.'))).toEqual(beforeNotificationRecords);
+
+      // Refresh emits no newly accepted peer evidence, including after reopen.
+      expect(await recovered.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
+      expect(await coordination(recovered)).toMatchObject({ revision: before.revision + 2, data: expected.data });
+      expect(await recovered.drainNotifications()).toBe(false);
+      expect(await ordinaryViews(recovered)).toEqual(beforeViews);
+      expect(await notificationState(unlocked)).toEqual(beforeNotifications);
+      expect((await domainRecords(unlocked)).filter(row => row.type.startsWith('notify.'))).toEqual(beforeNotificationRecords);
+      expect(await locationRecord(unlocked)).toEqual(recoveredLocation);
+
+      // Recovered records must support ordinary owner actions across both modules.
+      expect(await recovered.command('notify.notification.mark_read', { notificationId: notice.id, expectedRevision: notice.revision }))
+        .toMatchObject({ notificationId: notice.id, status: 'read', revision: notice.revision + 1 });
+      const readInbox = { ...beforeViews.inbox, items: [{ ...notice, status: 'read', revision: notice.revision + 1,
+        readAt: clock.iso(), updatedAt: clock.iso() }] };
+      expect(await recovered.query('notify.notification.list_mine', { status: 'all' })).toEqual(readInbox);
+      expect(await recovered.query('notify.notification.unread_count', {})).toMatchObject({ total: 0 });
+      const readNotifications = await notificationState(unlocked);
+      expect(readNotifications.seen).toEqual(beforeNotifications.seen);
+      expect(readNotifications.day).toEqual(beforeNotifications.day);
+      expect(readNotifications.preferences).toEqual(beforeNotifications.preferences);
+      expect(readNotifications.diagnostics?.data).toEqual({ created: 1, collapsed: 1, read: 1, dropped: 0, hidden: 0, total: 1 });
+      await recovered.command('bazaar.listing.restore', { archiveRecordId: archived.archiveRecordId, expectedRevision: 1 });
+      expect(await recovered.query<StoredRecord<Listing>>('bazaar.listing.get', { listingId: archivedListingId }))
+        .toMatchObject({ revision: 4, data: { status: 'unpublished' } });
+      const republished = await recovered.command<{ envelope: SignedEnvelope }>(
+        'bazaar.listing.publish', { listingId: archivedListingId, expectedRevision: 4 });
+      expect(await verifyEnvelope(republished.envelope, { now: clock.now() })).toMatchObject({ author: principal,
+        seq: 3, prev: archived.envelope.cid, payload: { listingId: archivedListingId, ownerId: principal, revision: 5 } });
+      expect(await recovered.query('bazaar.listing.publication', { listingId: archivedListingId })).toEqual({ envelope: republished.envelope });
+      expect(await recovered.query('bazaar.archive_record.get', { archiveRecordId: archived.archiveRecordId }))
+        .toMatchObject({ record: { data: { status: 'restored' } } });
+      expect(await recovered.drainNotifications()).toBe(false);
+      expect(await recovered.query('notify.notification.list_mine', { status: 'all' })).toEqual(readInbox);
+      expect(await notificationState(unlocked)).toEqual(readNotifications);
+      expect((await coordination(recovered)).data).toEqual(expected.data);
     } finally {
       peer.lock(); await peerStorage.close();
       for (const vault of vaults) await vault.close();

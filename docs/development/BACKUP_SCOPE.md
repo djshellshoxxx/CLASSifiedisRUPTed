@@ -62,10 +62,10 @@ transaction, including a retained/destructured reference.
 
 ### Production records and ordinary recovery readers
 
-The shared PWA registry currently has 15 record codecs. Three executed local
-scenarios populate their union through ordinary domain commands, then export,
-restore, reopen and continue owner actions. The precise candidate source,
-results and pending hosted gate are in the
+The shared PWA registry currently has 15 record codecs. The original three
+executed local scenarios populated their union through ordinary domain commands,
+then exported, restored, reopened and continued owner actions. Their exact
+candidate source, results and pending hosted gate are in the
 [notification/barter qualification](cycles/20261120-next-recovery/QUALIFICATION.md).
 
 | Record types | Populated scenario | Recovery acceptance |
@@ -75,12 +75,33 @@ results and pending hosted gate are in the
 | `notify.notification`, `notify.preference`, `notify.notification_seen`, `notify.notification_day`, `notify.notification_diag`, `notify.pref_counter` | Local notifications | Inbox pagination/filtering, preferences, counters, domain deduplication, collapse and continued read/preference actions |
 | `mutiny.want`, `mutiny.coordination`, `bazaar.inventory_hold` | Signed barter; also includes four listing/retention types above | Real committed exchange recovers frozen for manual review; wants/evidence/identity persist, repeated normalization and refresh preserve review state, ordinary terminal refresh releases the domain hold |
 
-Each scenario uses the full registry, but its backup contains only its populated
-types: six, six and seven respectively. The union is 15, not 19 distinct types.
-This is not a single all-type archive, every state of each codec, native-device
-acceptance, or a whole database snapshot. A domain inventory hold is distinct
-from the excluded infrastructure lease store. External notification delivery
-and channel grants remain outside local notification record recovery.
+Those original scenarios used the full registry with six, six and seven
+populated types respectively. Their union was 15, not 19 distinct types, at
+the source identified in that qualification.
+
+The later [full-registry interaction acceptance](cycles/20261120-full-registry-recovery/QUALIFICATION.md)
+expands the genuine barter lifecycle to populate **all 15 types in one owner
+archive**. A separate archived listing and coarse location coexist with the
+committed cycle. Accepted peer coordination evidence drives the actual local
+notification subscriber; a normal preference edit supplies the remaining
+preference/counter records. No direct inbox fixture or raw record insertion
+creates this combined state.
+
+Complete record snapshots and ordinary readers survive encrypted restore and
+reopen with the two explicit normalization exceptions: coordination requires
+fresh review, and the location import resets its local change window. Delivered
+notification records, source IDs, preferences and counters remain unchanged.
+Two subsequent coordination refreshes release the local hold without adding or
+collapsing alerts; the production delivery-health helper reports completion.
+Recovered mark-read and archive restore/republish actions continue normally.
+Full TypeScript and nine selected production recovery cases passed at that
+new source; its own hosted/browser gate remains pending.
+
+This acceptance does not cover every state of each codec, native-device
+recovery or a whole database snapshot. A domain inventory hold is distinct
+from the excluded infrastructure lease store. Kernel delivery state is not
+restored; notifications are delivered before export. External notification
+delivery and channel grants remain outside local notification record recovery.
 
 ### Coverage and compatibility boundaries
 

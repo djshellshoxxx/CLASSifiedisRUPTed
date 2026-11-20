@@ -1,0 +1,12 @@
+{
+  "native_compiler": "/workspace/scratch/e0ea2385d962/ClassRup-full-registry-recovery/node_modules/.pnpm/@typescript+typescript-linux-x64@7.0.2/node_modules/@typescript/typescript-linux-x64/lib/tsc",
+  "bytes": 24101026,
+  "sha256": "4f2de678286401759b3fb4475bafe35b8f32b4b3a07d92642bbf37eadc9b34a4",
+  "go_versions": [
+    "go1.26.4"
+  ],
+  "embedded_runtime_controls": {
+    "GOMAXPROCS": true,
+    "GOMEMLIMIT": true
+  }
+}

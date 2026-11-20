@@ -1,0 +1,18 @@
+{
+  "source": "99cce1075e066acaefd863d59d23a6fea51f988c",
+  "tree": "ba98ba4ef99f35a32068b1adc5725a4204c76ed9",
+  "name": "typecheck",
+  "command": [
+    "node",
+    "node_modules/typescript/bin/tsc",
+    "-p",
+    "tsconfig.json",
+    "--noEmit"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 300,
+  "exit_code": 0,
+  "seconds": 2.485,
+  "log_bytes": 0,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

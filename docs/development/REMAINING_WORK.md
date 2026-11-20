@@ -4,7 +4,7 @@ This register accompanies the [comprehensive branch consolidation](BRANCH_CONSOL
 It is based on the current runtime, retained unique branch changes, actual test
 coverage and existing contracts. Specifications and generated source-path counts
 do not establish completion. The owner has authorized continued incomplete-
-feature work and successive independent audits; see the [current handoff](cycles/20261120-combined-freeze/HANDOFF.md).
+feature work and successive independent audits; see the [current handoff](cycles/20261120-full-registry-recovery/HANDOFF.md).
 
 ## Completed slices to preserve
 
@@ -60,6 +60,15 @@ feature work and successive independent audits; see the [current handoff](cycles
   separate peer expiry and authenticated withdrawal precedence. This is a new
   source-specific qualification of overlapping cases, not an increased distinct
   test total or hosted/browser completion.
+- The [full-registry recovery acceptance](cycles/20261120-full-registry-recovery/QUALIFICATION.md)
+  now exercises all 15 current production record types together in one archive,
+  with real accepted barter evidence driving local notifications. Complete
+  records and ordinary readers survive restore/reopen under the two documented
+  normalization policies; repeated refresh preserves inbox/dedupe/counters and
+  ordinary mark-read/archive-republish actions continue. Full TypeScript and
+  nine selected cases passed at its own source. Production bytes are unchanged
+  from PR #62; hosted qualification and excluded-store/device recovery remain
+  separate.
 
 ## Priority and dependency register
 
@@ -68,7 +77,7 @@ Effort is an engineering estimate, not measured duration or a commitment: S = a 
 | Priority | Work item and affected components | Dependencies / next concrete step | Estimated effort |
 |---|---|---|---|
 | P1 | Native WebKit identity import compatibility (`packages/identity`, vault, `tests/compat/browser-crypto`) | Current bounded new-key generation retries mitigate creation availability only. Requalify reviewed upstream fixed-width engine repair using the unchanged leading-zero/all-zero import vectors, deterministic signatures and native stress probe; then validate create/unlock/restore in product. Never rotate existing identity on unlock failure. | M plus external engine availability |
-| P1 | Encrypted-storage recovery/rotation/load and backup completeness (`packages/vault`, kernel storage) | Record coverage and shared recovery preflight are qualified through merged PR #57. Complete current-source hosted qualification of PR #58 and its notification/barter continuation. The executed local scenarios populate all 15 codec types across separate archives. Attachment/reference recovery, delivery/lease rules, rotation, whole-database rollback and actual interrupted-device/load acceptance remain separate. | L |
+| P1 | Encrypted-storage recovery/rotation/load and backup completeness (`packages/vault`, kernel storage) | Record coverage and shared recovery preflight are qualified through merged PR #57. Complete current-source hosted qualification of the combined PR #62 history and its full-registry follow-on. Local acceptance now populates all 15 codec types together in one archive with real barter-to-inbox routing and ordinary post-recovery actions. Attachment/reference recovery, delivery/lease rules, rotation, whole-database rollback and actual interrupted-device/load acceptance remain separate. | L |
 | P1 | Canonical identity/device/recovery authority (`packages/identity`, federation, consent) | Resolve root/device roles, authenticated delegation, revocation and recovery/notice/dispute contracts; implement real owner-authorized handlers and end-to-end adversarial tests before depending on recovered signature helpers. | XL |
 | P1 | Canonical federation and compatible signed-file migration (`packages/federation`, discovery, vault restore) | Select explicit protocol version boundary; preserve alpha CID/signature bytes and per-subject histories; independent canonical vectors, author-stream gap/quarantine, delegated signer validity and old-backup acceptance. | XL; depends on identity authority |
 | P1 | Retention, purge, deletion and evidence lifecycle (`bazaar`, privacy, vault) | Define one cross-domain hold/evidence/tombstone/backup policy; implement bounded resumable purge with idempotency and recovery tests. Current archive/recovery and signed withdrawals are already implemented but do not erase peer copies. | L |
@@ -115,7 +124,7 @@ recommended shared recovery preflight and record inventory. Its focused acceptan
 cover foreign ownership, canonical-key normalization, detached original data,
 unchanged identity/signatures, asynchronous lock and a destination that remains
 uninitialized after a failed restore and reopen. PR #57's own main-push workflows
-passed. Current-source qualification and independent review of PR #58 remain
+passed. Current-source hosted qualification and independent review of the subsequent candidates remain
 separate gates.
 
 The production PWA codec registry now has executed realistic listing/location,
@@ -126,10 +135,12 @@ remain separate existing fixtures. Complete the actual current-source hosted
 qualification before marking these candidates integrated. Keep the full
 production registry shared rather than copying its rules into test-only code.
 
-The separate freeze-reason candidate now preserves documented expired-reservation
-and lost-local-reservation causes through reconstruction, with ordinary repeated
-refresh/reopen/normalization acceptance. Complete its current-source hosted gate
-before integration. Keep each pending source stable and preserve signed terminal
+Combined PR #62 preserves documented expired-reservation and lost-local-
+reservation causes through reconstruction and retains both independently
+developed acceptance sets. Its test-only follow-on executes one full-registry
+archive with genuine barter-to-inbox routing, complete recovery snapshots and
+continued owner actions. Complete the actual current-source hosted gates before
+integration. Keep each pending source stable and preserve signed terminal
 outcomes and the prohibition on automatic recommit.
 
 Attachments/blob references and delivery/queue/lease state remain excluded.

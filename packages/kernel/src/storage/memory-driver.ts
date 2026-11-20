@@ -280,6 +280,21 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
       upsert: (row) => write('blobs', k(row.tenant, row.ref), { ...row, bytes: row.bytes.slice() }),
       remove: (tenant, ref) => write('blobs', k(tenant, ref), undefined),
       holders: (tenant, ref) => state.groupKeys('blob_refs', k(tenant, ref)).size,
+      referenceCoverage: (tenant, limit) => {
+        let holderCount = 0;
+        let missingCount = 0;
+        const refs = new Set<string>();
+        for (const row of state.table<BlobRefRow>('blob_refs').values()) {
+          if (row.tenant !== tenant) continue;
+          if (++holderCount > limit) {
+            return { referenceCount: null, holderCount: null, missingCount: null, limitExceeded: true };
+          }
+          if (refs.has(row.ref)) continue;
+          refs.add(row.ref);
+          if (!state.table<BlobRow>('blobs').has(k(tenant, row.ref))) missingCount++;
+        }
+        return { referenceCount: refs.size, holderCount, missingCount, limitExceeded: false };
+      },
       attach: (tenant, ref, holder) => write('blob_refs', k(tenant, ref, holder), { tenant, ref, holder }),
       detach: (tenant, ref, holder) => write('blob_refs', k(tenant, ref, holder), undefined),
       orphans: (createdBefore, limit) =>

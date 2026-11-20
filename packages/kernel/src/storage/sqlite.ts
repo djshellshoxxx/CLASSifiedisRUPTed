@@ -204,6 +204,20 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
       upsert: (b) => void run('INSERT OR REPLACE INTO blobs (tenant, ref, bytes, size, content_type, privacy, encrypted, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', b.tenant, b.ref, b.bytes, b.size, b.contentType, b.privacy, b.encrypted ? 1 : 0, b.createdAt),
       remove: (t, ref) => void run('DELETE FROM blobs WHERE tenant = ? AND ref = ?', t, ref),
       holders: (t, ref) => n(one('SELECT COUNT(*) AS c FROM blob_refs WHERE tenant = ? AND ref = ?', t, ref)?.['c']),
+      referenceCoverage: (tenant, limit) => {
+        // A tenant-bound read of at most limit + 1 holder rows; do not retrieve blob bytes.
+        const rows = all('SELECT r.ref AS ref, b.ref AS present FROM blob_refs r LEFT JOIN blobs b ON b.tenant = r.tenant AND b.ref = r.ref WHERE r.tenant = ? ORDER BY r.ref, r.holder LIMIT ?', [tenant, limit + 1]);
+        if (rows.length > limit) return { referenceCount: null, holderCount: null, missingCount: null, limitExceeded: true };
+        let missingCount = 0;
+        const refs = new Set<string>();
+        for (const row of rows) {
+          const ref = s(row['ref']);
+          if (refs.has(ref)) continue;
+          refs.add(ref);
+          if (row['present'] === null || row['present'] === undefined) missingCount++;
+        }
+        return { referenceCount: refs.size, holderCount: rows.length, missingCount, limitExceeded: false };
+      },
       attach: (t, ref, holder) => void run('INSERT OR IGNORE INTO blob_refs (tenant, ref, holder) VALUES (?, ?, ?)', t, ref, holder),
       detach: (t, ref, holder) => void run('DELETE FROM blob_refs WHERE tenant = ? AND ref = ? AND holder = ?', t, ref, holder),
       orphans: (before, limit) =>

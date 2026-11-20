@@ -15,6 +15,9 @@ wrapper data. It remains subject to the session and transaction lifetime guards.
 
 The inventory allows at most 256 supported types and 10,000 exported records.
 An overflow sentinel distinguishes a truncated inventory from complete coverage.
+These limits bound the returned inventory and accepted export, not the total
+work required to count stored rows. Large-vault and device performance require
+separate measurement.
 The UI displays the inventory on explicit request and clears it on lock.
 Inventory success alone does not mean an export will succeed: schema, signature,
 canonical key, passphrase, encryption and envelope-size validation still apply.

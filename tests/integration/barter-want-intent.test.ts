@@ -34,6 +34,7 @@ async function fixture() {
       ? { allow: true } : { allow: false, code: 'FORBIDDEN' } } });
   const session: UnlockedVault = { principal: identity.principal, identity, storage: k.storage,
     async lock() { identity.lock(); await k.storage.close(); },
+    async backupCoverage() { throw new Error('Backup is outside this fixture'); },
     async exportBackup() { throw new Error('Backup is outside this fixture'); },
   };
   const runtime = createBarterRuntime(session);

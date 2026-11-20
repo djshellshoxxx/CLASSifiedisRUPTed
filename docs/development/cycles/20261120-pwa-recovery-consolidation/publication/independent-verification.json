@@ -1,0 +1,136 @@
+{
+  "verification_completed_at": "2026-11-20T17:25:39.455301+00:00",
+  "reviewer": "/root/g19_pwa_standards",
+  "worktree": "/workspace/scratch/e0ea2385d962/ClassRup-pwa-recovery-consolidation",
+  "remote_metadata": {
+    "pr": {
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/72",
+      "number": 72,
+      "state": "open",
+      "draft": true,
+      "head": "93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc",
+      "head_ref": "codex/classrup-pwa-recovery-consolidation-20261120",
+      "base": "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+      "base_ref": "main"
+    },
+    "commit": {
+      "sha": "93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc",
+      "tree": "f9af3b6d0468a10bca56195d51a14b426688aa18",
+      "parents": [
+        "b89e7047ea352a3d47703b134c6c12a7ea589a04",
+        "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9"
+      ]
+    },
+    "endpoints": [
+      "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls/72",
+      "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc"
+    ]
+  },
+  "local_documentation_commit": "720bf27473f17f659f8fecab9588c163df3f857b",
+  "published_commit": "93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc",
+  "complete_tree": "f9af3b6d0468a10bca56195d51a14b426688aa18",
+  "complete_tree_equal": true,
+  "complete_local_published_diff_empty": true,
+  "executed_source": "9cf6c56c9b65a421a95676f89e9fcc3800bca573",
+  "executed_source_tree": "f506c9282299b034cef6b540017e49ffeac88362",
+  "non_documentation_diff_from_executed_source_empty": true,
+  "documentation_only_changes_after_execution": [
+    "docs/development/CONSOLIDATION_HANDOFF.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/DEFENSIVE-REVIEW.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/EVIDENCE-REVIEW.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/HANDOFF.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/SPEC-REVIEW.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/STANDARDS-REVIEW.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/archive-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/archive_g19.py",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/build-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/build.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/cli-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/cli.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/deps-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/deps.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/focused-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/focused.json.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/focused.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/registry-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/registry.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/setup-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/setup.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/spec-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/spec.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/summary.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/tooling-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/tooling.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/typecheck-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/typecheck.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-parent-hosted-observation.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-parent-synthetic-merge.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-pwa-defensive.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-pwa-spec.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-pwa-standards.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-setup/install-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-setup/install.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-setup/summary.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-source.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-toolchain.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/publication-g16-post-preservation.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/publication-g16-state.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/run_g19.py"
+  ],
+  "ordered_parents": [
+    "b89e7047ea352a3d47703b134c6c12a7ea589a04",
+    "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9"
+  ],
+  "verified_ancestors": [
+    "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9",
+    "b89e7047ea352a3d47703b134c6c12a7ea589a04",
+    "6d4f6ea7ba9bcf886ae69edd0f167a621308d4b2",
+    "f598dc52937449764703b5048ba71a77239c9ded",
+    "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+    "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+    "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+    "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+    "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e"
+  ],
+  "preserved_blobs": [
+    {
+      "path": "apps/pwa/src/backup-coverage.ts",
+      "source": "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9",
+      "blob": "4e7a86ded78e8a0940fa8bb4b6d959e7a7d33a86",
+      "exact_match": true
+    },
+    {
+      "path": "apps/pwa/src/main.ts",
+      "source": "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9",
+      "blob": "2e9679cc47ddc59891cec1db7ac1de2ffec532e5",
+      "exact_match": true
+    },
+    {
+      "path": "tests/integration/backup-coverage.test.ts",
+      "source": "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9",
+      "blob": "655e0778ee7b5a4f0b1caf1d63dbf7099c83252f",
+      "exact_match": true
+    },
+    {
+      "path": "docs/development/cycles/20261120-pwa-attachment-diagnostic/HANDOFF.md",
+      "source": "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9",
+      "blob": "afa4f4be9015631119bcc9b3455efb0054c23fb4",
+      "exact_match": true
+    },
+    {
+      "path": "tests/integration/production-future-codec-rejection.test.ts",
+      "source": "b89e7047ea352a3d47703b134c6c12a7ea589a04",
+      "blob": "ebc626830218ec8a05f2ed1669530be4134bb441",
+      "exact_match": true
+    }
+  ],
+  "working_tree_clean": true,
+  "git_diff_check_passed": true,
+  "blocking_findings": [],
+  "limits": [
+    "Independent source/publication verification only.",
+    "No tests, compiler, browser, commits, remote mutations or hosted-job inspection performed.",
+    "No hosted acceptance inferred from tree equality or parent evidence.",
+    "Root owns branch inventory and actual hosted qualification."
+  ]
+}

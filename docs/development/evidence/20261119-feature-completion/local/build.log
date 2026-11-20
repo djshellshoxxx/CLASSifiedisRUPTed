@@ -1,0 +1,6 @@
+
+> classrup@ build /workspace/scratch/b3afde5215ae/classrupted
+> node packages/platform/scripts/gen-registry.mjs --check --strict && node tools/cli/classrup.mjs build
+
+registry: 18 features, 148 modules, 565 edges, acyclic, 0 specs missing, 66579 bytes, hash sha256-tTCcMiLdFtldMU8BIh3ooR6qsHOe4UE6OddOcSPQwWQ, generation_ms 4269, up to date
+Built dist/. Publish these public assets over HTTPS.

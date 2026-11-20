@@ -1,0 +1,5 @@
+
+> classrup@ setup /workspace/scratch/b3afde5215ae/classrupted
+> node tools/cli/classrup.mjs setup --non-interactive
+
+Created .classrup/local.json. Browser vault data is untouched.

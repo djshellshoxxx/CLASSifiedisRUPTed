@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "status": "awaiting-hosted-qualification",
+  "updatedAt": "2026-11-19T10:29:39Z",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "pullRequest": 56,
+  "baseline": "b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+  "sourceHead": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+  "sourceTree": "38523662eafe9f86a5b3f6f746703916be96fc89",
+  "testMerge": "f68098cda9d3bd0c6904468acab9289dcea9d401",
+  "localCheckpoint": "48806f8faf7b9c78d61db6cea04cdc7c424bf7a4",
+  "sourceTreeEqualityVerified": true,
+  "implementation": [
+    "public-file listing list/show/search",
+    "explicit local listing declared-value removal",
+    "transaction handle lifetime enforcement",
+    "safe malformed paired-price validation"
+  ],
+  "independentReview": {
+    "result": "no-blocking-findings",
+    "checkedLocalRuntime": "b0874e6adde2bee6b8ba9f550b2f034fe6004b15",
+    "probes": [
+      "39 detached methods across nine stores reject after expiry",
+      "cross-realm Promise read compatibility",
+      "128 independently signed listing files",
+      "pages of 100 and 28 without duplicates or omissions",
+      "input-order-invariant snapshot",
+      "exact CAD min=max128 selects one item"
+    ]
+  },
+  "local": {
+    "fullQualification": "not-green",
+    "typecheck": "passed after fixing a test-only seed command's missing idempotent property",
+    "specifications": {
+      "modules": 148,
+      "errors": 0,
+      "warnings": 0
+    },
+    "dependencyBoundaries": "passed",
+    "registry": {
+      "features": 18,
+      "modules": 148,
+      "edges": 565,
+      "stale": false
+    },
+    "moneyVectors": 331,
+    "moneyBundle": {
+      "gzipBytes": 2355,
+      "budgetBytes": 12288
+    },
+    "tooling": {
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "domain": {
+      "exitCode": 137,
+      "completedReport": false,
+      "description": "Process killed; no passing combined assertion count claimed."
+    },
+    "cli": {
+      "passed": 44,
+      "failed": 2,
+      "skipped": 0,
+      "reason": "Two spawnSync ETIMEDOUT assertions at unchanged 15000ms limits while full domain invocation was also running."
+    },
+    "setup": "passed",
+    "productionBuild": "passed",
+    "dependencyAudit": {
+      "knownAdvisories": 0,
+      "reportedDependencies": 142
+    },
+    "browser": {
+      "journeysExecuted": 0,
+      "reason": "Chromium aborted before page execution: socket() failed: Operation not permitted (1)."
+    },
+    "environment": "Executor disconnected twice; initial patches recovered and were committed/published before the second outage. Local source/artifact copies may be unavailable until recovery.",
+    "focused": {
+      "cli": 46,
+      "listingAndEditor": 59,
+      "storageLifecycleAndClose": 30,
+      "encryptedVaultLockReopen": 1,
+      "sharedSearch": 7,
+      "note": "Overlapping implementation suites, not a combined total."
+    },
+    "regressionsBeforeRepairs": {
+      "storage": 19,
+      "malformedPrice": 1
+    }
+  },
+  "hosted": {
+    "alpha": {
+      "runId": 44504114268,
+      "attempt": 1,
+      "planJobId": 135491117934,
+      "plan": "success",
+      "domainJobId": 135498101278,
+      "domain": "queued"
+    },
+    "cli": {
+      "runId": 44504114080,
+      "attempt": 1,
+      "planJobId": 135491117573,
+      "plan": "queued"
+    },
+    "mainQualification": "not-started"
+  },
+  "mergeState": "draft PR; main unchanged; do not merge before fresh required qualification",
+  "remaining": [
+    "native WebKit existing-key import compatibility",
+    "complete encrypted backup/recovery",
+    "canonical identity/device and federation authority",
+    "wider consent, commerce, messaging and later product workflows"
+  ]
+}

@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 1,
+  "title": "First PR #56 hosted qualification evidence",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "pullRequest": 56,
+  "sourceHead": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+  "testedMerge": "f68098cda9d3bd0c6904468acab9289dcea9d401",
+  "sourceTree": "38523662eafe9f86a5b3f6f746703916be96fc89",
+  "qualification": "Alpha failed; CLI cancelled before its six platform jobs executed",
+  "metadataSnapshots": [
+    {
+      "path": "initial-qualification.json",
+      "asOfUtc": "2026-11-19 10:53:15 UTC",
+      "qualification": "failed; CLI pending",
+      "preservedByteForByte": true
+    },
+    {
+      "path": "first-head-terminal.json",
+      "asOfUtc": "2026-11-19 10:57:51 UTC",
+      "qualification": "Alpha failed; CLI cancelled before platform jobs executed",
+      "preservedByteForByte": true
+    }
+  ],
+  "alpha": {
+    "runId": 44504114268,
+    "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268",
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "failure",
+    "domainAssertions": {
+      "passed": 748,
+      "failed": 0,
+      "pending": 0,
+      "skipped": 0,
+      "todo": 0
+    },
+    "tooling": {
+      "tests": 27,
+      "passed": 27,
+      "failed": 0
+    },
+    "browser": {
+      "tests": 75,
+      "passed": 72,
+      "failed": 3,
+      "failed_test": "tests/browser/listing-value.spec.ts:15:60",
+      "failed_engines": [
+        "chromium",
+        "firefox",
+        "webkit"
+      ],
+      "failure": "locator.selectOption timeout waiting for exact label 'Listing type'"
+    },
+    "browserFailure": "All three engines timed out after 20000ms at the same exact getByLabel locator for Listing type in tests/browser/listing-value.spec.ts:15:60.",
+    "domainEvidenceScope": "The completed job log records aggregate domain assertion counts only. No individual domain-case result or domain JSON report is archived in this package."
+  },
+  "cli": {
+    "runId": 44504114080,
+    "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114080",
+    "attempt": 1,
+    "initialObservedStatus": "queued",
+    "initialObservedConclusion": null,
+    "terminalObservedStatus": "completed",
+    "terminalObservedConclusion": "cancelled",
+    "platformJobs": [
+      {
+        "id": 135499848287,
+        "name": "clean-install (macos-latest, 22.18.0)",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "stepCount": 0,
+        "runnerId": 0,
+        "logAvailable": false,
+        "logFetchErrorCode": "NOT_FOUND",
+        "executedTestCount": null,
+        "qualificationClaim": "unexecuted; no CLI test pass claim"
+      },
+      {
+        "id": 135499848452,
+        "name": "clean-install (windows-latest, 22.18.0)",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "stepCount": 0,
+        "runnerId": 0,
+        "logAvailable": false,
+        "logFetchErrorCode": "NOT_FOUND",
+        "executedTestCount": null,
+        "qualificationClaim": "unexecuted; no CLI test pass claim"
+      },
+      {
+        "id": 135499848475,
+        "name": "clean-install (ubuntu-latest, 22.18.0)",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "stepCount": 0,
+        "runnerId": 0,
+        "logAvailable": false,
+        "logFetchErrorCode": "NOT_FOUND",
+        "executedTestCount": null,
+        "qualificationClaim": "unexecuted; no CLI test pass claim"
+      },
+      {
+        "id": 135499848485,
+        "name": "clean-install (windows-latest, 24.x)",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "stepCount": 0,
+        "runnerId": 0,
+        "logAvailable": false,
+        "logFetchErrorCode": "NOT_FOUND",
+        "executedTestCount": null,
+        "qualificationClaim": "unexecuted; no CLI test pass claim"
+      },
+      {
+        "id": 135499848512,
+        "name": "clean-install (macos-latest, 24.x)",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "stepCount": 0,
+        "runnerId": 0,
+        "logAvailable": false,
+        "logFetchErrorCode": "NOT_FOUND",
+        "executedTestCount": null,
+        "qualificationClaim": "unexecuted; no CLI test pass claim"
+      },
+      {
+        "id": 135499848610,
+        "name": "clean-install (ubuntu-latest, 24.x)",
+        "status": "completed",
+        "conclusion": "cancelled",
+        "stepCount": 0,
+        "runnerId": 0,
+        "logAvailable": false,
+        "logFetchErrorCode": "NOT_FOUND",
+        "executedTestCount": null,
+        "qualificationClaim": "unexecuted; no CLI test pass claim"
+      }
+    ],
+    "scope": "The original queued observation and the later cancellation observation are preserved separately. The successful planning job is not platform-test qualification."
+  },
+  "browserFailureArtifact": {
+    "id": 14521975297,
+    "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44504114268/artifacts/14521975297",
+    "originalZipBytes": 4782020,
+    "originalZipSha256": "dcc31c4447d830c41e81501c1443b15843cc98b8a73fa0d27794ee0cb9489f7f",
+    "zipIncluded": false,
+    "selectedMemberCount": 6,
+    "selectedMemberBytesVerifiedAgainstZip": true,
+    "excludedMembers": [
+      "alpha-layout-at-1280px-sta-8c1d3-ble-keyboard-error-feedback-chromium/layout-1280.png",
+      "alpha-layout-at-1280px-sta-8c1d3-ble-keyboard-error-feedback-firefox/layout-1280.png",
+      "alpha-layout-at-1280px-sta-8c1d3-ble-keyboard-error-feedback-webkit/layout-1280.png",
+      "alpha-layout-at-390px-stay-ec05e-ble-keyboard-error-feedback-chromium/layout-390.png",
+      "alpha-layout-at-390px-stay-ec05e-ble-keyboard-error-feedback-firefox/layout-390.png",
+      "alpha-layout-at-390px-stay-ec05e-ble-keyboard-error-feedback-webkit/layout-390.png"
+    ],
+    "exclusionReason": "The complete ZIP and the six passing layout screenshots are excluded; only listing-value failure contexts and screenshots are retained."
+  },
+  "files": [
+    {
+      "path": "first-head-terminal.json",
+      "bytes": 77780,
+      "sha256": "92b9c9f56c883f40e7ff5a878eb2753e4e7579d12ed9a480582d128afd9921a7",
+      "kind": "terminal-metadata-snapshot"
+    },
+    {
+      "path": "initial-qualification.json",
+      "bytes": 68609,
+      "sha256": "a819825f0fef56790762426c5d52069ec1c91cfce8f5c8171f96027771f8366e",
+      "kind": "original-metadata-snapshot"
+    },
+    {
+      "path": "job-135491117573-plan.log",
+      "bytes": 11799,
+      "sha256": "09c6939bbe34e4cac6fd16e38c112da157ae9ea8beffd3cf933f1bcc14c7843a",
+      "kind": "complete-job-log",
+      "jobId": 135491117573,
+      "runId": 44504114080,
+      "name": "plan",
+      "conclusion": "success"
+    },
+    {
+      "path": "job-135491117934-plan.log",
+      "bytes": 11904,
+      "sha256": "be1280989d890f3ef67feaa241effa76b8dcec14dc8fedf1e24c4e96469eb3f2",
+      "kind": "complete-job-log",
+      "jobId": 135491117934,
+      "runId": 44504114268,
+      "name": "plan",
+      "conclusion": "success"
+    },
+    {
+      "path": "job-135498101278-domain.log",
+      "bytes": 155381,
+      "sha256": "449db35680415834ce6c179ec47854ef2b590d20b8bf533bdf55b135ba4c02f2",
+      "kind": "complete-job-log",
+      "jobId": 135498101278,
+      "runId": 44504114268,
+      "name": "domain",
+      "conclusion": "failure"
+    },
+    {
+      "path": "listing-value-optional-dec-a50d0--absent-after-republication-chromium-error-context.md",
+      "bytes": 18152,
+      "sha256": "4082d9f8e101067c2fd2f15788b4887299463dfd8be1deba02adf5fd19944506",
+      "kind": "browser-failure-context",
+      "engine": "chromium",
+      "archiveMember": "listing-value-optional-dec-a50d0--absent-after-republication-chromium/error-context.md"
+    },
+    {
+      "path": "listing-value-optional-dec-a50d0--absent-after-republication-chromium.png",
+      "bytes": 46262,
+      "sha256": "84289176e4aa20f79e27eb0f5f88dcb58c8828a5751803b1fe2d68f4a844dbf7",
+      "kind": "browser-failure-screenshot",
+      "engine": "chromium",
+      "archiveMember": "listing-value-optional-dec-a50d0--absent-after-republication-chromium/test-failed-1.png"
+    },
+    {
+      "path": "listing-value-optional-dec-a50d0--absent-after-republication-firefox-error-context.md",
+      "bytes": 18152,
+      "sha256": "837b1ca9c7596b209689a86cd4fdcdec61dc74099d37309f3d2d4ae14beb5bcf",
+      "kind": "browser-failure-context",
+      "engine": "firefox",
+      "archiveMember": "listing-value-optional-dec-a50d0--absent-after-republication-firefox/error-context.md"
+    },
+    {
+      "path": "listing-value-optional-dec-a50d0--absent-after-republication-firefox.png",
+      "bytes": 53351,
+      "sha256": "75352c0fde402db455c266734431ec03d0a6380ea44e248598dd170791494c2f",
+      "kind": "browser-failure-screenshot",
+      "engine": "firefox",
+      "archiveMember": "listing-value-optional-dec-a50d0--absent-after-republication-firefox/test-failed-1.png"
+    },
+    {
+      "path": "listing-value-optional-dec-a50d0--absent-after-republication-webkit-error-context.md",
+      "bytes": 18135,
+      "sha256": "2aaccba2e3888686b7a8abe56720855bc23b3c506c585621e283dfc19e71624e",
+      "kind": "browser-failure-context",
+      "engine": "webkit",
+      "archiveMember": "listing-value-optional-dec-a50d0--absent-after-republication-webkit/error-context.md"
+    },
+    {
+      "path": "listing-value-optional-dec-a50d0--absent-after-republication-webkit.png",
+      "bytes": 200868,
+      "sha256": "a6abe06ebeb374de86cc438b3135fd0c35e896f450fac96843a1769641b71eb8",
+      "kind": "browser-failure-screenshot",
+      "engine": "webkit",
+      "archiveMember": "listing-value-optional-dec-a50d0--absent-after-republication-webkit/test-failed-1.png"
+    }
+  ],
+  "fileCount": 11,
+  "totalFileBytes": 680393
+}

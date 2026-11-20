@@ -1,0 +1,6 @@
+
+> classrup@ typecheck /workspace/scratch/b3afde5215ae/classrupted
+> tsc -p tsconfig.json --noEmit
+
+Killed
+ ELIFECYCLE  Command failed with exit code 137.

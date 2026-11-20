@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "baseline": "b6d99d87e9f67e76791f2dfff3e85015154cd92f",
+    "localCheckpoint": "48806f8faf7b9c78d61db6cea04cdc7c424bf7a4",
+    "publishedHead": "2ddd951a04282a31a865b3bcb5372a9b6b4d2cca",
+    "sourceTree": "38523662eafe9f86a5b3f6f746703916be96fc89",
+    "sourceTreeEqualityVerified": true
+  },
+  "overallLocalQualification": "not-green",
+  "checks": {
+    "typecheck": {
+      "finalExitCode": 0,
+      "firstCombinedExitCode": 1,
+      "firstFailure": "Test-only seed command omitted required idempotent property; corrected in b0874e6 before publication."
+    },
+    "specifications": {
+      "exitCode": 0,
+      "modules": 148,
+      "errors": 0,
+      "warnings": 0
+    },
+    "dependencyBoundaries": {
+      "exitCode": 0,
+      "errors": 0
+    },
+    "registry": {
+      "exitCode": 0,
+      "features": 18,
+      "modules": 148,
+      "edges": 565
+    },
+    "moneyVectors": {
+      "exitCode": 0,
+      "vectors": 331
+    },
+    "moneyBundle": {
+      "exitCode": 0,
+      "gzipBytes": 2355,
+      "budgetBytes": 12288
+    },
+    "tooling": {
+      "exitCode": 0,
+      "tests": 27,
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "domain": {
+      "exitCode": 137,
+      "completedReport": false,
+      "description": "Full invocation with maxWorkers=2 was killed. No combined passing assertion count is claimed.",
+      "serialRetry": {
+        "exitCode": 1,
+        "completedReport": true,
+        "success": false,
+        "tests": 748,
+        "passed": 745,
+        "failed": 3,
+        "pending": 0,
+        "todo": 0,
+        "testFiles": 75,
+        "failedFiles": 3,
+        "reportedSuites": {
+          "numTotalTestSuites": 200,
+          "numPassedTestSuites": 193,
+          "numFailedTestSuites": 7,
+          "numPendingTestSuites": 0
+        },
+        "suiteCountNote": "Vitest suite counts include nested suites. The seven failed suites belong to three affected test files; three assertions failed.",
+        "failures": [
+          {
+            "file": "tests/integration/mutiny-persistence.test.ts",
+            "fullName": "independent durable signed Mutiny verification keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget",
+            "title": "keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget",
+            "durationMs": 60075.55692599999,
+            "failureSummary": "Error: Test timed out in 60000ms.",
+            "kind": "timeout",
+            "timeoutMs": 60000,
+            "thresholdUnchanged": true
+          },
+          {
+            "file": "packages/discovery/src/search/filter/filter.test.ts",
+            "fullName": "PS-044 search filters against SQLite TEST-PS-044-09.T07 fuzz strings with SQL metacharacters never alter SQL, oversize lists are rejected and validation stays fast",
+            "title": "TEST-PS-044-09.T07 fuzz strings with SQL metacharacters never alter SQL, oversize lists are rejected and validation stays fast",
+            "durationMs": 3887.992349999986,
+            "failureSummary": "AssertionError: expected 1.1033290000050329 to be less than 1",
+            "kind": "performance-assertion",
+            "actualMilliseconds": 1.1033290000050329,
+            "actualMillisecondsReported": "1.1033290000050329",
+            "comparison": "less-than",
+            "limitMilliseconds": 1.0,
+            "thresholdUnchanged": true
+          },
+          {
+            "file": "packages/i18n/src/internationalization/currencies/currencies.test.ts",
+            "fullName": "library contract speed: warm formatMoney and parseMoneyInput average well under 0.05 ms over batches (not a spec claim)",
+            "title": "speed: warm formatMoney and parseMoneyInput average well under 0.05 ms over batches (not a spec claim)",
+            "durationMs": 1281.2965680000198,
+            "failureSummary": "AssertionError: expected 0.07592963999999483 to be less than 0.05",
+            "kind": "performance-assertion",
+            "actualMilliseconds": 0.07592963999999483,
+            "actualMillisecondsReported": "0.07592963999999483",
+            "comparison": "less-than",
+            "limitMilliseconds": 0.05,
+            "thresholdUnchanged": true
+          }
+        ],
+        "artifacts": [
+          "local/domain-serial.log",
+          "local/domain-serial.json"
+        ],
+        "description": "This second full-domain invocation completed with failures. All three affected test files are unchanged from the recorded baseline. No cause attribution or green local full qualification is claimed; the original exit-137 invocation remains separately recorded above."
+      }
+    },
+    "cli": {
+      "exitCode": 1,
+      "tests": 46,
+      "passed": 44,
+      "failed": 2,
+      "skipped": 0,
+      "failure": "Two spawnSync ETIMEDOUT assertions at unchanged 15000ms limits while the full domain invocation was also running."
+    },
+    "setup": {
+      "exitCode": 0
+    },
+    "productionBuild": {
+      "exitCode": 0
+    },
+    "dependencyAudit": {
+      "exitCode": 0,
+      "knownAdvisories": 0,
+      "reportedDependencies": 142
+    },
+    "localBrowser": {
+      "applicationJourneysExecuted": 0,
+      "failure": "Chromium process_singleton_posix.cc socket() failed: Operation not permitted (1). Product setup/build completed before launch."
+    }
+  },
+  "focusedEvidence": {
+    "publicCliSource": {
+      "source": "d3e9a285cedb6aa4d44482fc0e7d0b140629161d",
+      "passed": 46,
+      "failed": 0,
+      "skipped": 0
+    },
+    "listingSource": {
+      "source": "3e360e809107d7d0684cba8eae9361cb4b1718f6",
+      "passed": 59,
+      "failed": 0
+    },
+    "storageSource": {
+      "source": "f2e4a0ca0b52603e6bf93148b8ce886245668228",
+      "originalRegressionFailures": 19,
+      "finalLifecycleAndClosePasses": 30,
+      "newEncryptedVaultRegressionPasses": 1,
+      "unselectedExistingVaultTests": 11,
+      "targetedTypecheckExitCode": 0
+    },
+    "searchPrice": {
+      "originalRegressionFailures": 1,
+      "finalFullLocalSearchPasses": 7
+    },
+    "note": "Focused suites overlap and must not be summed as a combined qualification total."
+  },
+  "environmentIncident": "The executor disconnected and later recovered with worktrees intact. Two earlier baseline typecheck attempts exited137; the baseline tooling attempts were incomplete/failed. Interrupted attempts are not passing evidence.",
+  "artifacts": [
+    {
+      "path": "local/build.log",
+      "bytes": 395,
+      "sha256": "6c5a27351bd251389826f6a486dbe2d4af030adf40b8b221344cdda918e0701f"
+    },
+    {
+      "path": "local/cli.log",
+      "bytes": 9929,
+      "sha256": "48753bab734676304efa5e981c0ddb526c9471cc502b827dc337a408892e607d"
+    },
+    {
+      "path": "local/dependency-audit.json",
+      "bytes": 310,
+      "sha256": "f05f9b1b6661fd01ff7b54e26b8832afbc7f352434ffcfbc8fa0229dbf42b943"
+    },
+    {
+      "path": "local/deps-check.log",
+      "bytes": 123,
+      "sha256": "1e8355be5a47a03f7f5ba911d11a128e87acfc694533a78947dd9a710484ee52"
+    },
+    {
+      "path": "local/domain-serial.json",
+      "bytes": 319651,
+      "sha256": "14e08a1b30a0317d2cfc367523e50026eadfb8b62b5f6ad7d3adf26103440186"
+    },
+    {
+      "path": "local/domain-serial.log",
+      "bytes": 88,
+      "sha256": "9aa9335a71516d6726a01ecf9d368fb68e8c1a7cb370d30161be63a1dcc4d92e"
+    },
+    {
+      "path": "local/domain.log",
+      "bytes": 243,
+      "sha256": "9b18dd07f58cf140206dd041e6530da6564a3b41798ed152d3f52a44ff471f8a"
+    },
+    {
+      "path": "local/money-bundle.log",
+      "bytes": 43,
+      "sha256": "3df467e263fc9592e3ef73f7a1f172476474e3809ca257d409201d4f89497595"
+    },
+    {
+      "path": "local/money-vectors.log",
+      "bytes": 72,
+      "sha256": "413c70fc685fea3e6b4a09b95eda0237fcbefc2679353a99c97e50eba6a64bd2"
+    },
+    {
+      "path": "local/registry-check.log",
+      "bytes": 314,
+      "sha256": "63c4da2c7b5b56505a31b7e71909867fd7108295124af88e0d1d146739b99f89"
+    },
+    {
+      "path": "local/search-price-green.log",
+      "bytes": 204,
+      "sha256": "8524f3e81d88450be597beae1e47aff63ece2a4240ec81b0b8ac0917cd63374f"
+    },
+    {
+      "path": "local/search-price-red.log",
+      "bytes": 1611,
+      "sha256": "0ea5d565d1ecd6082bee16b79e9b451b98359196cf0f97bc7446bace68c5b9d2"
+    },
+    {
+      "path": "local/setup.log",
+      "bytes": 181,
+      "sha256": "9e4dcb0189fff19b615701cc54ab7762be84f4763e54af3cce993f517872d9d0"
+    },
+    {
+      "path": "local/spec-check.log",
+      "bytes": 156,
+      "sha256": "6dbde4c474e10f5b648f7578825909fab20bf2bd245475f73095918d643f5ae4"
+    },
+    {
+      "path": "local/storage-lifetime-final.log",
+      "bytes": 214,
+      "sha256": "d1f9a7efca1427a09f72759dd5ed4c51ed6b4c0ad0d9ea27ee51fa43eb95cbef"
+    },
+    {
+      "path": "local/storage-lifetime-red.log",
+      "bytes": 10054,
+      "sha256": "57d8cb88d8eb36f9be2e70efd8a6aa81dd89a5fd909faec3ff8fa15c516cf613"
+    },
+    {
+      "path": "local/storage-typecheck.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "local/storage-vault-regression.log",
+      "bytes": 213,
+      "sha256": "ca860ade1c21a4747f09967bd87ff9e01ddedb41a0117a47b0011cea5ded5982"
+    },
+    {
+      "path": "local/tooling-baseline-sequential.log",
+      "bytes": 2060,
+      "sha256": "2af3c25626d02ca49007eb9e071c7bb78ecaa628988e79ba91fbc2ce7d7f357c"
+    },
+    {
+      "path": "local/tooling.log",
+      "bytes": 2647,
+      "sha256": "65fc14a2e46561384e2a6377d37cd3cb47df7ab52a5f378e45ea4b995605461e"
+    },
+    {
+      "path": "local/typecheck-first.log",
+      "bytes": 618,
+      "sha256": "c250337a84751726236496ce043fefed86e28971d4e5ee9f918e3562b3e9e4cf"
+    },
+    {
+      "path": "local/typecheck.log",
+      "bytes": 100,
+      "sha256": "5aa3d21dd18985c790e2375612b49f45b43eb20cd5c282cd7391039e4aac8cdf"
+    }
+  ]
+}

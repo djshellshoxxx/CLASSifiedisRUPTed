@@ -12,6 +12,10 @@
 - The prior 2026-11-19 local complete domain attempt exited 137 without final report; original failed, interrupted, cancelled and queued observations remain historical evidence. No workflow reruns were initiated.
 - Local `git ls-remote` still fails DNS resolution of `github.com`, so this checkpoint is published through the GitHub connector. No isolated local worktree or executed local test is claimed.
 
+## Additional source-level finding
+
+Read-only inventory cannot currently enumerate complete principal-owned `blob_refs` through `tx.blobs`; the API only has known-ref `get/info`, holder counts, mutation and cross-tenant orphan purge. `tx.blobs.attach` may intentionally return `present: false` after recording a missing blob, so completeness requires explicit dangling-holder handling. The driver `BlobRow` and memory `BlobRefRow` schemas and blob SHA identities are now documented in SPEC.md. The safe first code slice needs a bounded tenant-scoped enumeration port across actual memory, IndexedDB and SQLite drivers; do not simulate a complete inventory by calling `collectOrphans`. This is an inspected **source-design blocker**, not an executed product failure or a proven exploit. Exact reviewed file blob SHAs are in SPEC.md.
+
 ## Fresh next-generation reviewer lanes (not launched)
 
 1. **Code auditor (source-only first):** review `packages/vault/src/vault.ts`, `packages/vault/src/encrypted-storage.ts`, `docs/development/BACKUP_SCOPE.md`, the actual kernel `blobs` and `blob_refs` schemas, and every reference writer/reader. Test design consistency, existing v1 compatibility and whether a read-only reference inventory can be principal-scoped without exposing bytes. Record exact source SHAs and whether any code executed.

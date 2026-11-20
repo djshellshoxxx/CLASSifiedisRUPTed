@@ -1,5 +1,16 @@
 # Project status
 
+## November 19, 2026 feature completion continuation
+
+The [current continuation report](../development/FEATURE_COMPLETION_20261119.md)
+records public CLI listing/show/search over selected signed files, explicit
+declared-value removal for draft/unpublished listings, transaction-handle
+lifetime enforcement and a malformed-price validation repair. The source starts
+from `b6d99d87e9f67e76791f2dfff3e85015154cd92f`, after the prior consolidation
+closed. Its qualification is recorded separately from all historical runs below.
+The [remaining-work register](../development/REMAINING_WORK.md) preserves the
+unfinished product and release requirements.
+
 ## Current consolidation record
 
 The [comprehensive branch audit](../development/BRANCH_CONSOLIDATION.md) records

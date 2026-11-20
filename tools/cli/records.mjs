@@ -32,7 +32,7 @@ function options(args) {
 
 /** Read through one opened descriptor, with a real byte cap even if the file grows after stat.
  * O_NONBLOCK also prevents a file-to-FIFO race from hanging open on platforms that support it. */
-export async function readPublicRecord(file) {
+export async function readPublicRecordWithSize(file) {
   let handle;
   try {
     const selected = await fs.lstat(file);
@@ -49,7 +49,7 @@ export async function readPublicRecord(file) {
       length += bytesRead;
     }
     if (length > MAX_ENVELOPE_BYTES) throw new RecordFailure('FILE_TOO_LARGE');
-    try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, length))); }
+    try { return { record: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, length))), bytes: length }; }
     catch { throw new RecordFailure('INVALID_JSON'); }
   } catch (error) {
     if (error instanceof RecordFailure) throw error;
@@ -57,6 +57,10 @@ export async function readPublicRecord(file) {
   } finally {
     if (handle) await handle.close().catch(() => {});
   }
+}
+
+export async function readPublicRecord(file) {
+  return (await readPublicRecordWithSize(file)).record;
 }
 
 export async function verifyPublicRecord(input, now = Date.now()) {

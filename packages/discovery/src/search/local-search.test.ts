@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestKernel } from '@classrup/kernel/testing';
 import { discoveryDefinitions, type PublicListingProjection, type RetainedListing, type VerifiedStatement } from '../index.ts';
+import { localSearchOptionsSchema } from './local-options.ts';
 
 const DAY = 86_400_000;
 function setup() {
@@ -99,5 +100,21 @@ describe('retained search options through the public query', () => {
     }
     const polar = await k.ask('discovery.listing.search', { options: { centerCell: 'zzzzz', distanceKm: 100 } });
     expect(polar).toMatchObject({ ok: false, error: { code: 'DISCOVERY_RADIUS_TOO_LARGE' } });
+  });
+
+  it('returns validation failures for malformed paired price bounds instead of throwing during bigint conversion', async () => {
+    const { k, base, retain, search } = setup();
+    await retain(base());
+    const before = await search();
+    for (const invalid of ['not-a-number', '1.5', '1e6', '', '-1', '01', '9'.repeat(79), null, 12, {}]) {
+      for (const price of [{ currency: 'CAD', min: invalid, max: '20' }, { currency: 'CAD', min: '0', max: invalid }]) {
+        expect(() => localSearchOptionsSchema.safeParse({ price })).not.toThrow();
+        expect(localSearchOptionsSchema.safeParse({ price }).success).toBe(false);
+        await expect(k.ask('discovery.listing.search', { options: { price } })).resolves.toMatchObject({
+          ok: false, error: { code: 'VALIDATION_FAILED' },
+        });
+      }
+    }
+    expect(await search()).toEqual(before);
   });
 });

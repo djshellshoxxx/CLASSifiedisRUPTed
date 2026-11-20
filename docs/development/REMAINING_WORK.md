@@ -19,6 +19,11 @@ repairs; unrelated feature implementation belongs in subsequent work.
   verification command through the verified source merge in PR #54. Its exact
   main qualification and documentation-closeout status belongs to the linked
   consolidation record; broader CLI phases remain open.
+- The [November 19 feature continuation](FEATURE_COMPLETION_20261119.md) adds
+  F1b listing/show/search over explicit signed files, explicit declared-value
+  removal in local listing edits, transaction-handle lifetime enforcement and
+  safe rejection of malformed paired price bounds. Qualification for this
+  continuation belongs to its own evidence, not the earlier main checks.
 
 ## Priority and dependency register
 
@@ -35,8 +40,8 @@ Effort is an engineering estimate, not measured duration or a commitment: S = a 
 | P2 | Consent production composition (`packages/comms`, owning domains, PWA, backup) | Implement trusted subject/revision resolver, immutable wording UI and confirmation, key validity, codec validation and revocation-preserving backup; add dependency quarantine/replay before enabling new consent domain for users. | L; identity/federation dependencies for delegated mode |
 | P2 | Currency registry PWA composition (`commerce/valuation`, PWA, vault) | Provide authentic signed release snapshot with documented authority, production vault/usage adapters, migration/preflight and immutable binding tests. Do not invent the missing authenticated snapshot. | M after snapshot is available |
 | P2 | Money and matching target-device qualification (`commerce/precision`, matching worker) | Run the specified performance workloads on the actual target hardware, profile memory/latency at full caps, preserve existing limits and cancellation assertions. Pure arithmetic/vector and host tests do not establish mobile budgets. | M plus device availability |
-| P2 | Listings, inventory and publication completion (`packages/bazaar`, PWA) | Owner history is already integrated. Add published editing and material-change reconsent, optional-value removal, quantity/variants, kind-specific terms, media admission, renewal/conflict recovery and real signed reservation release as distinct tested slices. | L/XL; consent/attachment boundaries needed |
-| P2 | Public CLI F1b (`tools/cli`, retained public discovery) | Read-only explicit-file/local-retained listing/show/search with stable versioned output, bounded pagination, no implicit network/private keys and shared domain rules. F1a record verify is supplied by PR #53. | M |
+| P2 | Listings, inventory and publication completion (`packages/bazaar`, PWA) | Owner history and explicit local value removal are implemented. Add published editing and material-change reconsent, quantity/variants, kind-specific terms, media admission, renewal/conflict recovery and real signed reservation release as distinct tested slices. | L/XL; consent/attachment boundaries needed |
+| P2 | Broader public CLI distribution and retained-cache access (`tools/cli`, retained public discovery) | F1a verification and F1b explicit-file listing/show/search are implemented. A packaged executable/version interface and a supported persisted retained-cache adapter remain separate; do not read browser IndexedDB implicitly. Private phases remain below. | M |
 | P2 | Feature settings/activation (`platform/configuration`, PWA) | Use recovered immutable registry but keep runtime availability separate; implement real per-user flags, dependency closure, disabled path checks and backup unknown-module diagnostics. | M |
 | P2 | Public-ID privacy migration (PR #8 helpers, kernel, public records) | Define new-public-record boundary and compatibility for prior signatures/references. Then integrate tested hour precision without using public IDs as private order. | M; contract/migration decision first |
 | P2 | Hosted module wiring (`governance`, moderation, notifications) | Implement production enforcement at actual callers, notification consent/reconfirmation UI, report-from-notification, mirror purge scheduler, policy selection and import/export support. A collection of helpers is not end-to-end completion. | L; optional relay items depend on real relay composition |
@@ -69,9 +74,11 @@ runtime vulnerabilities. No release or deployment was performed.
 
 ## Recommended next bounded milestone
 
-Complete and independently verify public CLI F1b (explicit-file/local-retained
-listing/show/search) after this consolidation is merged, while treating native
-WebKit existing-key compatibility and the other P1 items as release-readiness
-blockers. Choose the next milestone against the latest main and current worker
-activity; do not mutate another worker's branch or silently substitute a new
-identity to work around an import failure.
+The November 19 continuation implements the recommended explicit-file F1b
+slice. The next bounded storage milestone should establish complete supported
+backup coverage and restore diagnostics from an audited inventory of current
+record, blob and delivery stores, before promising complete recovery or key
+rotation. Native WebKit existing-key compatibility and the other P1 items
+remain release-readiness blockers. Choose the next milestone against the latest
+main and current worker activity; do not mutate another worker's branch or
+silently substitute a new identity to work around an import failure.

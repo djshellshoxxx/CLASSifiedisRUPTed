@@ -14,6 +14,10 @@ Usage: pnpm run setup [--host HOST] [--port PORT] [--base /path/] [--non-interac
        pnpm run configure [--host HOST] [--port PORT] [--base /path/]
        pnpm run doctor | pnpm dev | pnpm build | pnpm preview
        node tools/cli/classrup.mjs record verify --file FILE [--json]
+       node tools/cli/classrup.mjs listing list --file FILE [--file FILE ...] [--limit N] [--offset N] [--snapshot HASH] [--include-unavailable] [--json]
+       node tools/cli/classrup.mjs listing show --file FILE [--file FILE ...] --owner DID --id UUID [--json]
+       node tools/cli/classrup.mjs search --file FILE [--file FILE ...] [--query TEXT] [--region CELL] [--category UUID] [--kind KIND] [--condition CONDITION]
+            [--currency CODE] [--min-price MINOR_UNITS] [--max-price MINOR_UNITS] [--barter-only] [--include-unavailable] [--limit N] [--offset N] [--snapshot HASH] [--json]
        node tools/cli/classrup.mjs COMMAND --help
 Setup preserves existing configuration. Defaults: localhost, port 4173, base /.
 LAN binding requires explicit --host; HTTP on LAN is not a secure browser context.
@@ -22,6 +26,11 @@ installed explicitly: corepack pnpm install --frozen-lockfile.
 Record verification accepts signed listing/withdrawal files up to 1 MiB, without
 setup, private keys, persistence or network requests. Chain history and revocation
 are unchecked. Domain exits: 0 verified, 2 invalid input, 3 infrastructure failure.
+Listing/search uses at most 128 explicit public files and 16 MiB total, without
+private keys, browser storage or persistent writes. Each file must pass current
+expiry checks. Conflicting selected histories fail; unseen revisions, chain and
+revocation remain unchecked. Page size: 1-100 (default 20); offset: 0-128.
+List/search exits 0 for an empty collection; show exits 4 when no match exists.
 Note: 'pnpm setup' and 'pnpm doctor' are pnpm built-ins; use 'pnpm run setup' and 'pnpm run doctor'.`;
 
 export function assertRuntime(version = process.versions.node) {
@@ -245,6 +254,23 @@ export async function serve(root = ROOT) {
 export async function main(args = process.argv.slice(2)) {
   const [command, ...rest] = args;
   if (rest.includes('--help') || command === '--help') { console.log(HELP); return; }
+  if (command === 'listing' || command === 'search') {
+    const json = rest.includes('--json');
+    try {
+      assertRuntime(); assertPackageManager();
+      const { runPublicListingCommand, formatPublicListingResult } = await import('./listings.mjs');
+      const { exitCode, result } = await runPublicListingCommand(command, rest);
+      (json || exitCode === 0 ? console.log : console.error)(formatPublicListingResult(result, json));
+      process.exitCode = exitCode;
+    } catch {
+      const message = 'Public listing queries are unavailable. Check Node >=22.18.0 and the installed pinned dependencies.';
+      const name = command === 'search' ? 'search' : rest[0] === 'list' ? 'listing.list' : rest[0] === 'show' ? 'listing.show' : 'listing';
+      if (json) console.log(JSON.stringify({ schemaVersion: 1, command: name, ok: false, error: { code: 'INFRASTRUCTURE_FAILURE', message } }));
+      else console.error(`ClassRup: INFRASTRUCTURE_FAILURE: ${message}`);
+      process.exitCode = 3;
+    }
+    return;
+  }
   if (command === 'record') {
     const json = rest.includes('--json');
     try {

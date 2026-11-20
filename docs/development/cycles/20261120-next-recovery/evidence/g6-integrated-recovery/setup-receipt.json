@@ -1,0 +1,17 @@
+{
+  "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+  "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+  "name": "setup",
+  "command": [
+    "node",
+    "tools/cli/classrup.mjs",
+    "setup",
+    "--non-interactive"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 180,
+  "exit_code": 0,
+  "seconds": 0.115,
+  "log_bytes": 63,
+  "log_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939"
+}

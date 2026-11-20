@@ -1,0 +1,15 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "doctor",
+  "command": [
+    "node",
+    "tools/cli/classrup.mjs",
+    "doctor"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 180,
+  "seconds": 0.269,
+  "log_bytes": 77,
+  "log_sha256": "a2e2156a0ac8de668d8a4d5452a7f86a103e490efb8d7b88b62a3e3fba3b80aa"
+}

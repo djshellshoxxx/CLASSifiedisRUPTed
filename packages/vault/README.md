@@ -52,7 +52,7 @@ saved data. Coverage is bounded to 256 types and 10,000 records; the report mark
 overflow explicitly. Successful coverage does not waive schema, signature,
 passphrase or envelope-size validation. The accepted codec registry is copied
 when the vault opens, so caller mutation cannot change export coverage.
-See [the coverage contract](../../../docs/development/BACKUP_SCOPE.md).
+See [the coverage contract](../../docs/development/BACKUP_SCOPE.md).
 
 This is an explicitly scoped `classrup.vault.alpha_backup/v1` format, **not** a
 complete CTR-IOX-001 export or the 24-word recovery protocol. It excludes blobs,

@@ -1,0 +1,30 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "cli",
+  "command": [
+    "node",
+    "--test",
+    "--test-concurrency=1",
+    "--test-reporter=tap",
+    "tests/cli/listings.test.mjs",
+    "tests/cli/public-nested-assets.test.mjs",
+    "tests/cli/public-symlink.test.mjs",
+    "tests/cli/records.test.mjs",
+    "tests/cli/serviceworker.test.mjs",
+    "tests/cli/setup.test.mjs"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 300,
+  "seconds": 49.434,
+  "log_bytes": 11128,
+  "log_sha256": "1c38b7d77cb767a913266bbf4276c6de6a832f72d9b76ec7cc0668bd8415266a",
+  "tap_counts": {
+    "tests": 46,
+    "pass": 46,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  }
+}

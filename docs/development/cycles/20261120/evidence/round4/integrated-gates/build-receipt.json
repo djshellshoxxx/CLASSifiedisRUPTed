@@ -1,0 +1,15 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "build",
+  "command": [
+    "node",
+    "tools/cli/classrup.mjs",
+    "build"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 180,
+  "seconds": 0.321,
+  "log_bytes": 53,
+  "log_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60"
+}

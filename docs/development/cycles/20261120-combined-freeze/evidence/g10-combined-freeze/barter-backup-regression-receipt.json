@@ -1,0 +1,34 @@
+{
+  "source": "d629b4e14dc7d7dea7e32d80ab358b5060f5e69f",
+  "tree": "b30b157efe2f91fbac04ebfcc0568ce43c467d8e",
+  "name": "barter-backup-regression",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts",
+    "tests/integration/mixed-production-backup.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g10-combined-freeze/barter-backup-regression.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 35.538,
+  "log_bytes": 125,
+  "log_sha256": "23685942b0824915f3b87c7f92524057e6d540231da8def3caad48e3bb0a6023",
+  "files": [
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 11
+  },
+  "report_success": true,
+  "report_sha256": "53279346fc9f1015fafa9190d0a363c4b7b3607e3089058ee3441bc04ea7a53a"
+}

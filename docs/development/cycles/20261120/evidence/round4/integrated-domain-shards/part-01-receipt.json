@@ -1,0 +1,41 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "tree": "0238e6ad6a9add7d712e3b5bf5ff0eabf993d870",
+  "shard": 1,
+  "shard_count": 8,
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--shard=1/8",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-domain-shards/part-01.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 79.297,
+  "log_sha256": "5732df1ec36465756d4fbc7de7a2716fe315c23a06379c0e31a27cf65a3abb12",
+  "files": [
+    "packages/discovery/src/geoprivacy/location/location.test.ts",
+    "packages/kernel/src/ids/uuidv7.test.ts",
+    "packages/kernel/src/observability/metrics.test.ts",
+    "packages/kernel/src/observability/readiness.test.ts",
+    "packages/kernel/src/outbox/dispatcher.isolation.test.ts",
+    "packages/kernel/src/storage/storage.reference-isolation.test.ts",
+    "packages/notify/src/preferences/in/in.test.ts",
+    "packages/vault/src/backup-codecs.test.ts",
+    "tests/integration/archive-backup.test.ts",
+    "tests/integration/backup-coverage.test.ts",
+    "tests/integration/mutiny-persistence.test.ts",
+    "tests/integration/production-recovery-readers.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 65
+  },
+  "report_success": true,
+  "report_sha256": "c56ce82847b64bc701719b8d37fe7c7e4e8a68ad8a9b873dd4d4def6ae801cc2"
+}

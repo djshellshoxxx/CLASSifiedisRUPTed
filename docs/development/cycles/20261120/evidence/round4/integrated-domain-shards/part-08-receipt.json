@@ -1,0 +1,40 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "tree": "0238e6ad6a9add7d712e3b5bf5ff0eabf993d870",
+  "shard": 8,
+  "shard_count": 8,
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--shard=8/8",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-domain-shards/part-08.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 78.812,
+  "log_sha256": "b1f182872f42a7d67d61a6fb2b53cec2a861e5bacb8b360349fe829a3d95b452",
+  "files": [
+    "packages/bazaar/src/listings/value-removal.test.ts",
+    "packages/discovery/src/ranking/relevance/relevance.test.ts",
+    "packages/i18n/src/internationalization/languages/languages.test.ts",
+    "packages/kernel/src/errors/errors.test.ts",
+    "packages/kernel/src/kernel.meta.test.ts",
+    "packages/notify/src/delivery/inapp/inapp.test.ts",
+    "packages/platform/src/configuration/feature/feature.test.ts",
+    "packages/security/src/cryptography/base64url.test.ts",
+    "packages/vault/src/vault.test.ts",
+    "tests/integration/discovery-i18n-entrypoints.test.ts",
+    "tests/integration/mutiny-oracle.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 142
+  },
+  "report_success": true,
+  "report_sha256": "f09f4a103053525e5599dbb983e78a038c6424603400f95842aeedcc432774e1"
+}

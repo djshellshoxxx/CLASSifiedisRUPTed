@@ -1,0 +1,75 @@
+{
+  "observed_at_utc": "2026-11-20T06:45:20Z",
+  "sources": {
+    "open_prs": {
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls?state=open&per_page=100",
+      "value": [
+        {
+          "number": 59,
+          "title": "Preserve notification and signed barter records through recovery",
+          "state": "open",
+          "draft": true,
+          "head": "86cd564e0692e8c777538200675dc20f2651ab51",
+          "head_branch": "codex/classrup-recovery-next-20261120",
+          "base": "137d88e36cc6b1611b062daa33cf84c3d29c86b3",
+          "base_branch": "main",
+          "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/59",
+          "updated_at": "2026-11-20T06:44:11Z"
+        },
+        {
+          "number": 58,
+          "title": "Qualify production backup recovery and consolidate log redaction",
+          "state": "open",
+          "draft": true,
+          "head": "25b4708191f04516cab74371c84a15663cc6f6a6",
+          "head_branch": "codex/classrup-mixed-codec-recovery-20261120",
+          "base": "137d88e36cc6b1611b062daa33cf84c3d29c86b3",
+          "base_branch": "main",
+          "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/58",
+          "updated_at": "2026-11-20T06:36:54Z"
+        },
+        {
+          "number": 8,
+          "title": "Draft: reconcile remaining Stage 3/4 foundation work after alpha consolidation",
+          "state": "open",
+          "draft": true,
+          "head": "a403614bb34d3d176d4693730e512e14959718b8",
+          "head_branch": "claude/bold-mccarthy-qklhl6",
+          "base": "95c46be41233520382566360e7135011412e8e6e",
+          "base_branch": "main",
+          "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8",
+          "updated_at": "2026-11-18T10:02:09Z"
+        }
+      ]
+    },
+    "pr59_commit": {
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/86cd564e0692e8c777538200675dc20f2651ab51",
+      "value": {
+        "sha": "86cd564e0692e8c777538200675dc20f2651ab51",
+        "tree": "ca413cdad0612f8e602f1ec98e499fd589d68906",
+        "parents": [
+          "25b4708191f04516cab74371c84a15663cc6f6a6"
+        ],
+        "date": "2026-11-20T06:43:02Z"
+      }
+    },
+    "pr58_commit": {
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/25b4708191f04516cab74371c84a15663cc6f6a6",
+      "value": {
+        "sha": "25b4708191f04516cab74371c84a15663cc6f6a6",
+        "tree": "bc38af24e9d81724de6d463e681fd55db7e3618b",
+        "parents": [
+          "38ada90037d8176b0e0e319651b712cc396cad5d"
+        ],
+        "date": "2026-11-20T06:32:17Z"
+      }
+    },
+    "main_ref": {
+      "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/ref/heads/main",
+      "value": {
+        "ref": "refs/heads/main",
+        "sha": "137d88e36cc6b1611b062daa33cf84c3d29c86b3"
+      }
+    }
+  }
+}

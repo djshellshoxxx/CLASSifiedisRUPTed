@@ -1,0 +1,16 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "name": "repeat-setup",
+  "command": [
+    "node",
+    "tools/cli/classrup.mjs",
+    "setup",
+    "--non-interactive"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "exit_code": 0,
+  "process_timeout_seconds": 180,
+  "seconds": 0.115,
+  "log_bytes": 65,
+  "log_sha256": "2230cdca193676d08f76c0bbeea2d9bff7fb8b6c9922ed3c3f7c72b9f04ca5e9"
+}

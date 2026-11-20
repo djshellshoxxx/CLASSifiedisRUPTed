@@ -1,0 +1,24 @@
+{
+  "source": "355ea87578d25c2b7278290f0ced5dedde142bdb",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/production-barter-recovery.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g5-barter/barter-recovery.json"
+  ],
+  "exit_code": 0,
+  "seconds": 11.604,
+  "log_sha256": "0078dce7c4677699b759c2e7452d49ecbbe27ae5013a22edf1879bd5e02c4921",
+  "counts": {
+    "numTotalTests": 7,
+    "numPassedTests": 7,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "success": true
+  }
+}

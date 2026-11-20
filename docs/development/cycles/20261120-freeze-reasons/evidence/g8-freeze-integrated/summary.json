@@ -1,0 +1,146 @@
+{
+  "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+  "tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+  "scope": "selected freeze-state and backup regression only",
+  "selected_files": [
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/mutiny-oracle.test.ts",
+    "tests/integration/mutiny-persistence.test.ts",
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts"
+  ],
+  "reported_files": [
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/mutiny-oracle.test.ts",
+    "tests/integration/mutiny-persistence.test.ts",
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 39
+  },
+  "missing_files": [],
+  "unexpected_files": [],
+  "duplicate_files": [],
+  "checks": [
+    {
+      "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+      "tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+      "name": "typecheck",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.json",
+        "--noEmit"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 300,
+      "exit_code": 0,
+      "seconds": 3.296,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+      "tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+      "name": "persistence-oracle",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/integration/mutiny-persistence.test.ts",
+        "tests/integration/mutiny-oracle.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g8-freeze-integrated/persistence-oracle.json"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 900,
+      "exit_code": 0,
+      "seconds": 27.531,
+      "log_bytes": 120,
+      "log_sha256": "0f25c724555662e21bc066b027fee00b2892486375e6595262c5af163f9d396d",
+      "files": [
+        "tests/integration/mutiny-oracle.test.ts",
+        "tests/integration/mutiny-persistence.test.ts"
+      ],
+      "assertion_counts": {
+        "passed": 28
+      },
+      "report_success": true,
+      "report_sha256": "e18b089bdae940f1ec3cd3355af42c88d92e6b5b999ff43df0236e66d9e2a7ec"
+    },
+    {
+      "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+      "tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+      "name": "barter-backup-regression",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/integration/production-barter-recovery.test.ts",
+        "tests/integration/production-codec-compatibility.test.ts",
+        "tests/integration/mixed-production-backup.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g8-freeze-integrated/barter-backup-regression.json"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 900,
+      "exit_code": 0,
+      "seconds": 36.848,
+      "log_bytes": 126,
+      "log_sha256": "c16c640da9471d29786d2b9e324dc641bfea7726237b917f0fff208ba3dc560b",
+      "files": [
+        "tests/integration/mixed-production-backup.test.ts",
+        "tests/integration/production-barter-recovery.test.ts",
+        "tests/integration/production-codec-compatibility.test.ts"
+      ],
+      "assertion_counts": {
+        "passed": 11
+      },
+      "report_success": true,
+      "report_sha256": "b33bd61816675936aebb65faf083c66f69e274f3d1d3ac049750134653325d63"
+    },
+    {
+      "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+      "tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+      "name": "setup",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "setup",
+        "--non-interactive"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 180,
+      "exit_code": 0,
+      "seconds": 0.116,
+      "log_bytes": 63,
+      "log_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939"
+    },
+    {
+      "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+      "tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+      "name": "build",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "build"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 180,
+      "exit_code": 0,
+      "seconds": 0.466,
+      "log_bytes": 53,
+      "log_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60"
+    }
+  ],
+  "all_checks_passed": true,
+  "complete_selected_pass": true
+}

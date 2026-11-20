@@ -1,0 +1,40 @@
+{
+  "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+  "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+  "name": "mutiny-regression",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "packages/mutiny/src/cycle_matching/admission.test.ts",
+    "packages/mutiny/src/cycle_matching/matching.test.ts",
+    "tests/integration/mutiny-persistence.test.ts",
+    "tests/integration/mutiny-oracle.test.ts",
+    "tests/integration/barter-want-intent.test.ts",
+    "tests/integration/matching-worker.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g6-integrated-recovery/mutiny-regression.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 32.484,
+  "log_bytes": 121,
+  "log_sha256": "d1a90233073a3b45706426f577da100d7f1c86839e708b0cea73d6669efd9216",
+  "files": [
+    "packages/mutiny/src/cycle_matching/admission.test.ts",
+    "packages/mutiny/src/cycle_matching/matching.test.ts",
+    "tests/integration/barter-want-intent.test.ts",
+    "tests/integration/matching-worker.test.ts",
+    "tests/integration/mutiny-oracle.test.ts",
+    "tests/integration/mutiny-persistence.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 56
+  },
+  "report_success": true,
+  "report_sha256": "8bcc280fbe21b186f629fba4445bf211430379e95ec3fa894c33a53003de3d4a"
+}

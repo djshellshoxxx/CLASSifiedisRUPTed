@@ -1,0 +1,32 @@
+{
+  "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+  "tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+  "name": "persistence-oracle",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/mutiny-persistence.test.ts",
+    "tests/integration/mutiny-oracle.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g8-freeze-integrated/persistence-oracle.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 27.531,
+  "log_bytes": 120,
+  "log_sha256": "0f25c724555662e21bc066b027fee00b2892486375e6595262c5af163f9d396d",
+  "files": [
+    "tests/integration/mutiny-oracle.test.ts",
+    "tests/integration/mutiny-persistence.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 28
+  },
+  "report_success": true,
+  "report_sha256": "e18b089bdae940f1ec3cd3355af42c88d92e6b5b999ff43df0236e66d9e2a7ec"
+}

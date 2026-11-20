@@ -4,8 +4,14 @@ import { truncateIp } from './ip.ts';
 const DROP_KEYS = new Set([
   'token', 'secret', 'password', 'privatekey', 'recoverycode', 'email', 'address', 'lat', 'lon', 'note', 'body', 'ciphertext',
   'authorization', 'cookie', 'setcookie', 'passphrase', 'apikey', 'latitude', 'longitude', 'lng', 'plaintext',
+  'bearer', 'pwd',
 ]);
-const DROP_SUFFIXES = ['token', 'secret', 'password', 'privatekey', 'recoverycode', 'email', 'address', 'note', 'body', 'ciphertext', 'passphrase'];
+const DROP_SUFFIXES = [
+  'token', 'secret', 'password', 'privatekey', 'recoverycode', 'email', 'address', 'note', 'body', 'ciphertext', 'passphrase',
+  'passwd', 'pepper', 'apikey', 'datakey', 'signingkey', 'secretkey', 'accesskey', 'credential', 'credentials',
+];
+// Keep both the preserved relay namespace and the canonical CLASSRUP_SECRET_* namespace private.
+const SECRET_PREFIXES = ['relaysecret', 'classrupsecret'];
 const IP_KEYS = new Set(['ip', 'ipaddress', 'remoteaddress', 'clientip', 'remoteip', 'forwardedfor', 'xforwardedfor', 'xrealip']);
 const MAX_DEPTH = 8;
 const MAX_STRING = 2048;
@@ -17,7 +23,7 @@ function norm(key: string): string {
 
 export function isDroppedKey(key: string): boolean {
   const n = norm(key);
-  return DROP_KEYS.has(n) || DROP_SUFFIXES.some((s) => n.endsWith(s));
+  return DROP_KEYS.has(n) || SECRET_PREFIXES.some((p) => n.startsWith(p)) || DROP_SUFFIXES.some((s) => n.endsWith(s));
 }
 
 export function isIpKey(key: string): boolean {

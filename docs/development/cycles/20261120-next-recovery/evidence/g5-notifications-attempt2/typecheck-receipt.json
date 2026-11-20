@@ -1,0 +1,14 @@
+{
+  "source": "61c0e5eeaafe2361d100b4eddb2c9a970d48a18f",
+  "command": [
+    "node",
+    "node_modules/typescript/bin/tsc",
+    "-p",
+    "tsconfig.json",
+    "--noEmit"
+  ],
+  "exit_code": 0,
+  "seconds": 2.404,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "setup_change": "Pinned offline install replaces cross-worktree dependency symlinks; source unchanged"
+}

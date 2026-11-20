@@ -1,0 +1,13 @@
+{
+  "source": "355ea87578d25c2b7278290f0ced5dedde142bdb",
+  "command": [
+    "node",
+    "node_modules/typescript/bin/tsc",
+    "-p",
+    "tsconfig.json",
+    "--noEmit"
+  ],
+  "exit_code": 0,
+  "seconds": 3.102,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -1,0 +1,40 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "tree": "0238e6ad6a9add7d712e3b5bf5ff0eabf993d870",
+  "shard": 5,
+  "shard_count": 8,
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--shard=5/8",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/integrated-domain-shards/part-05.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 100.343,
+  "log_sha256": "20d328f375d00a67adc06a502a04d63d2cd4df91f2954de7addae33573730d37",
+  "files": [
+    "packages/bazaar/src/listings/listings.test.ts",
+    "packages/kernel/src/bus/bus.test.ts",
+    "packages/moderation/src/antifraud/signals/signals.test.ts",
+    "packages/notify/src/preferences/opt/opt.test.ts",
+    "packages/privacy/src/security_boundaries/model/model.test.ts",
+    "packages/vault/src/backup-coverage.test.ts",
+    "tests/integration/alpha-security.test.ts",
+    "tests/integration/listing-maintenance.test.ts",
+    "tests/integration/location-preferences.test.ts",
+    "tests/integration/matching-worker.test.ts",
+    "tests/integration/peer-search-form.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 152
+  },
+  "report_success": true,
+  "report_sha256": "9629fdccb62a0675362e1399333edd722e3f8f85ab48ff3b692b927b411a9cc5"
+}

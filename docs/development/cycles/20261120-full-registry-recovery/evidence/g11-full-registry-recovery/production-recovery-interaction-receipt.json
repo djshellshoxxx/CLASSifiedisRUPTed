@@ -1,0 +1,34 @@
+{
+  "source": "99cce1075e066acaefd863d59d23a6fea51f988c",
+  "tree": "ba98ba4ef99f35a32068b1adc5725a4204c76ed9",
+  "name": "production-recovery-interaction",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-recovery-readers.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g11-full-registry-recovery/production-recovery-interaction.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 26.208,
+  "log_bytes": 139,
+  "log_sha256": "f1f91c11939eb33af407178ba826606b4602ef074992a3ee57effa1fa5c31ec0",
+  "files": [
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-recovery-readers.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 9
+  },
+  "report_success": true,
+  "report_sha256": "8b6d740c3a04571534ff6b81462d99158ecef6c4cba7692897f268496c7be9f8"
+}

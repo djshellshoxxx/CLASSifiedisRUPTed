@@ -1,0 +1,42 @@
+{
+  "source": "4a693cba0483b92b0df2459f8c9794be202b7c9a",
+  "tree": "bccd3e4c94abfc05f2c39d0072264e6f14a9df6b",
+  "scope": "selected production recovery interaction and adjacent recovery scenarios only",
+  "selected_files": [
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-recovery-readers.test.ts"
+  ],
+  "reported_files": [],
+  "assertion_counts": {},
+  "missing_files": [
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-recovery-readers.test.ts"
+  ],
+  "unexpected_files": [],
+  "duplicate_files": [],
+  "checks": [
+    {
+      "source": "4a693cba0483b92b0df2459f8c9794be202b7c9a",
+      "tree": "bccd3e4c94abfc05f2c39d0072264e6f14a9df6b",
+      "name": "typecheck",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.json",
+        "--noEmit"
+      ],
+      "node_options": "--max-old-space-size=512",
+      "process_timeout_seconds": 300,
+      "exit_code": -9,
+      "seconds": 2.436,
+      "max_child_rss_kib": 598180,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "all_checks_passed": false,
+  "complete_selected_pass": false
+}

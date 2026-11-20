@@ -3,11 +3,19 @@
 ## New owner-directed continuation
 
 The owner subsequently requested continuing incomplete features and successive
-fresh code, bug and security reviews. The [November 19 engineering handoff](cycles/20261119/HANDOFF.md)
+fresh code, bug and security reviews. The [full-registry recovery handoff](cycles/20261120-full-registry-recovery/HANDOFF.md)
 is the current continuation record. It supersedes the finite-task stop direction
 below for this newly authorized work. The older paused automation remains paused.
-PR #56 is now merged after its own qualification; the next engineering candidate
-is tracked separately. Preserve the prior evidence and all existing branches.
+PRs #56 and #57 are merged after their own qualification; the draft PR #58
+continuation is tracked separately. PR #59 retains PR #58 as its parent. The
+combined candidate retains PR #61 and the independently developed PR #60 as
+parents, preserving their complementary acceptance and handoffs. Each published
+source stays stable while its qualification waits. A test-only follow-on retains
+combined PR #62 and qualifies one full-registry archive with actual barter-to-
+notification routing and continued recovery actions. The current handoff also
+links the 51-row
+historical readiness reconciliation, which leaves all original findings open.
+Preserve prior evidence and all existing branches.
 
 ## Prior finite consolidation state
 

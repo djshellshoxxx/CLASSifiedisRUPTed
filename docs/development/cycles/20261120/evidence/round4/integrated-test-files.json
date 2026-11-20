@@ -1,0 +1,269 @@
+[
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/action-queue.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/alpha-security.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/archive-backup.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/backup-coverage.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/barter-want-intent.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/discovery-i18n-entrypoints.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/identity-keygen-recovery.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/listing-editor.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/listing-maintenance.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/location-preferences.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/matching-worker.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/mixed-production-backup.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/mutiny-oracle.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/mutiny-persistence.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/notification-delivery.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/notification-lifecycle.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/peer-search-form.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/privacy-notify.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/production-codec-compatibility.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/production-recovery-readers.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/publication-backup.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/ranking-publication.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/retained-backup.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/tests/integration/vault-session.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/identity/src/identity.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/kernel.meta.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/vault/src/backup-codecs.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/vault/src/backup-coverage.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/vault/src/backup-preflight.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/vault/src/encrypted-storage.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/vault/src/session-policy.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/vault/src/vault.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/bazaar/src/listings/lifecycle.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/bazaar/src/listings/listings.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/bazaar/src/listings/value-removal.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/discovery/src/search/local-search.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/discovery/src/search/retained-key.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/bus/access.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/bus/bus.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/bus/perf.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/errors/errors.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/events/envelope.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/http/server.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/ids/uuidv7.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/machine/machine.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/observability/diagnostic-privacy.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/observability/logger.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/observability/metrics.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/observability/perf.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/observability/readiness.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/observability/redact.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/outbox/dispatcher.isolation.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/outbox/dispatcher.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/indexeddb.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/record-types.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/scope.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/sqlite.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/storage.blob-snapshot.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/storage.contract.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/storage.lifecycle.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/storage.lifetime.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/storage/storage.reference-isolation.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/sync/sender.expiry-boundary.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/sync/sender.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/kernel/src/validation/validation.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/mutiny/src/cycle_matching/admission.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/mutiny/src/cycle_matching/matching.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/security/src/cryptography/base64url.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/commerce/src/valuation/currency/currency.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/commerce/src/valuation/precision/precision.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/comms/src/negotiation/consent/consent.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/discovery/src/geoprivacy/coarse/coarse.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/discovery/src/geoprivacy/location/location.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/discovery/src/ranking/fairness/fairness.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/discovery/src/ranking/relevance/relevance.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/discovery/src/search/filter/filter.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/governance/src/policy/goods/goods.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/governance/src/policy/prohibited/prohibited.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/i18n/src/internationalization/currencies/currencies.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/i18n/src/internationalization/languages/languages.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/moderation/src/antifraud/limits/limits.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/moderation/src/antifraud/rate/rate.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/moderation/src/antifraud/signals/signals.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/notify/src/delivery/inapp/inapp.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/notify/src/preferences/in/in.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/notify/src/preferences/opt/opt.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/platform/src/configuration/feature/feature.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/privacy/src/security_boundaries/metadata/metadata.test.ts"
+  },
+  {
+    "file": "/workspace/scratch/e0ea2385d962/ClassRup/packages/privacy/src/security_boundaries/model/model.test.ts"
+  }
+]

@@ -1,0 +1,314 @@
+{
+  "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+  "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+  "scope": "affected recovery, mutiny and notification regression; not the entire domain suite",
+  "selected_files": [
+    "packages/mutiny/src/cycle_matching/admission.test.ts",
+    "packages/mutiny/src/cycle_matching/matching.test.ts",
+    "packages/notify/src/delivery/inapp/inapp.test.ts",
+    "packages/notify/src/preferences/in/in.test.ts",
+    "packages/notify/src/preferences/opt/opt.test.ts",
+    "tests/integration/archive-backup.test.ts",
+    "tests/integration/backup-coverage.test.ts",
+    "tests/integration/barter-want-intent.test.ts",
+    "tests/integration/matching-worker.test.ts",
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/mutiny-oracle.test.ts",
+    "tests/integration/mutiny-persistence.test.ts",
+    "tests/integration/notification-delivery.test.ts",
+    "tests/integration/notification-lifecycle.test.ts",
+    "tests/integration/privacy-notify.test.ts",
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-recovery-readers.test.ts",
+    "tests/integration/publication-backup.test.ts",
+    "tests/integration/retained-backup.test.ts"
+  ],
+  "reported_files": [
+    "packages/mutiny/src/cycle_matching/admission.test.ts",
+    "packages/mutiny/src/cycle_matching/matching.test.ts",
+    "packages/notify/src/delivery/inapp/inapp.test.ts",
+    "packages/notify/src/preferences/in/in.test.ts",
+    "packages/notify/src/preferences/opt/opt.test.ts",
+    "tests/integration/archive-backup.test.ts",
+    "tests/integration/backup-coverage.test.ts",
+    "tests/integration/barter-want-intent.test.ts",
+    "tests/integration/matching-worker.test.ts",
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/mutiny-oracle.test.ts",
+    "tests/integration/mutiny-persistence.test.ts",
+    "tests/integration/notification-delivery.test.ts",
+    "tests/integration/notification-lifecycle.test.ts",
+    "tests/integration/privacy-notify.test.ts",
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-recovery-readers.test.ts",
+    "tests/integration/publication-backup.test.ts",
+    "tests/integration/retained-backup.test.ts"
+  ],
+  "missing_files": [],
+  "unexpected_files": [],
+  "duplicate_files": [],
+  "assertion_counts": {
+    "passed": 127
+  },
+  "checks": [
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "typecheck",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.json",
+        "--noEmit"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 300,
+      "exit_code": 0,
+      "seconds": 2.388,
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "new-acceptance",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/integration/production-notification-recovery.test.ts",
+        "tests/integration/production-barter-recovery.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g6-integrated-recovery/new-acceptance.json"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 900,
+      "exit_code": 0,
+      "seconds": 20.923,
+      "log_bytes": 118,
+      "log_sha256": "6cdbafa28ebbbdf7d1f0b4e5ad093d1b26c90ecfcf81015fd085c6cdb1a7a275",
+      "files": [
+        "tests/integration/production-barter-recovery.test.ts",
+        "tests/integration/production-notification-recovery.test.ts"
+      ],
+      "assertion_counts": {
+        "passed": 8
+      },
+      "report_success": true,
+      "report_sha256": "5fa131f82366336ed9b0a23b740e02890261457227f14a19d9ae9b69e9ad8e53"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "mutiny-regression",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "packages/mutiny/src/cycle_matching/admission.test.ts",
+        "packages/mutiny/src/cycle_matching/matching.test.ts",
+        "tests/integration/mutiny-persistence.test.ts",
+        "tests/integration/mutiny-oracle.test.ts",
+        "tests/integration/barter-want-intent.test.ts",
+        "tests/integration/matching-worker.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g6-integrated-recovery/mutiny-regression.json"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 900,
+      "exit_code": 0,
+      "seconds": 32.484,
+      "log_bytes": 121,
+      "log_sha256": "d1a90233073a3b45706426f577da100d7f1c86839e708b0cea73d6669efd9216",
+      "files": [
+        "packages/mutiny/src/cycle_matching/admission.test.ts",
+        "packages/mutiny/src/cycle_matching/matching.test.ts",
+        "tests/integration/barter-want-intent.test.ts",
+        "tests/integration/matching-worker.test.ts",
+        "tests/integration/mutiny-oracle.test.ts",
+        "tests/integration/mutiny-persistence.test.ts"
+      ],
+      "assertion_counts": {
+        "passed": 56
+      },
+      "report_success": true,
+      "report_sha256": "8bcc280fbe21b186f629fba4445bf211430379e95ec3fa894c33a53003de3d4a"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "notification-regression",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "packages/notify/src/delivery/inapp/inapp.test.ts",
+        "packages/notify/src/preferences/in/in.test.ts",
+        "packages/notify/src/preferences/opt/opt.test.ts",
+        "tests/integration/notification-delivery.test.ts",
+        "tests/integration/notification-lifecycle.test.ts",
+        "tests/integration/privacy-notify.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g6-integrated-recovery/notification-regression.json"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 900,
+      "exit_code": 0,
+      "seconds": 12.538,
+      "log_bytes": 127,
+      "log_sha256": "c83d810e5b665fabff1f935a1b394d5cd1095cbdc1b0ca751cf68feb4aebf770",
+      "files": [
+        "packages/notify/src/delivery/inapp/inapp.test.ts",
+        "packages/notify/src/preferences/in/in.test.ts",
+        "packages/notify/src/preferences/opt/opt.test.ts",
+        "tests/integration/notification-delivery.test.ts",
+        "tests/integration/notification-lifecycle.test.ts",
+        "tests/integration/privacy-notify.test.ts"
+      ],
+      "assertion_counts": {
+        "passed": 50
+      },
+      "report_success": true,
+      "report_sha256": "10b81b325a2a3a340cda6da84d48d6e63eb58be6e53cd36639409a8e12ab8534"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "recovery-regression",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/integration/production-codec-compatibility.test.ts",
+        "tests/integration/mixed-production-backup.test.ts",
+        "tests/integration/production-recovery-readers.test.ts",
+        "tests/integration/backup-coverage.test.ts",
+        "tests/integration/publication-backup.test.ts",
+        "tests/integration/archive-backup.test.ts",
+        "tests/integration/retained-backup.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g6-integrated-recovery/recovery-regression.json"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 900,
+      "exit_code": 0,
+      "seconds": 56.861,
+      "log_bytes": 123,
+      "log_sha256": "029ded3e8368d1fd174a65c52fd46f83dc34a1afbb8f97c601b387f9bc7b8d7d",
+      "files": [
+        "tests/integration/archive-backup.test.ts",
+        "tests/integration/backup-coverage.test.ts",
+        "tests/integration/mixed-production-backup.test.ts",
+        "tests/integration/production-codec-compatibility.test.ts",
+        "tests/integration/production-recovery-readers.test.ts",
+        "tests/integration/publication-backup.test.ts",
+        "tests/integration/retained-backup.test.ts"
+      ],
+      "assertion_counts": {
+        "passed": 13
+      },
+      "report_success": true,
+      "report_sha256": "24331ec9c1eb24befbecb70723626335e615e7e65784828fb14110524fc0e6e9"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "specification",
+      "command": [
+        "node",
+        "tools/specgen/specgen.mjs",
+        "check"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 180,
+      "exit_code": 0,
+      "seconds": 1.021,
+      "log_bytes": 48,
+      "log_sha256": "8b9ba7ae8d9683b9b5fb588f2ab3c07b905c848a93a045c538eaf902ab6ea865"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "dependency-boundaries",
+      "command": [
+        "node",
+        "tools/deps/deps.mjs"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 180,
+      "exit_code": 0,
+      "seconds": 0.498,
+      "log_bytes": 27,
+      "log_sha256": "18ccefde637fed45e661c7a82351c243d90de5057a27cb8012b80148037554ae"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "feature-registry",
+      "command": [
+        "node",
+        "packages/platform/scripts/gen-registry.mjs",
+        "--check",
+        "--strict"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 180,
+      "exit_code": 0,
+      "seconds": 1.202,
+      "log_bytes": 173,
+      "log_sha256": "0cac70ec6e261634becfd24018cf0ca1686e27dd246b06905e1f4db1a036225d"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "setup",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "setup",
+        "--non-interactive"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 180,
+      "exit_code": 0,
+      "seconds": 0.115,
+      "log_bytes": 63,
+      "log_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939"
+    },
+    {
+      "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+      "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+      "name": "build",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "build"
+      ],
+      "node_options": "--max-old-space-size=1024",
+      "process_timeout_seconds": 180,
+      "exit_code": 0,
+      "seconds": 0.265,
+      "log_bytes": 53,
+      "log_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60"
+    }
+  ],
+  "all_checks_passed": true,
+  "complete_selected_pass": true
+}

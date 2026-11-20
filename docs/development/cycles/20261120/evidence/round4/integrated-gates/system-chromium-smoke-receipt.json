@@ -1,0 +1,14 @@
+{
+  "source": "d92f20bcdba146cd5d3d482ee830210e2bdb1ae2",
+  "command": [
+    "node",
+    "tests/cli/browser-smoke.mjs"
+  ],
+  "chromium_executable": "/usr/bin/chromium",
+  "chromium_version": "156.0.8078.79",
+  "qualification": "supplemental system browser; not pinned Playwright engines",
+  "exit_code": 1,
+  "seconds": 1.041,
+  "log_sha256": "02d2cdd3a96ff401f9b4ccd364a0d28489e647199957db59789ccc075183761e",
+  "log_bytes": 7521
+}

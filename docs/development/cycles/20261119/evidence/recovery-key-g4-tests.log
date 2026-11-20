@@ -1,0 +1,24 @@
+
+ RUN  v5.1.0 /workspace/scratch/06c5fd0c70c0/classrup-recovery-key-g4
+
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > preserves default result order and existing query/block/availability filtering 24ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > filters exact category, kind, condition and arbitrary-precision declared price without currency conversion 7ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > uses coarse-cell overlap for radius filters, including less precise published cells 4ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > ranks matching records by local recency and optional coarse distance with deterministic ties 5ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > anchors seenWithinDays and rank recency across signed listing revisions 4ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > rejects missing centers, precise/private locations, invalid prices and unsupported query options 11ms
+ ✓ packages/discovery/src/search/local-search.test.ts > retained search options through the public query > returns validation failures for malformed paired price bounds instead of throwing during bigint conversion 16ms
+ ✓ packages/vault/src/backup-preflight.test.ts > shared backup recovery preflight > validates detached recovery data while preserving exported evidence, live records and signing identity 4201ms
+ ✓ packages/vault/src/backup-preflight.test.ts > shared backup recovery preflight > rejects a recovery normalization that would change the canonical record key before export 1271ms
+ ✓ packages/vault/src/backup-preflight.test.ts > shared backup recovery preflight > returns no artifact when the session locks during asynchronous recovery preflight 1248ms
+ ✓ tests/integration/publication-backup.test.ts > production publication backup codec > preserves CID keys and signed listing, tombstone and reservation evidence through encrypted backup 3946ms
+ ✓ tests/integration/retained-backup.test.ts > production retained listing backup codec > round-trips normal signed retention with the existing key, evidence, indexes and signing identity 4512ms
+ ✓ packages/discovery/src/search/retained-key.test.ts > canonical retained listing record key > preserves the existing owner/listing key representation 2ms
+ ✓ packages/discovery/src/search/retained-key.test.ts > canonical retained listing record key > keeps records distinct when the owner or listing differs 0ms
+
+ Test Files  5 passed (5)
+      Tests  14 passed (14)
+   Start at  18:37:58
+   Duration  17.62s (tests 91%, transform 5%, import 4%)
+
+JSON report written to /workspace/scratch/06c5fd0c70c0/classrup-recovery-key-g4/docs/development/cycles/20261119/evidence/recovery-key-g4-tests.json

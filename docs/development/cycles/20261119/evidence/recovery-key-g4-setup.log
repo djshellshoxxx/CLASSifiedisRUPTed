@@ -1,0 +1,8 @@
+Scope: all 20 workspace projects
+? Verifying lockfile against supply-chain policies (122 entries)...
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +53
++++++++++++++++++++++++++++++++++++++++++++++++++++++
+✗ Lockfile failed supply-chain policy check (122 entries in 137ms)
+[ERR_PNPM_NO_OFFLINE_META] Failed to resolve @esbuild/aix-ppc64 in package mirror /home/agent/.cache/pnpm/v11/metadata-full/registry.npmjs.org/@esbuild/aix-ppc64.jsonl

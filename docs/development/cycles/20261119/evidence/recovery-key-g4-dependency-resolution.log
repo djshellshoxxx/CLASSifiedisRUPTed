@@ -1,0 +1,4 @@
+vitest: /workspace/scratch/06c5fd0c70c0/classrup-recovery-key-g4/node_modules/.pnpm/vitest@5.1.0_@types+node@22.20.5_vite@8.3.5_@types+node@22.20.5_esbuild@0.27.0_yaml@2.9.1_/node_modules/vitest/index.cjs
+discovery: /workspace/scratch/06c5fd0c70c0/classrup-recovery-key-g4/packages/discovery/src/index.ts
+kernel: /workspace/scratch/06c5fd0c70c0/classrup-recovery-key-g4/packages/kernel/src/index.ts
+zod: /workspace/scratch/06c5fd0c70c0/classrup-recovery-key-g4/node_modules/.pnpm/zod@4.6.7/node_modules/zod/index.cjs

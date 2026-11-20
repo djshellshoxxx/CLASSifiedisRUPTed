@@ -19,7 +19,9 @@ function isCoherentAttachmentCoverage(input: unknown): input is AttachmentCovera
   const validCount = (value: unknown): value is number =>
     typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10_000;
   return validCount(refs) && validCount(missing) && validCount(present) && validCount(holders) &&
-    missing + present === refs && holders >= refs;
+    missing + present === refs && holders >= refs &&
+    // Each holder row names one ref: zero distinct refs requires zero holder rows.
+    (refs > 0 || holders === 0);
 }
 
 /**

@@ -3,7 +3,7 @@ import { describeBackupCoverage, describeAttachmentCoverage, readBackupInspectio
 import { runForSession } from '../../apps/pwa/src/vault-session.ts';
 import type { BackupCoverage, AttachmentCoverage } from '../../packages/vault/src/index.ts';
 
-const base: BackupCoverage = { recordTypes: [{ type: 'private.note', count: 2 }], registeredRecordTypes: ['private.note'], unsupportedRecordTypes: [], recordCount: 2, typeLimitExceeded: false, recordLimitExceeded: false, excludedStores: ['blobs'] };
+const base: BackupCoverage = { recordTypes: [{ type: 'private.note', count: 2 }], registeredRecordTypes: ['private.note'], unsupportedRecordTypes: [], recordCount: 2, typeLimitExceeded: false, recordLimitExceeded: false, excludedStores: ['blobs', 'blob_refs'] };
 
 it('describes snapshot coverage without echoing private or untrusted type identifiers', () => {
   const text = describeBackupCoverage(base);
@@ -199,6 +199,7 @@ it('rejects malformed resolved record coverage without invoking attachment inspe
     { ...base, excludedStores: [] },
     { ...base, recordTypes: [{ type: 'private.note', count: 2 }, { type: 'private.note', count: 2 }], recordCount: 4 },
     { ...base, registeredRecordTypes: ['private.note', 'private.note'] },
+    { ...base, typeLimitExceeded: true }, // Impossible: the source only flags truncation after 256 categories.
     { ...base, typeLimitExceeded: 'false' },
   ];
   for (const invalid of invalidReports) {

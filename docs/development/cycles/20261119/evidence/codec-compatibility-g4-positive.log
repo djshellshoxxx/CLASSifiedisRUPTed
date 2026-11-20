@@ -1,0 +1,5 @@
+PASS 1: normal publish, reservation, release and withdrawal preserve CID keys and publication index
+PASS 2: normal peer retention and withdrawal preserve owner/listing keys and owner index
+PASS 3: canonical v1 from former codec definitions restores with all metadata, indexes, evidence and signing identity
+PASS 4: current codec export/restore and normal publication reader retain the same canonical records
+{"outcome":"passed","groups":4,"records":8,"publicationRecords":3,"retainedRecords":2,"codecTypes":["bazaar.inventory_hold","bazaar.listing","bazaar.listing_revision","bazaar.publication","discovery.retained_listing"],"node":"v24.22.3","maxRssKiB":238720}

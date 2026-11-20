@@ -10,6 +10,7 @@ const KEY_TYPE = 'vault.identity';
 const KEY_ID = 'root';
 const MAX_RECORDS = 10000;
 const MAX_RECORD_TYPES = 256;
+const MAX_REFERENCE_HOLDERS = 10000;
 const MAX_BACKUP_BYTES = 16 * 1024 * 1024;
 const encoder = new TextEncoder();
 const STORAGE_IDENTITY_FORMAT = 'classrup.vault-identity/v2';
@@ -27,6 +28,17 @@ export interface BackupCoverage {
   readonly typeLimitExceeded: boolean;
   readonly recordLimitExceeded: boolean;
   readonly excludedStores: readonly string[];
+}
+
+/** Principal-scoped holder-row diagnostic, not authenticated attachment or portable backup admission. */
+export interface AttachmentCoverage {
+  readonly referencedBlobs: number | null;
+  readonly missingBlobs: number | null;
+  readonly excludedStoredReferences: number | null;
+  readonly holderRows: number | null;
+  readonly limitExceeded: boolean;
+  readonly holderAuthorityVerified: false;
+  readonly includedInV1Backup: false;
 }
 
 /** Explicit domain schema and indexes; unknown record types never pass restore. */
@@ -61,6 +73,8 @@ export interface UnlockedVault {
   lock(): Promise<void>;
   /** Inspect current-principal record coverage without exporting payloads or keys. */
   backupCoverage(): Promise<BackupCoverage>;
+  /** Inspect this unlocked principal's blob-holder references; never returns refs or bytes. */
+  attachmentCoverage(): Promise<AttachmentCoverage>;
   /** Alpha record backup, not the complete IOX export/recovery/rotation protocol. */
   exportBackup(passphrase: string): Promise<Sealed>;
 }
@@ -189,6 +203,20 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         const result = await storage.read(tx => coverage(tx, identity.principal));
         guard();
         return result;
+      },
+      async attachmentCoverage() {
+        guard();
+        const counts = await storage.read(tx => tx.blobs.referenceCoverage(identity.principal, MAX_REFERENCE_HOLDERS));
+        guard();
+        return Object.freeze({
+          referencedBlobs: counts.referenceCount,
+          missingBlobs: counts.missingCount,
+          excludedStoredReferences: counts.referenceCount === null || counts.missingCount === null ? null : counts.referenceCount - counts.missingCount,
+          holderRows: counts.holderCount,
+          limitExceeded: counts.limitExceeded,
+          holderAuthorityVerified: false as const,
+          includedInV1Backup: false as const,
+        });
       },
       async exportBackup(passphrase) {
         guard();

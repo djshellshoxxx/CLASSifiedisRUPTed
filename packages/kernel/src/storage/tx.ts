@@ -515,6 +515,11 @@ function blobStore(d: DriverTx, kind: DriverKind) {
       const b = d.blobs.get(tenant, ref);
       return b ? toBlobInfo(b, d.blobs.holders(tenant, ref)) : undefined;
     },
+    /** Bounded read-only holder inventory; labels are not authenticated record references. */
+    referenceCoverage(tenant: string, limit = 10000) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10000) throw new RangeError('Reference coverage limit must be 1–10000');
+      return d.blobs.referenceCoverage(tenant, limit);
+    },
     /** Records that `holder` (e.g. `bazaar.listing/<id>`) references the blob; idempotent. */
     attach(tenant: string, ref: string, holder: string): Result<{ holders: number; present: boolean }, AppError> {
       if (!isBlobRef(ref)) return err(appError('VALIDATION_FAILED', { fields: [{ path: 'ref', code: 'INVALID_BLOB_REF' }] }));

@@ -1,0 +1,61 @@
+{
+  "source": "29daa061b4ad8b2899f6a8eaa910d12c80c93671",
+  "tree": "014ab768f786b9170ed4885cb849b85b46117bb1",
+  "checks": [
+    {
+      "name": "typecheck",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.json",
+        "--noEmit"
+      ],
+      "source": "29daa061b4ad8b2899f6a8eaa910d12c80c93671",
+      "tree": "014ab768f786b9170ed4885cb849b85b46117bb1",
+      "started_at": "2026-11-20T15:54:28.191450+00:00",
+      "duration_seconds": 12.476,
+      "timeout_seconds": 300,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "new-integration",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/integration/attachment-reference-coverage.test.ts",
+        "tests/integration/production-future-codec-rejection.test.ts",
+        "tests/integration/production-downgrade-export.test.ts",
+        "tests/integration/production-foreign-codec-isolation.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-baseline/new-integration.json"
+      ],
+      "source": "29daa061b4ad8b2899f6a8eaa910d12c80c93671",
+      "tree": "014ab768f786b9170ed4885cb849b85b46117bb1",
+      "started_at": "2026-11-20T15:54:40.668831+00:00",
+      "duration_seconds": 34.483,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 1,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 109,
+      "log_sha256": "20226dbe78f6621bd11fb86f06a817aeea68c682f9f376c2536f2fee5e410c7d"
+    }
+  ]
+}

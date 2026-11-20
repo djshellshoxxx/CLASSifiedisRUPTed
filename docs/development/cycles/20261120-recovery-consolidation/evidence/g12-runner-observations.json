@@ -1,0 +1,22 @@
+{
+  "recorded_at": "2026-11-20T16:27:55.319598+00:00",
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "observations": [
+    {
+      "runner": "finish_g12.py",
+      "exec_session": 71731,
+      "observed_exit_code": 1,
+      "reason": "The assertion that (file, fullName) pairs are unique failed after all eight domain shards had produced reports. One unchanged parameterized test has two distinct inputs with the same interpolated title. The original domain-recount.json is retained; tooling, CLI, setup and build had not begun in this process."
+    },
+    {
+      "runner": "complete_g12.py",
+      "exec_session": 85744,
+      "observed_exit_code": 130,
+      "reason": "The isolated vault suite completed six passed cases. The following runpy phase final-other accidentally matched run_g12.py phase.startswith(final), completing an extra TypeScript pass and starting a focused domain run. The coordinator interrupted the command before that domain report or receipt was emitted. No pass or failure is inferred for the incomplete extra focused run. All available partial files are retained."
+    },
+    {
+      "runner": "run_auxiliary_g12.py",
+      "reason": "Corrected continuation uses phase auxiliary, which loads only runner definitions before explicitly executing tooling, CLI, setup and build. This change affects only the temporary validation harness, not product code, assertions, or test limits."
+    }
+  ]
+}

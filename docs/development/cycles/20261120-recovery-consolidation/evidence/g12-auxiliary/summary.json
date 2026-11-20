@@ -1,0 +1,103 @@
+{
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "checks": [
+    {
+      "name": "tooling",
+      "command": [
+        "node",
+        "--test",
+        "tests/tooling/ci-plan.test.mjs",
+        "tests/tooling/feature-registry.test.mjs",
+        "tests/tooling/status.test.mjs",
+        "tests/tooling/trace.test.mjs"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:27:55.639530+00:00",
+      "duration_seconds": 4.348,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 2525,
+      "log_sha256": "3478a99a3563b7632f35f07824e70a86a3a89573764461056ef4efa80d1489a4"
+    },
+    {
+      "name": "cli",
+      "command": [
+        "node",
+        "--test",
+        "tests/cli/listings.test.mjs",
+        "tests/cli/public-nested-assets.test.mjs",
+        "tests/cli/public-symlink.test.mjs",
+        "tests/cli/records.test.mjs",
+        "tests/cli/serviceworker.test.mjs",
+        "tests/cli/setup.test.mjs"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:27:59.996626+00:00",
+      "duration_seconds": 24.992,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 4925,
+      "log_sha256": "4b72778643acaad868b90828e81c1646a06f513b4a6878ce7ffc8aeab0e58332"
+    },
+    {
+      "name": "setup",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "setup",
+        "--non-interactive"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:28:25.001419+00:00",
+      "duration_seconds": 0.115,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 63,
+      "log_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939"
+    },
+    {
+      "name": "build",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "build"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:28:25.125636+00:00",
+      "duration_seconds": 0.365,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 53,
+      "log_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60"
+    }
+  ]
+}

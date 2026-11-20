@@ -1,0 +1,229 @@
+{
+  "format": "domain-assertion-recount/v2",
+  "recorded_at": "2026-11-20T16:28:08.916444+00:00",
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "expected_files": 95,
+  "reported_files": 95,
+  "missing_files": [],
+  "unexpected_files": [],
+  "duplicate_files": 0,
+  "assertions": 839,
+  "counts_from_assertions": {
+    "failed": 3,
+    "passed": 832,
+    "pending": 4
+  },
+  "all_passed": false,
+  "nonpassing": [
+    {
+      "file": "tests/integration/mutiny-persistence.test.ts",
+      "ordinal_in_file": 13,
+      "name": "independent durable signed Mutiny verification keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget",
+      "status": "failed",
+      "duration_ms": 60219.712124,
+      "shard": 1
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "ordinal_in_file": 1,
+      "name": "vault composition survives IndexedDB close/reopen, gates locked storage, and atomically restores signed encrypted records",
+      "status": "failed",
+      "duration_ms": 30027.558987000004,
+      "shard": 7
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "ordinal_in_file": 2,
+      "name": "vault composition restores older backups after registering additional codecs but rejects unsupported types",
+      "status": "pending",
+      "duration_ms": null,
+      "shard": 7
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "ordinal_in_file": 3,
+      "name": "vault composition rejects corrupt restores before creating an identity and rolls back a lock during an awaited write",
+      "status": "pending",
+      "duration_ms": null,
+      "shard": 7
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "ordinal_in_file": 4,
+      "name": "vault composition rejects noncanonical record keys during backup restore without initializing the destination",
+      "status": "pending",
+      "duration_ms": null,
+      "shard": 7
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "ordinal_in_file": 5,
+      "name": "vault composition rechecks canonical keys after restore normalization before any records commit",
+      "status": "pending",
+      "duration_ms": null,
+      "shard": 7
+    },
+    {
+      "file": "tests/integration/production-future-codec-rejection.test.ts",
+      "ordinal_in_file": 0,
+      "name": "production backup compatibility with unknown future record types rejects a valid mixed future/current v1 backup without installing its supported records",
+      "status": "failed",
+      "duration_ms": 30014.938187,
+      "shard": 8
+    }
+  ],
+  "title_collisions": [
+    {
+      "file": "packages/platform/src/configuration/feature/feature.test.ts",
+      "name": "registry queries through the kernel authorization and read boundaries rejects malformed query input for platform.feature.list_features",
+      "entries": [
+        {
+          "file": "packages/platform/src/configuration/feature/feature.test.ts",
+          "ordinal_in_file": 33,
+          "name": "registry queries through the kernel authorization and read boundaries rejects malformed query input for platform.feature.list_features",
+          "status": "passed",
+          "duration_ms": 2.8117879999999786,
+          "shard": 8
+        },
+        {
+          "file": "packages/platform/src/configuration/feature/feature.test.ts",
+          "ordinal_in_file": 34,
+          "name": "registry queries through the kernel authorization and read boundaries rejects malformed query input for platform.feature.list_features",
+          "status": "passed",
+          "duration_ms": 0.4369209999999839,
+          "shard": 8
+        }
+      ],
+      "assessment": {
+        "kind": "distinct parameterized inputs with a shared interpolated title",
+        "source_blob": "035df8ba5b4f616b71b12007fb7b59d21bb17fd8",
+        "byte_identical_to_main": true,
+        "source_lines": [
+          290,
+          291,
+          295
+        ],
+        "inputs": [
+          {
+            "query": "platform.feature.list_features",
+            "input": {
+              "featureId": "../secret"
+            }
+          },
+          {
+            "query": "platform.feature.list_features",
+            "input": {
+              "includeFuture": "true"
+            }
+          }
+        ],
+        "counted_as": 2
+      }
+    }
+  ],
+  "reporter_discrepancies": [
+    {
+      "shard": 7,
+      "top_level_pending": 1,
+      "assertion_pending": 4,
+      "log_warning": "Some tests are still running when generating the JSON report"
+    }
+  ],
+  "reports": [
+    {
+      "source_path": "g12-final-round1/domain-1.json",
+      "sha256": "d30c33de6b03fd8e4741d99d118673b540eebef6786f336281691f2ae9bce459",
+      "files": 12,
+      "assertions": 62,
+      "counts_from_assertions": {
+        "failed": 1,
+        "passed": 61
+      },
+      "top_level_numPendingTests": 0,
+      "process_exit_code": 1
+    },
+    {
+      "source_path": "g12-remaining-round1/domain-2.json",
+      "sha256": "6955682cffc3e13e16fee3f005b7015798fb999263e73eafa5d3538611e7e3b3",
+      "files": 12,
+      "assertions": 76,
+      "counts_from_assertions": {
+        "passed": 76
+      },
+      "top_level_numPendingTests": 0,
+      "process_exit_code": 0
+    },
+    {
+      "source_path": "g12-remaining-round1/domain-3.json",
+      "sha256": "07bbf5aab87c2fce40e16316390e639aaac74e085c46afb7f3ad4c550620c88e",
+      "files": 12,
+      "assertions": 79,
+      "counts_from_assertions": {
+        "passed": 79
+      },
+      "top_level_numPendingTests": 0,
+      "process_exit_code": 0
+    },
+    {
+      "source_path": "g12-remaining-round1/domain-4.json",
+      "sha256": "044cd5f51660942fce2c9db459ea30364169a7ede1ceb655cafc80623a5a0ae2",
+      "files": 12,
+      "assertions": 98,
+      "counts_from_assertions": {
+        "passed": 98
+      },
+      "top_level_numPendingTests": 0,
+      "process_exit_code": 0
+    },
+    {
+      "source_path": "g12-remaining-round1/domain-5.json",
+      "sha256": "a9a3d1f9a8d5264bc5a0dc629ff355af777d299d6c5cdf33844f37e001855281",
+      "files": 12,
+      "assertions": 153,
+      "counts_from_assertions": {
+        "passed": 153
+      },
+      "top_level_numPendingTests": 0,
+      "process_exit_code": 0
+    },
+    {
+      "source_path": "g12-remaining-round1/domain-6.json",
+      "sha256": "789cccd5b6f6a565cbad2119a37bdd5107ddc1880c5168d04d87a86dd1701426",
+      "files": 12,
+      "assertions": 95,
+      "counts_from_assertions": {
+        "passed": 95
+      },
+      "top_level_numPendingTests": 0,
+      "process_exit_code": 0
+    },
+    {
+      "source_path": "g12-remaining-round1/domain-7.json",
+      "sha256": "640069ac0bbdc438cdb4e2423512c6dc722d6c514b8e62e87826cbf87663dbe9",
+      "files": 12,
+      "assertions": 139,
+      "counts_from_assertions": {
+        "failed": 1,
+        "passed": 134,
+        "pending": 4
+      },
+      "top_level_numPendingTests": 1,
+      "process_exit_code": 1
+    },
+    {
+      "source_path": "g12-remaining-round1/domain-8.json",
+      "sha256": "82cec65e73340f3e7af5e28fc316c29e45ad5b037e64cfd1e1771bd663e90a82",
+      "files": 11,
+      "assertions": 137,
+      "counts_from_assertions": {
+        "failed": 1,
+        "passed": 136
+      },
+      "top_level_numPendingTests": 0,
+      "process_exit_code": 1
+    }
+  ],
+  "original_recount_preserved": "domain-recount.json",
+  "note": "Individual assertion entries are counted. The two same-title entries are distinct existing parameterized cases; no result was discarded. Separate focused or isolated runs overlap this suite and are not added."
+}

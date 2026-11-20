@@ -3,19 +3,33 @@
 ## New owner-directed continuation
 
 The owner subsequently requested continuing incomplete features and successive
-fresh code, bug and security reviews. The [full-registry recovery handoff](cycles/20261120-full-registry-recovery/HANDOFF.md)
+fresh code, bug and defensive security reviews. The [PWA and restore-rejection consolidation](cycles/20261120-pwa-recovery-consolidation/HANDOFF.md)
 is the current continuation record. It supersedes the finite-task stop direction
-below for this newly authorized work. The older paused automation remains paused.
-PRs #56 and #57 are merged after their own qualification; the draft PR #58
-continuation is tracked separately. PR #59 retains PR #58 as its parent. The
-combined candidate retains PR #61 and the independently developed PR #60 as
-parents, preserving their complementary acceptance and handoffs. Each published
-source stays stable while its qualification waits. A test-only follow-on retains
-combined PR #62 and qualifies one full-registry archive with actual barter-to-
-notification routing and continued recovery actions. The current handoff also
-links the 51-row
-historical readiness reconciliation, which leaves all original findings open.
-Preserve prior evidence and all existing branches.
+below for this newly authorized work. Existing automation settings are unchanged.
+
+The latest candidate combines [PR #70](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/70)'s PWA attachment-exclusion diagnostic with
+[PR #71](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/71)'s persisted
+restore-rejection proof. Both published histories and all contributed source
+blobs remain intact. Three assertions extend the existing browser coverage
+journey; the current local selection passes 30 integration cases, TypeScript,
+static checks, 27 tooling tests and 46 CLI tests. Native-browser execution and
+current-head hosted qualification remain pending. PR #69's full-run failures
+and pending entries remain preserved in the
+[parent handoff](cycles/20261120-recovery-consolidation/HANDOFF.md).
+
+PR #63 merged as `449a619f1ae7b66cb42d9cab43dd5493bfe42c2e`, preserving the
+PR #58/#59/#60/#61/#62 recovery histories. Actual main-push Alpha run
+`44713847841` and CLI run `44713847763` completed successfully. The inspected
+Alpha domain log checked out that exact main and reports 78 passed product
+browser journeys. These results belong to that main source, not later drafts.
+
+The current continuation combines the independent PR #64–#68 heads without
+dropping their original handoffs. It repairs the attachment lifecycle test
+oracle, scopes the working-set coverage scan through a tenant index, and adds
+ordinary recovery, rollback and session acceptance. Its own source-specific
+qualification and hosted gate are recorded in the current handoff. The
+51-row historical readiness reconciliation leaves all original findings open.
+Preserve prior evidence and all existing branches, including draft PR #8.
 
 ## Prior finite consolidation state
 

@@ -1,4 +1,4 @@
-import type { BackupCoverage } from '../../../packages/vault/src/index.ts';
+import type { BackupCoverage, AttachmentCoverage } from '../../../packages/vault/src/index.ts';
 
 /** Coverage contains counts and type identifiers only; never render record payloads. */
 export function describeBackupCoverage(coverage: BackupCoverage): string {
@@ -8,4 +8,19 @@ export function describeBackupCoverage(coverage: BackupCoverage): string {
   const records = coverage.recordCount === 1 ? 'record' : 'records';
   const categories = coverage.recordTypes.length === 1 ? 'category' : 'categories';
   return `At last check: ${coverage.recordCount} saved ${records} across ${coverage.recordTypes.length} supported ${categories}. Coverage is checked again during export. Record validation and the encrypted file size limit still apply.`;
+}
+
+/**
+ * Holder coverage is diagnostic only. V1 does not include blob bytes or holder
+ * relationships, even when every counted holder has a stored blob row.
+ */
+export function describeAttachmentCoverage(coverage: AttachmentCoverage): string {
+  const exclusion = 'Attachment bytes and references are excluded from v1 backups. Holder labels are not authenticated and unheld blobs are not inventoried.';
+  if (coverage.limitExceeded || coverage.referencedBlobs === null || coverage.missingBlobs === null ||
+      coverage.excludedStoredReferences === null || coverage.holderRows === null) {
+    return `Attachment check exceeded its 10,000-holder limit; counts are unavailable. ${exclusion}`;
+  }
+  const refs = coverage.referencedBlobs === 1 ? 'reference' : 'references';
+  const holders = coverage.holderRows === 1 ? 'holder row' : 'holder rows';
+  return `Attachment check: ${coverage.referencedBlobs} held ${refs}, ${coverage.missingBlobs} missing stored blobs, ${coverage.excludedStoredReferences} present but excluded stored blobs, and ${coverage.holderRows} ${holders}. ${exclusion}`;
 }

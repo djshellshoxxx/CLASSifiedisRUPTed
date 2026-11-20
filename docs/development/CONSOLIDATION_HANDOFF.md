@@ -3,9 +3,17 @@
 ## New owner-directed continuation
 
 The owner subsequently requested continuing incomplete features and successive
-fresh code, bug and defensive security reviews. The [recovery consolidation handoff](cycles/20261120-recovery-consolidation/HANDOFF.md)
+fresh code, bug and defensive security reviews. The [persisted restore-rejection handoff](cycles/20261120-restore-rejection-proof/HANDOFF.md)
 is the current continuation record. It supersedes the finite-task stop direction
 below for this newly authorized work. Existing automation settings are unchanged.
+
+The latest follow-up extends one compatibility acceptance case from
+[draft PR #69](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/69).
+It directly checks persisted destination state across future-codec rejection
+and reopen, while retaining PR #69's published head as its source parent.
+PR #69's source and hosted qualification remain separate; its full-run failures
+and pending entries remain preserved in the
+[parent handoff](cycles/20261120-recovery-consolidation/HANDOFF.md).
 
 PR #63 merged as `449a619f1ae7b66cb42d9cab43dd5493bfe42c2e`, preserving the
 PR #58/#59/#60/#61/#62 recovery histories. Actual main-push Alpha run

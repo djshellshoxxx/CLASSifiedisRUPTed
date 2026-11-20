@@ -1,0 +1,22 @@
+{
+  "name": "spec",
+  "command": [
+    "node",
+    "tools/specgen/specgen.mjs",
+    "check"
+  ],
+  "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+  "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+  "started_at": "2026-11-20T16:54:43.369297+00:00",
+  "duration_seconds": 1.615,
+  "timeout_seconds": 900,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 48,
+  "log_sha256": "8b9ba7ae8d9683b9b5fb588f2ab3c07b905c848a93a045c538eaf902ab6ea865"
+}

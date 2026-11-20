@@ -127,3 +127,32 @@ describe('reference coverage lifecycle does not count unheld or detached data', 
     });
   }
 });
+
+it('IndexedDB reference coverage reconstructs its tenant index after reopening', async () => {
+  const indexedDB = new IDBFactory();
+  const name = 'reference-coverage-reopen';
+  const tenant = 'reopened-owner';
+  const ref = await blobRefOf(new Uint8Array([4, 5, 6]));
+  const original = await openIndexedDbStorage({ name, indexedDB });
+  try {
+    const created = await original.transaction(tx => {
+      tx.blobs.attach(tenant, ref, 'listing/reopened');
+      tx.blobs.attach('other-owner', ref, 'listing/foreign');
+      return ok(undefined);
+    });
+    expect(created.ok).toBe(true);
+  } finally {
+    await original.close();
+  }
+  const reopened = await openIndexedDbStorage({ name, indexedDB });
+  try {
+    expect(await reopened.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual({
+      referenceCount: 1, holderCount: 1, missingCount: 1, limitExceeded: false,
+    });
+    expect(await reopened.read(tx => tx.blobs.referenceCoverage('other-owner'))).toEqual({
+      referenceCount: 1, holderCount: 1, missingCount: 1, limitExceeded: false,
+    });
+  } finally {
+    await reopened.close();
+  }
+});

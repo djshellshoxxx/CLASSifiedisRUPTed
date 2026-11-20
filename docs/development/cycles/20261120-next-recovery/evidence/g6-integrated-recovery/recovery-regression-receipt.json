@@ -1,0 +1,42 @@
+{
+  "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+  "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+  "name": "recovery-regression",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/production-codec-compatibility.test.ts",
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/production-recovery-readers.test.ts",
+    "tests/integration/backup-coverage.test.ts",
+    "tests/integration/publication-backup.test.ts",
+    "tests/integration/archive-backup.test.ts",
+    "tests/integration/retained-backup.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g6-integrated-recovery/recovery-regression.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 56.861,
+  "log_bytes": 123,
+  "log_sha256": "029ded3e8368d1fd174a65c52fd46f83dc34a1afbb8f97c601b387f9bc7b8d7d",
+  "files": [
+    "tests/integration/archive-backup.test.ts",
+    "tests/integration/backup-coverage.test.ts",
+    "tests/integration/mixed-production-backup.test.ts",
+    "tests/integration/production-codec-compatibility.test.ts",
+    "tests/integration/production-recovery-readers.test.ts",
+    "tests/integration/publication-backup.test.ts",
+    "tests/integration/retained-backup.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 13
+  },
+  "report_success": true,
+  "report_sha256": "24331ec9c1eb24befbecb70723626335e615e7e65784828fb14110524fc0e6e9"
+}

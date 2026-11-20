@@ -65,7 +65,15 @@ async function reconstructCoordination(input: unknown, trustLocalVerdict: boolea
   if (trustLocalVerdict && parsed.committedLocallyAt !== null && state.committedLocallyAt === null) throw new TypeError('Unsupported cached commitment');
   if (state.proposal.revisionHash !== parsed.proposal.revisionHash) throw new TypeError('Cached proposal mismatch');
   // Local conflicts/terminal clock decisions are retained; committed status must be freshly re-evaluated.
-  if (parsed.status === 'frozen') state = freezeConflict(state);
+  if (parsed.status === 'frozen') {
+    // A restored record stays a recovery decision on later refresh/export.
+    // Signed terminal evidence still takes precedence over its cached reason.
+    const needsRecoveryReview = parsed.reason === 'restore_requires_review'
+      && (state.status === 'proposed' || state.status === 'committed');
+    state = needsRecoveryReview
+      ? { ...state, status: 'frozen', reason: 'restore_requires_review', committedLocallyAt: null, commitFeasibility: null }
+      : freezeConflict(state);
+  }
   // Restore cannot prove historical feasibility. Keep expired previously committed exchanges frozen for explicit recovery.
   if (!trustLocalVerdict && parsed.committedLocallyAt !== null && parsed.status === 'committed') state = { ...state, status: 'frozen', reason: 'restore_requires_review', committedLocallyAt: null, commitFeasibility: null };
   const noCommit: Feasibility = { revisionHash: state.proposal.revisionHash, feasible: false, checkedAt: parsed.lastObservedAt };

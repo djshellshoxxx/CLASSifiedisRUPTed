@@ -60,6 +60,30 @@ transaction, including a retained/destructured reference.
 
 ## Acceptance
 
+### Production records and ordinary recovery readers
+
+The shared PWA registry currently has 15 record codecs. Three executed local
+scenarios populate their union through ordinary domain commands, then export,
+restore, reopen and continue owner actions. The precise candidate source,
+results and pending hosted gate are in the
+[notification/barter qualification](cycles/20261120-next-recovery/QUALIFICATION.md).
+
+| Record types | Populated scenario | Recovery acceptance |
+|---|---|---|
+| `bazaar.listing`, `bazaar.listing_revision`, `bazaar.publication`, `bazaar.archive_record` | Normal readers | Listing/detail, paginated history, publication and archive readers; restore archive and republish through the existing signature/CID chain |
+| `discovery.retained_listing`, `discovery.location_setting` | Normal readers | Retained peer search and private/public location views |
+| `notify.notification`, `notify.preference`, `notify.notification_seen`, `notify.notification_day`, `notify.notification_diag`, `notify.pref_counter` | Local notifications | Inbox pagination/filtering, preferences, counters, domain deduplication, collapse and continued read/preference actions |
+| `mutiny.want`, `mutiny.coordination`, `bazaar.inventory_hold` | Signed barter; also includes four listing/retention types above | Real committed exchange recovers frozen for manual review; wants/evidence/identity persist, repeated normalization and refresh preserve review state, ordinary terminal refresh releases the domain hold |
+
+Each scenario uses the full registry, but its backup contains only its populated
+types: six, six and seven respectively. The union is 15, not 19 distinct types.
+This is not a single all-type archive, every state of each codec, native-device
+acceptance, or a whole database snapshot. A domain inventory hold is distinct
+from the excluded infrastructure lease store. External notification delivery
+and channel grants remain outside local notification record recovery.
+
+### Coverage and compatibility boundaries
+
 - An unsupported current-principal record blocks export, including when inserted
   after a successful coverage check. Another tenant's type never blocks export.
 - Per-type/total record counts and overflow states are deterministic and bounded.

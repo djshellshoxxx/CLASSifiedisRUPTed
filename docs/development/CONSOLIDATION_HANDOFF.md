@@ -3,11 +3,13 @@
 ## New owner-directed continuation
 
 The owner subsequently requested continuing incomplete features and successive
-fresh code, bug and security reviews. The [round 4 consolidation handoff](cycles/20261120/HANDOFF-ROUND4.md)
+fresh code, bug and security reviews. The [notification/barter recovery handoff](cycles/20261120-next-recovery/HANDOFF.md)
 is the current continuation record. It supersedes the finite-task stop direction
 below for this newly authorized work. The older paused automation remains paused.
 PRs #56 and #57 are merged after their own qualification; the draft PR #58
-continuation is tracked separately. Preserve prior evidence and all existing branches.
+continuation is tracked separately. The next recovery candidate retains PR #58
+as its parent and keeps that published source stable while qualification waits.
+Preserve prior evidence and all existing branches.
 
 ## Prior finite consolidation state
 

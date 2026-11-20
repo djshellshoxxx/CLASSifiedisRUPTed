@@ -1,0 +1,17 @@
+{
+  "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+  "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+  "name": "feature-registry",
+  "command": [
+    "node",
+    "packages/platform/scripts/gen-registry.mjs",
+    "--check",
+    "--strict"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 180,
+  "exit_code": 0,
+  "seconds": 1.202,
+  "log_bytes": 173,
+  "log_sha256": "0cac70ec6e261634becfd24018cf0ca1686e27dd246b06905e1f4db1a036225d"
+}

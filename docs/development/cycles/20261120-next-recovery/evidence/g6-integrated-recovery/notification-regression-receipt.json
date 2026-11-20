@@ -1,0 +1,40 @@
+{
+  "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+  "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+  "name": "notification-regression",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "packages/notify/src/delivery/inapp/inapp.test.ts",
+    "packages/notify/src/preferences/in/in.test.ts",
+    "packages/notify/src/preferences/opt/opt.test.ts",
+    "tests/integration/notification-delivery.test.ts",
+    "tests/integration/notification-lifecycle.test.ts",
+    "tests/integration/privacy-notify.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g6-integrated-recovery/notification-regression.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 12.538,
+  "log_bytes": 127,
+  "log_sha256": "c83d810e5b665fabff1f935a1b394d5cd1095cbdc1b0ca751cf68feb4aebf770",
+  "files": [
+    "packages/notify/src/delivery/inapp/inapp.test.ts",
+    "packages/notify/src/preferences/in/in.test.ts",
+    "packages/notify/src/preferences/opt/opt.test.ts",
+    "tests/integration/notification-delivery.test.ts",
+    "tests/integration/notification-lifecycle.test.ts",
+    "tests/integration/privacy-notify.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 50
+  },
+  "report_success": true,
+  "report_sha256": "10b81b325a2a3a340cda6da84d48d6e63eb58be6e53cd36639409a8e12ab8534"
+}

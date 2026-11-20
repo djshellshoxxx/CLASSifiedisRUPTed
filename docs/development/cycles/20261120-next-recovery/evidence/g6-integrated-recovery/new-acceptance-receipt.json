@@ -1,0 +1,32 @@
+{
+  "source": "796c16520365c57562c1328a73d313f3fa614ae4",
+  "tree": "07a135e30d47c5284d120d4dad76f648c26e8444",
+  "name": "new-acceptance",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/production-notification-recovery.test.ts",
+    "tests/integration/production-barter-recovery.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g6-integrated-recovery/new-acceptance.json"
+  ],
+  "node_options": "--max-old-space-size=1024",
+  "process_timeout_seconds": 900,
+  "exit_code": 0,
+  "seconds": 20.923,
+  "log_bytes": 118,
+  "log_sha256": "6cdbafa28ebbbdf7d1f0b4e5ad093d1b26c90ecfcf81015fd085c6cdb1a7a275",
+  "files": [
+    "tests/integration/production-barter-recovery.test.ts",
+    "tests/integration/production-notification-recovery.test.ts"
+  ],
+  "assertion_counts": {
+    "passed": 8
+  },
+  "report_success": true,
+  "report_sha256": "5fa131f82366336ed9b0a23b740e02890261457227f14a19d9ae9b69e9ad8e53"
+}

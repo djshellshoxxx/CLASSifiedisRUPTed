@@ -85,7 +85,9 @@ export function createBarterRuntime(session: Pick<UnlockedVault, 'principal' | '
 
 /** Backup validation is mandatory, even for locally encrypted signed archives. */
 export const barterCodecs = [
-  { ...backupCodec(wantRepo), async restoreData(input: unknown, principal: string) {
+  { ...backupCodec(wantRepo), recordId(input: unknown) {
+    return wantRepo.schema.parse(input).envelope.cid;
+  }, async restoreData(input: unknown, principal: string) {
     const data = wantRepo.schema.parse(input);
     if (data.ownerId !== principal) throw new Error('Backup want belongs to another local principal');
     return data;
@@ -94,7 +96,9 @@ export const barterCodecs = [
     const envelope = await verifyEnvelope(data.envelope, { expectedType: WANT_TYPE, now: Math.max(Date.now(), data.receivedAtLocal) });
     parseWant(envelope.payload);
   } },
-  { ...backupCodec(coordinationRepo), async restoreData(input: unknown, principal: string) {
+  { ...backupCodec(coordinationRepo), recordId(input: unknown) {
+    return coordinationRepo.schema.parse(input).state.proposal.snapshot.subjectId;
+  }, async restoreData(input: unknown, principal: string) {
     const data = coordinationRepo.schema.parse(input);
     if (data.ownerId !== principal) throw new Error('Backup coordination belongs to another local principal');
     return normalizeCoordinationRecord(data);

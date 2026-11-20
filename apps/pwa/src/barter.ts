@@ -26,6 +26,24 @@ function node<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string): HTM
 const short = (value: string): string => value.length <= 24 ? value : `${value.slice(0, 12)}…${value.slice(-8)}`;
 const ids = createUuidV7Generator();
 
+function frozenExplanation(reason: string | null): string {
+  const nextStep = ' Review the signed evidence with participants and explicitly negotiate a new proposal before continuing.';
+  switch (reason) {
+    case 'restore_requires_review':
+      return 'This coordination was restored from a backup and needs manual review. It is not recommitted automatically.' + nextStep;
+    case 'reservation_expired':
+      return 'A signed inventory reservation expired, so this coordination is frozen.' + nextStep;
+    case 'local_reservation_lost':
+      return 'The required local inventory reservation is no longer available, so this coordination is frozen.' + nextStep;
+    case 'conflicting_promise':
+      return 'Conflicting signed commitments froze this coordination. No winner is chosen automatically.' + nextStep;
+    case 'fork_detected':
+      return 'Conflicting signed proposal revisions froze this coordination. No revision is chosen automatically.' + nextStep;
+    default:
+      return 'This coordination is frozen.' + nextStep;
+  }
+}
+
 /** Explicit, signed file exchange only. Suggestions never authorize inventory or consent. */
 export function mountBarter(options: BarterMountOptions): { refresh(): Promise<void>; destroy(): void } {
   const { container, session } = options;
@@ -252,7 +270,7 @@ export function mountBarter(options: BarterMountOptions): { refresh(): Promise<v
       await ingest(envelope); options.download(`withdrawal-${row.id}.json`, envelope);
       options.message('Withdrawal saved locally. Share it with every participant. This cannot undo a physical exchange.'); await refresh();
     }));
-    if (state.status === 'frozen') article.append(node('p', 'Conflicting signed commitments froze this coordination. Review the evidence and explicitly negotiate a new proposal; no winner is chosen automatically.'));
+    if (state.status === 'frozen') article.append(node('p', frozenExplanation(state.reason)));
     coordinations.append(article);
   }
   return { refresh, destroy() { destroyed = true; matching.dispose(); options.setMatchingPolicy({ enabled: false, blockedOwners: [] }); inputs = undefined; container.replaceChildren(); } };

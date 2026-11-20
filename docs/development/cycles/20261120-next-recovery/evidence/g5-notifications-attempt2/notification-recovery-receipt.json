@@ -1,0 +1,25 @@
+{
+  "source": "61c0e5eeaafe2361d100b4eddb2c9a970d48a18f",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/production-notification-recovery.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g5-notifications-attempt2/notification-recovery.json"
+  ],
+  "exit_code": 0,
+  "seconds": 10.704,
+  "log_sha256": "b900d097c348f5a2381fa8a6a7da9c2cdf4ba932af357597d6b158c8503fa607",
+  "setup_change": "Pinned offline install replaces cross-worktree dependency symlinks; source unchanged",
+  "counts": {
+    "numTotalTests": 1,
+    "numPassedTests": 1,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "success": true
+  }
+}

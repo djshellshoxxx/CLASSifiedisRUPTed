@@ -4,7 +4,7 @@ This register accompanies the [comprehensive branch consolidation](BRANCH_CONSOL
 It is based on the current runtime, retained unique branch changes, actual test
 coverage and existing contracts. Specifications and generated source-path counts
 do not establish completion. The owner has authorized continued incomplete-
-feature work and successive independent audits; see the [current handoff](cycles/20261120/HANDOFF-ROUND4.md).
+feature work and successive independent audits; see the [current handoff](cycles/20261120-next-recovery/HANDOFF.md).
 
 ## Completed slices to preserve
 
@@ -36,6 +36,13 @@ feature work and successive independent audits; see the [current handoff](cycles
   adds mixed-record, generated legacy-subset, and rollback/retry acceptance.
   Its qualification is separate from PR #57; see the
   [round 4 handoff](cycles/20261120/HANDOFF-ROUND4.md).
+- The separate [notification/barter recovery candidate](cycles/20261120-next-recovery/HANDOFF.md)
+  adds continued local inbox recovery, signed barter recovery with manual
+  review, canonical want/coordination keys and accurate freeze explanations.
+  Its integrated source passed 127 selected cases plus compiler/static/build
+  checks. The three realistic recovery scenarios populate the union of all
+  15 production codec types in separate archives. Hosted qualification is
+  pending; this does not establish complete database or device recovery.
 
 ## Priority and dependency register
 
@@ -44,7 +51,7 @@ Effort is an engineering estimate, not measured duration or a commitment: S = a 
 | Priority | Work item and affected components | Dependencies / next concrete step | Estimated effort |
 |---|---|---|---|
 | P1 | Native WebKit identity import compatibility (`packages/identity`, vault, `tests/compat/browser-crypto`) | Current bounded new-key generation retries mitigate creation availability only. Requalify reviewed upstream fixed-width engine repair using the unchanged leading-zero/all-zero import vectors, deterministic signatures and native stress probe; then validate create/unlock/restore in product. Never rotate existing identity on unlock failure. | M plus external engine availability |
-| P1 | Encrypted-storage recovery/rotation/load and backup completeness (`packages/vault`, kernel storage) | Record coverage and shared recovery preflight are qualified through merged PR #57. Complete current-source qualification of PR #58's production codec-set round trip and normal-reader acceptance. Attachment/reference recovery, delivery/lease rules, rotation, whole-database rollback and actual interrupted-device/load acceptance remain separate. | L |
+| P1 | Encrypted-storage recovery/rotation/load and backup completeness (`packages/vault`, kernel storage) | Record coverage and shared recovery preflight are qualified through merged PR #57. Complete current-source hosted qualification of PR #58 and its notification/barter continuation. The executed local scenarios populate all 15 codec types across separate archives. Attachment/reference recovery, delivery/lease rules, rotation, whole-database rollback and actual interrupted-device/load acceptance remain separate. | L |
 | P1 | Canonical identity/device/recovery authority (`packages/identity`, federation, consent) | Resolve root/device roles, authenticated delegation, revocation and recovery/notice/dispute contracts; implement real owner-authorized handlers and end-to-end adversarial tests before depending on recovered signature helpers. | XL |
 | P1 | Canonical federation and compatible signed-file migration (`packages/federation`, discovery, vault restore) | Select explicit protocol version boundary; preserve alpha CID/signature bytes and per-subject histories; independent canonical vectors, author-stream gap/quarantine, delegated signer validity and old-backup acceptance. | XL; depends on identity authority |
 | P1 | Retention, purge, deletion and evidence lifecycle (`bazaar`, privacy, vault) | Define one cross-domain hold/evidence/tombstone/backup policy; implement bounded resumable purge with idempotency and recovery tests. Current archive/recovery and signed withdrawals are already implemented but do not erase peer copies. | L |
@@ -94,13 +101,19 @@ uninitialized after a failed restore and reopen. PR #57's own main-push workflow
 passed. Current-source qualification and independent review of PR #58 remain
 separate gates.
 
-Qualify the production PWA codec registry with realistic mixed records: export,
-restore into a new encrypted vault, reopen, and compare identity,
-canonical keys, rebuilt indexes and normalized coordination state. Include old
-subset backups, malformed owner/key evidence, record limits and interrupted
-recovery. Reuse production codec composition; do not duplicate its rules in a
-test-only registry. Repair any confirmed admission mismatch before expanding the
-format or claiming complete recovery.
+The production PWA codec registry now has executed realistic listing/location,
+notification and barter recovery scenarios: export, restore into a new encrypted
+vault, reopen, compare normal readers and identity, and continue ordinary owner
+actions. Generated subset compatibility and memory transaction rollback/retry
+remain separate existing fixtures. Complete the actual current-source hosted
+qualification before marking these candidates integrated. Keep the full
+production registry shared rather than copying its rules into test-only code.
+
+A bounded next correction is preserving the documented expired-reservation and
+lost-local-reservation reasons through repeated reconstruction. Existing first-
+transition tests and the new display fixtures do not establish that persistence.
+Keep the correction on a separate source while the recovery candidate waits;
+preserve signed terminal outcomes and prohibit automatic recommit.
 
 Attachments/blob references and delivery/queue/lease state remain excluded.
 Their recovery policy, compatible authenticated manifest, atomic persistence,

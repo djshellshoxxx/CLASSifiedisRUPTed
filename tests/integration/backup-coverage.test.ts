@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
 import { describeBackupCoverage, describeAttachmentCoverage, readBackupInspection } from '../../apps/pwa/src/backup-coverage.ts';
+import { runForSession } from '../../apps/pwa/src/vault-session.ts';
 import type { BackupCoverage, AttachmentCoverage } from '../../packages/vault/src/index.ts';
 
 const base: BackupCoverage = { recordTypes: [{ type: 'private.note', count: 2 }], registeredRecordTypes: ['private.note'], unsupportedRecordTypes: [], recordCount: 2, typeLimitExceeded: false, recordLimitExceeded: false, excludedStores: ['blobs'] };
@@ -30,8 +31,8 @@ const references: AttachmentCoverage = {
 it('reports held attachment exclusions without promising complete backup or revealing identifiers', () => {
   const text = describeAttachmentCoverage(references);
   expect(text).toContain('2 held references');
-  expect(text).toContain('1 missing stored blobs');
-  expect(text).toContain('1 present but excluded stored blobs');
+  expect(text).toContain('1 missing stored blob');
+  expect(text).toContain('1 present but excluded stored blob');
   expect(text).toContain('3 holder rows');
   expect(text).toContain('excluded from v1 backups');
   expect(text).toContain('Holder labels are not authenticated');
@@ -87,4 +88,39 @@ it('does not silently downgrade a failed record-coverage read into an exportable
     backupCoverage: async () => { throw new Error('Record coverage failed'); },
     attachmentCoverage: async () => references,
   })).rejects.toThrow('Record coverage failed');
+});
+
+it('uses exact singular and plural attachment labels while keeping exclusion warnings', () => {
+  const zero = describeAttachmentCoverage({
+    ...references, referencedBlobs: 0, missingBlobs: 0,
+    excludedStoredReferences: 0, holderRows: 0,
+  });
+  expect(zero).toContain('0 missing stored blobs');
+  expect(zero).toContain('0 present but excluded stored blobs');
+  const plural = describeAttachmentCoverage({
+    ...references, referencedBlobs: 4, missingBlobs: 2,
+    excludedStoredReferences: 2, holderRows: 4,
+  });
+  expect(plural).toContain('2 missing stored blobs');
+  expect(plural).toContain('2 present but excluded stored blobs');
+  const singular = describeAttachmentCoverage(references);
+  expect(singular).toContain('1 missing stored blob,');
+  expect(singular).toContain('1 present but excluded stored blob,');
+  expect(singular).toContain('excluded from v1 backups');
+});
+
+it('does not publish a recovered record inspection after session replacement during an optional failure', async () => {
+  const session = { id: 'owner-session' };
+  let active: typeof session | undefined = session;
+  let rejectAttachment: ((error: Error) => void) | undefined;
+  const deferredAttachment = new Promise<AttachmentCoverage>((_resolve, reject) => {
+    rejectAttachment = reject;
+  });
+  const pending = runForSession(session, () => active, () => readBackupInspection({
+    backupCoverage: async () => base,
+    attachmentCoverage: () => deferredAttachment,
+  }));
+  active = undefined;
+  rejectAttachment?.(new Error('private blob:sha256-reference should not be shown'));
+  await expect(pending).rejects.toThrow('Vault session ended');
 });

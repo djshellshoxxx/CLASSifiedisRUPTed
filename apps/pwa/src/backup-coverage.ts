@@ -36,6 +36,8 @@ export function describeAttachmentCoverage(coverage: AttachmentCoverage | null):
     return `Attachment check exceeded its 10,000-holder limit; counts are unavailable. ${exclusion}`;
   }
   const refs = coverage.referencedBlobs === 1 ? 'reference' : 'references';
+  const missing = coverage.missingBlobs === 1 ? 'missing stored blob' : 'missing stored blobs';
+  const excluded = coverage.excludedStoredReferences === 1 ? 'present but excluded stored blob' : 'present but excluded stored blobs';
   const holders = coverage.holderRows === 1 ? 'holder row' : 'holder rows';
-  return `Attachment check: ${coverage.referencedBlobs} held ${refs}, ${coverage.missingBlobs} missing stored blobs, ${coverage.excludedStoredReferences} present but excluded stored blobs, and ${coverage.holderRows} ${holders}. ${exclusion}`;
+  return `Attachment check: ${coverage.referencedBlobs} held ${refs}, ${coverage.missingBlobs} ${missing}, ${coverage.excludedStoredReferences} ${excluded}, and ${coverage.holderRows} ${holders}. ${exclusion}`;
 }

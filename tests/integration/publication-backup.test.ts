@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createMemoryStorage, ok } from '../../packages/kernel/src/index.ts';
+import { createDeterministicIds, createMemoryStorage, ok } from '../../packages/kernel/src/index.ts';
 import { signEnvelope, strictCanonicalJson } from '../../packages/federation/src/index.ts';
 import { publicationRepo } from '../../packages/bazaar/src/index.ts';
 import { type PublicListingProjection } from '../../packages/discovery/src/index.ts';
@@ -7,7 +7,9 @@ import { vaultFromStorage } from '../../packages/vault/src/index.ts';
 import { publicationBackupCodec } from '../../apps/pwa/src/publication-backup.ts';
 
 const passphrase = 'publication backup round trip passphrase';
-const listingId = '0195aaaa-0000-7000-8000-000000000001';
+const ids = createDeterministicIds({ seed: 95, now: () => Date.UTC(2026, 0, 1) });
+const listingId = ids.next();
+const categoryId = ids.next();
 
 describe('production publication backup codec', () => {
   it('preserves CID keys and signed listing, tombstone and reservation evidence through encrypted backup', async () => {
@@ -21,7 +23,7 @@ describe('production publication backup codec', () => {
       const projection: PublicListingProjection = {
         ownerId: session.principal, listingId, revision: 1,
         kind: 'giveaway', title: 'Winter bicycle', description: 'A good winter bicycle.',
-        categoryId: '0195aaaa-0000-7000-8000-000000000002', condition: 'good',
+        categoryId, condition: 'good',
         tags: [], locale: 'en', regionCell: 'c2b2', barterOptIn: true, availability: 'available', expiresAt,
       };
       const listing = await signEnvelope(session.identity, {

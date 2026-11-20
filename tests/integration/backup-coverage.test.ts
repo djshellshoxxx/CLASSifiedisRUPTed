@@ -3,7 +3,7 @@ import { describeBackupCoverage, describeAttachmentCoverage, readBackupInspectio
 import { runForSession } from '../../apps/pwa/src/vault-session.ts';
 import type { BackupCoverage, AttachmentCoverage } from '../../packages/vault/src/index.ts';
 
-const base: BackupCoverage = { recordTypes: [{ type: 'private.note', count: 2 }], registeredRecordTypes: ['private.note'], unsupportedRecordTypes: [], recordCount: 2, typeLimitExceeded: false, recordLimitExceeded: false, excludedStores: ['blobs'] };
+const base: BackupCoverage = { recordTypes: [{ type: 'private.note', count: 2 }], registeredRecordTypes: ['private.note'], unsupportedRecordTypes: [], recordCount: 2, typeLimitExceeded: false, recordLimitExceeded: false, excludedStores: ['blobs', 'blob_refs'] };
 
 it('describes snapshot coverage without echoing private or untrusted type identifiers', () => {
   const text = describeBackupCoverage(base);
@@ -147,6 +147,8 @@ it('retains valid record inspection when optional attachment counts are malforme
     { ...references, missingBlobs: -1 },
     { ...references, excludedStoredReferences: 2 },
     { ...references, holderRows: 1 },
+    // No holder row can exist without naming a reference.
+    { ...references, referencedBlobs: 0, missingBlobs: 0, excludedStoredReferences: 0, holderRows: 1 },
     { ...references, holderRows: 10001 },
     { ...references, missingBlobs: Number.NaN },
     { ...references, holderAuthorityVerified: true },
@@ -167,6 +169,19 @@ it('retains valid record inspection when optional attachment counts are malforme
     expect(display).not.toContain('undefined');
     expect(display).not.toContain('NaN');
   }
+});
+
+it('accepts genuine empty attachment coverage with zero holders', async () => {
+  const empty: AttachmentCoverage = {
+    ...references, referencedBlobs: 0, missingBlobs: 0,
+    excludedStoredReferences: 0, holderRows: 0,
+  };
+  const result = await readBackupInspection({
+    backupCoverage: async () => base,
+    attachmentCoverage: async () => empty,
+  });
+  expect(result).toEqual({ records: base, attachments: empty });
+  expect(describeAttachmentCoverage(result.attachments)).toContain('0 holder rows');
 });
 
 it('preserves the explicit capped-overflow report without presenting numeric totals', async () => {
@@ -199,6 +214,8 @@ it('rejects malformed resolved record coverage without invoking attachment inspe
     { ...base, excludedStores: [] },
     { ...base, recordTypes: [{ type: 'private.note', count: 2 }, { type: 'private.note', count: 2 }], recordCount: 4 },
     { ...base, registeredRecordTypes: ['private.note', 'private.note'] },
+    { ...base, registeredRecordTypes: [''] },
+    { ...base, typeLimitExceeded: true }, // Impossible: the source only flags truncation after 256 categories.
     { ...base, typeLimitExceeded: 'false' },
   ];
   for (const invalid of invalidReports) {
@@ -236,4 +253,22 @@ it('accepts coherent blocked required coverage without making an exportability c
   });
   expect(result.records).toEqual(truncated);
   expect(describeBackupCoverage(result.records)).toContain('too many saved record categories');
+});
+
+it('does not publish a successful required inspection after session replacement during the required read', async () => {
+  const session = { id: 'owner-required-check' };
+  let active: typeof session | undefined = session;
+  let resolveCoverage: ((coverage: BackupCoverage) => void) | undefined;
+  let attachmentReads = 0;
+  const deferredCoverage = new Promise<BackupCoverage>(resolve => { resolveCoverage = resolve; });
+  const pending = runForSession(session, () => active, () => readBackupInspection({
+    backupCoverage: () => deferredCoverage,
+    attachmentCoverage: async () => { attachmentReads++; return references; },
+  }));
+  active = undefined;
+  resolveCoverage?.(base);
+  await expect(pending).rejects.toThrow('Vault session ended');
+  // This assertion is not about cancelling underlying work: only stale publication
+  // is forbidden. The optional read may complete before the session guard rejects.
+  expect(attachmentReads).toBeLessThanOrEqual(1);
 });

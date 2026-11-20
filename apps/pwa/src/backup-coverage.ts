@@ -19,7 +19,9 @@ function isCoherentAttachmentCoverage(input: unknown): input is AttachmentCovera
   const validCount = (value: unknown): value is number =>
     typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10_000;
   return validCount(refs) && validCount(missing) && validCount(present) && validCount(holders) &&
-    missing + present === refs && holders >= refs;
+    missing + present === refs && holders >= refs &&
+    // Each holder row names one ref: zero distinct refs requires zero holder rows.
+    (refs > 0 || holders === 0);
 }
 
 /**
@@ -37,7 +39,7 @@ function isCoherentBackupCoverage(input: unknown): input is BackupCoverage {
       typeof report.typeLimitExceeded !== 'boolean' || typeof report.recordLimitExceeded !== 'boolean') return false;
   const count = report.recordCount;
   if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) return false;
-  if (report.registeredRecordTypes.some(type => typeof type !== 'string') ||
+  if (report.registeredRecordTypes.some(type => typeof type !== 'string' || type.length === 0) ||
       report.unsupportedRecordTypes.some(type => typeof type !== 'string') ||
       report.excludedStores.some(store => typeof store !== 'string') ||
       !report.excludedStores.includes('blobs') || !report.excludedStores.includes('blob_refs')) return false;
@@ -56,6 +58,8 @@ function isCoherentBackupCoverage(input: unknown): input is BackupCoverage {
     if (!registered.has(row.type)) unsupported.push(row.type);
   }
   return Number.isSafeInteger(total) && total === count &&
+    // The producer returns exactly the first 256 groups if additional types exist.
+    (!report.typeLimitExceeded || report.recordTypes.length === 256) &&
     report.recordLimitExceeded === (count > 10_000) &&
     unsupported.length === report.unsupportedRecordTypes.length &&
     unsupported.every((type, index) => type === report.unsupportedRecordTypes![index]);

@@ -4,7 +4,9 @@
 
 The owner subsequently requested continuing incomplete features and successive
 fresh code, bug and defensive security reviews. The [PWA and restore-rejection consolidation](cycles/20261120-pwa-recovery-consolidation/HANDOFF.md)
-is the current continuation record. It supersedes the finite-task stop direction
+is the current continuation record. Its [publication checkpoint](cycles/20261120-pwa-recovery-consolidation/PUBLICATION.md)
+records draft PR #72, exact source preservation and the pending hosted gates.
+It supersedes the finite-task stop direction
 below for this newly authorized work. Existing automation settings are unchanged.
 
 The latest candidate combines [PR #70](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/70)'s PWA attachment-exclusion diagnostic with

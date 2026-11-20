@@ -1,0 +1,122 @@
+{
+  "observed_at": "2026-11-20T17:25:36.753Z",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "pr_number": 72,
+  "pr_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/72",
+  "published_head": "93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc",
+  "published_tree": "f9af3b6d0468a10bca56195d51a14b426688aa18",
+  "local_documentation_commit": "720bf27473f17f659f8fecab9588c163df3f857b",
+  "executed_source": "9cf6c56c9b65a421a95676f89e9fcc3800bca573",
+  "executed_tree": "f506c9282299b034cef6b540017e49ffeac88362",
+  "documentation_only_paths_after_execution": [
+    "docs/development/CONSOLIDATION_HANDOFF.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/DEFENSIVE-REVIEW.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/EVIDENCE-REVIEW.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/HANDOFF.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/SPEC-REVIEW.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/STANDARDS-REVIEW.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/archive-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/archive_g19.py",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/build-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/build.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/cli-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/cli.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/deps-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/deps.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/focused-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/focused.json.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/focused.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/registry-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/registry.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/setup-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/setup.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/spec-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/spec.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/summary.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/tooling-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/tooling.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/typecheck-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-final/typecheck.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-parent-hosted-observation.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-parent-synthetic-merge.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-pwa-defensive.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-pwa-spec.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-pwa-standards.md",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-setup/install-receipt.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-setup/install.log.gz",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-setup/summary.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-source.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/g19-toolchain.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/publication-g16-post-preservation.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/publication-g16-state.json",
+    "docs/development/cycles/20261120-pwa-recovery-consolidation/evidence/run_g19.py"
+  ],
+  "ordered_parents": [
+    "b89e7047ea352a3d47703b134c6c12a7ea589a04",
+    "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9"
+  ],
+  "synthetic_merge": {
+    "sha": "1a77719d1b1ca49b596f8f64ff133551c9728aef",
+    "tree": "f9af3b6d0468a10bca56195d51a14b426688aa18",
+    "parents": [
+      "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+      "93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc"
+    ]
+  },
+  "current_head_workflows": {
+    "observed_at": "2026-11-20T17:25:36.753Z",
+    "runs": [
+      {
+        "id": 44783073095,
+        "name": "Alpha verification",
+        "status": "queued",
+        "conclusion": null,
+        "head_sha": "93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc",
+        "event": "pull_request",
+        "run_attempt": 1,
+        "updated_at": "2026-11-20T17:24:56Z",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44783073095"
+      },
+      {
+        "id": 44783073144,
+        "name": "CLI setup",
+        "status": "queued",
+        "conclusion": null,
+        "head_sha": "93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc",
+        "event": "pull_request",
+        "run_attempt": 1,
+        "updated_at": "2026-11-20T17:24:56Z",
+        "html_url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44783073144"
+      }
+    ],
+    "jobs": {
+      "44783073095": {
+        "jobs": [
+          {
+            "id": 136450594462,
+            "name": "plan",
+            "status": "queued",
+            "conclusion": null,
+            "run_id": 44783073095,
+            "logs_url": null,
+            "steps": null
+          }
+        ]
+      },
+      "44783073144": {
+        "jobs": [
+          {
+            "id": 136450594446,
+            "name": "plan",
+            "status": "queued",
+            "conclusion": null,
+            "run_id": 44783073144,
+            "logs_url": null,
+            "steps": null
+          }
+        ]
+      }
+    }
+  },
+  "qualification": "Draft. Hosted planning jobs queued; no current-head hosted execution or native-browser pass established."
+}

@@ -13,14 +13,21 @@ types, the registered codec types, and whether the record/type caps were exceede
 It never returns record payloads, keys, indexes, other tenants' types, or identity
 wrapper data. It remains subject to the session and transaction lifetime guards.
 
-The inventory allows at most 256 supported types and 10,000 exported records.
+The record inventory allows at most 256 supported types and 10,000 exported
+records.
 An overflow sentinel distinguishes a truncated inventory from complete coverage.
 These limits bound the returned inventory and accepted export, not the total
 work required to count stored rows. Large-vault and device performance require
 separate measurement.
-The UI displays the inventory on explicit request and clears it on lock.
-Inventory success alone does not mean an export will succeed: schema, signature,
-canonical key, passphrase, encryption and envelope-size validation still apply.
+
+The PWA's explicit **Check backup coverage** action requests this record inventory
+and the attachment diagnostic described below. These are successive session-guarded
+snapshots, not one atomic inventory. It clears the previous report before reading,
+displays both after completion and clears private counts on lock. The diagnostics
+do not authorize export or expand its contents.
+Record inventory success alone does not mean an export will succeed: schema,
+signature, canonical key, passphrase, encryption and envelope-size validation
+still apply.
 
 Export checks the actual principal-owned record types in the same read transaction
 that collects the records. Any unregistered type blocks export; it must not be
@@ -112,14 +119,18 @@ delivery and channel grants remain outside local notification record recovery.
 The current candidate adds `UnlockedVault.attachmentCoverage()` as a read-only,
 principal-scoped diagnostic. It reports distinct held references, distinct
 missing blobs, distinct present-but-excluded references, and holder-row counts.
-Stored blobs with no holders are outside these counts. Holder strings are
-caller-supplied labels, not authenticated parent-record authority; the result
-always states `holderAuthorityVerified: false` and `includedInV1Backup: false`.
+Several holder rows can name one reference. A missing reference has no stored
+blob; a present reference still does not qualify its blob for v1 backup.
+Stored blobs with no holders are outside these counts, so zero counts do not
+certify completeness. Holder strings are caller-supplied labels, not authenticated
+parent-record authority; the result always states `holderAuthorityVerified: false`
+and `includedInV1Backup: false`.
 It contains no tenant, holder label, content identifier, filename, MIME type,
 sample payload or bytes. Session guards run before and after the read; locking
 revokes the session.
 
-At most 10,000 owner holder rows are admitted. Overflow makes every count
+The attachment diagnostic admits at most 10,000 owner holder rows, independently
+of the record coverage bounds. Overflow makes every attachment count
 unavailable (`null`) instead of returning partial totals. Memory and both
 IndexedDB working sets use a tenant-to-holder-key index maintained through
 ordinary writes, snapshot loading and rollback. The diagnostic checks indexed
@@ -132,9 +143,9 @@ complete snapshot loading, total stored index memory or target-device cost.
 Coverage queries preserve bytes. Explicitly detaching the last holder retains
 the existing deletion/shredding contract. Encrypted reopen reconstructs the
 diagnostic from stored rows. Existing signed v1 export still excludes both
-blob stores, and acceptance verifies that the new restored destination contains
-no attachments. These are separately exercised acceptance properties, not
-portable recovery.
+attachment bytes and references in the blob stores, and acceptance verifies that
+the new restored destination contains no attachments. These are separately
+exercised acceptance properties, not portable recovery.
 
 The [source inventory](cycles/20261120-recovery-consolidation/ATTACHMENT-SOURCE-INVENTORY.md)
 finds no current production domain attachment field or `RepoDef.blobs`

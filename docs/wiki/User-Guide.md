@@ -30,6 +30,10 @@ Create or unlock a vault in the browser. Signing keys and domain records are enc
 
 Sessions default to a 15-minute idle lock, configurable from 1 to 60 minutes for the session, and lock after five continuous minutes hidden. Lock hides private views and closes vault access. Local unlock backoff is not a defense against offline password guessing or a complete database rollback.
 
+While unlocked, select **Check backup coverage** to inspect record counts and attachment references before exporting. References are counted once even when several holder rows name the same blob. **Missing** means no stored blob was found; **present but excluded** means the stored blob is still outside the backup. The attachment check reports unavailable counts if it exceeds 10,000 holder rows, and lock clears the report.
+
+Zero attachment counts do not prove completeness: blobs without holders are not counted, and holder labels are not verified links to owning records. V1 backups exclude both attachment bytes and references. The two reports are read in succession, so they are not a single snapshot. See the [coverage contract](../development/BACKUP_SCOPE.md) for bounds and interpretation.
+
 Export the encrypted alpha backup before substantial updates and preserve the original vault passphrase. Restore validates the bundle and restores supported records into a new empty vault. The original signing identity still needs its original passphrase. The backup is not complete account/device recovery: media, kernel delivery history and delegated-device rotation/revocation are outside its current scope.
 
 ## Listings and file exchange

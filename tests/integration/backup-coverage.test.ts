@@ -140,3 +140,48 @@ it('does not publish a recovered record inspection after session replacement dur
   rejectAttachment?.(new Error('private blob:sha256-reference should not be shown'));
   await expect(pending).rejects.toThrow('Vault session ended');
 });
+
+it('retains valid record inspection when optional attachment counts are malformed', async () => {
+  const invalidReports: readonly unknown[] = [
+    undefined,
+    { ...references, missingBlobs: -1 },
+    { ...references, excludedStoredReferences: 2 },
+    { ...references, holderRows: 1 },
+    { ...references, holderRows: 10001 },
+    { ...references, missingBlobs: Number.NaN },
+    { ...references, holderAuthorityVerified: true },
+    { ...references, includedInV1Backup: true },
+    { ...references, referencedBlobs: null, limitExceeded: false },
+    { ...references, limitExceeded: true },
+  ];
+  for (const invalid of invalidReports) {
+    const result = await readBackupInspection({
+      backupCoverage: async () => base,
+      attachmentCoverage: async () => invalid as AttachmentCoverage,
+    });
+    expect(result.records).toEqual(base);
+    expect(result.attachments).toBeNull();
+    const display = `${describeBackupCoverage(result.records)} ${describeAttachmentCoverage(result.attachments)}`;
+    expect(display).toContain('Attachment check unavailable; counts cannot be confirmed');
+    expect(display).toContain('Attachment bytes and references are excluded from v1 backups');
+    expect(display).not.toContain('undefined');
+    expect(display).not.toContain('NaN');
+  }
+});
+
+it('preserves the explicit capped-overflow report without presenting numeric totals', async () => {
+  const overflow: AttachmentCoverage = {
+    ...references, referencedBlobs: null, missingBlobs: null,
+    excludedStoredReferences: null, holderRows: null, limitExceeded: true,
+  };
+  const result = await readBackupInspection({
+    backupCoverage: async () => base,
+    attachmentCoverage: async () => overflow,
+  });
+  expect(result.records).toEqual(base);
+  expect(result.attachments).toEqual(overflow);
+  const display = describeAttachmentCoverage(result.attachments);
+  expect(display).toContain('counts are unavailable');
+  expect(display).toContain('10,000-holder limit');
+  expect(display).toContain('excluded from v1 backups');
+});

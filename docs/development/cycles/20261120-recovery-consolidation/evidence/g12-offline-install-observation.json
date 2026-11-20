@@ -1,0 +1,16 @@
+{
+  "provenance": "captured tool result from the first isolated dependency installation; no product test ran",
+  "source": "29daa061b4ad8b2899f6a8eaa910d12c80c93671",
+  "command": [
+    "npx",
+    "--yes",
+    "pnpm@10.28.0",
+    "install",
+    "--offline",
+    "--frozen-lockfile"
+  ],
+  "exit_code": 1,
+  "tool_wall_time_seconds": 7.051121538,
+  "diagnostic": "ERR_PNPM_NO_OFFLINE_TARBALL: canonicalize-5.1.0.tgz missing from the local package store",
+  "follow_up": "A normal pinned --frozen-lockfile --prefer-offline install succeeded; see g12-consolidation-baseline/install-receipt.json. No lockfile or package version change."
+}

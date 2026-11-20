@@ -1,0 +1,995 @@
+{
+  "format": "independent-post-publication-preservation/v1",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "pull_request": 69,
+  "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/69",
+  "observed_at": "2026-11-20T16:42:49.823291+00:00",
+  "published_head": "6d4f6ea7ba9bcf886ae69edd0f167a621308d4b2",
+  "published_tree": "ccd65c24112ae97c8ee7bf28a4bc5c9e560ede35",
+  "local_document_commit": "02e478dd4d8b712e7a05ea7a1c66fd3be3faf6e4",
+  "local_document_tree": "ccd65c24112ae97c8ee7bf28a4bc5c9e560ede35",
+  "tested_source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "ordered_parents": [
+    "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+    "f598dc52937449764703b5048ba71a77239c9ded",
+    "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+    "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+    "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+    "7a3a962400e44a3d7bb2a6834c869f97bae88ee4"
+  ],
+  "expected_ordered_parents": [
+    "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+    "f598dc52937449764703b5048ba71a77239c9ded",
+    "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+    "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+    "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+    "7a3a962400e44a3d7bb2a6834c869f97bae88ee4"
+  ],
+  "checks": {
+    "remote_branch_head_matches": true,
+    "tracking_head_matches": true,
+    "live_main_unchanged": true,
+    "branch_count_is_75": true,
+    "only_new_branch_added": true,
+    "all_previous_74_unchanged": true,
+    "all_original_57_unchanged": true,
+    "full_tree_equals_local_docs_commit": true,
+    "ordered_parents_match_main_plus_five_sources": true,
+    "all_source_parents_ancestral": true,
+    "runtime_and_test_content_matches_tested_source": true
+  },
+  "all_checks_passed": true,
+  "branch_count": 75,
+  "added_branches": [
+    "codex/classrup-recovery-consolidation-20261120"
+  ],
+  "missing_previous_branches": [],
+  "moved_previous_branches": [],
+  "previous_refs": [
+    {
+      "branch": "agents/ci/trim-workflows",
+      "previous": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "observed": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/discovery/coarse-filters",
+      "previous": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "observed": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/discovery/ranking",
+      "previous": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "observed": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/governance/taxonomy-prohibited",
+      "previous": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "observed": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/i18n/languages-currencies",
+      "previous": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "observed": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/moderation/rate-limits-signals",
+      "previous": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "observed": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/notify/prefs-inapp",
+      "previous": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "observed": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/orchestration/wave1-handoff",
+      "previous": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "observed": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/privacy/classification-metadata-consent",
+      "previous": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "observed": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex-continuation-spec-20261109",
+      "previous": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "observed": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/audit-observability-20261110",
+      "previous": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "observed": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/barter-discovery-status-20261110",
+      "previous": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "observed": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-nested-assets-20261110",
+      "previous": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "observed": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "previous": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "observed": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+      "previous": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "observed": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/docs-wiki-20261110",
+      "previous": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "observed": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+      "previous": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "observed": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+      "previous": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "observed": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/outbox-isolation-20261110",
+      "previous": "a294dd21715edf501aac75bee69f785951985cd5",
+      "observed": "a294dd21715edf501aac75bee69f785951985cd5",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "previous": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "observed": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+      "previous": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "observed": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+      "previous": "12558435a307415ba0332777f87b1603abba5268",
+      "observed": "12558435a307415ba0332777f87b1603abba5268",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/bold-mccarthy-qklhl6",
+      "previous": "a403614bb34d3d176d4693730e512e14959718b8",
+      "observed": "a403614bb34d3d176d4693730e512e14959718b8",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/busy-cerf-vg3hz3",
+      "previous": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "observed": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/classifiedisrupted-continue-lcuuwg",
+      "previous": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "observed": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/difficult-project-parts-dcqlup",
+      "previous": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "observed": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/gallant-goodall-9cc7yb",
+      "previous": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "observed": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/haiku-classrupted-features-cc9qmr",
+      "previous": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "observed": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/happy-newton-4yttpa",
+      "previous": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "observed": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/pensive-mendel-30x81m",
+      "previous": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/vigilant-newton-nva2l6",
+      "previous": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "observed": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/wonderful-cori-ynhlsb",
+      "previous": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "observed": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-attachment-recovery-scope-20261120",
+      "previous": "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+      "observed": "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-attachment-reference-coverage-20261120",
+      "previous": "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+      "observed": "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-combined-freeze-20261120",
+      "previous": "4fc8e9c8aab75dec89d77677b4b25c50bd749632",
+      "observed": "4fc8e9c8aab75dec89d77677b4b25c50bd749632",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-completion-20261116",
+      "previous": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "observed": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-consolidation-audit-20261104",
+      "previous": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "observed": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-downgrade-export-guard-20261120",
+      "previous": "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+      "observed": "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-engineering-20261119",
+      "previous": "e4bce5196e5086293234a576e3cb03697994cad8",
+      "observed": "e4bce5196e5086293234a576e3cb03697994cad8",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-f1b-consolidation-20261119",
+      "previous": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+      "observed": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-features-20261116",
+      "previous": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "observed": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-foreign-codec-isolation-20261120",
+      "previous": "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+      "observed": "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-freeze-reasons-20261120",
+      "previous": "8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e",
+      "observed": "8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-freeze-review-20261120",
+      "previous": "759f5e2c17eb127db152eb3070557afefe3c64e7",
+      "observed": "759f5e2c17eb127db152eb3070557afefe3c64e7",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-full-registry-recovery-20261120",
+      "previous": "0f3288c8589ae8d3316c2a4cb21b4ceb306fd320",
+      "observed": "0f3288c8589ae8d3316c2a4cb21b4ceb306fd320",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-future-codec-guard-20261120",
+      "previous": "f598dc52937449764703b5048ba71a77239c9ded",
+      "observed": "f598dc52937449764703b5048ba71a77239c9ded",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-mixed-codec-recovery-20261120",
+      "previous": "25b4708191f04516cab74371c84a15663cc6f6a6",
+      "observed": "25b4708191f04516cab74371c84a15663cc6f6a6",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-recovery-next-20261120",
+      "previous": "86cd564e0692e8c777538200675dc20f2651ab51",
+      "observed": "86cd564e0692e8c777538200675dc20f2651ab51",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/consolidate-keyboard-focus-20261117",
+      "previous": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "observed": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/encrypted-domain-storage-20261116",
+      "previous": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "observed": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/listing-history-20261116",
+      "previous": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "observed": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/local-alpha-20261109",
+      "previous": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "observed": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/parallel-completion-20261116",
+      "previous": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "observed": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/verified-status-20261116",
+      "previous": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "observed": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "unchanged": true
+    },
+    {
+      "branch": "continuation/classrup-20261101",
+      "previous": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "observed": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "unchanged": true
+    },
+    {
+      "branch": "diagnostic/webkit-keygen-20261118",
+      "previous": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "observed": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "unchanged": true
+    },
+    {
+      "branch": "docs/classrup-feature-qualification-20261119",
+      "previous": "7619ba839a7bcbb38428d6429ab5362c5c18d095",
+      "observed": "7619ba839a7bcbb38428d6429ab5362c5c18d095",
+      "unchanged": true
+    },
+    {
+      "branch": "docs/client-owned-foundations-20261024",
+      "previous": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "observed": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "unchanged": true
+    },
+    {
+      "branch": "docs/consolidation-qualification-20261118",
+      "previous": "7f5c250cd0a956081479891416c0267b26a1fdb1",
+      "observed": "7f5c250cd0a956081479891416c0267b26a1fdb1",
+      "unchanged": true
+    },
+    {
+      "branch": "docs/pr-consolidation-results-20261117",
+      "previous": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "observed": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "unchanged": true
+    },
+    {
+      "branch": "docs/prompt3-foundations-20261022",
+      "previous": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "observed": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/classrup-completion",
+      "previous": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "observed": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/classrupted-audit-record-20261117",
+      "previous": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "observed": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/classrupted-consolidation-20261117",
+      "previous": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "observed": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/classrupted-continuation-20261118",
+      "previous": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "observed": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/comprehensive-consolidation",
+      "previous": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "observed": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/feature-registry-20261117",
+      "previous": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "observed": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/pr-docs-consolidation-20261117",
+      "previous": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "observed": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/qualified-listing-vault-stack-20261116",
+      "previous": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "observed": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "unchanged": true
+    },
+    {
+      "branch": "main",
+      "previous": "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+      "observed": "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+      "unchanged": true
+    },
+    {
+      "branch": "milestone/framework-browser-verification",
+      "previous": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "observed": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "unchanged": true
+    },
+    {
+      "branch": "planning/future-cli-specs-20261110",
+      "previous": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "observed": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "unchanged": true
+    },
+    {
+      "branch": "work/classrup-framework",
+      "previous": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "unchanged": true
+    },
+    {
+      "branch": "work/classrup-haiku-framework",
+      "previous": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "observed": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "unchanged": true
+    }
+  ],
+  "original_non_main_refs": [
+    {
+      "branch": "agents/ci/trim-workflows",
+      "original": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "observed": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/discovery/coarse-filters",
+      "original": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "observed": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/discovery/ranking",
+      "original": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "observed": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/governance/taxonomy-prohibited",
+      "original": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "observed": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/i18n/languages-currencies",
+      "original": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "observed": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/moderation/rate-limits-signals",
+      "original": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "observed": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/notify/prefs-inapp",
+      "original": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "observed": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/orchestration/wave1-handoff",
+      "original": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "observed": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "unchanged": true
+    },
+    {
+      "branch": "agents/privacy/classification-metadata-consent",
+      "original": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "observed": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/audit-observability-20261110",
+      "original": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "observed": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/barter-discovery-status-20261110",
+      "original": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "observed": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-nested-assets-20261110",
+      "original": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "observed": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "original": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "observed": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+      "original": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "observed": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/docs-wiki-20261110",
+      "original": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "observed": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+      "original": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "observed": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+      "original": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "observed": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/outbox-isolation-20261110",
+      "original": "a294dd21715edf501aac75bee69f785951985cd5",
+      "observed": "a294dd21715edf501aac75bee69f785951985cd5",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "original": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "observed": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+      "original": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "observed": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+      "original": "12558435a307415ba0332777f87b1603abba5268",
+      "observed": "12558435a307415ba0332777f87b1603abba5268",
+      "unchanged": true
+    },
+    {
+      "branch": "chatgpt/zero-codex-continuation-spec-20261109",
+      "original": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "observed": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/bold-mccarthy-qklhl6",
+      "original": "a403614bb34d3d176d4693730e512e14959718b8",
+      "observed": "a403614bb34d3d176d4693730e512e14959718b8",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/busy-cerf-vg3hz3",
+      "original": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "observed": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/classifiedisrupted-continue-lcuuwg",
+      "original": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "observed": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/difficult-project-parts-dcqlup",
+      "original": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "observed": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/gallant-goodall-9cc7yb",
+      "original": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "observed": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/haiku-classrupted-features-cc9qmr",
+      "original": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "observed": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/happy-newton-4yttpa",
+      "original": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "observed": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/pensive-mendel-30x81m",
+      "original": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/vigilant-newton-nva2l6",
+      "original": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "observed": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "unchanged": true
+    },
+    {
+      "branch": "claude/wonderful-cori-ynhlsb",
+      "original": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "observed": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-completion-20261116",
+      "original": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "observed": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-consolidation-audit-20261104",
+      "original": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "observed": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/classrup-features-20261116",
+      "original": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "observed": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/consolidate-keyboard-focus-20261117",
+      "original": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "observed": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/encrypted-domain-storage-20261116",
+      "original": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "observed": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/listing-history-20261116",
+      "original": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "observed": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/local-alpha-20261109",
+      "original": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "observed": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/parallel-completion-20261116",
+      "original": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "observed": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "unchanged": true
+    },
+    {
+      "branch": "codex/verified-status-20261116",
+      "original": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "observed": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "unchanged": true
+    },
+    {
+      "branch": "continuation/classrup-20261101",
+      "original": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "observed": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "unchanged": true
+    },
+    {
+      "branch": "diagnostic/webkit-keygen-20261118",
+      "original": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "observed": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "unchanged": true
+    },
+    {
+      "branch": "docs/client-owned-foundations-20261024",
+      "original": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "observed": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "unchanged": true
+    },
+    {
+      "branch": "docs/pr-consolidation-results-20261117",
+      "original": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "observed": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "unchanged": true
+    },
+    {
+      "branch": "docs/prompt3-foundations-20261022",
+      "original": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "observed": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/classrup-completion",
+      "original": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "observed": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/classrupted-audit-record-20261117",
+      "original": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "observed": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/classrupted-consolidation-20261117",
+      "original": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "observed": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/classrupted-continuation-20261118",
+      "original": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "observed": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/feature-registry-20261117",
+      "original": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "observed": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/pr-docs-consolidation-20261117",
+      "original": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "observed": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "unchanged": true
+    },
+    {
+      "branch": "integration/qualified-listing-vault-stack-20261116",
+      "original": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "observed": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "unchanged": true
+    },
+    {
+      "branch": "milestone/framework-browser-verification",
+      "original": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "observed": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "unchanged": true
+    },
+    {
+      "branch": "planning/future-cli-specs-20261110",
+      "original": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "observed": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "unchanged": true
+    },
+    {
+      "branch": "work/classrup-framework",
+      "original": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "unchanged": true
+    },
+    {
+      "branch": "work/classrup-haiku-framework",
+      "original": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "observed": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "unchanged": true
+    }
+  ],
+  "source_ancestry": [
+    {
+      "head": "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+      "ancestor_of_published_head": true
+    },
+    {
+      "head": "f598dc52937449764703b5048ba71a77239c9ded",
+      "ancestor_of_published_head": true
+    },
+    {
+      "head": "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+      "ancestor_of_published_head": true
+    },
+    {
+      "head": "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+      "ancestor_of_published_head": true
+    },
+    {
+      "head": "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+      "ancestor_of_published_head": true
+    },
+    {
+      "head": "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+      "ancestor_of_published_head": true
+    }
+  ],
+  "full_content_diff_from_local_document_commit": [],
+  "changed_paths_from_tested_source": [
+    "docs/development/BACKUP_SCOPE.md",
+    "docs/development/CONSOLIDATION_HANDOFF.md",
+    "docs/development/REMAINING_WORK.md",
+    "docs/development/cycles/20261120-recovery-consolidation/ATTACHMENT-SOURCE-INVENTORY.md",
+    "docs/development/cycles/20261120-recovery-consolidation/CODE-REVIEW-FINAL.md",
+    "docs/development/cycles/20261120-recovery-consolidation/CODE-REVIEW-INITIAL.md",
+    "docs/development/cycles/20261120-recovery-consolidation/DEFENSIVE-REVIEW-FINAL.md",
+    "docs/development/cycles/20261120-recovery-consolidation/DEFENSIVE-REVIEW-INITIAL.md",
+    "docs/development/cycles/20261120-recovery-consolidation/EVIDENCE-REVIEW-FINAL.md",
+    "docs/development/cycles/20261120-recovery-consolidation/FUNCTIONAL-REVIEW-FINAL.md",
+    "docs/development/cycles/20261120-recovery-consolidation/FUNCTIONAL-REVIEW-INITIAL.md",
+    "docs/development/cycles/20261120-recovery-consolidation/HANDOFF.md",
+    "docs/development/cycles/20261120-recovery-consolidation/IMPLEMENTATION.md",
+    "docs/development/cycles/20261120-recovery-consolidation/MERGE-PRESERVATION.json",
+    "docs/development/cycles/20261120-recovery-consolidation/PRESERVATION-REVIEW-FINAL.md",
+    "docs/development/cycles/20261120-recovery-consolidation/QUALIFICATION.md",
+    "docs/development/cycles/20261120-recovery-consolidation/SOURCE-PRESERVATION-FINAL.json",
+    "docs/development/cycles/20261120-recovery-consolidation/SOURCE-PRESERVATION.json",
+    "docs/development/cycles/20261120-recovery-consolidation/TIMING-OBSERVATION.md",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/archive-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/archive_g12.py",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/complete_g12.py",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/finish_g12.py",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/build-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/build.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/cli-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/cli.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/setup-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/setup.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/summary.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/tooling-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-auxiliary/tooling.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-baseline/new-integration-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-baseline/new-integration.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-baseline/new-integration.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-baseline/summary.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-baseline/typecheck-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-baseline/typecheck.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-consolidation-baseline/install-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-consolidation-baseline/install.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-other/focused-recovery.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-other/summary.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-other/typecheck-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-other/typecheck.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/deps-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/deps.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/domain-1-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/domain-1.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/domain-1.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/expected-domain-files.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/focused-recovery-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/focused-recovery.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/focused-recovery.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/registry-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/registry.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/spec-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/spec.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/summary.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/typecheck-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-final-round1/typecheck.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-isolated-budget/summary.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-isolated-budget/withdrawal-budget-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-isolated-budget/withdrawal-budget.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-isolated-budget/withdrawal-budget.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-isolated-vault/summary.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-isolated-vault/vault-composition-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-isolated-vault/vault-composition.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-isolated-vault/vault-composition.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-main-domain.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-main-observation.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-offline-install-observation.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-pr68-failed-domain.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-pr68-predecessor-observation.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-2-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-2.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-2.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-3-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-3.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-3.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-4-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-4.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-4.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-5-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-5.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-5.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-6-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-6.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-6.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-7-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-7.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-7.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-8-receipt.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-8.json.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-8.log.gz",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-recount-verified.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/domain-recount.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-remaining-round1/summary.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-runner-observations.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/g12-toolchain.json",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/run_auxiliary_g12.py",
+    "docs/development/cycles/20261120-recovery-consolidation/evidence/run_g12.py"
+  ],
+  "non_documentation_changes_from_tested_source": [],
+  "command_receipt": {
+    "command": [
+      "git",
+      "ls-remote",
+      "--heads",
+      "origin"
+    ],
+    "started_at": "2026-11-20T16:42:45.770025+00:00",
+    "finished_at": "2026-11-20T16:42:49.823291+00:00",
+    "exit_code": 0,
+    "stdout_bytes": 6817,
+    "stdout_sha256": "5622940a8cce4e83254bdc1c8b10aade347afb58c38c0d45fbfd005f4f4e64d3",
+    "stdout_utf8": "3f41b81accf062b2031504bd2e98d2913fb17fb8\trefs/heads/agents/ci/trim-workflows\n4f60ff9fa121435b962801d6594d9fca413d5bb7\trefs/heads/agents/discovery/coarse-filters\nde8f44d52cfccf4f1496a885cd4ac70894ff3847\trefs/heads/agents/discovery/ranking\n997249164e4b32df443dbbe2e07f729311c9cdeb\trefs/heads/agents/governance/taxonomy-prohibited\na0f9422d91b91d147405c17730d49350e87fc3ce\trefs/heads/agents/i18n/languages-currencies\nc098f1bf91759afd8ab0519ba04fa27671605de5\trefs/heads/agents/moderation/rate-limits-signals\nd6076d18621e16ec5b6a87e210f99bd305cf6243\trefs/heads/agents/notify/prefs-inapp\n6406a0369098fdb7aa58b5a4e85325560857815f\trefs/heads/agents/orchestration/wave1-handoff\n2752f04dd27c6df90ffa5d22d479e77ae2688a86\trefs/heads/agents/privacy/classification-metadata-consent\nd52b29369271f39a4873ace47c76b1b92d0750b3\trefs/heads/chatgpt/zero-codex-continuation-spec-20261109\n1ee040492345e607b431707fd7f08528bbf2db77\trefs/heads/chatgpt/zero-codex/audit-observability-20261110\ne0f153fd9185eaa5b52882931eac1c694d54abc5\trefs/heads/chatgpt/zero-codex/barter-discovery-status-20261110\n3a66e440847d7e1234e5a82674decdacb3efb954\trefs/heads/chatgpt/zero-codex/cli-nested-assets-20261110\nf8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f\trefs/heads/chatgpt/zero-codex/cli-public-symlink-20261110\n9bb03390b2692d8fad80dbf653c28e36bef76c28\trefs/heads/chatgpt/zero-codex/diagnostic-privacy-regression-20261110\n19edded385d4aaa2fea9f482cf3a0fdc7cd0a806\trefs/heads/chatgpt/zero-codex/docs-wiki-20261110\n20691f1cce36b1254644ea16bb438ca91221a872\trefs/heads/chatgpt/zero-codex/federation-recovery-trace-20261110\n968d63d8aebac1055ffc911fcceec519f30c8855\trefs/heads/chatgpt/zero-codex/noscript-vault-guard-20261110\na294dd21715edf501aac75bee69f785951985cd5\trefs/heads/chatgpt/zero-codex/outbox-isolation-20261110\n4620d244e79e4cefbeade9cf59149ea1c3f7e5c2\trefs/heads/chatgpt/zero-codex/qualify-pr10-20261110\nd16abeef4dfab4f6376436f944f88a25d5a1bf8f\trefs/heads/chatgpt/zero-codex/review-ranking-i18n-20261112\n12558435a307415ba0332777f87b1603abba5268\trefs/heads/chatgpt/zero-codex/sync-expiry-head-boundary-20261110\na403614bb34d3d176d4693730e512e14959718b8\trefs/heads/claude/bold-mccarthy-qklhl6\n34a6892cff8babb01c41f42d04df85bf6860fa34\trefs/heads/claude/busy-cerf-vg3hz3\nab6541552827b82c7bbbcbba282b2836f92cdd37\trefs/heads/claude/classifiedisrupted-continue-lcuuwg\n566778cdf72399df4696e1d6f6675412813e6d5a\trefs/heads/claude/difficult-project-parts-dcqlup\ncc55f8ad153468ed6523ded1a59dfdf84215ce6b\trefs/heads/claude/gallant-goodall-9cc7yb\n7b729df38dddf59c4e60e245bdf1ca43546b1e7b\trefs/heads/claude/haiku-classrupted-features-cc9qmr\n8d5f66f75411debbfe9377679005cfadb6b679c0\trefs/heads/claude/happy-newton-4yttpa\n52bed39dda52c680a4299e20aaefe0f4695b2d58\trefs/heads/claude/pensive-mendel-30x81m\n59028d1d962e6c4f113e19d77abf73a045a2318d\trefs/heads/claude/vigilant-newton-nva2l6\nc9bd8933ff519e97ed97bb132432103a2ad29fe4\trefs/heads/claude/wonderful-cori-ynhlsb\nd1dcd44e839c7c28a33b94553f5cb3270ffc6d6c\trefs/heads/codex/classrup-attachment-recovery-scope-20261120\n7a3a962400e44a3d7bb2a6834c869f97bae88ee4\trefs/heads/codex/classrup-attachment-reference-coverage-20261120\n4fc8e9c8aab75dec89d77677b4b25c50bd749632\trefs/heads/codex/classrup-combined-freeze-20261120\na189787ab6cc0741743da0cd0cf8b0a9cd2e39dc\trefs/heads/codex/classrup-completion-20261116\n59324a42e2ddf933eeef8c9363e33ef41690a31a\trefs/heads/codex/classrup-consolidation-audit-20261104\n5a742b5c4f1068f8bbd51d84de6a3de054df57e7\trefs/heads/codex/classrup-downgrade-export-guard-20261120\ne4bce5196e5086293234a576e3cb03697994cad8\trefs/heads/codex/classrup-engineering-20261119\n3aa7a17b28ee07ebec4336b49c3527743510bc16\trefs/heads/codex/classrup-f1b-consolidation-20261119\n560b328dd335aebdc12de01ec339c43ebd164be3\trefs/heads/codex/classrup-features-20261116\n5bae3058bffec53c0fe04700c84232b8d7a5a84a\trefs/heads/codex/classrup-foreign-codec-isolation-20261120\n8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e\trefs/heads/codex/classrup-freeze-reasons-20261120\n759f5e2c17eb127db152eb3070557afefe3c64e7\trefs/heads/codex/classrup-freeze-review-20261120\n0f3288c8589ae8d3316c2a4cb21b4ceb306fd320\trefs/heads/codex/classrup-full-registry-recovery-20261120\nf598dc52937449764703b5048ba71a77239c9ded\trefs/heads/codex/classrup-future-codec-guard-20261120\n25b4708191f04516cab74371c84a15663cc6f6a6\trefs/heads/codex/classrup-mixed-codec-recovery-20261120\n6d4f6ea7ba9bcf886ae69edd0f167a621308d4b2\trefs/heads/codex/classrup-recovery-consolidation-20261120\n86cd564e0692e8c777538200675dc20f2651ab51\trefs/heads/codex/classrup-recovery-next-20261120\n0c2e9e2992c359fd60f827983bd5e3f432bc8771\trefs/heads/codex/consolidate-keyboard-focus-20261117\nafa6952b50d97e46e8e54d950db92a3593f1e5bd\trefs/heads/codex/encrypted-domain-storage-20261116\n3f814c03a8c09652c79312959d0225ee0742457b\trefs/heads/codex/listing-history-20261116\n429fcfca9735a323a6ce709d8605429d6c850fdb\trefs/heads/codex/local-alpha-20261109\n64cfc398ea3ba2449da0ed7adbfe8d99261bbc05\trefs/heads/codex/parallel-completion-20261116\nedcb583afc2cba40f32b0cbdbce765d65febbd21\trefs/heads/codex/verified-status-20261116\nfa0cf0c33c80e71787539b964a03c0e8a561c718\trefs/heads/continuation/classrup-20261101\n764557187d51903630d3f864c4ee2fa56c3b7c6a\trefs/heads/diagnostic/webkit-keygen-20261118\n7619ba839a7bcbb38428d6429ab5362c5c18d095\trefs/heads/docs/classrup-feature-qualification-20261119\nd804b49d262bdb87f1eabd0a15bfbb9d1d3e831a\trefs/heads/docs/client-owned-foundations-20261024\n7f5c250cd0a956081479891416c0267b26a1fdb1\trefs/heads/docs/consolidation-qualification-20261118\nf75baf6240d2c6eb4fb2261b91148152451db2fb\trefs/heads/docs/pr-consolidation-results-20261117\n39ac847870746e14b466d5706ebe5b00dddbaadb\trefs/heads/docs/prompt3-foundations-20261022\n75d4bf51433ebddef56c86c4065d9619ebe02058\trefs/heads/integration/classrup-completion\n7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298\trefs/heads/integration/classrupted-audit-record-20261117\nccff8d8aab9640163d143a470e6e5e2eee04926f\trefs/heads/integration/classrupted-consolidation-20261117\nd81094688ac116c84c09f3105c7b3f6b4c472793\trefs/heads/integration/classrupted-continuation-20261118\na111eefb907a9f039f56777715e20b4976ea3d87\trefs/heads/integration/comprehensive-consolidation\ne331e56165304c98a1c2bdd26692772b586e499d\trefs/heads/integration/feature-registry-20261117\n43fb20ffd6c7b1a055db90dca8893a217b9834bb\trefs/heads/integration/pr-docs-consolidation-20261117\nd020237d6acf7180c2ccea9681a01ff4d700d1bb\trefs/heads/integration/qualified-listing-vault-stack-20261116\n449a619f1ae7b66cb42d9cab43dd5493bfe42c2e\trefs/heads/main\n25fa6f0a997253aedb53e0d106b2c0a08b050228\trefs/heads/milestone/framework-browser-verification\naf4dcc546e6342fb34d717d4050b52b8ffe7ffa3\trefs/heads/planning/future-cli-specs-20261110\n52bed39dda52c680a4299e20aaefe0f4695b2d58\trefs/heads/work/classrup-framework\n0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108\trefs/heads/work/classrup-haiku-framework\n",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "prior_snapshot": {
+    "path": "docs/development/cycles/20261120-recovery-consolidation/SOURCE-PRESERVATION-FINAL.json",
+    "sha256": "6ab090704ec5713268ede91295573f19dcfda29a09c5801163afaf38c8983879",
+    "branch_count": 74
+  },
+  "limits": [
+    "Read-only point-in-time publication preservation check; no remote mutation or repository file edit.",
+    "The published commit preserves the tested content through full-tree and non-documentation diff comparisons; its parent topology intentionally differs from the local tested history.",
+    "This observation contains no hosted-CI, browser, test execution, release or merge qualification."
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "expected_files": 95,
+  "reported_files": 95,
+  "missing": [],
+  "unexpected": [],
+  "duplicate_files": 0,
+  "cases": 839,
+  "passed": 832,
+  "nonpassing": [
+    {
+      "file": "tests/integration/mutiny-persistence.test.ts",
+      "name": "independent durable signed Mutiny verification keeps a withdrawal slot when repeated signed evidence exhausts the ordinary budget",
+      "status": "failed",
+      "duration_ms": 60219.712124
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "name": "vault composition survives IndexedDB close/reopen, gates locked storage, and atomically restores signed encrypted records",
+      "status": "failed",
+      "duration_ms": 30027.558987000004
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "name": "vault composition restores older backups after registering additional codecs but rejects unsupported types",
+      "status": "pending",
+      "duration_ms": null
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "name": "vault composition rejects corrupt restores before creating an identity and rolls back a lock during an awaited write",
+      "status": "pending",
+      "duration_ms": null
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "name": "vault composition rejects noncanonical record keys during backup restore without initializing the destination",
+      "status": "pending",
+      "duration_ms": null
+    },
+    {
+      "file": "packages/vault/src/vault.test.ts",
+      "name": "vault composition rechecks canonical keys after restore normalization before any records commit",
+      "status": "pending",
+      "duration_ms": null
+    },
+    {
+      "file": "tests/integration/production-future-codec-rejection.test.ts",
+      "name": "production backup compatibility with unknown future record types rejects a valid mixed future/current v1 backup without installing its supported records",
+      "status": "failed",
+      "duration_ms": 30014.938187
+    }
+  ],
+  "duplicate_cases": 1,
+  "later_failed_shards": [
+    7,
+    8
+  ]
+}

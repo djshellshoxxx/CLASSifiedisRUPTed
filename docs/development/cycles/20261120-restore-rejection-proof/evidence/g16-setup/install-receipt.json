@@ -1,0 +1,20 @@
+{
+  "name": "install",
+  "command": [
+    "corepack",
+    "pnpm",
+    "install",
+    "--offline",
+    "--frozen-lockfile"
+  ],
+  "base_commit": "6d4f6ea7ba9bcf886ae69edd0f167a621308d4b2",
+  "started_at": "2026-11-20T16:51:02.996283+00:00",
+  "duration_seconds": 7.348,
+  "exit_code": 0,
+  "timed_out": false,
+  "timeout_seconds": 300,
+  "lockfile_sha256": "d72caa3b730141025fcbb083eedea8d5c1bf6774c5f2b7ed3e8e145f10308773",
+  "log_bytes": 1458,
+  "log_sha256": "fc43c1abc81c5f76f7f37775c38367d7c341a82bc97ae942aae2bc878010706e",
+  "scope": "Dependency preparation only; no product tests executed. Test-only follow-up editing may occur concurrently; dependency files remain unchanged."
+}

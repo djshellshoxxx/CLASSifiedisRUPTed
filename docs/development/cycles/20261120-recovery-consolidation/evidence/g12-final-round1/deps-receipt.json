@@ -1,0 +1,21 @@
+{
+  "name": "deps",
+  "command": [
+    "node",
+    "tools/deps/deps.mjs"
+  ],
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "started_at": "2026-11-20T16:06:43.195224+00:00",
+  "duration_seconds": 1.154,
+  "timeout_seconds": 300,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 27,
+  "log_sha256": "18ccefde637fed45e661c7a82351c243d90de5057a27cb8012b80148037554ae"
+}

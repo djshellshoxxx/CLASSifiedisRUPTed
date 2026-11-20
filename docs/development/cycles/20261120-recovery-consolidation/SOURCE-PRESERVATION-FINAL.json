@@ -1,0 +1,850 @@
+{
+  "format": "independent-source-preservation-audit/v1",
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "reviewed_source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "reviewed_tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "observed_at": "2026-11-20T16:31:04.543735+00:00",
+  "observation_scope": "Read-only pre-publication point-in-time comparison; no ref, PR, source or configuration mutation.",
+  "command_receipt": {
+    "command": [
+      "git",
+      "ls-remote",
+      "--heads",
+      "origin"
+    ],
+    "started_at": "2026-11-20T16:31:00.089506+00:00",
+    "finished_at": "2026-11-20T16:31:04.543735+00:00",
+    "exit_code": 0,
+    "stdout_bytes": 6718,
+    "stdout_sha256": "209feb4c62dd5e39b286ec1242d7830474a568581e578064938ae4abe504807b",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_utf8": "3f41b81accf062b2031504bd2e98d2913fb17fb8\trefs/heads/agents/ci/trim-workflows\n4f60ff9fa121435b962801d6594d9fca413d5bb7\trefs/heads/agents/discovery/coarse-filters\nde8f44d52cfccf4f1496a885cd4ac70894ff3847\trefs/heads/agents/discovery/ranking\n997249164e4b32df443dbbe2e07f729311c9cdeb\trefs/heads/agents/governance/taxonomy-prohibited\na0f9422d91b91d147405c17730d49350e87fc3ce\trefs/heads/agents/i18n/languages-currencies\nc098f1bf91759afd8ab0519ba04fa27671605de5\trefs/heads/agents/moderation/rate-limits-signals\nd6076d18621e16ec5b6a87e210f99bd305cf6243\trefs/heads/agents/notify/prefs-inapp\n6406a0369098fdb7aa58b5a4e85325560857815f\trefs/heads/agents/orchestration/wave1-handoff\n2752f04dd27c6df90ffa5d22d479e77ae2688a86\trefs/heads/agents/privacy/classification-metadata-consent\nd52b29369271f39a4873ace47c76b1b92d0750b3\trefs/heads/chatgpt/zero-codex-continuation-spec-20261109\n1ee040492345e607b431707fd7f08528bbf2db77\trefs/heads/chatgpt/zero-codex/audit-observability-20261110\ne0f153fd9185eaa5b52882931eac1c694d54abc5\trefs/heads/chatgpt/zero-codex/barter-discovery-status-20261110\n3a66e440847d7e1234e5a82674decdacb3efb954\trefs/heads/chatgpt/zero-codex/cli-nested-assets-20261110\nf8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f\trefs/heads/chatgpt/zero-codex/cli-public-symlink-20261110\n9bb03390b2692d8fad80dbf653c28e36bef76c28\trefs/heads/chatgpt/zero-codex/diagnostic-privacy-regression-20261110\n19edded385d4aaa2fea9f482cf3a0fdc7cd0a806\trefs/heads/chatgpt/zero-codex/docs-wiki-20261110\n20691f1cce36b1254644ea16bb438ca91221a872\trefs/heads/chatgpt/zero-codex/federation-recovery-trace-20261110\n968d63d8aebac1055ffc911fcceec519f30c8855\trefs/heads/chatgpt/zero-codex/noscript-vault-guard-20261110\na294dd21715edf501aac75bee69f785951985cd5\trefs/heads/chatgpt/zero-codex/outbox-isolation-20261110\n4620d244e79e4cefbeade9cf59149ea1c3f7e5c2\trefs/heads/chatgpt/zero-codex/qualify-pr10-20261110\nd16abeef4dfab4f6376436f944f88a25d5a1bf8f\trefs/heads/chatgpt/zero-codex/review-ranking-i18n-20261112\n12558435a307415ba0332777f87b1603abba5268\trefs/heads/chatgpt/zero-codex/sync-expiry-head-boundary-20261110\na403614bb34d3d176d4693730e512e14959718b8\trefs/heads/claude/bold-mccarthy-qklhl6\n34a6892cff8babb01c41f42d04df85bf6860fa34\trefs/heads/claude/busy-cerf-vg3hz3\nab6541552827b82c7bbbcbba282b2836f92cdd37\trefs/heads/claude/classifiedisrupted-continue-lcuuwg\n566778cdf72399df4696e1d6f6675412813e6d5a\trefs/heads/claude/difficult-project-parts-dcqlup\ncc55f8ad153468ed6523ded1a59dfdf84215ce6b\trefs/heads/claude/gallant-goodall-9cc7yb\n7b729df38dddf59c4e60e245bdf1ca43546b1e7b\trefs/heads/claude/haiku-classrupted-features-cc9qmr\n8d5f66f75411debbfe9377679005cfadb6b679c0\trefs/heads/claude/happy-newton-4yttpa\n52bed39dda52c680a4299e20aaefe0f4695b2d58\trefs/heads/claude/pensive-mendel-30x81m\n59028d1d962e6c4f113e19d77abf73a045a2318d\trefs/heads/claude/vigilant-newton-nva2l6\nc9bd8933ff519e97ed97bb132432103a2ad29fe4\trefs/heads/claude/wonderful-cori-ynhlsb\nd1dcd44e839c7c28a33b94553f5cb3270ffc6d6c\trefs/heads/codex/classrup-attachment-recovery-scope-20261120\n7a3a962400e44a3d7bb2a6834c869f97bae88ee4\trefs/heads/codex/classrup-attachment-reference-coverage-20261120\n4fc8e9c8aab75dec89d77677b4b25c50bd749632\trefs/heads/codex/classrup-combined-freeze-20261120\na189787ab6cc0741743da0cd0cf8b0a9cd2e39dc\trefs/heads/codex/classrup-completion-20261116\n59324a42e2ddf933eeef8c9363e33ef41690a31a\trefs/heads/codex/classrup-consolidation-audit-20261104\n5a742b5c4f1068f8bbd51d84de6a3de054df57e7\trefs/heads/codex/classrup-downgrade-export-guard-20261120\ne4bce5196e5086293234a576e3cb03697994cad8\trefs/heads/codex/classrup-engineering-20261119\n3aa7a17b28ee07ebec4336b49c3527743510bc16\trefs/heads/codex/classrup-f1b-consolidation-20261119\n560b328dd335aebdc12de01ec339c43ebd164be3\trefs/heads/codex/classrup-features-20261116\n5bae3058bffec53c0fe04700c84232b8d7a5a84a\trefs/heads/codex/classrup-foreign-codec-isolation-20261120\n8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e\trefs/heads/codex/classrup-freeze-reasons-20261120\n759f5e2c17eb127db152eb3070557afefe3c64e7\trefs/heads/codex/classrup-freeze-review-20261120\n0f3288c8589ae8d3316c2a4cb21b4ceb306fd320\trefs/heads/codex/classrup-full-registry-recovery-20261120\nf598dc52937449764703b5048ba71a77239c9ded\trefs/heads/codex/classrup-future-codec-guard-20261120\n25b4708191f04516cab74371c84a15663cc6f6a6\trefs/heads/codex/classrup-mixed-codec-recovery-20261120\n86cd564e0692e8c777538200675dc20f2651ab51\trefs/heads/codex/classrup-recovery-next-20261120\n0c2e9e2992c359fd60f827983bd5e3f432bc8771\trefs/heads/codex/consolidate-keyboard-focus-20261117\nafa6952b50d97e46e8e54d950db92a3593f1e5bd\trefs/heads/codex/encrypted-domain-storage-20261116\n3f814c03a8c09652c79312959d0225ee0742457b\trefs/heads/codex/listing-history-20261116\n429fcfca9735a323a6ce709d8605429d6c850fdb\trefs/heads/codex/local-alpha-20261109\n64cfc398ea3ba2449da0ed7adbfe8d99261bbc05\trefs/heads/codex/parallel-completion-20261116\nedcb583afc2cba40f32b0cbdbce765d65febbd21\trefs/heads/codex/verified-status-20261116\nfa0cf0c33c80e71787539b964a03c0e8a561c718\trefs/heads/continuation/classrup-20261101\n764557187d51903630d3f864c4ee2fa56c3b7c6a\trefs/heads/diagnostic/webkit-keygen-20261118\n7619ba839a7bcbb38428d6429ab5362c5c18d095\trefs/heads/docs/classrup-feature-qualification-20261119\nd804b49d262bdb87f1eabd0a15bfbb9d1d3e831a\trefs/heads/docs/client-owned-foundations-20261024\n7f5c250cd0a956081479891416c0267b26a1fdb1\trefs/heads/docs/consolidation-qualification-20261118\nf75baf6240d2c6eb4fb2261b91148152451db2fb\trefs/heads/docs/pr-consolidation-results-20261117\n39ac847870746e14b466d5706ebe5b00dddbaadb\trefs/heads/docs/prompt3-foundations-20261022\n75d4bf51433ebddef56c86c4065d9619ebe02058\trefs/heads/integration/classrup-completion\n7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298\trefs/heads/integration/classrupted-audit-record-20261117\nccff8d8aab9640163d143a470e6e5e2eee04926f\trefs/heads/integration/classrupted-consolidation-20261117\nd81094688ac116c84c09f3105c7b3f6b4c472793\trefs/heads/integration/classrupted-continuation-20261118\na111eefb907a9f039f56777715e20b4976ea3d87\trefs/heads/integration/comprehensive-consolidation\ne331e56165304c98a1c2bdd26692772b586e499d\trefs/heads/integration/feature-registry-20261117\n43fb20ffd6c7b1a055db90dca8893a217b9834bb\trefs/heads/integration/pr-docs-consolidation-20261117\nd020237d6acf7180c2ccea9681a01ff4d700d1bb\trefs/heads/integration/qualified-listing-vault-stack-20261116\n449a619f1ae7b66cb42d9cab43dd5493bfe42c2e\trefs/heads/main\n25fa6f0a997253aedb53e0d106b2c0a08b050228\trefs/heads/milestone/framework-browser-verification\naf4dcc546e6342fb34d717d4050b52b8ffe7ffa3\trefs/heads/planning/future-cli-specs-20261110\n52bed39dda52c680a4299e20aaefe0f4695b2d58\trefs/heads/work/classrup-framework\n0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108\trefs/heads/work/classrup-haiku-framework\n"
+  },
+  "branch_count": 74,
+  "branches": {
+    "agents/ci/trim-workflows": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+    "agents/discovery/coarse-filters": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+    "agents/discovery/ranking": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+    "agents/governance/taxonomy-prohibited": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+    "agents/i18n/languages-currencies": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+    "agents/moderation/rate-limits-signals": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+    "agents/notify/prefs-inapp": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+    "agents/orchestration/wave1-handoff": "6406a0369098fdb7aa58b5a4e85325560857815f",
+    "agents/privacy/classification-metadata-consent": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+    "chatgpt/zero-codex-continuation-spec-20261109": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+    "chatgpt/zero-codex/audit-observability-20261110": "1ee040492345e607b431707fd7f08528bbf2db77",
+    "chatgpt/zero-codex/barter-discovery-status-20261110": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+    "chatgpt/zero-codex/cli-nested-assets-20261110": "3a66e440847d7e1234e5a82674decdacb3efb954",
+    "chatgpt/zero-codex/cli-public-symlink-20261110": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+    "chatgpt/zero-codex/diagnostic-privacy-regression-20261110": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+    "chatgpt/zero-codex/docs-wiki-20261110": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+    "chatgpt/zero-codex/federation-recovery-trace-20261110": "20691f1cce36b1254644ea16bb438ca91221a872",
+    "chatgpt/zero-codex/noscript-vault-guard-20261110": "968d63d8aebac1055ffc911fcceec519f30c8855",
+    "chatgpt/zero-codex/outbox-isolation-20261110": "a294dd21715edf501aac75bee69f785951985cd5",
+    "chatgpt/zero-codex/qualify-pr10-20261110": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+    "chatgpt/zero-codex/review-ranking-i18n-20261112": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+    "chatgpt/zero-codex/sync-expiry-head-boundary-20261110": "12558435a307415ba0332777f87b1603abba5268",
+    "claude/bold-mccarthy-qklhl6": "a403614bb34d3d176d4693730e512e14959718b8",
+    "claude/busy-cerf-vg3hz3": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+    "claude/classifiedisrupted-continue-lcuuwg": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+    "claude/difficult-project-parts-dcqlup": "566778cdf72399df4696e1d6f6675412813e6d5a",
+    "claude/gallant-goodall-9cc7yb": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+    "claude/haiku-classrupted-features-cc9qmr": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+    "claude/happy-newton-4yttpa": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+    "claude/pensive-mendel-30x81m": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+    "claude/vigilant-newton-nva2l6": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+    "claude/wonderful-cori-ynhlsb": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+    "codex/classrup-attachment-recovery-scope-20261120": "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+    "codex/classrup-attachment-reference-coverage-20261120": "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+    "codex/classrup-combined-freeze-20261120": "4fc8e9c8aab75dec89d77677b4b25c50bd749632",
+    "codex/classrup-completion-20261116": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+    "codex/classrup-consolidation-audit-20261104": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+    "codex/classrup-downgrade-export-guard-20261120": "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+    "codex/classrup-engineering-20261119": "e4bce5196e5086293234a576e3cb03697994cad8",
+    "codex/classrup-f1b-consolidation-20261119": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+    "codex/classrup-features-20261116": "560b328dd335aebdc12de01ec339c43ebd164be3",
+    "codex/classrup-foreign-codec-isolation-20261120": "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+    "codex/classrup-freeze-reasons-20261120": "8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e",
+    "codex/classrup-freeze-review-20261120": "759f5e2c17eb127db152eb3070557afefe3c64e7",
+    "codex/classrup-full-registry-recovery-20261120": "0f3288c8589ae8d3316c2a4cb21b4ceb306fd320",
+    "codex/classrup-future-codec-guard-20261120": "f598dc52937449764703b5048ba71a77239c9ded",
+    "codex/classrup-mixed-codec-recovery-20261120": "25b4708191f04516cab74371c84a15663cc6f6a6",
+    "codex/classrup-recovery-next-20261120": "86cd564e0692e8c777538200675dc20f2651ab51",
+    "codex/consolidate-keyboard-focus-20261117": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+    "codex/encrypted-domain-storage-20261116": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+    "codex/listing-history-20261116": "3f814c03a8c09652c79312959d0225ee0742457b",
+    "codex/local-alpha-20261109": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+    "codex/parallel-completion-20261116": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+    "codex/verified-status-20261116": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+    "continuation/classrup-20261101": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+    "diagnostic/webkit-keygen-20261118": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+    "docs/classrup-feature-qualification-20261119": "7619ba839a7bcbb38428d6429ab5362c5c18d095",
+    "docs/client-owned-foundations-20261024": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+    "docs/consolidation-qualification-20261118": "7f5c250cd0a956081479891416c0267b26a1fdb1",
+    "docs/pr-consolidation-results-20261117": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+    "docs/prompt3-foundations-20261022": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+    "integration/classrup-completion": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+    "integration/classrupted-audit-record-20261117": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+    "integration/classrupted-consolidation-20261117": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+    "integration/classrupted-continuation-20261118": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+    "integration/comprehensive-consolidation": "a111eefb907a9f039f56777715e20b4976ea3d87",
+    "integration/feature-registry-20261117": "e331e56165304c98a1c2bdd26692772b586e499d",
+    "integration/pr-docs-consolidation-20261117": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+    "integration/qualified-listing-vault-stack-20261116": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+    "main": "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+    "milestone/framework-browser-verification": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+    "planning/future-cli-specs-20261110": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+    "work/classrup-framework": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+    "work/classrup-haiku-framework": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108"
+  },
+  "baseline": {
+    "path": "docs/development/evidence/20261118/inventory.json",
+    "sha256": "fe755a265cc0fe925bf6f349e77dec43f8d8f78db7c994d3cf3cbaa899202034",
+    "total_branch_count": 58,
+    "non_main_branch_count": 57
+  },
+  "original_non_main_checks": [
+    {
+      "branch": "agents/ci/trim-workflows",
+      "original_head": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "observed_head": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "agents/discovery/coarse-filters",
+      "original_head": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "observed_head": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "agents/discovery/ranking",
+      "original_head": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "observed_head": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "agents/governance/taxonomy-prohibited",
+      "original_head": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "observed_head": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "agents/i18n/languages-currencies",
+      "original_head": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "observed_head": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "agents/moderation/rate-limits-signals",
+      "original_head": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "observed_head": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "agents/notify/prefs-inapp",
+      "original_head": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "observed_head": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "agents/orchestration/wave1-handoff",
+      "original_head": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "observed_head": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "agents/privacy/classification-metadata-consent",
+      "original_head": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "observed_head": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "chatgpt/zero-codex-continuation-spec-20261109",
+      "original_head": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "observed_head": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/audit-observability-20261110",
+      "original_head": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "observed_head": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/barter-discovery-status-20261110",
+      "original_head": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "observed_head": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-nested-assets-20261110",
+      "original_head": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "observed_head": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "original_head": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "observed_head": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+      "original_head": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "observed_head": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/docs-wiki-20261110",
+      "original_head": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "observed_head": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+      "original_head": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "observed_head": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+      "original_head": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "observed_head": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/outbox-isolation-20261110",
+      "original_head": "a294dd21715edf501aac75bee69f785951985cd5",
+      "observed_head": "a294dd21715edf501aac75bee69f785951985cd5",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "original_head": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "observed_head": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+      "original_head": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "observed_head": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+      "original_head": "12558435a307415ba0332777f87b1603abba5268",
+      "observed_head": "12558435a307415ba0332777f87b1603abba5268",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "claude/bold-mccarthy-qklhl6",
+      "original_head": "a403614bb34d3d176d4693730e512e14959718b8",
+      "observed_head": "a403614bb34d3d176d4693730e512e14959718b8",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "claude/busy-cerf-vg3hz3",
+      "original_head": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "observed_head": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "claude/classifiedisrupted-continue-lcuuwg",
+      "original_head": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "observed_head": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "claude/difficult-project-parts-dcqlup",
+      "original_head": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "observed_head": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "claude/gallant-goodall-9cc7yb",
+      "original_head": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "observed_head": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "claude/haiku-classrupted-features-cc9qmr",
+      "original_head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "observed_head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "claude/happy-newton-4yttpa",
+      "original_head": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "observed_head": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "claude/pensive-mendel-30x81m",
+      "original_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "claude/vigilant-newton-nva2l6",
+      "original_head": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "observed_head": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "claude/wonderful-cori-ynhlsb",
+      "original_head": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "observed_head": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "codex/classrup-completion-20261116",
+      "original_head": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "observed_head": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "codex/classrup-consolidation-audit-20261104",
+      "original_head": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "observed_head": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "codex/classrup-features-20261116",
+      "original_head": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "observed_head": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "codex/consolidate-keyboard-focus-20261117",
+      "original_head": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "observed_head": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "codex/encrypted-domain-storage-20261116",
+      "original_head": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "observed_head": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "codex/listing-history-20261116",
+      "original_head": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "observed_head": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "codex/local-alpha-20261109",
+      "original_head": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "observed_head": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "codex/parallel-completion-20261116",
+      "original_head": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "observed_head": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "codex/verified-status-20261116",
+      "original_head": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "observed_head": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "continuation/classrup-20261101",
+      "original_head": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "observed_head": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "diagnostic/webkit-keygen-20261118",
+      "original_head": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "observed_head": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "docs/client-owned-foundations-20261024",
+      "original_head": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "observed_head": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "docs/pr-consolidation-results-20261117",
+      "original_head": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "observed_head": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "docs/prompt3-foundations-20261022",
+      "original_head": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "observed_head": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "integration/classrup-completion",
+      "original_head": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "observed_head": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "integration/classrupted-audit-record-20261117",
+      "original_head": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "observed_head": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "integration/classrupted-consolidation-20261117",
+      "original_head": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "observed_head": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "integration/classrupted-continuation-20261118",
+      "original_head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "observed_head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "integration/feature-registry-20261117",
+      "original_head": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "observed_head": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "integration/pr-docs-consolidation-20261117",
+      "original_head": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "observed_head": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "integration/qualified-listing-vault-stack-20261116",
+      "original_head": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "observed_head": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": true
+    },
+    {
+      "branch": "milestone/framework-browser-verification",
+      "original_head": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "observed_head": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "planning/future-cli-specs-20261110",
+      "original_head": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "observed_head": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "work/classrup-framework",
+      "original_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    },
+    {
+      "branch": "work/classrup-haiku-framework",
+      "original_head": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "observed_head": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "unchanged": true,
+      "local_commit_available": true,
+      "ancestor_of_combined_source": false
+    }
+  ],
+  "original_ref_counts": {
+    "unchanged": 57
+  },
+  "expected_head_checks": [
+    {
+      "branch": "main",
+      "expected": "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+      "observed": "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+      "matches": true
+    },
+    {
+      "branch": "codex/classrup-future-codec-guard-20261120",
+      "expected": "f598dc52937449764703b5048ba71a77239c9ded",
+      "observed": "f598dc52937449764703b5048ba71a77239c9ded",
+      "matches": true
+    },
+    {
+      "branch": "codex/classrup-downgrade-export-guard-20261120",
+      "expected": "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+      "observed": "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+      "matches": true
+    },
+    {
+      "branch": "codex/classrup-foreign-codec-isolation-20261120",
+      "expected": "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+      "observed": "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+      "matches": true
+    },
+    {
+      "branch": "codex/classrup-attachment-recovery-scope-20261120",
+      "expected": "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+      "observed": "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+      "matches": true
+    },
+    {
+      "branch": "codex/classrup-attachment-reference-coverage-20261120",
+      "expected": "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+      "observed": "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+      "matches": true
+    }
+  ],
+  "previous_snapshot": {
+    "path": "SOURCE-PRESERVATION.json",
+    "sha256": "0758e3d8a99d1f74eec9ea1a5b28ca4003aa51f894b7364f5066740c9a242ba0",
+    "observed_at": "2026-11-20T15:58:45.412333+00:00",
+    "observed_branch_count": 74,
+    "missing_since_previous": [],
+    "moved_since_previous": [],
+    "added_since_previous": []
+  },
+  "ancestry": {
+    "main_is_ancestor_of_combined": true,
+    "earlier_pr68_head": "259f84204561c82d1138f252771564a02ea5916c",
+    "earlier_pr68_is_ancestor_of_latest_pr68": true,
+    "earlier_pr68_is_ancestor_of_combined": true,
+    "immediate_parents": [
+      "bd6f59cb49a72583dcba3ca7925a6be3e82bc584",
+      "7a3a962400e44a3d7bb2a6834c869f97bae88ee4"
+    ]
+  },
+  "contributions": [
+    {
+      "pr": 64,
+      "head": "f598dc52937449764703b5048ba71a77239c9ded",
+      "ancestor_of_combined_source": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-future-codec/HANDOFF-ROUND2.md",
+          "source_blob": "9d92a59d630b00e5a8c9e3730711ee96cbdaa529",
+          "combined_blob": "9d92a59d630b00e5a8c9e3730711ee96cbdaa529",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-future-codec/HANDOFF.md",
+          "source_blob": "35098745f4bfc7f2d19181ed96de1735ed3949a9",
+          "combined_blob": "35098745f4bfc7f2d19181ed96de1735ed3949a9",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/production-future-codec-rejection.test.ts",
+          "source_blob": "9b0e390d95d4488afff43def49cdebfc3031af83",
+          "combined_blob": "d1f63bd71e28eb76226dfcc4e2c0b7cc91233371",
+          "byte_identical": false,
+          "disposition": "original admission and compatible positive-control assertions retained; adds compatible retry into the rejected destination with complete record and identity checks across encrypted reopen"
+        }
+      ]
+    },
+    {
+      "pr": 65,
+      "head": "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+      "ancestor_of_combined_source": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-downgrade-export/HANDOFF.md",
+          "source_blob": "93189639aae1adf915d2b5101b4a6c8febf83025",
+          "combined_blob": "93189639aae1adf915d2b5101b4a6c8febf83025",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/production-downgrade-export.test.ts",
+          "source_blob": "115f287724429b595f8627e981ec15ee0cfb9f58",
+          "combined_blob": "115f287724429b595f8627e981ec15ee0cfb9f58",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        }
+      ]
+    },
+    {
+      "pr": 66,
+      "head": "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+      "ancestor_of_combined_source": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-foreign-codec-isolation/HANDOFF.md",
+          "source_blob": "6d65e72323e0ef26e09d8ce2385d447f36ec932b",
+          "combined_blob": "6d65e72323e0ef26e09d8ce2385d447f36ec932b",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/production-foreign-codec-isolation.test.ts",
+          "source_blob": "bd536af4622f9b488bc120bd03696e408418c2a9",
+          "combined_blob": "bd536af4622f9b488bc120bd03696e408418c2a9",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        }
+      ]
+    },
+    {
+      "pr": 67,
+      "head": "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+      "ancestor_of_combined_source": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-attachment-recovery/HANDOFF.md",
+          "source_blob": "d45f04205ed3ba2975fab0a59684293e147be2c1",
+          "combined_blob": "d45f04205ed3ba2975fab0a59684293e147be2c1",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-attachment-recovery/SPEC.md",
+          "source_blob": "90fdd99f33f9953cf30726a5e753b2f87f2476de",
+          "combined_blob": "90fdd99f33f9953cf30726a5e753b2f87f2476de",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        }
+      ]
+    },
+    {
+      "pr": 68,
+      "head": "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+      "ancestor_of_combined_source": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-attachment-reference-coverage/HANDOFF-ROUND2.md",
+          "source_blob": "7cdd9d7d475fef6d1b51215e9b75eaabb8f42e28",
+          "combined_blob": "7cdd9d7d475fef6d1b51215e9b75eaabb8f42e28",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-attachment-reference-coverage/HANDOFF-ROUND3.md",
+          "source_blob": "afb362b7c385b414a2cb34c01a99b1367fc38f73",
+          "combined_blob": "afb362b7c385b414a2cb34c01a99b1367fc38f73",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-attachment-reference-coverage/HANDOFF-ROUND4.md",
+          "source_blob": "81064ab464324fd29c672341a721abe31a92c9b8",
+          "combined_blob": "81064ab464324fd29c672341a721abe31a92c9b8",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-attachment-reference-coverage/HANDOFF.md",
+          "source_blob": "fd359db3e15c158fbc3de2538b4fd6285b577665",
+          "combined_blob": "fd359db3e15c158fbc3de2538b4fd6285b577665",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/kernel/src/storage/driver.ts",
+          "source_blob": "1457e9ebb9fe32ea6c6f7d793e8ed0fa7759ed1d",
+          "combined_blob": "1457e9ebb9fe32ea6c6f7d793e8ed0fa7759ed1d",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/kernel/src/storage/memory-driver.ts",
+          "source_blob": "56d93ed22056f8cd215882df97a3732ea1b5b213",
+          "combined_blob": "56d93ed22056f8cd215882df97a3732ea1b5b213",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/kernel/src/storage/sqlite.ts",
+          "source_blob": "f9b30c65248d37fc0cdeaabd7126da8013c997b7",
+          "combined_blob": "f9b30c65248d37fc0cdeaabd7126da8013c997b7",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/kernel/src/storage/tx.ts",
+          "source_blob": "a22169550c042cd637cf66201917077666d1eb80",
+          "combined_blob": "a22169550c042cd637cf66201917077666d1eb80",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/vault/src/index.ts",
+          "source_blob": "cab54ba0cc87235806894d1a351a492c2c4e7f43",
+          "combined_blob": "cab54ba0cc87235806894d1a351a492c2c4e7f43",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/vault/src/vault.ts",
+          "source_blob": "6f1b28556be694d945dac6de5eda0e4cad069f1f",
+          "combined_blob": "6f1b28556be694d945dac6de5eda0e4cad069f1f",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/attachment-reference-coverage.test.ts",
+          "source_blob": "d87ccecdb31abea3d8aadade900c4d5bb30cd194",
+          "combined_blob": "ffbe7343ce099cafc1249e43eecef11bf5c9b388",
+          "byte_identical": false,
+          "disposition": "incoming corrected last-holder deletion, exception rollback and plain IndexedDB reopen assertions retained; adds ordinary lifecycle, rollback, persistence rejection, revocation and encrypted recovery acceptance"
+        },
+        {
+          "path": "tests/integration/barter-want-intent.test.ts",
+          "source_blob": "6eb5eff4142d10e8eba47a5bcb304a1adbc2aed3",
+          "combined_blob": "6eb5eff4142d10e8eba47a5bcb304a1adbc2aed3",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/production-barter-recovery.test.ts",
+          "source_blob": "0f7733f87c0d3bad5b95fab2b83a92063a72ee86",
+          "combined_blob": "0f7733f87c0d3bad5b95fab2b83a92063a72ee86",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        }
+      ]
+    }
+  ],
+  "contribution_summary": {
+    "paths": 22,
+    "byte_identical": 20,
+    "extended_acceptance_paths": [
+      "tests/integration/production-future-codec-rejection.test.ts",
+      "tests/integration/attachment-reference-coverage.test.ts"
+    ],
+    "production_files_exact": 6,
+    "original_document_files_exact": 10
+  },
+  "selected_production_memory_blob": "56d93ed22056f8cd215882df97a3732ea1b5b213",
+  "acceptance_retention": {
+    "future_codec_original_expect_lines_retained": 17,
+    "future_codec_timeout_unchanged_ms": 30000,
+    "incoming_plain_indexeddb_reopen_case_byte_exact": true,
+    "incoming_exception_rollback_block_byte_exact": true,
+    "incoming_exception_rollback_block_sha256": "eb2fa1dbd64981b34aedba187711c065b7e0230a34d215b8e660366c568f50ae",
+    "attachment_note": "Foreign fixture and corresponding counts expand from one to two foreign references; original owner isolation stays intact. Original invalid-boundary cases remain in a broader loop. Last-detach result assertions are strengthened while preserving the latest incoming deletion oracle."
+  },
+  "receipt_bytes_preserved_during_audit": {
+    "SOURCE-PRESERVATION.json": "0758e3d8a99d1f74eec9ea1a5b28ca4003aa51f894b7364f5066740c9a242ba0",
+    "MERGE-PRESERVATION.json": "7bb24ef108cf4d82a80e946d901ec99b9ca0a57c079d6817ae738bc23d98f2d4"
+  },
+  "working_tree_tracked_dirty_paths": [
+    "docs/development/BACKUP_SCOPE.md",
+    "docs/development/CONSOLIDATION_HANDOFF.md",
+    "docs/development/REMAINING_WORK.md"
+  ],
+  "limits": [
+    "Branch equality is observed at this snapshot and does not prove uninterrupted equality between snapshots.",
+    "Historical refs are preserved; preservation does not mean all historical branches were wholesale merged.",
+    "This lane ran no tests or application and provides no functional, hosted-CI, browser or release qualification.",
+    "The extended test files and production source must retain candidate-specific evidence; earlier main success does not qualify the candidate."
+  ]
+}

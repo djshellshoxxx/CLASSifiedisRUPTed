@@ -95,13 +95,53 @@ Two subsequent coordination refreshes release the local hold without adding or
 collapsing alerts; the production delivery-health helper reports completion.
 Recovered mark-read and archive restore/republish actions continue normally.
 Full TypeScript and nine selected production recovery cases passed at that
-new source; its own hosted/browser gate remains pending.
+source. PR #63 subsequently merged as
+`449a619f1ae7b66cb42d9cab43dd5493bfe42c2e`; its actual main-push Alpha and CLI
+workflows passed, including 78 product browser journeys in the inspected Alpha
+log. The [later consolidation record](cycles/20261120-recovery-consolidation/HANDOFF.md)
+separates that main qualification from subsequent candidate results.
 
 This acceptance does not cover every state of each codec, native-device
 recovery or a whole database snapshot. A domain inventory hold is distinct
 from the excluded infrastructure lease store. Kernel delivery state is not
 restored; notifications are delivered before export. External notification
 delivery and channel grants remain outside local notification record recovery.
+
+### Attachment holder diagnostic
+
+The current candidate adds `UnlockedVault.attachmentCoverage()` as a read-only,
+principal-scoped diagnostic. It reports distinct held references, distinct
+missing blobs, distinct present-but-excluded references, and holder-row counts.
+Stored blobs with no holders are outside these counts. Holder strings are
+caller-supplied labels, not authenticated parent-record authority; the result
+always states `holderAuthorityVerified: false` and `includedInV1Backup: false`.
+It contains no tenant, holder label, content identifier, filename, MIME type,
+sample payload or bytes. Session guards run before and after the read; locking
+revokes the session.
+
+At most 10,000 owner holder rows are admitted. Overflow makes every count
+unavailable (`null`) instead of returning partial totals. Memory and both
+IndexedDB working sets use a tenant-to-holder-key index maintained through
+ordinary writes, snapshot loading and rollback. The diagnostic checks indexed
+cardinality first and examines at most the requested owner limit for admitted
+results; it does not traverse foreign holder rows. SQLite uses its
+tenant-prefixed limit-plus-one query.
+This bounds the diagnostic's holder traversal, not encrypted-vault unlock,
+complete snapshot loading, total stored index memory or target-device cost.
+
+Coverage queries preserve bytes. Explicitly detaching the last holder retains
+the existing deletion/shredding contract. Encrypted reopen reconstructs the
+diagnostic from stored rows. Existing signed v1 export still excludes both
+blob stores, and acceptance verifies that the new restored destination contains
+no attachments. These are separately exercised acceptance properties, not
+portable recovery.
+
+The [source inventory](cycles/20261120-recovery-consolidation/ATTACHMENT-SOURCE-INVENTORY.md)
+finds no current production domain attachment field or `RepoDef.blobs`
+composition among the 15 production codecs. Kernel media ports and a count API
+do not supply an owning domain, authenticated parent linkage, media admission,
+a portable manifest or a product media workflow. Those remain subsequent
+engineering contracts; no PWA completeness certificate consumes this report.
 
 ### Coverage and compatibility boundaries
 

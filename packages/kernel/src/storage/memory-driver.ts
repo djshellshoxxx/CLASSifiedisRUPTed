@@ -53,6 +53,8 @@ interface Journal {
 class MemoryState {
   readonly tables = new Map<TableName, Map<string, Row>>(TABLES.map((t) => [t, new Map()]));
   readonly groups = new Map<string, Set<string>>();
+  /** Tenant index for bounded attachment coverage; maintained with the journal. */
+  readonly blobRefKeysByTenant = new Map<string, Set<string>>();
 
   table<R extends Row>(name: TableName): Map<string, R> {
     return this.tables.get(name) as Map<string, R>;
@@ -67,7 +69,17 @@ class MemoryState {
       map.set(key, row);
       const g = groupOf(table, row);
       if (g !== undefined) this.groupSet(table, g).add(key);
+      if (table === 'blob_refs') {
+        const tenant = (row as BlobRefRow).tenant;
+        let keys = this.blobRefKeysByTenant.get(tenant);
+        if (!keys) this.blobRefKeysByTenant.set(tenant, (keys = new Set()));
+        keys.add(key);
+      }
     }
+  }
+
+  blobRefKeys(tenant: string): ReadonlySet<string> {
+    return this.blobRefKeysByTenant.get(tenant) ?? new Set<string>();
   }
 
   groupKeys(table: TableName, group: string): ReadonlySet<string> {
@@ -84,6 +96,12 @@ class MemoryState {
   private ungroup(table: TableName, key: string, row: Row): void {
     const g = groupOf(table, row);
     if (g !== undefined) this.groups.get(k(table, g))?.delete(key);
+    if (table === 'blob_refs') {
+      const tenant = (row as BlobRefRow).tenant;
+      const keys = this.blobRefKeysByTenant.get(tenant);
+      keys?.delete(key);
+      if (keys?.size === 0) this.blobRefKeysByTenant.delete(tenant);
+    }
   }
 }
 
@@ -280,6 +298,23 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
       upsert: (row) => write('blobs', k(row.tenant, row.ref), { ...row, bytes: row.bytes.slice() }),
       remove: (tenant, ref) => write('blobs', k(tenant, ref), undefined),
       holders: (tenant, ref) => state.groupKeys('blob_refs', k(tenant, ref)).size,
+      referenceCoverage: (tenant, limit) => {
+        // Use a tenant index rather than scanning the entire in-memory database.
+        // Checking the index cardinality is O(1); accepted reads visit at most limit rows.
+        const keys = state.blobRefKeys(tenant);
+        if (keys.size > limit) {
+          return { referenceCount: null, holderCount: null, missingCount: null, limitExceeded: true };
+        }
+        let missingCount = 0;
+        const refs = new Set<string>();
+        for (const key of keys) {
+          const row = state.table<BlobRefRow>('blob_refs').get(key) as BlobRefRow;
+          if (refs.has(row.ref)) continue;
+          refs.add(row.ref);
+          if (!state.table<BlobRow>('blobs').has(k(tenant, row.ref))) missingCount++;
+        }
+        return { referenceCount: refs.size, holderCount: keys.size, missingCount, limitExceeded: false };
+      },
       attach: (tenant, ref, holder) => write('blob_refs', k(tenant, ref, holder), { tenant, ref, holder }),
       detach: (tenant, ref, holder) => write('blob_refs', k(tenant, ref, holder), undefined),
       orphans: (createdBefore, limit) =>

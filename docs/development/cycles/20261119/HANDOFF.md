@@ -85,6 +85,10 @@ database recovery remain separate work.
 - Transaction documentation and tests state the precise asynchronous lifetime:
   revocation happens when the wrapper observes settlement; callers still must
   await work queued inside an asynchronous callback.
+- Retained-listing backup admission now uses the same owner/listing compound key
+  as normal retention. Publication backup admission uses the signed envelope CID
+  used by existing publication writers and readers. Both headless production
+  codecs retain their original signed-evidence validators and valid key formats.
 
 ## Independent worker generations
 
@@ -103,14 +107,18 @@ not be summed into one test total.
 | G3 storage review | No blocker; 12 reference-isolation cases, three-adapter reviewer probe, one explicitly filtered migration case; [handoff](storage-review-g3.md) |
 | G3 recovery code review | No demonstrated source regression; five real-crypto probe groups including transactional conflict rollback and retry; [handoff](preflight-code-g3.md) |
 | G3 coverage bug hunt | No demonstrated UI defect; eight bounded production-fragment probes; [handoff](coverage-bug-g3.md) |
+| G4 key-consistency repair | Retained/publication codec repairs; 14 focused tests passed; [handoff](recovery-key-g4.md) |
+| G4 static security review | No additional blocker after source review of the combined changes and both key repairs; no runtime testing claimed; [handoff](static-security-g4.md) |
+| G4 independent compatibility review | Four native positive groups, eight normal records, prior codec definitions through new codecs and another round trip; [handoff](codec-compatibility-g4.md) |
 
 One attempted G2 general bug-hunt worker stopped at an automatic safety review
 before producing work. It is not counted as a completed audit. The narrowly
 scoped independent barter correctness review completed that lane separately.
 The G3 recovery-security follow-up also stopped at automatic review; its
-completed observations are retained as a partial review, not a completed audit.
-A new worker is repairing canonical record-key consistency, and a separate fresh
-worker is conducting strictly static defensive review without reproduction.
+completed observations are retained in a [partial handoff](preflight-security-g3-partial.md),
+not counted as a completed audit. G4 completed the defensive key-consistency
+repairs and a strictly static security review. A separate fresh compatibility
+worker exercised normal valid v1 round trips without reproducing the prior gap.
 
 ## Root verification and limits
 
@@ -129,19 +137,31 @@ One candidate runner and three full TypeScript attempts were killed. Those are
 incomplete gates, not passes. A later integration check identified and fixed the
 barter fixture's missing new `backupCoverage()` method. Strict focused TypeScript
 then passed for all 23 changed TypeScript files and their transitive imports.
+The combined affected run then passed **126/126 across 15 files**, with zero
+failed or pending cases. That run preceded the later key-codec repairs and is
+not a complete repository suite.
 
-Fresh combined-candidate focused checks, static/build qualification and hosted
-Alpha/CLI/browser results must be recorded separately. No full repository green
-typecheck, complete suite or new native-browser qualification is claimed by this
-checkpoint. Existing WebKit fixed-width import limitations, large-device/load
+The full repository TypeScript check now passes on the integrated candidate
+after correcting two branded-ID errors in the new publication test fixture.
+Specification, dependency-boundary and registry checks, independent money
+vectors and bundle budget, all 27 tooling tests, setup and production build also
+pass. The original compiler diagnostic failure remains preserved.
+
+The complete local domain suite was killed with **exit 137 after 145.485 seconds**,
+before producing its final JSON report. This was not the 1,200-second process
+cap. There is no passing complete-suite result or partial assertion count from
+that invocation. The [qualification record](QUALIFICATION.md) and hashed logs
+keep it distinct from the successful focused tests. Full hosted Alpha/CLI and
+native-browser qualification remains required before merge. Existing WebKit
+fixed-width import limitations, large-device/load
 acceptance, manual accessibility and broader product/release gates remain open.
 
 ## Resume procedure
 
 1. Read fresh main, the current integration PR/head/checks, this handoff and all
    later worker handoffs. Check active workers before taking ownership of files.
-2. Finish and independently review the retained-listing admission repair, then
-   run the combined affected checks and normal unchanged project gates. Preserve
+2. Read the completed key-codec repairs and independent reviews, then
+   finish the normal unchanged project gates. Preserve
    every failed or unfinished invocation without converting reruns into passes.
 3. Publish a reviewable draft with source/tree identities and fresh qualification.
    Merge only after its required current-source checks and independent review

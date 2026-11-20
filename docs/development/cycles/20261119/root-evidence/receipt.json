@@ -141,6 +141,20 @@
       "decoded_bytes": 2327,
       "decoded_sha256": "a273c438f6bb865cccc6322e5de4fdfba5506aa75a16720f9aac6a4840abbc52",
       "stored_sha256": "a273c438f6bb865cccc6322e5de4fdfba5506aa75a16720f9aac6a4840abbc52"
+    },
+    {
+      "source_name": "combined-focused.log",
+      "path": "combined-focused.log.gz",
+      "decoded_bytes": 77,
+      "decoded_sha256": "577ab3d3b82e57dc9a86fa796bf9dd2bfa1e1e57f47b2de1d75577e777cd28f7",
+      "stored_sha256": "2c29e66881c3e804f8dcf8eac4567831231e25844e936d1663a24563d307e9d0"
+    },
+    {
+      "source_name": "combined-focused.json",
+      "path": "combined-focused.json",
+      "decoded_bytes": 49326,
+      "decoded_sha256": "3ea52107f81c66e77118e3b3cf805e876c3224b9b68018a03a6de48e12b42f8b",
+      "stored_sha256": "3ea52107f81c66e77118e3b3cf805e876c3224b9b68018a03a6de48e12b42f8b"
     }
   ],
   "focused_typecheck": {
@@ -150,5 +164,15 @@
     "transitive_imports": true,
     "command": "env NODE_OPTIONS=--max-old-space-size=512 timeout 120s corepack pnpm exec tsc -p /workspace/scratch/06c5fd0c70c0/classrup-focused-tsconfig.json --noEmit",
     "full_repository_typecheck": false
+  },
+  "combined_affected": {
+    "source": "eeee923adbd4dee3634898d035c74072803ea2f0",
+    "passed": 126,
+    "failed": 0,
+    "pending": 0,
+    "files": 15,
+    "exit_code": 0,
+    "full_repository_suite": false,
+    "later_key_codec_repairs_included": false
   }
 }

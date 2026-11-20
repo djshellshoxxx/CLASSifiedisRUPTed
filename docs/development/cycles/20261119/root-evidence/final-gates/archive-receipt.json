@@ -1,0 +1,116 @@
+{
+  "scope": "Full integrated typecheck and static/build qualification; includes original fixture compiler failure",
+  "files": [
+    {
+      "path": "build.log.gz",
+      "decoded_bytes": 394,
+      "decoded_sha256": "0b68c0b0ead067ad27de6f08d1fb0f80d57cc545d6f50fadd820e60a5235c0dc",
+      "stored_sha256": "fe0e9c1ebd100ef5242134d014e22b9266790f5dd43e8730dbab946279dc9981"
+    },
+    {
+      "path": "dependencies.log.gz",
+      "decoded_bytes": 123,
+      "decoded_sha256": "0790717e4a115bbe24211b9676cbb214ae17b76f5d0ce87edbfc6bab45242159",
+      "stored_sha256": "610497ddedf8a0aa65c259de5727d9742e6f406b8977a49dcae1518dbf1836ee"
+    },
+    {
+      "path": "money-bundle.log.gz",
+      "decoded_bytes": 43,
+      "decoded_sha256": "3df467e263fc9592e3ef73f7a1f172476474e3809ca257d409201d4f89497595",
+      "stored_sha256": "cd68e1611d927dafb6126c7319b396e6f57bbd51cc5225a90d7a73dc386f14cc"
+    },
+    {
+      "path": "money-vectors.log.gz",
+      "decoded_bytes": 72,
+      "decoded_sha256": "413c70fc685fea3e6b4a09b95eda0237fcbefc2679353a99c97e50eba6a64bd2",
+      "stored_sha256": "e18496cc9e87cfb5060b4bb9fc15dbd866db87c0e5e93ba1ef5e6c2ce2e91da8"
+    },
+    {
+      "path": "registry.log.gz",
+      "decoded_bytes": 314,
+      "decoded_sha256": "0295ec7f4d0d4782529879e1f5b2437301f85a5841ea15e306b28211fb907bd4",
+      "stored_sha256": "2dcebc4475911c0e5537f07bc11cb114acdd7cdad6a07b1783c9d962ba1d443e"
+    },
+    {
+      "path": "setup.log.gz",
+      "decoded_bytes": 181,
+      "decoded_sha256": "6cbb937086a21738d2646141f35bd581b05ffd66ab38b8d692838bef0aa502a9",
+      "stored_sha256": "34bf36ccab631b9be2c68a6450b5312ef34b2e216661da56e4e8c118d59f8da8"
+    },
+    {
+      "path": "spec.log.gz",
+      "decoded_bytes": 156,
+      "decoded_sha256": "e60eca4ac2b7db83af2e89edf8a0fd09590c1c9794498a69e606ecf3ce2e8f5e",
+      "stored_sha256": "f217b884e2f79f8220ec33abc35d2a1a9d66380a0c4487eead3842afe7f49fe4"
+    },
+    {
+      "path": "static-receipt.json",
+      "decoded_bytes": 2717,
+      "decoded_sha256": "130e963f4be21dbddb91a697cd8389f9ba6aae1aa4f6561989712c72a575ca53",
+      "stored_sha256": "130e963f4be21dbddb91a697cd8389f9ba6aae1aa4f6561989712c72a575ca53"
+    },
+    {
+      "path": "tooling.log.gz",
+      "decoded_bytes": 2523,
+      "decoded_sha256": "e6845224a84b9ad31241eda3a63c760408d73989187b7b59a8e23ba1e283c3d8",
+      "stored_sha256": "1d4d95102e74612c79f4c793011e1e2e8dbaa4a8305690930595ca8efd6f9559"
+    },
+    {
+      "path": "typecheck-fixture-failure-receipt.json",
+      "decoded_bytes": 535,
+      "decoded_sha256": "074a08a659888402597dc7abfbdd4bcd33c4a8ec08bc96c96f8ecf0a48e85fed",
+      "stored_sha256": "074a08a659888402597dc7abfbdd4bcd33c4a8ec08bc96c96f8ecf0a48e85fed"
+    },
+    {
+      "path": "typecheck-fixture-failure.log.gz",
+      "decoded_bytes": 545,
+      "decoded_sha256": "7b0e04a28bbe53a8a03925dcb437264ce8fc343bd45300771f032b4f19af4de4",
+      "stored_sha256": "97ef4f7d719875ff95638367e4115f158f98f09da1604a87e441fd512b1c2d38"
+    },
+    {
+      "path": "typecheck-receipt.json",
+      "decoded_bytes": 533,
+      "decoded_sha256": "6d0a5d62ab5688ddcb8dd76fdc6296bc63554d6d934834baf3df9646554b4112",
+      "stored_sha256": "6d0a5d62ab5688ddcb8dd76fdc6296bc63554d6d934834baf3df9646554b4112"
+    },
+    {
+      "path": "typecheck.log.gz",
+      "decoded_bytes": 100,
+      "decoded_sha256": "67004248e99985500917309abfc71347a8732b6b9d5aa247036285943f0c36fc",
+      "stored_sha256": "961dbc4c404cf1e42212042742f8e63ae0c379cd9b1a102532f331768f64a744"
+    },
+    {
+      "path": "domain.log.gz",
+      "decoded_bytes": 241,
+      "decoded_sha256": "ae414312bdae685758da665d502db75fcf11562775133f7cae5250abe963d093",
+      "stored_sha256": "0abef7947f82fee8e1d2f68765e5be6bc86ca458fe89551a9bd7fa13ecd049c7"
+    },
+    {
+      "path": "domain-receipt.json",
+      "decoded_bytes": 659,
+      "decoded_sha256": "5d07afdff1c7018677f00dd8cbc50f8fc50f600b63918c2f6521441b2e9416c8",
+      "stored_sha256": "5d07afdff1c7018677f00dd8cbc50f8fc50f600b63918c2f6521441b2e9416c8"
+    },
+    {
+      "path": "publication-fixture.log.gz",
+      "decoded_bytes": 92,
+      "decoded_sha256": "0bf4c9a40100b1bc7e30bebbd4b224de8c9f892142497990be84635c86a053ef",
+      "stored_sha256": "b3db1d6e287a6faec7dd031b0a8321776a74c1ca77872b0d720b90b3100dfda4"
+    },
+    {
+      "path": "publication-fixture.json",
+      "decoded_bytes": 1108,
+      "decoded_sha256": "888e92bd791a47b8a8f8c4dd24f321426fe9913d0038e81b458c3aca3be9120f",
+      "stored_sha256": "888e92bd791a47b8a8f8c4dd24f321426fe9913d0038e81b458c3aca3be9120f"
+    }
+  ],
+  "full_domain_outcome": "Exit 137 after 145.485 seconds, without a final JSON report. Incomplete full suite; no assertion count or passing full result claimed.",
+  "corrected_publication_fixture": {
+    "source": "590dd14468b25ccbffac1f7da3632c736f0290e1",
+    "exit_code": 0,
+    "passed": 1,
+    "failed": 0,
+    "pending": 0,
+    "command": "env NODE_OPTIONS=--max-old-space-size=512 corepack pnpm exec vitest run tests/integration/publication-backup.test.ts --maxWorkers=1 --reporter=json --outputFile=/workspace/scratch/06c5fd0c70c0/final-gates/publication-fixture.json"
+  }
+}

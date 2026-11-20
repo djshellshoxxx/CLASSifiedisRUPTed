@@ -19,6 +19,10 @@ records new backup coverage and shared export/recovery preflight, storage and
 barter repairs, worker findings and the next candidate's qualification. These
 new changes require their own complete gates before merge. They do not complete
 the wider product or change existing signing identities or backup wire formats.
+The [candidate qualification record](../development/cycles/20261119/QUALIFICATION.md)
+records passing full typecheck, static/build and focused checks. The full local
+domain invocation was killed with exit 137 before its report; fresh complete
+hosted qualification remains pending.
 
 The [current continuation report](../development/FEATURE_COMPLETION_20261119.md)
 records public CLI listing/show/search over selected signed files, explicit

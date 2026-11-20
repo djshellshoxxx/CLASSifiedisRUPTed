@@ -1,0 +1,338 @@
+{
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "method": "Connected GitHub Git objects; each blob and tree identity checked before commit creation; parent ordering preserved through mapping",
+  "through_local_head": "590dd14468b25ccbffac1f7da3632c736f0290e1",
+  "through_remote_head": "4ec681df9aa61de194e9bfdea6856bc52548c7bd",
+  "through_tree": "04e98a0f7e038ad7eee1837925faa5ef9754009e",
+  "scope": "Preceding commits only. The published PR identifies the final head after this receipt and subsequent evidence.",
+  "commits": [
+    {
+      "local_commit": "e6df4af37f0cab79f3b98d97e26a32b6bfae34f0",
+      "remote_commit": "b69a583107966d286c42c6797bb48eb399dc2e90",
+      "tree": "6d1651f0cb7be46c3ae4efd306f8c3bda4b9bd96",
+      "local_parents": [
+        "3aa7a17b28ee07ebec4336b49c3527743510bc16"
+      ],
+      "remote_parents": [
+        "3aa7a17b28ee07ebec4336b49c3527743510bc16"
+      ],
+      "message": "feat(vault): expose backup coverage and reject silent record omissions"
+    },
+    {
+      "local_commit": "8fe288e7e39254eefef056594a647ad87dd3bf06",
+      "remote_commit": "fcda7985d6b387f5675813147babb6311f0a3d0f",
+      "tree": "8151cdc7b6f9cd746bcb9a50f2d09c24a0df41fd",
+      "local_parents": [
+        "e6df4af37f0cab79f3b98d97e26a32b6bfae34f0"
+      ],
+      "remote_parents": [
+        "b69a583107966d286c42c6797bb48eb399dc2e90"
+      ],
+      "message": "fix(storage): prevent blob metadata from overriding tenant scope"
+    },
+    {
+      "local_commit": "2be3f33f4fd028ac04f3e7c80184c13f6ddd7fc8",
+      "remote_commit": "82f134765a7616492ecf99e6d9a0f5f5cd030b02",
+      "tree": "620c9845fa37fc1c5919e45313fa1710bcb8170b",
+      "local_parents": [
+        "8fe288e7e39254eefef056594a647ad87dd3bf06"
+      ],
+      "remote_parents": [
+        "fcda7985d6b387f5675813147babb6311f0a3d0f"
+      ],
+      "message": "docs(storage): state the asynchronous transaction lifetime boundary"
+    },
+    {
+      "local_commit": "5cd769dc729e6ba462f1ec02727baeab02922f95",
+      "remote_commit": "d9a25f3cc3b24446fa7401f6e59366e08a3ac24e",
+      "tree": "0cc6dec4a1c84f5673f31bd845103f24622dc98a",
+      "local_parents": [
+        "2be3f33f4fd028ac04f3e7c80184c13f6ddd7fc8"
+      ],
+      "remote_parents": [
+        "82f134765a7616492ecf99e6d9a0f5f5cd030b02"
+      ],
+      "message": "fix(storage): snapshot blob admission before asynchronous hashing"
+    },
+    {
+      "local_commit": "30526fb2745e8d6e2bb15efae5b8106bcdcf53d0",
+      "remote_commit": "2eba3f5a3ebe36d7b8dea1e07f71175b46558745",
+      "tree": "0cc6dec4a1c84f5673f31bd845103f24622dc98a",
+      "local_parents": [
+        "5cd769dc729e6ba462f1ec02727baeab02922f95",
+        "e63a7ecf0c7f15c2ce8ffa17793799caa0e62d3c"
+      ],
+      "remote_parents": [
+        "d9a25f3cc3b24446fa7401f6e59366e08a3ac24e",
+        "e63a7ecf0c7f15c2ce8ffa17793799caa0e62d3c"
+      ],
+      "message": "Merge qualified ClassRup main after PR 56 consolidation"
+    },
+    {
+      "local_commit": "fa4825d9f479f9068388f7002170345502bd7927",
+      "remote_commit": "f4f296ec9a0e39f2e8fdfb69d991b59365c86f85",
+      "tree": "3c0ba328d654495ed4db4a3a71f4728543a90625",
+      "local_parents": [
+        "30526fb2745e8d6e2bb15efae5b8106bcdcf53d0"
+      ],
+      "remote_parents": [
+        "2eba3f5a3ebe36d7b8dea1e07f71175b46558745"
+      ],
+      "message": "docs(security): preserve scope repair evidence and current advisory status"
+    },
+    {
+      "local_commit": "4871233ae7f5f9bd193de416daa1f0c35d749f43",
+      "remote_commit": "a930cdb82d2e20911ee28fa0d6be7ad2d3f5a968",
+      "tree": "12f38d266e3ec2af9c1f7ec0e90635eea23feaf9",
+      "local_parents": [
+        "fa4825d9f479f9068388f7002170345502bd7927"
+      ],
+      "remote_parents": [
+        "f4f296ec9a0e39f2e8fdfb69d991b59365c86f85"
+      ],
+      "message": "docs(audit): preserve generation one code review and regression evidence"
+    },
+    {
+      "local_commit": "fdb6038c2ece910f150aee2d23f7b805f37dd332",
+      "remote_commit": "ab53bada3d47ba34973bf129eaa8561c1182f2e9",
+      "tree": "6501f700fe1755523ed0de7df35cb7c05fbaf693",
+      "local_parents": [
+        "4871233ae7f5f9bd193de416daa1f0c35d749f43"
+      ],
+      "remote_parents": [
+        "a930cdb82d2e20911ee28fa0d6be7ad2d3f5a968"
+      ],
+      "message": "fix(pwa): bind signed barter wants to submitted selections"
+    },
+    {
+      "local_commit": "f2f3a02aabd8675c2cd65118b03e8243ffeeaa93",
+      "remote_commit": "dc35d3dce7e5dc60d29c587ef0358bcc8de8c5d1",
+      "tree": "1bc932e44f5b9c76e507469c2e462c256380b02b",
+      "local_parents": [
+        "fdb6038c2ece910f150aee2d23f7b805f37dd332"
+      ],
+      "remote_parents": [
+        "ab53bada3d47ba34973bf129eaa8561c1182f2e9"
+      ],
+      "message": "docs: preserve barter intent bug hunt evidence and handoff"
+    },
+    {
+      "local_commit": "6efd1074bacaffcefc448bccd835acf69369474c",
+      "remote_commit": "a759356eaa663888cfbad321c0bd811561114bf3",
+      "tree": "43cd50760e88c9c8b4ad0950b67ac4d79b1303ce",
+      "local_parents": [
+        "f2f3a02aabd8675c2cd65118b03e8243ffeeaa93",
+        "7619ba839a7bcbb38428d6429ab5362c5c18d095"
+      ],
+      "remote_parents": [
+        "dc35d3dce7e5dc60d29c587ef0358bcc8de8c5d1",
+        "7619ba839a7bcbb38428d6429ab5362c5c18d095"
+      ],
+      "message": "Preserve unique PR 56 failure and qualification history"
+    },
+    {
+      "local_commit": "be83c8dbae9c7bcfe697f1f03e302f2bbc9fc49b",
+      "remote_commit": "b3474fec0205063f3ec2ad758a9ad30ebdf9ed60",
+      "tree": "7a5fab2df4aa4f429495363f7fb5010c951ebcbf",
+      "local_parents": [
+        "6efd1074bacaffcefc448bccd835acf69369474c"
+      ],
+      "remote_parents": [
+        "a759356eaa663888cfbad321c0bd811561114bf3"
+      ],
+      "message": "fix(storage): isolate record indexes and migration rows by value"
+    },
+    {
+      "local_commit": "4b2fe2fd23dfe41ef1945905099587b65f87ecb5",
+      "remote_commit": "40ae3bc910a713b61be4181d3cc543fb0eb2ef66",
+      "tree": "92ce364a3fb769e3929762fbb6a1501d3ea9d22e",
+      "local_parents": [
+        "be83c8dbae9c7bcfe697f1f03e302f2bbc9fc49b"
+      ],
+      "remote_parents": [
+        "b3474fec0205063f3ec2ad758a9ad30ebdf9ed60"
+      ],
+      "message": "docs: preserve generation two storage audit and handoff"
+    },
+    {
+      "local_commit": "64af14d65adf858d85d13174fb50a6e33c50456f",
+      "remote_commit": "df49dcedbb4629642f5e8d76790827d07d74165e",
+      "tree": "6203e00416d8006f65aaedbb7a5c530c8e2b0814",
+      "local_parents": [
+        "4b2fe2fd23dfe41ef1945905099587b65f87ecb5"
+      ],
+      "remote_parents": [
+        "40ae3bc910a713b61be4181d3cc543fb0eb2ef66"
+      ],
+      "message": "fix(vault): preserve accepted codec receiver and methods"
+    },
+    {
+      "local_commit": "b25ab5389673b15e7c4a5fc17bae252428ce2aa6",
+      "remote_commit": "0bd665518c7b296636ab68e187142b9b25db82a7",
+      "tree": "a8f9788280940206ec646a138d12dbd9d3e2f12a",
+      "local_parents": [
+        "64af14d65adf858d85d13174fb50a6e33c50456f"
+      ],
+      "remote_parents": [
+        "df49dcedbb4629642f5e8d76790827d07d74165e"
+      ],
+      "message": "docs(security): record generation two audit and evidence"
+    },
+    {
+      "local_commit": "b5a192b3808206c02736ff39e2b2d796b62ed0e1",
+      "remote_commit": "b95fad897a810581b797eb491df318106626df17",
+      "tree": "ee6c69e01f92162382824d97daab7892fc50b05b",
+      "local_parents": [
+        "b25ab5389673b15e7c4a5fc17bae252428ce2aa6"
+      ],
+      "remote_parents": [
+        "0bd665518c7b296636ab68e187142b9b25db82a7"
+      ],
+      "message": "docs: record independent barter selection review"
+    },
+    {
+      "local_commit": "2917cb4751786bd475df2b34441cb40e1dfbc43f",
+      "remote_commit": "70c36cc44f5ea4ee2439fbb2619685c442efa717",
+      "tree": "3738fd68754ddd78533572bc78f8d30e8cd6381a",
+      "local_parents": [
+        "b5a192b3808206c02736ff39e2b2d796b62ed0e1"
+      ],
+      "remote_parents": [
+        "b95fad897a810581b797eb491df318106626df17"
+      ],
+      "message": "feat(vault): preflight record recovery before exporting backups"
+    },
+    {
+      "local_commit": "12f094ecb3f303f0a05fa06f800eedc6ffe829a1",
+      "remote_commit": "9334ee81e7e035cc4af489fa14cc3691fbbc5673",
+      "tree": "75df6a11201b824103f987d91468e794f2242a0f",
+      "local_parents": [
+        "2917cb4751786bd475df2b34441cb40e1dfbc43f"
+      ],
+      "remote_parents": [
+        "70c36cc44f5ea4ee2439fbb2619685c442efa717"
+      ],
+      "message": "docs: record independent storage value-isolation review"
+    },
+    {
+      "local_commit": "12a08eba995beeed809555657c0d97b7f9b6d0dd",
+      "remote_commit": "390a8e5e0be3c9de9d8b684f5cd3487d9718a31f",
+      "tree": "85df6e67057fd9a7ed7a1c48571b4c70c760b173",
+      "local_parents": [
+        "12f094ecb3f303f0a05fa06f800eedc6ffe829a1"
+      ],
+      "remote_parents": [
+        "9334ee81e7e035cc4af489fa14cc3691fbbc5673"
+      ],
+      "message": "fix(test): compose barter fixture with backup coverage contract"
+    },
+    {
+      "local_commit": "f552a416a47e1be95cd85ec52cd032b4f98fadd3",
+      "remote_commit": "2547c417c70c1c3c01f52201ea7149d8ba92a630",
+      "tree": "66f3ed4748ac924ebe34b0079975f714ba7d533e",
+      "local_parents": [
+        "12a08eba995beeed809555657c0d97b7f9b6d0dd"
+      ],
+      "remote_parents": [
+        "390a8e5e0be3c9de9d8b684f5cd3487d9718a31f"
+      ],
+      "message": "docs: record generation three backup coverage UI review"
+    },
+    {
+      "local_commit": "eeee923adbd4dee3634898d035c74072803ea2f0",
+      "remote_commit": "35b14fe78098851af7ded1c11a529f05085f545a",
+      "tree": "cfba987c4fc0f9de5d291568a113892cc52dc492",
+      "local_parents": [
+        "f552a416a47e1be95cd85ec52cd032b4f98fadd3"
+      ],
+      "remote_parents": [
+        "2547c417c70c1c3c01f52201ea7149d8ba92a630"
+      ],
+      "message": "docs: record independent recovery preflight code review"
+    },
+    {
+      "local_commit": "c57af555e85ac074328a0aa2b6a1dd7854ae12d5",
+      "remote_commit": "8e9a739d2f1c70b4aa5b8796e602b5b9e9486024",
+      "tree": "4cef7d3d7c1729bcc265fe0f12fb9c0da78f4b8c",
+      "local_parents": [
+        "eeee923adbd4dee3634898d035c74072803ea2f0"
+      ],
+      "remote_parents": [
+        "35b14fe78098851af7ded1c11a529f05085f545a"
+      ],
+      "message": "docs: preserve qualified consolidation and engineering audit handoffs"
+    },
+    {
+      "local_commit": "91bdf4fd98033c85c18ac5a6025547f34d7bb9d7",
+      "remote_commit": "bb7f5a2d7ac7a5640ad5b35f912b0dd76484311a",
+      "tree": "eed68ea3e4da5919418f1f28d9d4d154ed89b6f0",
+      "local_parents": [
+        "c57af555e85ac074328a0aa2b6a1dd7854ae12d5"
+      ],
+      "remote_parents": [
+        "8e9a739d2f1c70b4aa5b8796e602b5b9e9486024"
+      ],
+      "message": "fix: align retained backup keys with normal retention"
+    },
+    {
+      "local_commit": "448588461e9d02dfb43367c4b4f9a182630c6f3b",
+      "remote_commit": "462f9f409d7a6c59f2dbafae1e7f09c1452329a9",
+      "tree": "3fc31a1c3400f0c335042b025849145dbdc4c82c",
+      "local_parents": [
+        "91bdf4fd98033c85c18ac5a6025547f34d7bb9d7"
+      ],
+      "remote_parents": [
+        "bb7f5a2d7ac7a5640ad5b35f912b0dd76484311a"
+      ],
+      "message": "fix: admit publication backups under signed CIDs"
+    },
+    {
+      "local_commit": "1338cf7400c699d2a4e0c0a128fa8e0152b7b35e",
+      "remote_commit": "c802be5a0efc3fb014e08eaabeedf9ddbc72863f",
+      "tree": "6d8f7f88f08678bdda4f5a730b55e1f983646064",
+      "local_parents": [
+        "448588461e9d02dfb43367c4b4f9a182630c6f3b"
+      ],
+      "remote_parents": [
+        "462f9f409d7a6c59f2dbafae1e7f09c1452329a9"
+      ],
+      "message": "docs: record static security review of recovery boundaries"
+    },
+    {
+      "local_commit": "e5d46d4e27d9f9395729358f8468a6300feeb69a",
+      "remote_commit": "23b6cf94554b0bf6b18fede0a72b5028a9419611",
+      "tree": "60af3f5b2d0128dce7538878496ccb8e7627286f",
+      "local_parents": [
+        "1338cf7400c699d2a4e0c0a128fa8e0152b7b35e"
+      ],
+      "remote_parents": [
+        "c802be5a0efc3fb014e08eaabeedf9ddbc72863f"
+      ],
+      "message": "docs: record G4 backup key repair evidence"
+    },
+    {
+      "local_commit": "ce8251947a87bc55d8919b79f07e21c5a0b63ec4",
+      "remote_commit": "f80b38b1639d315fd2287cb8743baecf071ac040",
+      "tree": "425b10ff48e6ef54c7579a41e457a5ea020a1121",
+      "local_parents": [
+        "e5d46d4e27d9f9395729358f8468a6300feeb69a"
+      ],
+      "remote_parents": [
+        "23b6cf94554b0bf6b18fede0a72b5028a9419611"
+      ],
+      "message": "fix(test): use branded IDs in publication backup fixture"
+    },
+    {
+      "local_commit": "590dd14468b25ccbffac1f7da3632c736f0290e1",
+      "remote_commit": "4ec681df9aa61de194e9bfdea6856bc52548c7bd",
+      "tree": "04e98a0f7e038ad7eee1837925faa5ef9754009e",
+      "local_parents": [
+        "ce8251947a87bc55d8919b79f07e21c5a0b63ec4"
+      ],
+      "remote_parents": [
+        "f80b38b1639d315fd2287cb8743baecf071ac040"
+      ],
+      "message": "docs: record independent codec compatibility review"
+    }
+  ]
+}

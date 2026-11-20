@@ -1,0 +1,25 @@
+{
+  "phase": "domain",
+  "source": "590dd14468b25ccbffac1f7da3632c736f0290e1",
+  "tree": "04e98a0f7e038ad7eee1837925faa5ef9754009e",
+  "started_at": "2026-11-20T02:43:06.802248+00:00",
+  "gates": [
+    {
+      "name": "domain",
+      "command": [
+        "corepack",
+        "pnpm",
+        "test",
+        "--maxWorkers=1",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/06c5fd0c70c0/final-gates/domain.json"
+      ],
+      "process_cap_seconds": 1200,
+      "exit_code": 137,
+      "process_timed_out": false,
+      "elapsed_seconds": 145.485,
+      "log": "domain.log"
+    }
+  ],
+  "completed_at": "2026-11-20T02:45:32.288052+00:00"
+}

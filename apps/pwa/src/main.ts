@@ -1,10 +1,8 @@
-import { archiveBackupCodec } from './archive-backup.ts';
-import { publicationBackupCodec } from './publication-backup.ts';
-import { retainedBackupCodec } from './retained-backup.ts';
+import { productionBackupCodecs } from './backup-codecs.ts';
 import { describeBackupCoverage } from './backup-coverage.ts';
 import { protectVaultSession, runForSession } from './vault-session.ts';
 import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
-import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
+import { createBarterRuntime } from './barter-runtime.ts';
 import { mountBarter } from './barter.ts';
 import { mountNotifications } from './notifications.ts';
 import { drainNotificationDelivery } from './notification-delivery.ts';
@@ -14,51 +12,15 @@ import { listingClosure } from './listing-closure.ts';
 import { createListingMaintenance } from './listing-maintenance.ts';
 import { mountListingEditor } from './listing-editor.ts';
 import { mountLocationPreferences } from './location-preferences.ts';
-import { localNotificationDefinitions, localNotificationBackupCodecs } from '../../../packages/notify/src/index.ts';
+import { localNotificationDefinitions } from '../../../packages/notify/src/index.ts';
 import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
-import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
+import { openVault, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
-import { bazaarDefinitions, listingSchema, listingRepo, inventoryHoldRepo, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
-import { discoveryDefinitions, locationDefinitions, locationBackupCodecs, type RetainedListing } from '../../../packages/discovery/src/index.ts';
+import { bazaarDefinitions, listingSchema, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
+import { discoveryDefinitions, locationDefinitions, type RetainedListing } from '../../../packages/discovery/src/index.ts';
 
-const codecs = [
-  ...locationBackupCodecs(backupCodec),
-  ...localNotificationBackupCodecs(backupCodec),
-  ...barterCodecs,
-  archiveBackupCodec,
-  {
-    ...backupCodec(listingRevisionRepo),
-    recordId(input: unknown) {
-      const row = listingRevisionRepo.schema.parse(input);
-      return listingRevisionId(row.listingId, row.revisionNo);
-    },
-    validate: validateListingRevision,
-    async restoreData(input: unknown, principal: string) {
-      const row = listingRevisionRepo.schema.parse(input);
-      if (row.ownerId !== principal) throw new Error('Backup history belongs to another principal');
-      return row;
-    },
-  },
-  {
-    ...backupCodec(listingRepo),
-    async restoreData(input: unknown, principal: string) {
-      const data = listingRepo.schema.parse(input);
-      if (data.ownerId !== principal) throw new Error('Backup listing belongs to another principal');
-      return data;
-    },
-  },
-  publicationBackupCodec,
-  {
-    ...backupCodec(inventoryHoldRepo),
-    async restoreData(input: unknown, principal: string) {
-      const data = inventoryHoldRepo.schema.parse(input);
-      if (data.ownerId !== principal) throw new Error('Backup reservation belongs to another principal');
-      return data;
-    },
-  },
-  retainedBackupCodec,
-];
+
 const CATEGORY = '0195aaaa-0000-7000-8000-000000000001';
 const ids = createUuidV7Generator();
 let unlocked: UnlockedVault | undefined;
@@ -395,7 +357,7 @@ element<HTMLFormElement>('unlock-form').addEventListener('submit', event => {
     try {
       await waitForStorageClose();
       if (!globalThis.isSecureContext || !crypto.subtle) throw new Error('Open this application on localhost or HTTPS to use browser cryptography.');
-      vault = await openVault({ name, codecs });
+      vault = await openVault({ name, codecs: productionBackupCodecs });
       await connect(submitter?.value === 'create' ? await vault.create(passphrase) : await vault.unlock(passphrase));
     }
     catch (error) {
@@ -475,7 +437,7 @@ element<HTMLFormElement>('restore-form').addEventListener('submit', event => {
     let vault: Awaited<ReturnType<typeof openVault>> | undefined;
     try {
       await waitForStorageClose();
-      vault = await openVault({ name, codecs });
+      vault = await openVault({ name, codecs: productionBackupCodecs });
       const backup = await readFile(file, 24 * 1024 * 1024);
       await connect(await vault.restoreBackup(backup, passphrase));
       form.reset(); message('Backup restored into this new vault. Peer availability must be checked again.');

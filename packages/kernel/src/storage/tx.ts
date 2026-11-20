@@ -488,15 +488,23 @@ function blobStore(d: DriverTx, kind: DriverKind) {
      * a more public class (e.g. a draft photo being published) lowers the stored class.
      */
     async put(input: PutBlobInput): Promise<Result<BlobInfo, AppError>> {
-      const bad = blobCheck(input, kind);
+      // Admission and persistence must use the same invocation snapshot. The caller
+      // can reuse its byte view or change metadata while the digest is pending.
+      const admitted: PutBlobInput = {
+        tenant: input.tenant, bytes: input.bytes, contentType: input.contentType,
+        privacy: input.privacy, encrypted: input.encrypted === true, now: input.now,
+      };
+      const bad = blobCheck(admitted, kind);
       if (bad) return err(bad);
-      const ref = await blobRefOf(input.bytes);
-      const existing = d.blobs.get(input.tenant, ref);
-      if (existing && input.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: input.privacy });
-      if (existing) return ok(toBlobInfo({ ...existing, privacy: input.privacy < existing.privacy ? input.privacy : existing.privacy }, d.blobs.holders(input.tenant, ref)));
-      const row: BlobRow = { tenant: input.tenant, ref, bytes: input.bytes, size: input.bytes.byteLength, contentType: input.contentType, privacy: input.privacy, encrypted: input.encrypted === true, createdAt: toIso(input.now) };
+      // Uint8Array construction also copies a Node Buffer; Buffer.slice() would alias it.
+      const snapshot = { ...admitted, bytes: new Uint8Array(admitted.bytes) };
+      const ref = await blobRefOf(snapshot.bytes);
+      const existing = d.blobs.get(snapshot.tenant, ref);
+      if (existing && snapshot.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: snapshot.privacy });
+      if (existing) return ok(toBlobInfo({ ...existing, privacy: snapshot.privacy < existing.privacy ? snapshot.privacy : existing.privacy }, d.blobs.holders(snapshot.tenant, ref)));
+      const row: BlobRow = { tenant: snapshot.tenant, ref, bytes: snapshot.bytes, size: snapshot.bytes.byteLength, contentType: snapshot.contentType, privacy: snapshot.privacy, encrypted: snapshot.encrypted === true, createdAt: toIso(snapshot.now) };
       d.blobs.upsert(row);
-      return ok(toBlobInfo(row, d.blobs.holders(input.tenant, ref)));
+      return ok(toBlobInfo(row, d.blobs.holders(snapshot.tenant, ref)));
     },
     get(tenant: string, ref: string): MediaBlob | undefined {
       const b = d.blobs.get(tenant, ref);

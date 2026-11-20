@@ -1,0 +1,28 @@
+{
+  "name": "domain-3",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-remaining-round1/domain-3.json",
+    "--shard=3/8"
+  ],
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "started_at": "2026-11-20T16:15:23.758945+00:00",
+  "duration_seconds": 103.969,
+  "timeout_seconds": 900,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 110,
+  "log_sha256": "62980c3f0b25ac27493d0dcb8b597fa51d720370e17e2bda4f5f7c171c50730a"
+}

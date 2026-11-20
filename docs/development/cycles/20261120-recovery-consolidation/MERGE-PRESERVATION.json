@@ -1,0 +1,202 @@
+{
+  "initial_combined_source": "29daa061b4ad8b2899f6a8eaa910d12c80c93671",
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "immediate_parents": [
+    "bd6f59cb49a72583dcba3ca7925a6be3e82bc584",
+    "7a3a962400e44a3d7bb2a6834c869f97bae88ee4"
+  ],
+  "main": "449a619f1ae7b66cb42d9cab43dd5493bfe42c2e",
+  "sources": [
+    {
+      "pr": 64,
+      "head": "f598dc52937449764703b5048ba71a77239c9ded",
+      "ancestor": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-future-codec/HANDOFF-ROUND2.md",
+          "source_blob": "9d92a59d630b00e5a8c9e3730711ee96cbdaa529",
+          "combined_blob": "9d92a59d630b00e5a8c9e3730711ee96cbdaa529",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-future-codec/HANDOFF.md",
+          "source_blob": "35098745f4bfc7f2d19181ed96de1735ed3949a9",
+          "combined_blob": "35098745f4bfc7f2d19181ed96de1735ed3949a9",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/production-future-codec-rejection.test.ts",
+          "source_blob": "9b0e390d95d4488afff43def49cdebfc3031af83",
+          "combined_blob": "d1f63bd71e28eb76226dfcc4e2c0b7cc91233371",
+          "byte_identical": false,
+          "disposition": "original admission and compatible positive-control assertions retained; adds compatible retry into the rejected destination with complete record and identity checks across encrypted reopen"
+        }
+      ]
+    },
+    {
+      "pr": 65,
+      "head": "5a742b5c4f1068f8bbd51d84de6a3de054df57e7",
+      "ancestor": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-downgrade-export/HANDOFF.md",
+          "source_blob": "93189639aae1adf915d2b5101b4a6c8febf83025",
+          "combined_blob": "93189639aae1adf915d2b5101b4a6c8febf83025",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/production-downgrade-export.test.ts",
+          "source_blob": "115f287724429b595f8627e981ec15ee0cfb9f58",
+          "combined_blob": "115f287724429b595f8627e981ec15ee0cfb9f58",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        }
+      ]
+    },
+    {
+      "pr": 66,
+      "head": "5bae3058bffec53c0fe04700c84232b8d7a5a84a",
+      "ancestor": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-foreign-codec-isolation/HANDOFF.md",
+          "source_blob": "6d65e72323e0ef26e09d8ce2385d447f36ec932b",
+          "combined_blob": "6d65e72323e0ef26e09d8ce2385d447f36ec932b",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/production-foreign-codec-isolation.test.ts",
+          "source_blob": "bd536af4622f9b488bc120bd03696e408418c2a9",
+          "combined_blob": "bd536af4622f9b488bc120bd03696e408418c2a9",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        }
+      ]
+    },
+    {
+      "pr": 67,
+      "head": "d1dcd44e839c7c28a33b94553f5cb3270ffc6d6c",
+      "ancestor": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-attachment-recovery/HANDOFF.md",
+          "source_blob": "d45f04205ed3ba2975fab0a59684293e147be2c1",
+          "combined_blob": "d45f04205ed3ba2975fab0a59684293e147be2c1",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-attachment-recovery/SPEC.md",
+          "source_blob": "90fdd99f33f9953cf30726a5e753b2f87f2476de",
+          "combined_blob": "90fdd99f33f9953cf30726a5e753b2f87f2476de",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        }
+      ]
+    },
+    {
+      "pr": 68,
+      "head": "7a3a962400e44a3d7bb2a6834c869f97bae88ee4",
+      "ancestor": true,
+      "paths": [
+        {
+          "path": "docs/development/cycles/20261120-attachment-reference-coverage/HANDOFF-ROUND2.md",
+          "source_blob": "7cdd9d7d475fef6d1b51215e9b75eaabb8f42e28",
+          "combined_blob": "7cdd9d7d475fef6d1b51215e9b75eaabb8f42e28",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-attachment-reference-coverage/HANDOFF-ROUND3.md",
+          "source_blob": "afb362b7c385b414a2cb34c01a99b1367fc38f73",
+          "combined_blob": "afb362b7c385b414a2cb34c01a99b1367fc38f73",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-attachment-reference-coverage/HANDOFF-ROUND4.md",
+          "source_blob": "81064ab464324fd29c672341a721abe31a92c9b8",
+          "combined_blob": "81064ab464324fd29c672341a721abe31a92c9b8",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "docs/development/cycles/20261120-attachment-reference-coverage/HANDOFF.md",
+          "source_blob": "fd359db3e15c158fbc3de2538b4fd6285b577665",
+          "combined_blob": "fd359db3e15c158fbc3de2538b4fd6285b577665",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/kernel/src/storage/driver.ts",
+          "source_blob": "1457e9ebb9fe32ea6c6f7d793e8ed0fa7759ed1d",
+          "combined_blob": "1457e9ebb9fe32ea6c6f7d793e8ed0fa7759ed1d",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/kernel/src/storage/memory-driver.ts",
+          "source_blob": "56d93ed22056f8cd215882df97a3732ea1b5b213",
+          "combined_blob": "56d93ed22056f8cd215882df97a3732ea1b5b213",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/kernel/src/storage/sqlite.ts",
+          "source_blob": "f9b30c65248d37fc0cdeaabd7126da8013c997b7",
+          "combined_blob": "f9b30c65248d37fc0cdeaabd7126da8013c997b7",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/kernel/src/storage/tx.ts",
+          "source_blob": "a22169550c042cd637cf66201917077666d1eb80",
+          "combined_blob": "a22169550c042cd637cf66201917077666d1eb80",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/vault/src/index.ts",
+          "source_blob": "cab54ba0cc87235806894d1a351a492c2c4e7f43",
+          "combined_blob": "cab54ba0cc87235806894d1a351a492c2c4e7f43",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "packages/vault/src/vault.ts",
+          "source_blob": "6f1b28556be694d945dac6de5eda0e4cad069f1f",
+          "combined_blob": "6f1b28556be694d945dac6de5eda0e4cad069f1f",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/attachment-reference-coverage.test.ts",
+          "source_blob": "d87ccecdb31abea3d8aadade900c4d5bb30cd194",
+          "combined_blob": "ffbe7343ce099cafc1249e43eecef11bf5c9b388",
+          "byte_identical": false,
+          "disposition": "incoming corrected last-holder deletion, exception rollback and plain IndexedDB reopen assertions retained; adds ordinary lifecycle, rollback, persistence rejection, revocation and encrypted recovery acceptance"
+        },
+        {
+          "path": "tests/integration/barter-want-intent.test.ts",
+          "source_blob": "6eb5eff4142d10e8eba47a5bcb304a1adbc2aed3",
+          "combined_blob": "6eb5eff4142d10e8eba47a5bcb304a1adbc2aed3",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        },
+        {
+          "path": "tests/integration/production-barter-recovery.test.ts",
+          "source_blob": "0f7733f87c0d3bad5b95fab2b83a92063a72ee86",
+          "combined_blob": "0f7733f87c0d3bad5b95fab2b83a92063a72ee86",
+          "byte_identical": true,
+          "disposition": "preserved exactly"
+        }
+      ]
+    }
+  ],
+  "selected_production_memory_blob": "56d93ed22056f8cd215882df97a3732ea1b5b213"
+}

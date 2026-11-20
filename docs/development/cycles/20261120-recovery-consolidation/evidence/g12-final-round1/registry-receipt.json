@@ -1,0 +1,23 @@
+{
+  "name": "registry",
+  "command": [
+    "node",
+    "packages/platform/scripts/gen-registry.mjs",
+    "--check",
+    "--strict"
+  ],
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "started_at": "2026-11-20T16:06:44.378861+00:00",
+  "duration_seconds": 2.703,
+  "timeout_seconds": 300,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 174,
+  "log_sha256": "bae6ffa117fc88037b39e7176109499ec43e92a62dcb6ed7de1ddd8f11928971"
+}

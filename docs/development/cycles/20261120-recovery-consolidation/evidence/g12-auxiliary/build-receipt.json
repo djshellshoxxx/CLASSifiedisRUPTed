@@ -1,0 +1,22 @@
+{
+  "name": "build",
+  "command": [
+    "node",
+    "tools/cli/classrup.mjs",
+    "build"
+  ],
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "started_at": "2026-11-20T16:28:25.125636+00:00",
+  "duration_seconds": 0.365,
+  "timeout_seconds": 900,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 53,
+  "log_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60"
+}

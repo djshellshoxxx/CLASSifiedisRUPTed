@@ -147,6 +147,8 @@ it('retains valid record inspection when optional attachment counts are malforme
     { ...references, missingBlobs: -1 },
     { ...references, excludedStoredReferences: 2 },
     { ...references, holderRows: 1 },
+    // No holder row can exist without naming a reference.
+    { ...references, referencedBlobs: 0, missingBlobs: 0, excludedStoredReferences: 0, holderRows: 1 },
     { ...references, holderRows: 10001 },
     { ...references, missingBlobs: Number.NaN },
     { ...references, holderAuthorityVerified: true },
@@ -167,6 +169,19 @@ it('retains valid record inspection when optional attachment counts are malforme
     expect(display).not.toContain('undefined');
     expect(display).not.toContain('NaN');
   }
+});
+
+it('accepts genuine empty attachment coverage with zero holders', async () => {
+  const empty: AttachmentCoverage = {
+    ...references, referencedBlobs: 0, missingBlobs: 0,
+    excludedStoredReferences: 0, holderRows: 0,
+  };
+  const result = await readBackupInspection({
+    backupCoverage: async () => base,
+    attachmentCoverage: async () => empty,
+  });
+  expect(result).toEqual({ records: base, attachments: empty });
+  expect(describeAttachmentCoverage(result.attachments)).toContain('0 holder rows');
 });
 
 it('preserves the explicit capped-overflow report without presenting numeric totals', async () => {

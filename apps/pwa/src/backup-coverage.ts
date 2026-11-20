@@ -22,6 +22,45 @@ function isCoherentAttachmentCoverage(input: unknown): input is AttachmentCovera
     missing + present === refs && holders >= refs;
 }
 
+/**
+ * The required record diagnostic must also be coherent at runtime. A resolved
+ * malformed result is a failed required inspection, not a successful report.
+ * The count is a lower bound if more than 256 categories were discovered.
+ */
+function isCoherentBackupCoverage(input: unknown): input is BackupCoverage {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) return false;
+  const report = input as Partial<BackupCoverage>;
+  if (!Array.isArray(report.recordTypes) || report.recordTypes.length > 256 ||
+      !Array.isArray(report.registeredRecordTypes) || report.registeredRecordTypes.length > 256 ||
+      !Array.isArray(report.unsupportedRecordTypes) || report.unsupportedRecordTypes.length > 256 ||
+      !Array.isArray(report.excludedStores) ||
+      typeof report.typeLimitExceeded !== 'boolean' || typeof report.recordLimitExceeded !== 'boolean') return false;
+  const count = report.recordCount;
+  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) return false;
+  if (report.registeredRecordTypes.some(type => typeof type !== 'string') ||
+      report.unsupportedRecordTypes.some(type => typeof type !== 'string') ||
+      report.excludedStores.some(store => typeof store !== 'string') ||
+      !report.excludedStores.includes('blobs') || !report.excludedStores.includes('blob_refs')) return false;
+  const registered = new Set(report.registeredRecordTypes);
+  if (registered.size !== report.registeredRecordTypes.length) return false;
+  const seen = new Set<string>();
+  let total = 0;
+  const unsupported: string[] = [];
+  for (const row of report.recordTypes) {
+    if (!row || typeof row !== 'object' || Array.isArray(row) ||
+        typeof row.type !== 'string' || !row.type ||
+        typeof row.count !== 'number' || !Number.isSafeInteger(row.count) || row.count < 1 ||
+        seen.has(row.type)) return false;
+    seen.add(row.type);
+    total += row.count;
+    if (!registered.has(row.type)) unsupported.push(row.type);
+  }
+  return Number.isSafeInteger(total) && total === count &&
+    report.recordLimitExceeded === (count > 10_000) &&
+    unsupported.length === report.unsupportedRecordTypes.length &&
+    unsupported.every((type, index) => type === report.unsupportedRecordTypes![index]);
+}
+
 /** A failed attachment diagnostic must not discard a valid record-coverage result. */
 export async function readBackupInspection(source: {
   backupCoverage(): Promise<BackupCoverage>;
@@ -30,6 +69,7 @@ export async function readBackupInspection(source: {
   let records: BackupCoverage;
   try {
     records = await source.backupCoverage();
+    if (!isCoherentBackupCoverage(records)) throw new Error('Malformed required coverage');
   } catch {
     // The PWA reports thrown errors verbatim. Keep database or crypto details out of the DOM.
     // A failed required read still rejects; it never creates a successful coverage report.

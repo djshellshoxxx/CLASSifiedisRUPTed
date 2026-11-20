@@ -9,7 +9,7 @@ import { signEnvelope, verifyEnvelope } from '../../packages/federation/src/inde
 import { bazaarDefinitions, inventoryHoldRepo, listingRepo, listingRevisionRepo, publicationRepo } from '../../packages/bazaar/src/index.ts';
 import { discoveryDefinitions, retainedListingRepo } from '../../packages/discovery/src/index.ts';
 import {
-  admitSignedGraph, coordinationRepo, discoverCycles, prepareProposal, PROPOSAL_TYPE, WANT_TYPE, wantRepo, validateCoordinationRecord,
+  admitSignedGraph, coordinationRepo, discoverCycles, prepareProposal, PROPOSAL_TYPE, WANT_TYPE, WITHDRAWAL_TYPE, wantRepo, validateCoordinationRecord,
   type CoordinationState,
 } from '../../packages/mutiny/src/index.ts';
 import { openVault, type UnlockedVault, type Vault } from '../../packages/vault/src/index.ts';
@@ -176,6 +176,19 @@ describe('production barter record recovery', () => {
         expect(verified).toMatchObject({ status: 'frozen', reason });
         expect((await validateCoordinationRecord(verified)).reason).toBe(reason);
       }
+      // A real signed terminal cancellation wins over a locally cached reason.
+      // The test never grants an unsigned cache reason authority over evidence.
+      const withdrawal = await signEnvelope(original.identity, {
+        type: WITHDRAWAL_TYPE, createdAt: clock.iso(), seq: 2, prev: opening.cid,
+        payload: { subjectId: proposal.snapshot.subjectId, revisionHash: proposal.revisionHash,
+          revisionNo: 1, reason: 'cancel' },
+      });
+      const cachedWithWithdrawal = { ...before.data.state, status: 'frozen' as const,
+        reason: 'local_reservation_lost',
+        evidence: [...before.data.state.evidence, { envelope: withdrawal, receivedAtLocal: clock.now() }] };
+      expect(await validateCoordinationRecord(cachedWithWithdrawal)).toMatchObject({
+        status: 'cancelled', reason: 'cancel',
+      });
 
       // Exercise a real loss of the local hold through the ordinary inventory
       // command, then repeat matching-enabled refresh: the reason must not drift

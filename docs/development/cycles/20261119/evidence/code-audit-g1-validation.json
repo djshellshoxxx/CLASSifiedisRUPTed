@@ -1,0 +1,58 @@
+{
+  "base": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+  "lifetime_commit": "3087c33ce665ad4e94f2c271235b266a90a21473",
+  "blob_fix_commit": "4323b612b1d4ab72a437619e6e86f196760a005c",
+  "logs": [
+    {
+      "file": "code-audit-cli-baseline.log.gz",
+      "tests": 14,
+      "outcome": "passed",
+      "encoding": "gzip",
+      "rawBytes": 1759,
+      "rawSha256": "9d10ab389800a10915ddd2b34994e7347a38b0d50b7e305c423304e34a65e9eb",
+      "archiveBytes": 945,
+      "archiveSha256": "a3a4520126fa1791b35029367efb61479e87b9d8ef0d74c4fff9b5a7b8652a70"
+    },
+    {
+      "file": "code-audit-lifetime.log.gz",
+      "tests": 31,
+      "outcome": "passed",
+      "encoding": "gzip",
+      "rawBytes": 203,
+      "rawSha256": "cf5536f7db2b00ffcebe74fe523e4223d2803a04755ff319778d55e4b7f83fb2",
+      "archiveBytes": 177,
+      "archiveSha256": "8b48c4f3103fe671058debf7746f8678e533783f973b766dc74d33af1369d2a7"
+    },
+    {
+      "file": "code-audit-blob-red.log.gz",
+      "tests": 12,
+      "outcome": "failed",
+      "encoding": "gzip",
+      "rawBytes": 6893,
+      "rawSha256": "e5a16e463334106ccabf61da312a342edcdb360b9e9e1615b592e4a948d3bf5b",
+      "archiveBytes": 1384,
+      "archiveSha256": "f8f42960ebe6cb2e9406c73567343ce709c7f8856d5e0ecf63a45c4e24181f5e"
+    },
+    {
+      "file": "code-audit-blob-green.log.gz",
+      "tests": 73,
+      "outcome": "passed",
+      "encoding": "gzip",
+      "rawBytes": 414,
+      "rawSha256": "61e1533ca3a96124a80b7d9b1fc28adaf1cccbd2cfa378d1678089fc86add366",
+      "archiveBytes": 301,
+      "archiveSha256": "33398ab509588fed85206f1fbb23a0be5b5692e0781dddda42286811657a39f3"
+    },
+    {
+      "file": "code-audit-blob-final.log.gz",
+      "tests": 13,
+      "outcome": "passed",
+      "encoding": "gzip",
+      "rawBytes": 230,
+      "rawSha256": "a0d6248003a11f94b5d3a04b8d67438a6b1684f61a7f454eebb79e53fce85f96",
+      "archiveBytes": 191,
+      "archiveSha256": "7bf0eab42ea74797937ee4a4fc440a8f36dc7bb1d5ab9c1967c224e43e5c3491"
+    }
+  ],
+  "note": "Counts overlap and are separate invocations; do not sum them. Full combined qualification belongs to the integration lane."
+}

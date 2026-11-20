@@ -80,3 +80,43 @@ it('vault diagnostic is principal-bound and revoked with the unlocked session', 
   }
   await expect(session.attachmentCoverage()).rejects.toThrow(/Vault closed|Vault locked/);
 });
+
+describe('reference coverage lifecycle does not count unheld or detached data', () => {
+  for (const factory of factories) {
+    it(`${factory.name}: empty state, duplicate attach, detach and orphan blobs`, async () => {
+      const storage = await factory.open();
+      try {
+        const tenant = 'coverage-lifecycle-owner';
+        const ref = await blobRefOf(bytes);
+        const empty = { referenceCount: 0, holderCount: 0, missingCount: 0, limitExceeded: false };
+        expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual(empty);
+        const seeded = await storage.transaction(async tx => {
+          const blob = await tx.blobs.put({ tenant, bytes, contentType: 'image/png', privacy: 'P0', encrypted: false, now });
+          if (!blob.ok) return blob;
+          // Stored but unheld bytes are intentionally excluded from this diagnostic.
+          return ok(undefined);
+        });
+        expect(seeded.ok).toBe(true);
+        expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual(empty);
+        const attached = await storage.transaction(tx => {
+          tx.blobs.attach(tenant, ref, 'listing/lifecycle');
+          tx.blobs.attach(tenant, ref, 'listing/lifecycle');
+          return ok(undefined);
+        });
+        expect(attached.ok).toBe(true);
+        expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual({
+          referenceCount: 1, holderCount: 1, missingCount: 0, limitExceeded: false,
+        });
+        const detached = await storage.transaction(tx => {
+          tx.blobs.detach(tenant, ref, 'listing/lifecycle');
+          return ok(undefined);
+        });
+        expect(detached.ok).toBe(true);
+        expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual(empty);
+        expect(await storage.read(tx => tx.blobs.info(tenant, ref))).toBeDefined();
+      } finally {
+        await storage.close();
+      }
+    });
+  }
+});

@@ -6,10 +6,14 @@ This isolated bounded change is stacked **on** the published draft PR #59 source
 `86cd564e0692e8c777538200675dc20f2651ab51` (tree `ca413cdad0612f8e602f1ec98e499fd589d68906`).
 It does not modify PR #58 (`25b4708191f04516cab74371c84a15663cc6f6a6`), PR #59, main or preserved draft #8.
 
-New source/test checkpoint before this documentation file:
-`cfa652e075190c27c3947ef65bed30b922e77d5b`;
-tree `0ef1185cf68c3fe749365017b2612ddc896c5842`.
-Its parent production commit is `db39909a98602ded0ab1b5448cd0d8ba2f5490fb`.
+Initial test checkpoint was `cfa652e075190c27c3947ef65bed30b922e77d5b`
+(tree `0ef1185cf68c3fe749365017b2612ddc896c5842`), parented by the
+production fix `db39909a98602ded0ab1b5448cd0d8ba2f5490fb`.
+A subsequent bounded **test-only** improvement is
+`179fdfc9cb5af99c190cedaca69aa42b451bb343`,
+tree `a58747a6b1493d4b32ab137ccf3c515c10129dbd`, parent
+`cc2241fb650a7773ad1aaef3c0be58441eff176e`. This is the latest
+runtime/test source before the current handoff update.
 The published branch is `codex/classrup-freeze-reasons-20261120`.
 
 The frozen reason drift is explicitly recorded in
@@ -38,9 +42,14 @@ for both local reasons using the genuine signed lifecycle evidence already
 constructed by the existing test, then exercises an ordinary
 `bazaar.inventory.release` followed by two normal
 `mutiny.coordination.refresh` calls. The repeated refresh must retain
-`local_reservation_lost`. The manufactured cached-reason portion is
-explicitly a local-state fixture, not a real expiry or native interruption.
-This test remains under its existing 30-second limit.
+`local_reservation_lost`. The follow-up test-only commit also completes
+the **independent peer's** signed consent through the normal handler,
+uses a separate clock beyond the signed reservation deadline and
+requires two normal peer refreshes to retain `reservation_expired`.
+This avoids altering the owner's export/recovery clock. The manufactured
+cached-reason portion remains explicitly a local-state fixture, not signed
+remote expiry proof or native interruption. Both ordinary-flow extensions
+remain **unexecuted**, and the test retains its 30-second cap.
 
 ## Qualification / limitations
 
@@ -67,11 +76,11 @@ not results from this new source.
    signed terminal state behavior, repeated reconstruction and consistency
    of historical `committedLocallyAt` fields. Leave reviewed commit/tree,
    exact findings and test evidence; do not count static inspection as tests.
-2. **Functional bug hunt:** execute the ordinary hold-release and refresh case
-   with a pinned isolated checkout. Add an ordinary clock-expiry case that
-   exercises `reservation_expired` without synthesizing a cached reason.
-   Confirm recovery-review marker, signed withdrawal/terminal precedence and
-   existing fixtures remain unchanged.
+2. **Functional bug hunt:** execute both ordinary hold-release and signed
+   reservation-expiry refresh paths with a pinned isolated checkout.
+   Check the peer's signed-consent completion, separate-clock construction
+   and original vault's restore assertions. Confirm the recovery-review marker,
+   signed withdrawal/terminal precedence and existing fixtures remain unchanged.
 3. **Defensive security review:** trace verified signed evidence, owner
    identity, cached reason trust boundary and the normal hold-release policy.
    Confirm no restored cache can authorize consent/recommit; use source-focused

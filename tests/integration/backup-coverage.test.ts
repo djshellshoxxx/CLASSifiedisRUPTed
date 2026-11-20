@@ -83,11 +83,27 @@ it('keeps successful attachment inspection results exact', async () => {
   expect(result).toEqual({ records: base, attachments: references });
 });
 
-it('does not silently downgrade a failed record-coverage read into an exportable status', async () => {
+it('does not downgrade a failed required read and never starts the optional diagnostic', async () => {
+  let attachmentReads = 0;
   await expect(readBackupInspection({
     backupCoverage: async () => { throw new Error('Record coverage failed'); },
-    attachmentCoverage: async () => references,
-  })).rejects.toThrow('Record coverage failed');
+    attachmentCoverage: async () => { attachmentReads++; return references; },
+  })).rejects.toThrow('Backup inspection unavailable; saved-record coverage could not be verified.');
+  expect(attachmentReads).toBe(0);
+});
+
+it('does not expose sensitive internal required-read exceptions to the PWA error renderer', async () => {
+  let received: unknown;
+  try {
+    await readBackupInspection({
+      backupCoverage: async () => { throw new Error('sqlite tenant=private-owner blob:sha256-secret'); },
+      attachmentCoverage: async () => references,
+    });
+  } catch (error) { received = error; }
+  expect(received).toBeInstanceOf(Error);
+  const message = (received as Error).message;
+  expect(message).toBe('Backup inspection unavailable; saved-record coverage could not be verified.');
+  expect(message).not.toMatch(/private-owner|blob:sha256-secret|sqlite/);
 });
 
 it('uses exact singular and plural attachment labels while keeping exclusion warnings', () => {

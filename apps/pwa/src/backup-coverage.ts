@@ -5,7 +5,14 @@ export async function readBackupInspection(source: {
   backupCoverage(): Promise<BackupCoverage>;
   attachmentCoverage(): Promise<AttachmentCoverage>;
 }): Promise<{ readonly records: BackupCoverage; readonly attachments: AttachmentCoverage | null }> {
-  const records = await source.backupCoverage();
+  let records: BackupCoverage;
+  try {
+    records = await source.backupCoverage();
+  } catch {
+    // The PWA reports thrown errors verbatim. Keep database or crypto details out of the DOM.
+    // A failed required read still rejects; it never creates a successful coverage report.
+    throw new Error('Backup inspection unavailable; saved-record coverage could not be verified.');
+  }
   try {
     return { records, attachments: await source.attachmentCoverage() };
   } catch {

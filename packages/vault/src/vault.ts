@@ -9,11 +9,25 @@ const KEY_TENANT = 'local-vault';
 const KEY_TYPE = 'vault.identity';
 const KEY_ID = 'root';
 const MAX_RECORDS = 10000;
+const MAX_RECORD_TYPES = 256;
 const MAX_BACKUP_BYTES = 16 * 1024 * 1024;
 const encoder = new TextEncoder();
 const STORAGE_IDENTITY_FORMAT = 'classrup.vault-identity/v2';
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const unlockBackoffs = new WeakMap<object, Map<string, UnlockBackoff>>();
+const excludedStores = Object.freeze(['blobs', 'blob_refs', 'outbox', 'inbox', 'idempotency', 'leases', 'dead_letter', 'sync_outbox', 'schema_migrations', 'meta']);
+
+/** Inventory of record coverage only; schema/signature/size checks still run during export. */
+export interface BackupCoverage {
+  readonly recordTypes: readonly { readonly type: string; readonly count: number }[];
+  readonly registeredRecordTypes: readonly string[];
+  readonly unsupportedRecordTypes: readonly string[];
+  /** A lower bound when typeLimitExceeded is true. */
+  readonly recordCount: number;
+  readonly typeLimitExceeded: boolean;
+  readonly recordLimitExceeded: boolean;
+  readonly excludedStores: readonly string[];
+}
 
 /** Explicit domain schema and indexes; unknown record types never pass restore. */
 export interface BackupCodec {
@@ -45,6 +59,8 @@ export interface UnlockedVault {
   readonly storage: Storage;
   /** Closes this connection and revokes this session; reopen before unlocking again. */
   lock(): Promise<void>;
+  /** Inspect current-principal record coverage without exporting payloads or keys. */
+  backupCoverage(): Promise<BackupCoverage>;
   /** Alpha record backup, not the complete IOX export/recovery/rotation protocol. */
   exportBackup(passphrase: string): Promise<Sealed>;
 }
@@ -69,8 +85,22 @@ export async function openVault(options: VaultOptions): Promise<Vault> {
 
 /** Composition seam for contract tests; production callers use openVault's IndexedDB adapter. */
 export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = [], unlockStorage?: (passphrase: string, required: boolean, replacement?: object) => Promise<void>, backoff = createUnlockBackoff()): Vault {
-  const byType = new Map(codecs.map(codec => [codec.type, codec]));
-  if (byType.size !== codecs.length || byType.has(KEY_TYPE)) throw new Error('Invalid backup codecs');
+  // Callers cannot change export coverage after this vault has accepted its codecs.
+  const registeredCodecs = Object.freeze(codecs.map(codec => Object.freeze({ ...codec })));
+  const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
+  if (byType.size !== codecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
+  const registeredRecordTypes = Object.freeze([...byType.keys()].sort());
+  const coverage = (tx: Tx, principal: string): BackupCoverage => {
+    const found = tx.records.listTypes(principal, MAX_RECORD_TYPES + 1);
+    const recordTypes = Object.freeze(found.slice(0, MAX_RECORD_TYPES).map(row => Object.freeze({ ...row })));
+    const recordCount = recordTypes.reduce((total, row) => total + row.count, 0);
+    return Object.freeze({
+      recordTypes, registeredRecordTypes,
+      unsupportedRecordTypes: Object.freeze(recordTypes.filter(row => !byType.has(row.type)).map(row => row.type)),
+      recordCount, typeLimitExceeded: found.length > MAX_RECORD_TYPES,
+      recordLimitExceeded: recordCount > MAX_RECORDS, excludedStores,
+    });
+  };
   let session: UnlockedVault | undefined;
   let closed = false;
   let opening = false;
@@ -111,6 +141,12 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
     const unlocked: UnlockedVault = {
       principal: identity.principal, identity, storage,
       async lock() { active = false; identity.lock(); await close(); },
+      async backupCoverage() {
+        guard();
+        const result = await storage.read(tx => coverage(tx, identity.principal));
+        guard();
+        return result;
+      },
       async exportBackup(passphrase) {
         guard();
         // Confirm the entered passphrase really decrypts this identity. Never emit an unusable kit.
@@ -118,8 +154,13 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         checked.lock();
         guard();
         const records = await storage.read(tx => {
+          // Recheck against the same snapshot as the export, not an earlier UI inventory.
+          const scope = coverage(tx, identity.principal);
+          if (scope.typeLimitExceeded) throw new Error('Backup record type limit exceeded');
+          if (scope.unsupportedRecordTypes.length) throw new Error('Backup contains unsupported record types. Open a compatible application version before exporting.');
+          if (scope.recordLimitExceeded) throw new Error('Backup record limit exceeded');
           const out: StoredRecord[] = [];
-          for (const codec of codecs) {
+          for (const codec of registeredCodecs) {
             const rows = tx.records.query({ tenant: identity.principal, type: codec.type, filters: [], orderSlot: 0, dir: 'asc', limit: MAX_RECORDS + 1 });
             for (const row of rows) {
               const data = codec.parse(row.data);
@@ -132,7 +173,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         });
         for (const row of records) await byType.get(row.type)?.validate?.(row.data);
         const exportedAt = new Date().toISOString();
-        const manifest = await signEnvelope(identity, { type: 'classrup.vault.alpha_backup/v1', createdAt: exportedAt, seq: 1, prev: null, payload: { principal: identity.principal, protectedIdentity, recordTypes: codecs.map(c => c.type).sort(), records } });
+        const manifest = await signEnvelope(identity, { type: 'classrup.vault.alpha_backup/v1', createdAt: exportedAt, seq: 1, prev: null, payload: { principal: identity.principal, protectedIdentity, recordTypes: registeredRecordTypes, records } });
         const plaintext = encoder.encode(JSON.stringify(manifest));
         try { const result = await seal(plaintext, passphrase); guard(); return result; }
         finally { plaintext.fill(0); }

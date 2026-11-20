@@ -14,6 +14,11 @@ export interface RecordRow {
   readonly updatedAt: string;
 }
 
+export interface RecordTypeCount {
+  readonly type: string;
+  readonly count: number;
+}
+
 export type FilterOp = 'eq' | 'lt' | 'lte' | 'gt' | 'gte';
 
 export interface RecordFilter {
@@ -149,6 +154,8 @@ export interface DriverTx {
     upsert(row: RecordRow): void;
     remove(tenant: string, type: string, id: string): void;
     query(q: RecordQuery): RecordRow[];
+    /** Distinct populated types and counts for one tenant, ordered by UTF-8 bytes. */
+    listTypes(tenant: string, limit: number): RecordTypeCount[];
   };
   readonly outbox: {
     append(row: Omit<OutboxRow, 'seq'>): number;

@@ -119,6 +119,10 @@ function casCheck(current: RecordRow | undefined, expected: number): Result<numb
 
 function recordStore(d: DriverTx) {
   return {
+    listTypes(tenant: string, limit: number) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10001) throw new RangeError('Record type limit must be 1–10001');
+      return d.records.listTypes(tenant, limit);
+    },
     get<T = unknown>(tenant: string, type: string, id: string): StoredRecord<T> | undefined {
       const row = d.records.get(tenant, type, id);
       return row ? toStored<T>(row) : undefined;

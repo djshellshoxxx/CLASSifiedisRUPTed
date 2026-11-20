@@ -1,4 +1,5 @@
 import { archiveBackupCodec } from './archive-backup.ts';
+import { describeBackupCoverage } from './backup-coverage.ts';
 import { protectVaultSession, runForSession } from './vault-session.ts';
 import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
 import { createBarterRuntime, barterCodecs } from './barter-runtime.ts';
@@ -352,7 +353,7 @@ function clearVaultViews(): void {
   element('workspace').hidden = true; element('access').hidden = false;
   element('listings').replaceChildren(); element('peers').replaceChildren(); element('principal').textContent = '';
   element('error').hidden = true; element('error').textContent = '';
-  element<HTMLInputElement>('backup-password').value = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
+  element<HTMLInputElement>('backup-password').value = ''; element('backup-coverage').textContent = ''; element<HTMLFormElement>('listing-form').reset(); resetPeerSearch(); element<HTMLInputElement>('peer-file').value = '';
 }
 async function finishStorageClose(close: () => Promise<void>): Promise<void> {
   const previous = closingSession;
@@ -447,6 +448,11 @@ element<HTMLFormElement>('peer-search-form').addEventListener('submit', event =>
 });
 element('reset-peer-search').addEventListener('click', () => { void vaultAction(async () => {
   resetPeerSearch(); await refreshPeers();
+}); });
+element('inspect-backup').addEventListener('click', () => { void vaultAction(async () => {
+  const session = current().vault;
+  const coverage = await runForSession(session, () => unlocked, () => session.backupCoverage());
+  element('backup-coverage').textContent = describeBackupCoverage(coverage);
 }); });
 element('backup').addEventListener('click', () => { void vaultAction(async () => {
   const password = element<HTMLInputElement>('backup-password');

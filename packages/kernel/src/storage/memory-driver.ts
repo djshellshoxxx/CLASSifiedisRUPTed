@@ -156,6 +156,11 @@ function makeTx(state: MemoryState, journal: Journal | null): DriverTx {
   return {
     records: {
       get: (tenant, type, id) => recs().get(k(tenant, type, id)),
+      listTypes: (tenant, limit) => {
+        const counts = new Map<string, number>();
+        for (const row of recs().values()) if (row.tenant === tenant) counts.set(row.type, (counts.get(row.type) ?? 0) + 1);
+        return [...counts].sort(([a], [b]) => cmp(a, b)).slice(0, limit).map(([type, count]) => ({ type, count }));
+      },
       upsert: (row) => write('records', k(row.tenant, row.type, row.id), row),
       remove: (tenant, type, id) => write('records', k(tenant, type, id), undefined),
       query: (q) => {

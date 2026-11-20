@@ -32,6 +32,13 @@ separate milestones; this change does not claim those workflows.
 
 ## Restore compatibility
 
+Export also runs the existing recovery preflight over detached copies of its
+captured records. This checks owner authority, record metadata, schema, indexes,
+canonical keys, normalization and validation before returning a backup. Original
+exported data and signatures remain unchanged; recovery normalization changes
+only the copy being checked. Restore uses the same preflight and commits its
+normalized result. Session closure during asynchronous preflight aborts export.
+
 Existing backups with a subset of the current codec set remain accepted. Unknown
 types, duplicate or unsorted declared types, invalid signatures, mismatched
 principals, invalid record schemas and canonical-key mismatches still fail before

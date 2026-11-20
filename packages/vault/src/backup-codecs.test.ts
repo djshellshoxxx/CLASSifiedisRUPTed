@@ -47,7 +47,7 @@ it('retains class codec methods, private receiver state and accepted references 
     const records = await restored.storage.read(tx => tx.records.query({ tenant: restored.principal, type: 'test.class_codec', filters: [{ slot: 1, op: 'eq', value: 'class-private-index' }], orderSlot: 0, dir: 'asc', limit: 2 }));
     expect(records).toHaveLength(1);
     expect(records[0]?.data).toEqual({ id: 'one', text: 'private test record' });
-    expect(original.calls).toEqual(['parse', 'recordId', 'validate']);
+    expect(original.calls).toEqual(['parse', 'recordId', 'parse', 'recordId', 'indexes', 'validate', 'restoreData', 'parse', 'indexes', 'recordId', 'validate']);
     expect(receiving.calls).toEqual(['parse', 'recordId', 'indexes', 'restoreData', 'parse', 'indexes', 'recordId', 'validate']);
   } finally { await source.close(); await destination.close(); }
 }, 30000);

@@ -34,7 +34,7 @@ export interface BackupCodec {
   readonly type: string;
   parse(input: unknown): unknown;
   validate?(input: unknown): Promise<void>;
-  /** Rebuild derived state after trust validation; applied only during restore. */
+  /** Rebuild derived state on detached export preflight data and during restore. */
   restoreData?(input: unknown, principal: string): Promise<unknown>;
   /** Optional canonical storage key for data with a compound uniqueness invariant. */
   recordId?(input: unknown): string;
@@ -132,6 +132,41 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
     opening = true;
     try { return await fn(); } finally { opening = false; }
   };
+  /** Shared recovery admission. Normalizers and validators receive detached payloads. */
+  async function preflightRecords(inputs: readonly unknown[], principal: string, recordTypes: readonly string[], guard: () => void = check, validateOriginal = false) {
+    guard();
+    if (inputs.length > MAX_RECORDS) throw new Error('Backup record limit exceeded');
+    const ids = new Set<string>();
+    const records = inputs.map((input: unknown) => {
+      if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid backup record');
+      const row = input as Record<string, unknown>;
+      if (Object.keys(row).sort().join(',') !== 'createdAt,data,id,revision,tenantId,type,updatedAt' || row.tenantId !== principal || typeof row.type !== 'string' || typeof row.id !== 'string' || row.id.length < 1 || row.id.length > 256 || /[\u0000-\u001f\u007f]/u.test(row.id) || !Number.isSafeInteger(row.revision) || (row.revision as number) < 1 || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string' || !Number.isFinite(Date.parse(row.createdAt)) || !Number.isFinite(Date.parse(row.updatedAt)) || new Date(row.createdAt).toISOString() !== row.createdAt || new Date(row.updatedAt).toISOString() !== row.updatedAt || row.updatedAt < row.createdAt) throw new Error('Invalid backup record');
+      const codec = byType.get(row.type);
+      if (!codec || !recordTypes.includes(row.type)) throw new Error('Unsupported backup record type');
+      const id = `${row.type}\u0000${row.id}`;
+      if (ids.has(id)) throw new Error('Duplicate backup record');
+      ids.add(id);
+      const parsedData = codec.parse(structuredClone(row.data));
+      if (codec.recordId && codec.recordId(parsedData) !== row.id) throw new Error('Backup record key mismatch');
+      return { record: { ...row, data: parsedData } as unknown as StoredRecord, idx: codec.indexes(parsedData) };
+    });
+    for (const entry of records) {
+      guard();
+      const codec = byType.get(entry.record.type)!;
+      if (codec.restoreData) {
+        // Keep export's original evidence validation before checking normalized recovery data.
+        if (validateOriginal) { await codec.validate?.(structuredClone(entry.record.data)); guard(); }
+        const normalized = codec.parse(await codec.restoreData(entry.record.data, principal));
+        guard();
+        entry.record = { ...entry.record, data: normalized };
+        entry.idx = codec.indexes(normalized);
+        if (codec.recordId && codec.recordId(normalized) !== entry.record.id) throw new Error('Backup record key mismatch');
+      }
+      await codec.validate?.(structuredClone(entry.record.data));
+      guard();
+    }
+    return records;
+  }
   function activate(identity: UnlockedIdentity, protectedIdentity: ProtectedIdentity): UnlockedVault {
     if (closed) { identity.lock(); throw new Error('Vault closed'); }
     let active = true;
@@ -179,7 +214,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           }
           return out;
         });
-        for (const row of records) await byType.get(row.type)?.validate?.(row.data);
+        await preflightRecords(records, identity.principal, registeredRecordTypes, guard, true);
         const exportedAt = new Date().toISOString();
         const manifest = await signEnvelope(identity, { type: 'classrup.vault.alpha_backup/v1', createdAt: exportedAt, seq: 1, prev: null, payload: { principal: identity.principal, protectedIdentity, recordTypes: registeredRecordTypes, records } });
         const plaintext = encoder.encode(JSON.stringify(manifest));
@@ -252,30 +287,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
       const identity = await unlockIdentity(data.protectedIdentity, passphrase);
       try {
         if (identity.principal !== envelope.author) throw new Error('Backup identity mismatch');
-        const ids = new Set<string>();
-        const records = data.records.map((input: unknown) => {
-          if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid backup record');
-          const row = input as Record<string, unknown>;
-          if (Object.keys(row).sort().join(',') !== 'createdAt,data,id,revision,tenantId,type,updatedAt' || row.tenantId !== identity.principal || typeof row.type !== 'string' || typeof row.id !== 'string' || row.id.length < 1 || row.id.length > 256 || /[\u0000-\u001f\u007f]/u.test(row.id) || !Number.isSafeInteger(row.revision) || (row.revision as number) < 1 || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string' || !Number.isFinite(Date.parse(row.createdAt)) || !Number.isFinite(Date.parse(row.updatedAt)) || new Date(row.createdAt).toISOString() !== row.createdAt || new Date(row.updatedAt).toISOString() !== row.updatedAt || row.updatedAt < row.createdAt) throw new Error('Invalid backup record');
-          const codec = byType.get(row.type);
-          if (!codec || !(data.recordTypes as unknown[]).includes(row.type)) throw new Error('Unsupported backup record type');
-          const id = `${row.type}\u0000${row.id}`;
-          if (ids.has(id)) throw new Error('Duplicate backup record');
-          ids.add(id);
-          const parsedData = codec.parse(row.data);
-          if (codec.recordId && codec.recordId(parsedData) !== row.id) throw new Error('Backup record key mismatch');
-          return { record: { ...row, data: parsedData } as unknown as StoredRecord, idx: codec.indexes(parsedData) };
-        });
-        for (const entry of records) {
-          const codec = byType.get(entry.record.type)!;
-          if (codec.restoreData) {
-            const normalized = codec.parse(await codec.restoreData(entry.record.data, identity.principal));
-            entry.record = { ...entry.record, data: normalized };
-            entry.idx = codec.indexes(normalized);
-            if (codec.recordId && codec.recordId(normalized) !== entry.record.id) throw new Error('Backup record key mismatch');
-          }
-          await codec.validate?.(entry.record.data);
-        }
+        const records = await preflightRecords(data.records, identity.principal, data.recordTypes as string[]);
         check();
         const persistedIdentity = await wrapIdentity(data.protectedIdentity as ProtectedIdentity, passphrase);
         await unlockStorage?.(passphrase, false);

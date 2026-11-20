@@ -185,3 +185,55 @@ it('preserves the explicit capped-overflow report without presenting numeric tot
   expect(display).toContain('10,000-holder limit');
   expect(display).toContain('excluded from v1 backups');
 });
+
+it('rejects malformed resolved record coverage without invoking attachment inspection', async () => {
+  const invalidReports: readonly unknown[] = [
+    undefined,
+    { ...base, recordTypes: undefined },
+    { ...base, recordTypes: [{ type: 'private.note', count: 1 }] },
+    { ...base, recordTypes: [{ type: 'private.note', count: Number.NaN }] },
+    { ...base, recordCount: -1 },
+    { ...base, recordCount: 'tenant-private-secret' },
+    { ...base, recordLimitExceeded: true },
+    { ...base, unsupportedRecordTypes: ['private.note'] },
+    { ...base, excludedStores: [] },
+    { ...base, recordTypes: [{ type: 'private.note', count: 2 }, { type: 'private.note', count: 2 }], recordCount: 4 },
+    { ...base, registeredRecordTypes: ['private.note', 'private.note'] },
+    { ...base, typeLimitExceeded: 'false' },
+  ];
+  for (const invalid of invalidReports) {
+    let attachmentReads = 0;
+    await expect(readBackupInspection({
+      backupCoverage: async () => invalid as BackupCoverage,
+      attachmentCoverage: async () => { attachmentReads++; return references; },
+    })).rejects.toThrow('Backup inspection unavailable; saved-record coverage could not be verified.');
+    expect(attachmentReads).toBe(0);
+  }
+});
+
+it('accepts coherent blocked required coverage without making an exportability claim', async () => {
+  const overRecords: BackupCoverage = {
+    ...base, recordTypes: [{ type: 'private.note', count: 10_001 }],
+    recordCount: 10_001, recordLimitExceeded: true,
+  };
+  const counted = await readBackupInspection({
+    backupCoverage: async () => overRecords,
+    attachmentCoverage: async () => references,
+  });
+  expect(counted.records).toEqual(overRecords);
+  expect(describeBackupCoverage(counted.records)).toContain('Backup blocked');
+
+  // Over 256 stored types produces a lower-bound count for the 256 reported types.
+  const categories = Array.from({ length: 256 }, (_, i) => ({ type: `unrecognized.${i}`, count: 1 }));
+  const truncated: BackupCoverage = {
+    ...base, recordTypes: categories, registeredRecordTypes: [],
+    unsupportedRecordTypes: categories.map(row => row.type),
+    recordCount: 256, typeLimitExceeded: true, recordLimitExceeded: false,
+  };
+  const result = await readBackupInspection({
+    backupCoverage: async () => truncated,
+    attachmentCoverage: async () => references,
+  });
+  expect(result.records).toEqual(truncated);
+  expect(describeBackupCoverage(result.records)).toContain('too many saved record categories');
+});

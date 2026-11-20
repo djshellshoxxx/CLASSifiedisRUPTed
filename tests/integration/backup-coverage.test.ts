@@ -254,3 +254,21 @@ it('accepts coherent blocked required coverage without making an exportability c
   expect(result.records).toEqual(truncated);
   expect(describeBackupCoverage(result.records)).toContain('too many saved record categories');
 });
+
+it('does not publish a successful required inspection after session replacement during the required read', async () => {
+  const session = { id: 'owner-required-check' };
+  let active: typeof session | undefined = session;
+  let resolveCoverage: ((coverage: BackupCoverage) => void) | undefined;
+  let attachmentReads = 0;
+  const deferredCoverage = new Promise<BackupCoverage>(resolve => { resolveCoverage = resolve; });
+  const pending = runForSession(session, () => active, () => readBackupInspection({
+    backupCoverage: () => deferredCoverage,
+    attachmentCoverage: async () => { attachmentReads++; return references; },
+  }));
+  active = undefined;
+  resolveCoverage?.(base);
+  await expect(pending).rejects.toThrow('Vault session ended');
+  // This assertion is not about cancelling underlying work: only stale publication
+  // is forbidden. The optional read may complete before the session guard rejects.
+  expect(attachmentReads).toBeLessThanOrEqual(1);
+});

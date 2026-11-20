@@ -189,6 +189,24 @@ describe('production barter record recovery', () => {
       expect(await owner.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
       const lostAgain = await coordination(owner);
       expect(lostAgain.data.state).toMatchObject({ status: 'frozen', reason: 'local_reservation_lost' });
+
+      // The independent peer has the same signed reservation/consent chain.
+      // Commit it through the normal handler, then advance only its clock:
+      // the owner's archived backup remains at the original timestamp.
+      await ingest(other, consents[0]!);
+      expect((await coordination(other)).data.state.status).toBe('committed');
+      const expiredClock = createFakeClock(clock.now() + 2 * DAY);
+      const expiredPeer = runtime({ principal: peer.principal, identity: peer, storage: peerStorage },
+        expiredClock, peerIds, categoryId);
+      expiredPeer.setMatchingPolicy({ enabled: true, blockedOwners: [] });
+      expect(await expiredPeer.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
+      expect((await coordination(expiredPeer)).data.state).toMatchObject({
+        status: 'frozen', reason: 'reservation_expired',
+      });
+      expect(await expiredPeer.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
+      expect((await coordination(expiredPeer)).data.state).toMatchObject({
+        status: 'frozen', reason: 'reservation_expired',
+      });
       await original.lock();
 
       const expected = { ...before, data: { ...before.data, state: { ...before.data.state,

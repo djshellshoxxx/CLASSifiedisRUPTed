@@ -1,4 +1,5 @@
 import { archiveBackupCodec } from './archive-backup.ts';
+import { publicationBackupCodec } from './publication-backup.ts';
 import { retainedBackupCodec } from './retained-backup.ts';
 import { describeBackupCoverage } from './backup-coverage.ts';
 import { protectVaultSession, runForSession } from './vault-session.ts';
@@ -18,7 +19,7 @@ import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.t
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
 import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
-import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
+import { bazaarDefinitions, listingSchema, listingRepo, inventoryHoldRepo, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
 import { discoveryDefinitions, locationDefinitions, locationBackupCodecs, type RetainedListing } from '../../../packages/discovery/src/index.ts';
 
 const codecs = [
@@ -47,7 +48,7 @@ const codecs = [
       return data;
     },
   },
-  { ...backupCodec(publicationRepo), validate: (input: unknown) => validatePublicationRecord(input, verifyEnvelope) },
+  publicationBackupCodec,
   {
     ...backupCodec(inventoryHoldRepo),
     async restoreData(input: unknown, principal: string) {

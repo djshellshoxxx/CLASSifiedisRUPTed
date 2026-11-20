@@ -1,0 +1,66 @@
+{
+  "source_commit": "6efd1074bacaffcefc448bccd835acf69369474c",
+  "original_fix_commit": "4b46abc9240c83a9da9f3800d45b38507d37e331",
+  "integrated_fix_commit": "fdb6038c2ece910f150aee2d23f7b805f37dd332",
+  "previous_handoff_commit": "552d55ad788c9b9bf01f4a4916769bbc216305be",
+  "review_branch": "codex/classrup-barter-review-g2-20261119",
+  "source_blobs": {
+    "apps/pwa/src/barter.ts": "23dc7361b74d74725372ddf281a66c8e90a9b32c",
+    "tests/integration/barter-want-intent.test.ts": "00605c7fc34f5b18084aec6cfe57b9cd727ac069",
+    "apps/pwa/src/action-queue.ts": "ca7132ab9b13f641e171b13d8058e7e2d92e20a2",
+    "apps/pwa/src/vault-session.ts": "240d8c30774f78fb9c72dff92dab21dbd8f2dfaf",
+    "apps/pwa/src/main.ts": "26595d77976819925cc362de14e61b4722c8e581",
+    "apps/pwa/src/barter-runtime.ts": "00a7b548251bb53fe238bedf536eac1ca356b3a5",
+    "tests/integration/action-queue.test.ts": "f8ba7726095a01f323240d7e0adf29b86e55b244",
+    "tests/integration/vault-session.test.ts": "439a6ea5e289c575237a4d72f67bdcdeeda49d0f",
+    "tests/support/node-stub.ts": "1d904913818585c65301655f3c6aff314289eb22",
+    "pnpm-lock.yaml": "7bde223f1f15209a4eae0496a4a14c5060037e92"
+  },
+  "node_version": "v24.22.3",
+  "vitest_version": "5.1.0",
+  "source_and_tests_unchanged_during_runs": true,
+  "runs": [
+    {
+      "name": "initial-worktree-setup",
+      "command": "env NODE_OPTIONS=--max-old-space-size=512 timeout 90s corepack pnpm exec vitest run tests/integration/barter-want-intent.test.ts tests/integration/action-queue.test.ts --maxWorkers=1 --reporter=verbose",
+      "exit_code": 1,
+      "test_files_passed": 1,
+      "test_files_failed": 1,
+      "tests_passed": 2,
+      "tests_failed": 0,
+      "outcome": "Both action-queue tests passed. Barter suite collection failed with ERR_MODULE_NOT_FOUND for zod; no barter assertion ran.",
+      "dependency_context": "Root node_modules linked to existing installation; package-level pnpm links not yet present.",
+      "log_path": "docs/development/cycles/20261119/evidence/barter-review-g2-setup.log.gz",
+      "decoded_log_sha256": "0cb94d022eba2a3e44af4b375db55e1e9fab1a201693b1cc4d080c9e7eca378b",
+      "decoded_log_bytes": 1661
+    },
+    {
+      "name": "focused-verification",
+      "command": "env NODE_OPTIONS=--max-old-space-size=512 timeout 90s corepack pnpm exec vitest run tests/integration/barter-want-intent.test.ts tests/integration/action-queue.test.ts tests/integration/vault-session.test.ts --maxWorkers=1 --reporter=verbose",
+      "exit_code": 0,
+      "test_files_passed": 3,
+      "test_files_failed": 0,
+      "tests_passed": 11,
+      "tests_failed": 0,
+      "duration_seconds": 7.54,
+      "outcome": "All four submitted-pair cases, two action-queue cases and five vault-session cases passed.",
+      "dependency_context": "Root and per-package node_modules temporarily linked to the existing installation in ../classrupted. No install or lockfile change.",
+      "log_path": "docs/development/cycles/20261119/evidence/barter-review-g2-focused.log.gz",
+      "decoded_log_sha256": "a48fe2d9efcc9d3a871dc70c0bbe9d4577e914b396edc628c3fcd1ff77e89e1a",
+      "decoded_log_bytes": 1844
+    }
+  ],
+  "other_checks": [
+    {
+      "command": "git diff --check 4b46abc9240c83a9da9f3800d45b38507d37e331^...4b46abc9240c83a9da9f3800d45b38507d37e331",
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "not_run": [
+    "full test suite",
+    "typecheck",
+    "build",
+    "browser tests"
+  ]
+}

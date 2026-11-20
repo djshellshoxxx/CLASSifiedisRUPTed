@@ -83,7 +83,7 @@ it('vault diagnostic is principal-bound and revoked with the unlocked session', 
 
 describe('reference coverage lifecycle does not count unheld or detached data', () => {
   for (const factory of factories) {
-    it(`${factory.name}: empty state, duplicate attach, detach and orphan blobs`, async () => {
+    it(`${factory.name}: empty, rolled-back, duplicate and detached references`, async () => {
       const storage = await factory.open();
       try {
         const tenant = 'coverage-lifecycle-owner';
@@ -97,6 +97,12 @@ describe('reference coverage lifecycle does not count unheld or detached data', 
           return ok(undefined);
         });
         expect(seeded.ok).toBe(true);
+        expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual(empty);
+        // An aborted write must also roll back the tenant reference index.
+        await expect(storage.transaction(tx => {
+          tx.blobs.attach(tenant, ref, 'listing/rolled-back');
+          throw new Error('intentional reference transaction rollback');
+        })).rejects.toThrow('intentional reference transaction rollback');
         expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual(empty);
         const attached = await storage.transaction(tx => {
           tx.blobs.attach(tenant, ref, 'listing/lifecycle');
@@ -113,7 +119,8 @@ describe('reference coverage lifecycle does not count unheld or detached data', 
         });
         expect(detached.ok).toBe(true);
         expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual(empty);
-        expect(await storage.read(tx => tx.blobs.info(tenant, ref))).toBeDefined();
+        // Detaching the final holder removes the blob under the existing blob lifecycle contract.
+        expect(await storage.read(tx => tx.blobs.info(tenant, ref))).toBeUndefined();
       } finally {
         await storage.close();
       }

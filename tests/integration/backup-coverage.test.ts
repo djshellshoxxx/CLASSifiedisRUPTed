@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { describeBackupCoverage, describeAttachmentCoverage } from '../../apps/pwa/src/backup-coverage.ts';
+import { describeBackupCoverage, describeAttachmentCoverage, readBackupInspection } from '../../apps/pwa/src/backup-coverage.ts';
 import type { BackupCoverage, AttachmentCoverage } from '../../packages/vault/src/index.ts';
 
 const base: BackupCoverage = { recordTypes: [{ type: 'private.note', count: 2 }], registeredRecordTypes: ['private.note'], unsupportedRecordTypes: [], recordCount: 2, typeLimitExceeded: false, recordLimitExceeded: false, excludedStores: ['blobs'] };
@@ -58,4 +58,33 @@ it('does not mistake zero holder references for a complete attachment inventory'
   expect(text).toContain('0 held references');
   expect(text).toContain('unheld blobs are not inventoried');
   expect(text).toContain('excluded from v1 backups');
+});
+
+it('retains successful record coverage if the optional attachment diagnostic rejects', async () => {
+  const result = await readBackupInspection({
+    backupCoverage: async () => base,
+    attachmentCoverage: async () => { throw new Error('private blob:sha256-secret should not appear'); },
+  });
+  expect(result.records).toEqual(base);
+  expect(result.attachments).toBeNull();
+  const text = `${describeBackupCoverage(result.records)} ${describeAttachmentCoverage(result.attachments)}`;
+  expect(text).toContain('2 saved records across 1 supported category');
+  expect(text).toContain('Attachment check unavailable; counts cannot be confirmed');
+  expect(text).toContain('excluded from v1 backups');
+  expect(text).not.toMatch(/blob:sha256-secret|private\.note/);
+});
+
+it('keeps successful attachment inspection results exact', async () => {
+  const result = await readBackupInspection({
+    backupCoverage: async () => base,
+    attachmentCoverage: async () => references,
+  });
+  expect(result).toEqual({ records: base, attachments: references });
+});
+
+it('does not silently downgrade a failed record-coverage read into an exportable status', async () => {
+  await expect(readBackupInspection({
+    backupCoverage: async () => { throw new Error('Record coverage failed'); },
+    attachmentCoverage: async () => references,
+  })).rejects.toThrow('Record coverage failed');
 });

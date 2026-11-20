@@ -1,0 +1,19 @@
+{
+  "reviewed_source": "2917cb4751786bd475df2b34441cb40e1dfbc43f",
+  "status": "partial; worker follow-up stopped by automatic review; not a completed audit",
+  "source_changes": "none",
+  "files": [
+    {
+      "path": "domain-probes.log.gz",
+      "decoded_bytes": 965,
+      "decoded_sha256": "0030ed9dec9431133ce84980db49c8811984fa8826716e893f8751beea340475",
+      "stored_sha256": "43d1eae9a86e734cf207709c0e6f9117f4443cd7239388e046a48fe5a20038dd"
+    },
+    {
+      "path": "vault-probes.log.gz",
+      "decoded_bytes": 1014,
+      "decoded_sha256": "e69ec937ffbe397e7b0a006b95bdc065fbc58dc5df76c0d6e6bbc9a792694451",
+      "stored_sha256": "79ea08a7ab8cd427560dc9071e8d5fdab25747e48953abf30e910bb7709df0ad"
+    }
+  ]
+}

@@ -81,11 +81,15 @@ its own fixed-error boundary.
 
 ## Review and qualification
 
-**Status: implementation published; corrected-head qualification pending.**
-[Draft PR #56](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/56) contains
+**Status: corrected-head qualification passed; PR #56 merged.**
+[PR #56](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/56) contains
 source `3aa7a17b28ee07ebec4336b49c3527743510bc16`, with tree
-`92a6452b4241fbcafe13b334a154765bbac63c3e`. Main remains
-`b6d99d87e9f67e76791f2dfff3e85015154cd92f`; this continuation has not merged.
+`92a6452b4241fbcafe13b334a154765bbac63c3e`. Its actual main merge is
+`e63a7ecf0c7f15c2ce8ffa17793799caa0e62d3c`, with the same tree as the tested PR
+merge. All nine current-source jobs passed. The [complete receipt and raw logs](cycles/20261119/evidence/pr56-qualification.json)
+record 748 domain assertions, 27 tooling tests, 75 browser journeys and all six
+CLI platform jobs. Main's separate push runs remain distinct. Further owner-
+directed engineering and audits are tracked in the [new cycle handoff](cycles/20261119/HANDOFF.md).
 
 The [first hosted attempt](evidence/20261119-feature-completion/initial-ci/manifest.json)
 passed 748 domain assertions, 27 tooling tests and the static/money/setup/build
@@ -98,10 +102,11 @@ assertions and timeouts remain intact.
 
 The corrected source's [Alpha run 44510361239](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44510361239)
 and [CLI run 44510361244](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/44510361244)
-are still queued at the
-[latest immutable checkpoint](evidence/20261119-feature-completion/corrected-head-queued-checkpoint.json).
-Both planning jobs have zero executed steps and no assigned runner. Their
-actual checkout and passing checks have not been observed. The prior source's
+were queued at the preserved
+[earlier immutable checkpoint](evidence/20261119-feature-completion/corrected-head-queued-checkpoint.json).
+At that checkpoint both planning jobs had zero executed steps and no assigned
+runner. The later completed qualification above supersedes that observation
+without altering the checkpoint. The prior source's
 six CLI platform jobs were cancelled before execution when the correction was
 pushed. The correction's local typecheck was killed with exit 137, as recorded
 in its [local evidence](evidence/20261119-feature-completion/correction-local/manifest.json).
@@ -110,7 +115,7 @@ also preserves the original killed domain run, the 745/748 serial domain result
 with unchanged timing limits, and the 44/46 concurrent CLI result with two
 unchanged subprocess timeouts.
 
-The combined source requires independent review and the normal Alpha and
+The combined source completed independent review and the normal Alpha and
 six-platform CLI workflows. Results and source identity are recorded in the PR
 and in the continuation's evidence record; previous main runs do not qualify
 this new code. The [independent review](evidence/20261119-feature-completion/independent-review.md)

@@ -1,0 +1,154 @@
+{
+  "scope": "Root backup coverage and shared recovery preflight; counts are per invocation, not additive.",
+  "preflight_source": "2917cb4751786bd475df2b34441cb40e1dfbc43f",
+  "outcomes": {
+    "backup_baseline": "7 failed: 6 missing-listTypes interface assertions, 1 timeout; timeout is not behavioral proof of omission",
+    "backup_first_candidate": "SIGKILL before JSON report; no passing result",
+    "backup_focused_retry": {
+      "passed": 12,
+      "failed": 0,
+      "pending": 0
+    },
+    "backup_native_probe": "baseline omitted unsupported record; candidate counted it and blocked export; stdout retained",
+    "typechecks": "three incomplete root attempts killed; first two exit 137, third pnpm reports SIGKILL; no complete passing root typecheck",
+    "preflight_baseline": {
+      "passed": 0,
+      "failed": 1,
+      "excluded": 3,
+      "reason": "foreign-owner record export resolved instead of rejecting"
+    },
+    "preflight_initial_candidate": {
+      "passed": 13,
+      "failed": 1,
+      "pending": 0,
+      "reason": "class codec regression expected old export invocation sequence"
+    },
+    "preflight_final": {
+      "passed": 14,
+      "failed": 0,
+      "pending": 0
+    }
+  },
+  "files": [
+    {
+      "source_name": "backup-red.log",
+      "path": "backup-red.log.gz",
+      "decoded_bytes": 4699,
+      "decoded_sha256": "6e0f0349f568904309857a4c0e77afc9e2785df9c96bf4afb0eb26031f02cadb",
+      "stored_sha256": "26a8fba3f042655d111f410137ac563bf59263cfd9fa3271efbec9085e41e5bf"
+    },
+    {
+      "source_name": "backup-green.log",
+      "path": "backup-green.log.gz",
+      "decoded_bytes": 346,
+      "decoded_sha256": "507eee9ae5d990438fa69f44f8fc548bd970f93082a621cd7ef413b0959de867",
+      "stored_sha256": "c817354a9531858d631f8534d623fa1519cd878103f024ef2032e69b3e64d019"
+    },
+    {
+      "source_name": "backup-focused-retry.log",
+      "path": "backup-focused-retry.log.gz",
+      "decoded_bytes": 81,
+      "decoded_sha256": "d5fa26a07dc869723b3bd95db88b1ddff882a782709c42b0302288b11c904050",
+      "stored_sha256": "4bda5906f8945c4dab55eaa875243f1ec5b28071bbb4b92bf972c1e3fd9935c5"
+    },
+    {
+      "source_name": "backup-focused-retry.json",
+      "path": "backup-focused-retry.json",
+      "decoded_bytes": 5131,
+      "decoded_sha256": "d5d4a09c1d326103128eeeb692846fc7298531ec4a2245191c272ffdbf2f73fe",
+      "stored_sha256": "d5d4a09c1d326103128eeeb692846fc7298531ec4a2245191c272ffdbf2f73fe"
+    },
+    {
+      "source_name": "backup-native-probe.log",
+      "path": "backup-native-probe.log.gz",
+      "decoded_bytes": 137,
+      "decoded_sha256": "64c53ad76c52576629fd76c267b58a269d53b26fb768c6fa5e128dff01ac77ae",
+      "stored_sha256": "94343e5e05419dbc97fb45d851d2cc2b4772217d88b5303c144d6027487352f7"
+    },
+    {
+      "source_name": "backup-typecheck.log",
+      "path": "backup-typecheck.log.gz",
+      "decoded_bytes": 159,
+      "decoded_sha256": "52e55580b7a1b812b90231772a57dc92c0bc191a38733c5d91d3310b694ed917",
+      "stored_sha256": "a37da9774cea5e31e52da6d47e27dd2bb840b3250666b060dd67f0b3ac39a0dd"
+    },
+    {
+      "source_name": "combined-typecheck.log",
+      "path": "combined-typecheck.log.gz",
+      "decoded_bytes": 159,
+      "decoded_sha256": "52e55580b7a1b812b90231772a57dc92c0bc191a38733c5d91d3310b694ed917",
+      "stored_sha256": "a37da9774cea5e31e52da6d47e27dd2bb840b3250666b060dd67f0b3ac39a0dd"
+    },
+    {
+      "source_name": "typecheck-serial.log",
+      "path": "typecheck-serial.log.gz",
+      "decoded_bytes": 220,
+      "decoded_sha256": "b7a24ecf796c608127d61148443120c7dbc40b0822717bed4796d60780a09cef",
+      "stored_sha256": "fccce1549f7965308e6db5d8fbed1eed5925c9e601105d005544b0b13d17003f"
+    },
+    {
+      "source_name": "preflight-red.log",
+      "path": "preflight-red.log.gz",
+      "decoded_bytes": 74,
+      "decoded_sha256": "8e4c892afce3231f523441a277f3974ba1558c292d75a884743ddd3785b24267",
+      "stored_sha256": "98516da646dd5789010dc2e3a03413b194ee588a3598be8b70092267bf69670f"
+    },
+    {
+      "source_name": "preflight-red.json",
+      "path": "preflight-red.json",
+      "decoded_bytes": 3113,
+      "decoded_sha256": "34524213c340b6e77742cbe700d15be41cbfadda02b034893d2d9f304ed4ea84",
+      "stored_sha256": "34524213c340b6e77742cbe700d15be41cbfadda02b034893d2d9f304ed4ea84"
+    },
+    {
+      "source_name": "preflight-green.log",
+      "path": "preflight-green.log.gz",
+      "decoded_bytes": 76,
+      "decoded_sha256": "c953f77bb4dd865b7589c68a42a40383e1904e5a2367ca8b1c13b45e4470bc48",
+      "stored_sha256": "daadfe47dfebe36ac1aaf5e26757ae4257383ca300e0ef3cd521b34eb1dfc28e"
+    },
+    {
+      "source_name": "preflight-green.json",
+      "path": "preflight-green.json",
+      "decoded_bytes": 6997,
+      "decoded_sha256": "a9ccfce723c7b40be44ff791c32728829c663f2a567597548dc94457a6440768",
+      "stored_sha256": "a9ccfce723c7b40be44ff791c32728829c663f2a567597548dc94457a6440768"
+    },
+    {
+      "source_name": "preflight-final.log",
+      "path": "preflight-final.log.gz",
+      "decoded_bytes": 76,
+      "decoded_sha256": "c2d16faca346595082a2ed6c9094d8d98cea6bff316cfdd9c7a7389ecd2977ee",
+      "stored_sha256": "3ce870aa8612b7744d5526b1b56622740bbb651136d874006b82fb9c41777f21"
+    },
+    {
+      "source_name": "preflight-final.json",
+      "path": "preflight-final.json",
+      "decoded_bytes": 6532,
+      "decoded_sha256": "b3dbcc3cbafa79f56e4d9f0c45baf8a6e5906abac3a29ea52d976b657e9a714e",
+      "stored_sha256": "b3dbcc3cbafa79f56e4d9f0c45baf8a6e5906abac3a29ea52d976b657e9a714e"
+    },
+    {
+      "source_name": "focused-typecheck.log",
+      "path": "focused-typecheck.log.gz",
+      "decoded_bytes": 0,
+      "decoded_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+    },
+    {
+      "source_name": "classrup-focused-tsconfig.json",
+      "path": "classrup-focused-tsconfig.json",
+      "decoded_bytes": 2327,
+      "decoded_sha256": "a273c438f6bb865cccc6322e5de4fdfba5506aa75a16720f9aac6a4840abbc52",
+      "stored_sha256": "a273c438f6bb865cccc6322e5de4fdfba5506aa75a16720f9aac6a4840abbc52"
+    }
+  ],
+  "focused_typecheck": {
+    "source": "eeee923adbd4dee3634898d035c74072803ea2f0",
+    "exit_code": 0,
+    "changed_typescript_files": 23,
+    "transitive_imports": true,
+    "command": "env NODE_OPTIONS=--max-old-space-size=512 timeout 120s corepack pnpm exec tsc -p /workspace/scratch/06c5fd0c70c0/classrup-focused-tsconfig.json --noEmit",
+    "full_repository_typecheck": false
+  }
+}

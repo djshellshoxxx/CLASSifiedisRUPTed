@@ -1,0 +1,34 @@
+{
+  "extends": "/workspace/scratch/06c5fd0c70c0/classrupted/tsconfig.base.json",
+  "compilerOptions": {
+    "typeRoots": [
+      "/workspace/scratch/06c5fd0c70c0/classrupted/node_modules/@types"
+    ]
+  },
+  "files": [
+    "/workspace/scratch/06c5fd0c70c0/classrupted/apps/pwa/src/backup-coverage.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/apps/pwa/src/barter.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/apps/pwa/src/main.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/driver.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/memory-driver.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/record-types.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/scope.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/scope.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/sqlite.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/storage.blob-snapshot.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/storage.lifetime.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/storage.reference-isolation.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/storage.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/kernel/src/storage/tx.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/vault/src/backup-codecs.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/vault/src/backup-coverage.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/vault/src/backup-preflight.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/vault/src/index.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/packages/vault/src/vault.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/tests/browser/alpha.spec.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/tests/integration/archive-backup.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/tests/integration/backup-coverage.test.ts",
+    "/workspace/scratch/06c5fd0c70c0/classrupted/tests/integration/barter-want-intent.test.ts"
+  ],
+  "include": []
+}

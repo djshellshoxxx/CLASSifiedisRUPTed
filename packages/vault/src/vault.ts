@@ -85,10 +85,18 @@ export async function openVault(options: VaultOptions): Promise<Vault> {
 
 /** Composition seam for contract tests; production callers use openVault's IndexedDB adapter. */
 export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = [], unlockStorage?: (passphrase: string, required: boolean, replacement?: object) => Promise<void>, backoff = createUnlockBackoff()): Vault {
-  // Callers cannot change export coverage after this vault has accepted its codecs.
-  const registeredCodecs = Object.freeze(codecs.map(codec => Object.freeze({ ...codec })));
+  // Capture callable references with their receiver: codecs may use prototype
+  // methods or private class state. Their trusted closure behavior is not frozen.
+  const registeredCodecs = Object.freeze(codecs.map(codec => {
+    const { type, parse, indexes, validate, restoreData, recordId } = codec;
+    return Object.freeze({ type, parse: parse.bind(codec), indexes: indexes.bind(codec),
+      ...(validate === undefined ? {} : { validate: validate.bind(codec) }),
+      ...(restoreData === undefined ? {} : { restoreData: restoreData.bind(codec) }),
+      ...(recordId === undefined ? {} : { recordId: recordId.bind(codec) }),
+    });
+  }));
   const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
-  if (byType.size !== codecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
+  if (byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
   const registeredRecordTypes = Object.freeze([...byType.keys()].sort());
   const coverage = (tx: Tx, principal: string): BackupCoverage => {
     const found = tx.records.listTypes(principal, MAX_RECORD_TYPES + 1);

@@ -1,4 +1,5 @@
 import { archiveBackupCodec } from './archive-backup.ts';
+import { retainedBackupCodec } from './retained-backup.ts';
 import { describeBackupCoverage } from './backup-coverage.ts';
 import { protectVaultSession, runForSession } from './vault-session.ts';
 import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
@@ -18,7 +19,7 @@ import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, c
 import { openVault, backupCodec, type UnlockedVault } from '../../../packages/vault/src/index.ts';
 import { signEnvelope, verifyEnvelope, MAX_ENVELOPE_BYTES } from '../../../packages/federation/src/index.ts';
 import { bazaarDefinitions, listingSchema, listingRepo, publicationRepo, inventoryHoldRepo, validatePublicationRecord, listingRevisionRepo, listingRevisionId, validateListingRevision, archiveRecordRepo } from '../../../packages/bazaar/src/index.ts';
-import { discoveryDefinitions, locationDefinitions, locationBackupCodecs, retainedListingRepo, validateRetainedRecord, type RetainedListing } from '../../../packages/discovery/src/index.ts';
+import { discoveryDefinitions, locationDefinitions, locationBackupCodecs, type RetainedListing } from '../../../packages/discovery/src/index.ts';
 
 const codecs = [
   ...locationBackupCodecs(backupCodec),
@@ -55,7 +56,7 @@ const codecs = [
       return data;
     },
   },
-  { ...backupCodec(retainedListingRepo), validate: (input: unknown) => validateRetainedRecord(input, verifyEnvelope) },
+  retainedBackupCodec,
 ];
 const CATEGORY = '0195aaaa-0000-7000-8000-000000000001';
 const ids = createUuidV7Generator();

@@ -4,7 +4,7 @@ This register accompanies the [comprehensive branch consolidation](BRANCH_CONSOL
 It is based on the current runtime, retained unique branch changes, actual test
 coverage and existing contracts. Specifications and generated source-path counts
 do not establish completion. The owner has authorized continued incomplete-
-feature work and successive independent audits; see the [current handoff](cycles/20261120-next-recovery/HANDOFF.md).
+feature work and successive independent audits; see the [current handoff](cycles/20261120-freeze-reasons/INTEGRATION-HANDOFF.md).
 
 ## Completed slices to preserve
 
@@ -43,6 +43,16 @@ feature work and successive independent audits; see the [current handoff](cycles
   checks. The three realistic recovery scenarios populate the union of all
   15 production codec types in separate archives. Hosted qualification is
   pending; this does not establish complete database or device recovery.
+- The [freeze-reason continuation](cycles/20261120-freeze-reasons/QUALIFICATION.md)
+  preserves the distinct expired-reservation and lost-local-hold explanations
+  through reconstruction. Full TypeScript, 39 selected persistence/recovery
+  cases, setup and build passed at its own source. Hosted qualification remains
+  separate. Two existing lifecycle cases gained repeated-refresh/reopen and
+  normalization assertions; no case count or timeout changed.
+- The [historical readiness reconciliation](cycles/20261120-readiness/READINESS-RECONCILIATION.md)
+  maps all 51 existing findings to inspected current controls, unresolved
+  boundaries and next acceptance steps. All 51 remain OPEN; original audits,
+  severities, provisional gates and owner roles are unchanged.
 
 ## Priority and dependency register
 
@@ -55,7 +65,7 @@ Effort is an engineering estimate, not measured duration or a commitment: S = a 
 | P1 | Canonical identity/device/recovery authority (`packages/identity`, federation, consent) | Resolve root/device roles, authenticated delegation, revocation and recovery/notice/dispute contracts; implement real owner-authorized handlers and end-to-end adversarial tests before depending on recovered signature helpers. | XL |
 | P1 | Canonical federation and compatible signed-file migration (`packages/federation`, discovery, vault restore) | Select explicit protocol version boundary; preserve alpha CID/signature bytes and per-subject histories; independent canonical vectors, author-stream gap/quarantine, delegated signer validity and old-backup acceptance. | XL; depends on identity authority |
 | P1 | Retention, purge, deletion and evidence lifecycle (`bazaar`, privacy, vault) | Define one cross-domain hold/evidence/tombstone/backup policy; implement bounded resumable purge with idempotency and recovery tests. Current archive/recovery and signed withdrawals are already implemented but do not erase peer copies. | L |
-| P1 | Security findings and release evidence (`planning/SECURITY_FINDINGS_TRACKER.md`, tools/gates, CI) | Reconcile each historical finding with current owning workflow, remaining negative acceptance and accountable closure. All 51 historical rows remain open; they are planning/readiness findings, not 51 confirmed current runtime vulnerabilities. Build full release aggregation and dependency/security audit evidence separately from spec completeness. | M for evidence reconciliation; L/XL for remaining controls |
+| P1 | Security findings and release evidence (`planning/SECURITY_FINDINGS_TRACKER.md`, tools/gates, CI) | The 51-row current-source reconciliation now links implemented alpha controls, unresolved boundaries and next acceptance. All historical rows remain open; they are planning/readiness findings, not 51 confirmed current runtime vulnerabilities. Complete accountable control acceptance and full release/dependency/security evidence separately from spec completeness. | M for release aggregation; L/XL for remaining controls |
 | P2 | Consent production composition (`packages/comms`, owning domains, PWA, backup) | Implement trusted subject/revision resolver, immutable wording UI and confirmation, key validity, codec validation and revocation-preserving backup; add dependency quarantine/replay before enabling new consent domain for users. | L; identity/federation dependencies for delegated mode |
 | P2 | Currency registry PWA composition (`commerce/valuation`, PWA, vault) | Provide authentic signed release snapshot with documented authority, production vault/usage adapters, migration/preflight and immutable binding tests. Do not invent the missing authenticated snapshot. | M after snapshot is available |
 | P2 | Money and matching target-device qualification (`commerce/precision`, matching worker) | Run the specified performance workloads on the actual target hardware, profile memory/latency at full caps, preserve existing limits and cancellation assertions. Pure arithmetic/vector and host tests do not establish mobile budgets. | M plus device availability |
@@ -109,11 +119,11 @@ remain separate existing fixtures. Complete the actual current-source hosted
 qualification before marking these candidates integrated. Keep the full
 production registry shared rather than copying its rules into test-only code.
 
-A bounded next correction is preserving the documented expired-reservation and
-lost-local-reservation reasons through repeated reconstruction. Existing first-
-transition tests and the new display fixtures do not establish that persistence.
-Keep the correction on a separate source while the recovery candidate waits;
-preserve signed terminal outcomes and prohibit automatic recommit.
+The separate freeze-reason candidate now preserves documented expired-reservation
+and lost-local-reservation causes through reconstruction, with ordinary repeated
+refresh/reopen/normalization acceptance. Complete its current-source hosted gate
+before integration. Keep each pending source stable and preserve signed terminal
+outcomes and the prohibition on automatic recommit.
 
 Attachments/blob references and delivery/queue/lease state remain excluded.
 Their recovery policy, compatible authenticated manifest, atomic persistence,

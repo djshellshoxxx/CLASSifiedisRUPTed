@@ -1,0 +1,403 @@
+{
+  "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+  "source_tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+  "main": "137d88e36cc6b1611b062daa33cf84c3d29c86b3",
+  "original_count": 51,
+  "mapped_count": 51,
+  "missing_ids": [],
+  "unexpected_ids": [],
+  "duplicate_ids": [],
+  "all_original_statuses_open": true,
+  "severity_counts": {
+    "Critical": 15,
+    "High": 30,
+    "Medium-High": 6
+  },
+  "gate_counts": {
+    "Stage4-blocker": 15,
+    "Stage3-GO": 30,
+    "Stage5-release": 6
+  },
+  "original_inputs": [
+    {
+      "path": "planning/SECURITY_FINDINGS_TRACKER.md",
+      "git_blob": "d44912f735d506feb2bb1e2a3b3a511f32c615ec",
+      "same_as_main": true,
+      "same_as_candidate": true
+    },
+    {
+      "path": "RISK_REGISTER.md",
+      "git_blob": "6d0872d13226077ef999eb3a8cc91585dbc234c6",
+      "same_as_main": true,
+      "same_as_candidate": true
+    },
+    {
+      "path": "SECURITY_BLUE_TEAM_AUDIT_2026-11-15.md",
+      "git_blob": "8443d4b397bb83019a8f5ae7e94a6cec342b8c1e",
+      "same_as_main": true,
+      "same_as_candidate": true
+    },
+    {
+      "path": "SECURITY_RED_TEAM_AUDIT_2026-11-15_PASS2.md",
+      "git_blob": "925e31e9785cf456ca7e75681eb204ff7bd6d9c8",
+      "same_as_main": true,
+      "same_as_candidate": true
+    },
+    {
+      "path": "SECURITY_SENSITIVE_SURFACES_AUDIT_2026-11-15_PASS3.md",
+      "git_blob": "66352d51af5cbc1cc05877d677ccac0d7f91fdcf",
+      "same_as_main": true,
+      "same_as_candidate": true
+    },
+    {
+      "path": "SECURITY_CROSS_MODULE_SENSITIVE_AUDIT_2026-11-15_PASS4.md",
+      "git_blob": "8d96eb7259cb34d0b8db0b0edc13187d3c0c366b",
+      "same_as_main": true,
+      "same_as_candidate": true
+    },
+    {
+      "path": "SECURITY_TOP_DOWN_ARCHITECTURE_AUDIT_2026-11-15.md",
+      "git_blob": "03675c301d81d7af6eb54a2ed9f09ebc83fa46da",
+      "same_as_main": true,
+      "same_as_candidate": true
+    }
+  ],
+  "reports": [
+    {
+      "path": "BT-TD-RECONCILIATION.md",
+      "mapped_ids": [
+        "BT-01",
+        "BT-02",
+        "BT-03",
+        "BT-04",
+        "BT-05",
+        "BT-06",
+        "BT-07",
+        "BT-08",
+        "BT-09",
+        "BT-10",
+        "BT-11",
+        "BT-12",
+        "TD-01",
+        "TD-02",
+        "TD-03",
+        "TD-04",
+        "TD-05",
+        "TD-06",
+        "TD-07",
+        "TD-08"
+      ],
+      "mapped_count": 20,
+      "bytes": 21448,
+      "sha256": "b968e3dbdb7f73b795c49d3a6a88c1cbd6e1397e6ab726571b515b36f0908384",
+      "git_blob": "054330cf4dbd2162227b8c96a9eddc3f000f100c"
+    },
+    {
+      "path": "CR-RECONCILIATION.md",
+      "mapped_ids": [
+        "CR-09",
+        "CR-10",
+        "CR-11",
+        "CR-12",
+        "CR-13",
+        "CR-14",
+        "CR-15",
+        "CR-16",
+        "CR-17",
+        "CR-18",
+        "CR-19",
+        "CR-20",
+        "CR-21"
+      ],
+      "mapped_count": 13,
+      "bytes": 11503,
+      "sha256": "6f11b79fc32e5d335907dabbce0500c11da442de86e756a1381ad838b1d39fdd",
+      "git_blob": "2614d00459a1ba1402125ee4591abe7a58f28813"
+    },
+    {
+      "path": "S3-S4-RECONCILIATION.md",
+      "mapped_ids": [
+        "S3-01",
+        "S3-02",
+        "S3-03",
+        "S3-04",
+        "S3-05",
+        "S3-06",
+        "S3-07",
+        "S3-08",
+        "S3-09",
+        "S3-10",
+        "S3-11",
+        "S3-12",
+        "S4-01",
+        "S4-02",
+        "S4-03",
+        "S4-04",
+        "S4-05",
+        "S4-06"
+      ],
+      "mapped_count": 18,
+      "bytes": 21967,
+      "sha256": "3156eca7fbac246fd104ec533dae47f5d0be979c8636027dc55d3d317f09e796",
+      "git_blob": "1fe28bb14aa08a19ac0328667520ef1fd9a04b95"
+    }
+  ],
+  "findings": {
+    "S3-01": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "S3-02": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "S3-03": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "S3-04": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "S3-05": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S3-06": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S3-07": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "S3-08": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S3-09": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S3-10": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S3-11": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S3-12": {
+      "severity": "Medium-High",
+      "gate": "Stage5-release",
+      "status": "OPEN"
+    },
+    "S4-01": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "S4-02": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "S4-03": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S4-04": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S4-05": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "S4-06": {
+      "severity": "Medium-High",
+      "gate": "Stage5-release",
+      "status": "OPEN"
+    },
+    "CR-09": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-10": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "CR-11": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "CR-12": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-13": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-14": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-15": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-16": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-17": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-18": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-19": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-20": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "CR-21": {
+      "severity": "Medium-High",
+      "gate": "Stage5-release",
+      "status": "OPEN"
+    },
+    "BT-01": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "BT-02": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "BT-03": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "BT-04": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "BT-05": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "BT-06": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "BT-07": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "BT-08": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "BT-09": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "BT-10": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "BT-11": {
+      "severity": "Medium-High",
+      "gate": "Stage5-release",
+      "status": "OPEN"
+    },
+    "BT-12": {
+      "severity": "Medium-High",
+      "gate": "Stage5-release",
+      "status": "OPEN"
+    },
+    "TD-01": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "TD-02": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "TD-03": {
+      "severity": "Critical",
+      "gate": "Stage4-blocker",
+      "status": "OPEN"
+    },
+    "TD-04": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "TD-05": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "TD-06": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "TD-07": {
+      "severity": "High",
+      "gate": "Stage3-GO",
+      "status": "OPEN"
+    },
+    "TD-08": {
+      "severity": "Medium-High",
+      "gate": "Stage5-release",
+      "status": "OPEN"
+    }
+  },
+  "limits": "ID/hash/link integrity is not semantic closure, implementation acceptance or release approval"
+}

@@ -148,6 +148,29 @@ async function scenario(size: number, failRelease: () => boolean = () => false) 
   return { peers, wants, clock, proposal, opening, reserveAll, consents, broadcast };
 }
 
+async function expectLocalFreezeToRemainStable(peer: Peer, subjectId: string, holdId: string,
+  reason: 'local_reservation_lost' | 'reservation_expired'): Promise<void> {
+  // The caller reached this state using actual signed coordination and inventory commands.
+  const initial = (await peer.record(subjectId))!.state;
+  expect(initial).toMatchObject({ status: 'frozen', reason });
+  expect(initial.committedLocallyAt).not.toBeNull();
+  expect(initial.commitFeasibility?.feasible).toBe(true);
+  await peer.must('mutiny.coordination.refresh', {});
+  expect((await peer.record(subjectId))!.state).toEqual(initial);
+  await peer.restart();
+  await peer.must('mutiny.coordination.refresh', {});
+  const saved = (await peer.record(subjectId))!.state;
+  expect(saved).toEqual(initial);
+  const hold = await peer.storage.read(tx => tx.records.get(peer.identity.principal, inventoryHoldRepo.type, holdId));
+  expect((hold!.data as { state: string }).state).toBe('released');
+  const normalized = await normalizeCoordinationRecord({ ownerId: peer.identity.principal, state: saved });
+  expect(normalized).toEqual({ ownerId: peer.identity.principal,
+    state: { ...initial, committedLocallyAt: null, commitFeasibility: null } });
+  expect(await normalizeCoordinationRecord(normalized)).toEqual(normalized);
+  // Normalizing an export copy must not alter the live historical commitment.
+  expect((await peer.record(subjectId))!.state).toEqual(initial);
+}
+
 describe('independent durable signed Mutiny verification', () => {
   it('routes only newly verified peer evidence to the local inbox and resumes without duplicate alerts', async () => {
     const f = await scenario(2);
@@ -304,6 +327,7 @@ describe('independent durable signed Mutiny verification', () => {
     const state = (await peer.record(f.proposal.snapshot.subjectId))!.state;
     expect(state.status).toBe('frozen');
     expect(state.reason).toBe('local_reservation_lost');
+    await expectLocalFreezeToRemainStable(peer, f.proposal.snapshot.subjectId, holds[0]!, 'local_reservation_lost');
   });
 
   it('committed coordination freezes after signed reservations expire and releases its hold', async () => {
@@ -317,6 +341,7 @@ describe('independent durable signed Mutiny verification', () => {
     expect(state.reason).toBe('reservation_expired');
     const hold = await peer.storage.read(tx => tx.records.get(peer.identity.principal, inventoryHoldRepo.type, holds[0]!));
     expect((hold!.data as { state: string }).state).toBe('released');
+    await expectLocalFreezeToRemainStable(peer, f.proposal.snapshot.subjectId, holds[0]!, 'reservation_expired');
   });
 
   it('a signed participant dropout after the consent deadline cancels committed coordination and releases holds', async () => {

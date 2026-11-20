@@ -1,0 +1,610 @@
+{
+  "repository": "djshellshoxxx/CLASSifiedisRUPTed",
+  "observed_remote_receipt": {
+    "command": [
+      "git",
+      "ls-remote",
+      "--heads",
+      "origin"
+    ],
+    "cwd": "/workspace/scratch/e0ea2385d962/ClassRup",
+    "started_at_utc": "2026-11-20T06:45:02.707859+00:00",
+    "finished_at_utc": "2026-11-20T06:45:07.949666+00:00",
+    "exit_code": 0,
+    "stdout_bytes": 5844,
+    "stdout_sha256": "aaa1566c117268ba00f660d9daeac52ba7cf7aaebbbc54247ac64919cdef4b9e",
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "completed_at_utc": "2026-11-20T06:45:46.351974+00:00",
+  "completed_at_pacific": "2026-11-19T22:45:46.351974-08:00",
+  "baseline_path": "docs/development/evidence/20261118/inventory.json",
+  "baseline_sha256": "fe755a265cc0fe925bf6f349e77dec43f8d8f78db7c994d3cf3cbaa899202034",
+  "baseline_branch_count": 58,
+  "baseline_nonmain_count": 57,
+  "observed_branch_count": 65,
+  "original_ref_counts": {
+    "unchanged": 57
+  },
+  "original_ancestry_counts": {
+    "False": 23,
+    "True": 34
+  },
+  "expected_head_checks": [
+    {
+      "branch": "main",
+      "expected": "137d88e36cc6b1611b062daa33cf84c3d29c86b3",
+      "observed": "137d88e36cc6b1611b062daa33cf84c3d29c86b3",
+      "matches": true
+    },
+    {
+      "branch": "codex/classrup-mixed-codec-recovery-20261120",
+      "expected": "25b4708191f04516cab74371c84a15663cc6f6a6",
+      "observed": "25b4708191f04516cab74371c84a15663cc6f6a6",
+      "matches": true
+    },
+    {
+      "branch": "codex/classrup-recovery-next-20261120",
+      "expected": "86cd564e0692e8c777538200675dc20f2651ab51",
+      "observed": "86cd564e0692e8c777538200675dc20f2651ab51",
+      "matches": true
+    },
+    {
+      "branch": "claude/bold-mccarthy-qklhl6",
+      "expected": "a403614bb34d3d176d4693730e512e14959718b8",
+      "observed": "a403614bb34d3d176d4693730e512e14959718b8",
+      "matches": true
+    }
+  ],
+  "published_ancestry_checks": [
+    {
+      "name": "main_to_pr58",
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "137d88e36cc6b1611b062daa33cf84c3d29c86b3",
+        "25b4708191f04516cab74371c84a15663cc6f6a6"
+      ],
+      "exit_code": 0,
+      "ancestor": true
+    },
+    {
+      "name": "pr58_to_pr59",
+      "command": [
+        "git",
+        "merge-base",
+        "--is-ancestor",
+        "25b4708191f04516cab74371c84a15663cc6f6a6",
+        "86cd564e0692e8c777538200675dc20f2651ab51"
+      ],
+      "exit_code": 0,
+      "ancestor": true
+    }
+  ],
+  "additional_remote_refs": [
+    {
+      "branch": "codex/classrup-engineering-20261119",
+      "head": "e4bce5196e5086293234a576e3cb03697994cad8",
+      "ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/classrup-f1b-consolidation-20261119",
+      "head": "3aa7a17b28ee07ebec4336b49c3527743510bc16",
+      "ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/classrup-mixed-codec-recovery-20261120",
+      "head": "25b4708191f04516cab74371c84a15663cc6f6a6",
+      "ancestor_of_observed_main": false
+    },
+    {
+      "branch": "codex/classrup-recovery-next-20261120",
+      "head": "86cd564e0692e8c777538200675dc20f2651ab51",
+      "ancestor_of_observed_main": false
+    },
+    {
+      "branch": "docs/classrup-feature-qualification-20261119",
+      "head": "7619ba839a7bcbb38428d6429ab5362c5c18d095",
+      "ancestor_of_observed_main": true
+    },
+    {
+      "branch": "docs/consolidation-qualification-20261118",
+      "head": "7f5c250cd0a956081479891416c0267b26a1fdb1",
+      "ancestor_of_observed_main": true
+    },
+    {
+      "branch": "integration/comprehensive-consolidation",
+      "head": "a111eefb907a9f039f56777715e20b4976ea3d87",
+      "ancestor_of_observed_main": true
+    }
+  ],
+  "original_nonmain_refs": [
+    {
+      "branch": "agents/ci/trim-workflows",
+      "original_head": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "observed_head": "3f41b81accf062b2031504bd2e98d2913fb17fb8",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "agents/discovery/coarse-filters",
+      "original_head": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "observed_head": "4f60ff9fa121435b962801d6594d9fca413d5bb7",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "agents/discovery/ranking",
+      "original_head": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "observed_head": "de8f44d52cfccf4f1496a885cd4ac70894ff3847",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "agents/governance/taxonomy-prohibited",
+      "original_head": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "observed_head": "997249164e4b32df443dbbe2e07f729311c9cdeb",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "agents/i18n/languages-currencies",
+      "original_head": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "observed_head": "a0f9422d91b91d147405c17730d49350e87fc3ce",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "agents/moderation/rate-limits-signals",
+      "original_head": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "observed_head": "c098f1bf91759afd8ab0519ba04fa27671605de5",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "agents/notify/prefs-inapp",
+      "original_head": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "observed_head": "d6076d18621e16ec5b6a87e210f99bd305cf6243",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "agents/orchestration/wave1-handoff",
+      "original_head": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "observed_head": "6406a0369098fdb7aa58b5a4e85325560857815f",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "agents/privacy/classification-metadata-consent",
+      "original_head": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "observed_head": "2752f04dd27c6df90ffa5d22d479e77ae2688a86",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "chatgpt/zero-codex-continuation-spec-20261109",
+      "original_head": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "observed_head": "d52b29369271f39a4873ace47c76b1b92d0750b3",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/audit-observability-20261110",
+      "original_head": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "observed_head": "1ee040492345e607b431707fd7f08528bbf2db77",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/barter-discovery-status-20261110",
+      "original_head": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "observed_head": "e0f153fd9185eaa5b52882931eac1c694d54abc5",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-nested-assets-20261110",
+      "original_head": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "observed_head": "3a66e440847d7e1234e5a82674decdacb3efb954",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/cli-public-symlink-20261110",
+      "original_head": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "observed_head": "f8ed3a9324de83bd5116b1d7a4a8cfdb8682b88f",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/diagnostic-privacy-regression-20261110",
+      "original_head": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "observed_head": "9bb03390b2692d8fad80dbf653c28e36bef76c28",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/docs-wiki-20261110",
+      "original_head": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "observed_head": "19edded385d4aaa2fea9f482cf3a0fdc7cd0a806",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/federation-recovery-trace-20261110",
+      "original_head": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "observed_head": "20691f1cce36b1254644ea16bb438ca91221a872",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/noscript-vault-guard-20261110",
+      "original_head": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "observed_head": "968d63d8aebac1055ffc911fcceec519f30c8855",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/outbox-isolation-20261110",
+      "original_head": "a294dd21715edf501aac75bee69f785951985cd5",
+      "observed_head": "a294dd21715edf501aac75bee69f785951985cd5",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/qualify-pr10-20261110",
+      "original_head": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "observed_head": "4620d244e79e4cefbeade9cf59149ea1c3f7e5c2",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/review-ranking-i18n-20261112",
+      "original_head": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "observed_head": "d16abeef4dfab4f6376436f944f88a25d5a1bf8f",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "chatgpt/zero-codex/sync-expiry-head-boundary-20261110",
+      "original_head": "12558435a307415ba0332777f87b1603abba5268",
+      "observed_head": "12558435a307415ba0332777f87b1603abba5268",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "claude/bold-mccarthy-qklhl6",
+      "original_head": "a403614bb34d3d176d4693730e512e14959718b8",
+      "observed_head": "a403614bb34d3d176d4693730e512e14959718b8",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "claude/busy-cerf-vg3hz3",
+      "original_head": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "observed_head": "34a6892cff8babb01c41f42d04df85bf6860fa34",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "claude/classifiedisrupted-continue-lcuuwg",
+      "original_head": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "observed_head": "ab6541552827b82c7bbbcbba282b2836f92cdd37",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "claude/difficult-project-parts-dcqlup",
+      "original_head": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "observed_head": "566778cdf72399df4696e1d6f6675412813e6d5a",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "claude/gallant-goodall-9cc7yb",
+      "original_head": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "observed_head": "cc55f8ad153468ed6523ded1a59dfdf84215ce6b",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "claude/haiku-classrupted-features-cc9qmr",
+      "original_head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "observed_head": "7b729df38dddf59c4e60e245bdf1ca43546b1e7b",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "claude/happy-newton-4yttpa",
+      "original_head": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "observed_head": "8d5f66f75411debbfe9377679005cfadb6b679c0",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "claude/pensive-mendel-30x81m",
+      "original_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "claude/vigilant-newton-nva2l6",
+      "original_head": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "observed_head": "59028d1d962e6c4f113e19d77abf73a045a2318d",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "claude/wonderful-cori-ynhlsb",
+      "original_head": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "observed_head": "c9bd8933ff519e97ed97bb132432103a2ad29fe4",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "codex/classrup-completion-20261116",
+      "original_head": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "observed_head": "a189787ab6cc0741743da0cd0cf8b0a9cd2e39dc",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/classrup-consolidation-audit-20261104",
+      "original_head": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "observed_head": "59324a42e2ddf933eeef8c9363e33ef41690a31a",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/classrup-features-20261116",
+      "original_head": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "observed_head": "560b328dd335aebdc12de01ec339c43ebd164be3",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/consolidate-keyboard-focus-20261117",
+      "original_head": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "observed_head": "0c2e9e2992c359fd60f827983bd5e3f432bc8771",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/encrypted-domain-storage-20261116",
+      "original_head": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "observed_head": "afa6952b50d97e46e8e54d950db92a3593f1e5bd",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/listing-history-20261116",
+      "original_head": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "observed_head": "3f814c03a8c09652c79312959d0225ee0742457b",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/local-alpha-20261109",
+      "original_head": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "observed_head": "429fcfca9735a323a6ce709d8605429d6c850fdb",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/parallel-completion-20261116",
+      "original_head": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "observed_head": "64cfc398ea3ba2449da0ed7adbfe8d99261bbc05",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "codex/verified-status-20261116",
+      "original_head": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "observed_head": "edcb583afc2cba40f32b0cbdbce765d65febbd21",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "continuation/classrup-20261101",
+      "original_head": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "observed_head": "fa0cf0c33c80e71787539b964a03c0e8a561c718",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "diagnostic/webkit-keygen-20261118",
+      "original_head": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "observed_head": "764557187d51903630d3f864c4ee2fa56c3b7c6a",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "docs/client-owned-foundations-20261024",
+      "original_head": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "observed_head": "d804b49d262bdb87f1eabd0a15bfbb9d1d3e831a",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "docs/pr-consolidation-results-20261117",
+      "original_head": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "observed_head": "f75baf6240d2c6eb4fb2261b91148152451db2fb",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "docs/prompt3-foundations-20261022",
+      "original_head": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "observed_head": "39ac847870746e14b466d5706ebe5b00dddbaadb",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "integration/classrup-completion",
+      "original_head": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "observed_head": "75d4bf51433ebddef56c86c4065d9619ebe02058",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "integration/classrupted-audit-record-20261117",
+      "original_head": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "observed_head": "7d5a8e620e7f91cf9d4d73ae2f9aea4eabc8b298",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "integration/classrupted-consolidation-20261117",
+      "original_head": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "observed_head": "ccff8d8aab9640163d143a470e6e5e2eee04926f",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "integration/classrupted-continuation-20261118",
+      "original_head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "observed_head": "d81094688ac116c84c09f3105c7b3f6b4c472793",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "integration/feature-registry-20261117",
+      "original_head": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "observed_head": "e331e56165304c98a1c2bdd26692772b586e499d",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "integration/pr-docs-consolidation-20261117",
+      "original_head": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "observed_head": "43fb20ffd6c7b1a055db90dca8893a217b9834bb",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "integration/qualified-listing-vault-stack-20261116",
+      "original_head": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "observed_head": "d020237d6acf7180c2ccea9681a01ff4d700d1bb",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": true
+    },
+    {
+      "branch": "milestone/framework-browser-verification",
+      "original_head": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "observed_head": "25fa6f0a997253aedb53e0d106b2c0a08b050228",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "planning/future-cli-specs-20261110",
+      "original_head": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "observed_head": "af4dcc546e6342fb34d717d4050b52b8ffe7ffa3",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "work/classrup-framework",
+      "original_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "observed_head": "52bed39dda52c680a4299e20aaefe0f4695b2d58",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    },
+    {
+      "branch": "work/classrup-haiku-framework",
+      "original_head": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "observed_head": "0ac7f962aaa65e17cf1bd0a6d4b6a5438bd5e108",
+      "ref_state": "unchanged",
+      "original_head_ancestor_of_observed_main": false
+    }
+  ],
+  "github_observations": {
+    "observed_at_utc": "2026-11-20T06:45:20Z",
+    "sources": {
+      "open_prs": {
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/pulls?state=open&per_page=100",
+        "value": [
+          {
+            "number": 59,
+            "title": "Preserve notification and signed barter records through recovery",
+            "state": "open",
+            "draft": true,
+            "head": "86cd564e0692e8c777538200675dc20f2651ab51",
+            "head_branch": "codex/classrup-recovery-next-20261120",
+            "base": "137d88e36cc6b1611b062daa33cf84c3d29c86b3",
+            "base_branch": "main",
+            "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/59",
+            "updated_at": "2026-11-20T06:44:11Z"
+          },
+          {
+            "number": 58,
+            "title": "Qualify production backup recovery and consolidate log redaction",
+            "state": "open",
+            "draft": true,
+            "head": "25b4708191f04516cab74371c84a15663cc6f6a6",
+            "head_branch": "codex/classrup-mixed-codec-recovery-20261120",
+            "base": "137d88e36cc6b1611b062daa33cf84c3d29c86b3",
+            "base_branch": "main",
+            "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/58",
+            "updated_at": "2026-11-20T06:36:54Z"
+          },
+          {
+            "number": 8,
+            "title": "Draft: reconcile remaining Stage 3/4 foundation work after alpha consolidation",
+            "state": "open",
+            "draft": true,
+            "head": "a403614bb34d3d176d4693730e512e14959718b8",
+            "head_branch": "claude/bold-mccarthy-qklhl6",
+            "base": "95c46be41233520382566360e7135011412e8e6e",
+            "base_branch": "main",
+            "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8",
+            "updated_at": "2026-11-18T10:02:09Z"
+          }
+        ]
+      },
+      "pr59_commit": {
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/86cd564e0692e8c777538200675dc20f2651ab51",
+        "value": {
+          "sha": "86cd564e0692e8c777538200675dc20f2651ab51",
+          "tree": "ca413cdad0612f8e602f1ec98e499fd589d68906",
+          "parents": [
+            "25b4708191f04516cab74371c84a15663cc6f6a6"
+          ],
+          "date": "2026-11-20T06:43:02Z"
+        }
+      },
+      "pr58_commit": {
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/commits/25b4708191f04516cab74371c84a15663cc6f6a6",
+        "value": {
+          "sha": "25b4708191f04516cab74371c84a15663cc6f6a6",
+          "tree": "bc38af24e9d81724de6d463e681fd55db7e3618b",
+          "parents": [
+            "38ada90037d8176b0e0e319651b712cc396cad5d"
+          ],
+          "date": "2026-11-20T06:32:17Z"
+        }
+      },
+      "main_ref": {
+        "url": "https://api.github.com/repos/djshellshoxxx/CLASSifiedisRUPTed/git/ref/heads/main",
+        "value": {
+          "ref": "refs/heads/main",
+          "sha": "137d88e36cc6b1611b062daa33cf84c3d29c86b3"
+        }
+      }
+    }
+  },
+  "limits": [
+    "Read-only point-in-time ref reconciliation; no branch or PR mutation.",
+    "Original branch head equality does not establish product-feature completeness.",
+    "Ancestry is computed from available local Git commit objects; no source or runtime tests ran.",
+    "PR #8 API base.sha is historical metadata; fresh main is checked independently.",
+    "Absence of a moved original ref is not proof of absence of unpushed or other concurrent work."
+  ],
+  "all_nonmain_ancestry_counts": {
+    "ancestor": 39,
+    "not_ancestor": 25,
+    "unknown": 0
+  }
+}

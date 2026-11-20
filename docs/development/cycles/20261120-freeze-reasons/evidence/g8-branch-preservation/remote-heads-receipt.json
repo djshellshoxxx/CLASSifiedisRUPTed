@@ -1,0 +1,16 @@
+{
+  "command": [
+    "git",
+    "ls-remote",
+    "--heads",
+    "origin"
+  ],
+  "cwd": "/workspace/scratch/e0ea2385d962/ClassRup",
+  "started_at_utc": "2026-11-20T06:45:02.707859+00:00",
+  "finished_at_utc": "2026-11-20T06:45:07.949666+00:00",
+  "exit_code": 0,
+  "stdout_bytes": 5844,
+  "stdout_sha256": "aaa1566c117268ba00f660d9daeac52ba7cf7aaebbbc54247ac64919cdef4b9e",
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

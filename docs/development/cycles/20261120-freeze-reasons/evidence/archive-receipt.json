@@ -1,0 +1,139 @@
+{
+  "source": "94a34723108cf60db3b9bab1c669f5c9b5c36cd3",
+  "tree": "1c7f8a1c4be00b81a9d2098673eb4fc6ddff7fe4",
+  "records": [
+    {
+      "path": "g8-freeze-integrated/barter-backup-regression-receipt.json",
+      "original_bytes": 1212,
+      "original_sha256": "197d2a00583027329abd4549e88d7ec97c3549136b5d3457e2058b1ae20a8d88",
+      "stored_bytes": 1212,
+      "stored_sha256": "197d2a00583027329abd4549e88d7ec97c3549136b5d3457e2058b1ae20a8d88"
+    },
+    {
+      "path": "g8-freeze-integrated/barter-backup-regression.json.gz",
+      "original_bytes": 5776,
+      "original_sha256": "b33bd61816675936aebb65faf083c66f69e274f3d1d3ac049750134653325d63",
+      "stored_bytes": 1134,
+      "stored_sha256": "1aa53b4ca86d1bcc7c9080882b4afa40214201f3fd90ca788be64ec65f20fd7c"
+    },
+    {
+      "path": "g8-freeze-integrated/barter-backup-regression.log.gz",
+      "original_bytes": 126,
+      "original_sha256": "c16c640da9471d29786d2b9e324dc641bfea7726237b917f0fff208ba3dc560b",
+      "stored_bytes": 130,
+      "stored_sha256": "62eb7c13be0b5fa8ded20936f53d37cb5911cb69a204836b17216d7257534d1c"
+    },
+    {
+      "path": "g8-freeze-integrated/build-receipt.json",
+      "original_bytes": 428,
+      "original_sha256": "feec086b1a6d334313d9e27bec3924253d989498f720ed00cc53f99c6686cda6",
+      "stored_bytes": 428,
+      "stored_sha256": "feec086b1a6d334313d9e27bec3924253d989498f720ed00cc53f99c6686cda6"
+    },
+    {
+      "path": "g8-freeze-integrated/build.log.gz",
+      "original_bytes": 53,
+      "original_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60",
+      "stored_bytes": 70,
+      "stored_sha256": "5f38089667a790e2a65540b27b5ed01132240745e9145a6acc8df19f158ccba4"
+    },
+    {
+      "path": "g8-freeze-integrated/persistence-oracle-receipt.json",
+      "original_bytes": 1036,
+      "original_sha256": "dbde7db083a181290017d3daae0f6997bc5af1da569836d16969ee8ab26677b4",
+      "stored_bytes": 1036,
+      "stored_sha256": "dbde7db083a181290017d3daae0f6997bc5af1da569836d16969ee8ab26677b4"
+    },
+    {
+      "path": "g8-freeze-integrated/persistence-oracle.json.gz",
+      "original_bytes": 12018,
+      "original_sha256": "e18b089bdae940f1ec3cd3355af42c88d92e6b5b999ff43df0236e66d9e2a7ec",
+      "stored_bytes": 2006,
+      "stored_sha256": "a589c538f8f17df2bab05bd406d074bfbcd597a131b89d556938142be8a06912"
+    },
+    {
+      "path": "g8-freeze-integrated/persistence-oracle.log.gz",
+      "original_bytes": 120,
+      "original_sha256": "0f25c724555662e21bc066b027fee00b2892486375e6595262c5af163f9d396d",
+      "stored_bytes": 126,
+      "stored_sha256": "8d55930d8a4a047f9d3e097f03a9050e0ad83f2ae7d49f3561ea91e9503ccce6"
+    },
+    {
+      "path": "g8-freeze-integrated/setup-receipt.json",
+      "original_bytes": 453,
+      "original_sha256": "8f33921dc28ad0d6779fb7eb57aead8521a909bcbb0f625e1d85f3e7c7df3f11",
+      "stored_bytes": 453,
+      "stored_sha256": "8f33921dc28ad0d6779fb7eb57aead8521a909bcbb0f625e1d85f3e7c7df3f11"
+    },
+    {
+      "path": "g8-freeze-integrated/setup.log.gz",
+      "original_bytes": 63,
+      "original_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939",
+      "stored_bytes": 79,
+      "stored_sha256": "0cc648a7d12351983a9e23cd29fd4dbe8079ed537c29932ef29f8a3fdb4b3877"
+    },
+    {
+      "path": "g8-freeze-integrated/summary.json",
+      "original_bytes": 5065,
+      "original_sha256": "b8b54e1abebb7ee53500e3cb164558a17e298fcb9cb3fdd87dcaf55082080a4e",
+      "stored_bytes": 5065,
+      "stored_sha256": "b8b54e1abebb7ee53500e3cb164558a17e298fcb9cb3fdd87dcaf55082080a4e"
+    },
+    {
+      "path": "g8-freeze-integrated/typecheck-receipt.json",
+      "original_bytes": 474,
+      "original_sha256": "f0e1ee0932ec9411fcad97570c92a1230ca26a9e0b381e2330638b277e645a47",
+      "stored_bytes": 474,
+      "stored_sha256": "f0e1ee0932ec9411fcad97570c92a1230ca26a9e0b381e2330638b277e645a47"
+    },
+    {
+      "path": "g8-freeze-integrated/typecheck.log.gz",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_bytes": 20,
+      "stored_sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+    },
+    {
+      "path": "g8-branch-preservation/RECONCILIATION.md",
+      "original_bytes": 5326,
+      "original_sha256": "c555a39bdabcd364a42947dfa707733819b9bd1dc0ae519a34e0425848873153",
+      "stored_bytes": 5326,
+      "stored_sha256": "c555a39bdabcd364a42947dfa707733819b9bd1dc0ae519a34e0425848873153"
+    },
+    {
+      "path": "g8-branch-preservation/audit.json",
+      "original_bytes": 24050,
+      "original_sha256": "591b02208dd8e2895526768d9a5eed7941dcbbf4e787258df5232b30025c8210",
+      "stored_bytes": 24050,
+      "stored_sha256": "591b02208dd8e2895526768d9a5eed7941dcbbf4e787258df5232b30025c8210"
+    },
+    {
+      "path": "g8-branch-preservation/github-observations.json",
+      "original_bytes": 2928,
+      "original_sha256": "dfe6ff5d039a19b33da250c57d7f16efb505a512733c0b745aaf5c99a5089754",
+      "stored_bytes": 2928,
+      "stored_sha256": "dfe6ff5d039a19b33da250c57d7f16efb505a512733c0b745aaf5c99a5089754"
+    },
+    {
+      "path": "g8-branch-preservation/remote-heads-receipt.json",
+      "original_bytes": 482,
+      "original_sha256": "80be2086341b17db271d338f3eb374fa07968278c791d348b00e85fa90e5a84d",
+      "stored_bytes": 482,
+      "stored_sha256": "80be2086341b17db271d338f3eb374fa07968278c791d348b00e85fa90e5a84d"
+    },
+    {
+      "path": "g8-branch-preservation/remote-heads.stderr.txt",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_bytes": 0,
+      "stored_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "g8-branch-preservation/remote-heads.txt",
+      "original_bytes": 5844,
+      "original_sha256": "aaa1566c117268ba00f660d9daeac52ba7cf7aaebbbc54247ac64919cdef4b9e",
+      "stored_bytes": 5844,
+      "stored_sha256": "aaa1566c117268ba00f660d9daeac52ba7cf7aaebbbc54247ac64919cdef4b9e"
+    }
+  ]
+}

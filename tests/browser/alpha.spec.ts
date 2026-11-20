@@ -32,6 +32,9 @@ test('backup coverage explains excluded data and clears private counts on lock',
   await listing(page, 'Counted private listing');
   await page.getByRole('button', { name: 'Check backup coverage', exact: true }).click();
   await expect(page.locator('#backup-coverage')).toHaveText(/At last check: [1-9]\d* saved records? across [1-9]\d* supported categor(?:y|ies)\./);
+  await expect(page.locator('#backup-coverage')).toContainText('Attachment check: 0 held references, 0 missing stored blobs, 0 present but excluded stored blobs, and 0 holder rows.');
+  await expect(page.locator('#backup-coverage')).toContainText('Attachment bytes and references are excluded from v1 backups.');
+  await expect(page.locator('#backup-coverage')).toContainText('Holder labels are not authenticated and unheld blobs are not inventoried.');
   const checked = await page.locator('#backup-coverage').textContent();
   expect(checked).not.toContain('Counted private listing');
   await expect(page.getByText(/Attachments, pending deliveries, temporary coordination locks/)).toBeVisible();

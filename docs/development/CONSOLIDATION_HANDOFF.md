@@ -3,15 +3,17 @@
 ## New owner-directed continuation
 
 The owner subsequently requested continuing incomplete features and successive
-fresh code, bug and defensive security reviews. The [persisted restore-rejection handoff](cycles/20261120-restore-rejection-proof/HANDOFF.md)
+fresh code, bug and defensive security reviews. The [PWA and restore-rejection consolidation](cycles/20261120-pwa-recovery-consolidation/HANDOFF.md)
 is the current continuation record. It supersedes the finite-task stop direction
 below for this newly authorized work. Existing automation settings are unchanged.
 
-The latest follow-up extends one compatibility acceptance case from
-[draft PR #69](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/69).
-It directly checks persisted destination state across future-codec rejection
-and reopen, while retaining PR #69's published head as its source parent.
-PR #69's source and hosted qualification remain separate; its full-run failures
+The latest candidate combines [PR #70](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/70)'s PWA attachment-exclusion diagnostic with
+[PR #71](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/71)'s persisted
+restore-rejection proof. Both published histories and all contributed source
+blobs remain intact. Three assertions extend the existing browser coverage
+journey; the current local selection passes 30 integration cases, TypeScript,
+static checks, 27 tooling tests and 46 CLI tests. Native-browser execution and
+current-head hosted qualification remain pending. PR #69's full-run failures
 and pending entries remain preserved in the
 [parent handoff](cycles/20261120-recovery-consolidation/HANDOFF.md).
 

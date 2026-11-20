@@ -4,7 +4,7 @@ This register accompanies the [comprehensive branch consolidation](BRANCH_CONSOL
 It is based on the current runtime, retained unique branch changes, actual test
 coverage and existing contracts. Specifications and generated source-path counts
 do not establish completion. The owner has authorized continued incomplete-
-feature work and successive independent audits; see the [current handoff](cycles/20261120-freeze-reasons/INTEGRATION-HANDOFF.md).
+feature work and successive independent audits; see the [current handoff](cycles/20261120-combined-freeze/HANDOFF.md).
 
 ## Completed slices to preserve
 
@@ -53,6 +53,13 @@ feature work and successive independent audits; see the [current handoff](cycles
   maps all 51 existing findings to inspected current controls, unresolved
   boundaries and next acceptance steps. All 51 remain OPEN; original audits,
   severities, provisional gates and owner roles are unchanged.
+- The [combined freeze-recovery candidate](cycles/20261120-combined-freeze/QUALIFICATION.md)
+  retains both PR #60 and PR #61 histories, the reviewed production implementation,
+  both test sets and both original handoffs. Its own source passed TypeScript,
+  the 39 affected cases, setup and build, including ordinary owner hold loss,
+  separate peer expiry and authenticated withdrawal precedence. This is a new
+  source-specific qualification of overlapping cases, not an increased distinct
+  test total or hosted/browser completion.
 
 ## Priority and dependency register
 

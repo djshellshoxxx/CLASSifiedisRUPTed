@@ -1,0 +1,55 @@
+{
+  "source": "d629b4e14dc7d7dea7e32d80ab358b5060f5e69f",
+  "tree": "b30b157efe2f91fbac04ebfcc0568ce43c467d8e",
+  "parents": [
+    "759f5e2c17eb127db152eb3070557afefe3c64e7",
+    "8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e"
+  ],
+  "resolution": "Preserve PR61 production and original handoff; retain both test files; preserve exact PR60 handoff under a separate path.",
+  "records": [
+    {
+      "path": "packages/mutiny/src/trade_proposals/repository.ts",
+      "preserved_from": "759f5e2c17eb127db152eb3070557afefe3c64e7",
+      "original_path": "packages/mutiny/src/trade_proposals/repository.ts",
+      "bytes": 17477,
+      "sha256": "7a49aefff3b07eb74982b81cdfa7d20df89d3625395133baf2d166df0f9e27ad",
+      "blob": "0554e07aa0cead3ac61b44e75faa34dba5452a9b"
+    },
+    {
+      "path": "tests/integration/mutiny-persistence.test.ts",
+      "preserved_from": "759f5e2c17eb127db152eb3070557afefe3c64e7",
+      "original_path": "tests/integration/mutiny-persistence.test.ts",
+      "bytes": 30003,
+      "sha256": "90fb371f750498272042acb5b5b029cc9a1691cd6a2cd0b7e80dbcd528d89361",
+      "blob": "6d1ac8b5851bc0884bd2cdf8f0e88e3a6ea288c7"
+    },
+    {
+      "path": "tests/integration/production-barter-recovery.test.ts",
+      "preserved_from": "8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e",
+      "original_path": "tests/integration/production-barter-recovery.test.ts",
+      "bytes": 21183,
+      "sha256": "75e3663d73516c00bcf2377ca3f060e43b1f211c7d13a6dae1d7947debdad3de",
+      "blob": "9b8da0d86a226424d014e535f845b0396448cb79"
+    },
+    {
+      "path": "docs/development/cycles/20261120-freeze-reasons/HANDOFF.md",
+      "preserved_from": "759f5e2c17eb127db152eb3070557afefe3c64e7",
+      "original_path": "docs/development/cycles/20261120-freeze-reasons/HANDOFF.md",
+      "bytes": 4889,
+      "sha256": "1bedb90e06d10ba6180351b33500bd79f5bfe794f92355f086a79c9c467d9eef",
+      "blob": "e715d1db3c276f4c3c44e779d156fad30e18601c"
+    },
+    {
+      "path": "docs/development/cycles/20261120-combined-freeze/PR60-HANDOFF.md",
+      "preserved_from": "8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e",
+      "original_path": "docs/development/cycles/20261120-freeze-reasons/HANDOFF.md",
+      "bytes": 5782,
+      "sha256": "fbf3fb76488ea6c2dca7b02bec3f9c4a2c254cec43f8c59c36b739e2ccc53a58",
+      "blob": "65fd94547595dfe1b3391d2d53331145ce54785b"
+    }
+  ],
+  "runtime_configuration_changed_from_first_parent": [],
+  "tests_changed_from_first_parent": [
+    "tests/integration/production-barter-recovery.test.ts"
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "source": "d629b4e14dc7d7dea7e32d80ab358b5060f5e69f",
+  "tree": "b30b157efe2f91fbac04ebfcc0568ce43c467d8e",
+  "records": [
+    {
+      "path": "g10-combined-freeze/barter-backup-regression-receipt.json",
+      "original_bytes": 1211,
+      "original_sha256": "c37748b53386af0dd7187b34320377cc0ba8495542bb3f85194df6f3e8be5a9a",
+      "stored_bytes": 1211,
+      "stored_sha256": "c37748b53386af0dd7187b34320377cc0ba8495542bb3f85194df6f3e8be5a9a"
+    },
+    {
+      "path": "g10-combined-freeze/barter-backup-regression.json.gz",
+      "original_bytes": 5764,
+      "original_sha256": "53279346fc9f1015fafa9190d0a363c4b7b3607e3089058ee3441bc04ea7a53a",
+      "stored_bytes": 1128,
+      "stored_sha256": "bf487a0d44df5b69c4f4ed300025445b720375a3d64b0763da4cdab2cda5ebbd"
+    },
+    {
+      "path": "g10-combined-freeze/barter-backup-regression.log.gz",
+      "original_bytes": 125,
+      "original_sha256": "23685942b0824915f3b87c7f92524057e6d540231da8def3caad48e3bb0a6023",
+      "stored_bytes": 130,
+      "stored_sha256": "39cc77590a9a4e30d270c444e1d2d404a22426c5771807c9bd08e09c87cbd677"
+    },
+    {
+      "path": "g10-combined-freeze/build-receipt.json",
+      "original_bytes": 428,
+      "original_sha256": "b1a0a86ed8dbe632785f2e6581e594d5db039dd90e96be5d91f511dfb45f9e15",
+      "stored_bytes": 428,
+      "stored_sha256": "b1a0a86ed8dbe632785f2e6581e594d5db039dd90e96be5d91f511dfb45f9e15"
+    },
+    {
+      "path": "g10-combined-freeze/build.log.gz",
+      "original_bytes": 53,
+      "original_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60",
+      "stored_bytes": 70,
+      "stored_sha256": "5f38089667a790e2a65540b27b5ed01132240745e9145a6acc8df19f158ccba4"
+    },
+    {
+      "path": "g10-combined-freeze/persistence-oracle-receipt.json",
+      "original_bytes": 1035,
+      "original_sha256": "2ebf7c721a1fe7e1b24a4e5dc79eba6fa1724394bf8a432e5d620b0c878090f3",
+      "stored_bytes": 1035,
+      "stored_sha256": "2ebf7c721a1fe7e1b24a4e5dc79eba6fa1724394bf8a432e5d620b0c878090f3"
+    },
+    {
+      "path": "g10-combined-freeze/persistence-oracle.json.gz",
+      "original_bytes": 11994,
+      "original_sha256": "9e9abe4c19ab99874f5f4e15576da8ea42534ee369c993b3f23fe640d50e97a5",
+      "stored_bytes": 2006,
+      "stored_sha256": "3886391f7e9bbf105106bc171ac03ae41aae1ee1218205a1c224829cf211a2fb"
+    },
+    {
+      "path": "g10-combined-freeze/persistence-oracle.log.gz",
+      "original_bytes": 119,
+      "original_sha256": "f7be1e7e73ec34a0c4f2ae28742102a8aa70c93e5a4da31ca194fb3b2b0cc7ce",
+      "stored_bytes": 126,
+      "stored_sha256": "fcae0cd61b58b86e3736277595586dcc12ca96e597b416657894f9f293bd255a"
+    },
+    {
+      "path": "g10-combined-freeze/setup-receipt.json",
+      "original_bytes": 453,
+      "original_sha256": "d0c49dd9558eaeed702e9b59c925c302ab543e2ba87aa929904cd8e822622e5e",
+      "stored_bytes": 453,
+      "stored_sha256": "d0c49dd9558eaeed702e9b59c925c302ab543e2ba87aa929904cd8e822622e5e"
+    },
+    {
+      "path": "g10-combined-freeze/setup.log.gz",
+      "original_bytes": 63,
+      "original_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939",
+      "stored_bytes": 79,
+      "stored_sha256": "0cc648a7d12351983a9e23cd29fd4dbe8079ed537c29932ef29f8a3fdb4b3877"
+    },
+    {
+      "path": "g10-combined-freeze/summary.json",
+      "original_bytes": 5072,
+      "original_sha256": "d6c03fce40b2db948b93285b95c6411d47527ad0e9dc72d58b213d9ac4575111",
+      "stored_bytes": 5072,
+      "stored_sha256": "d6c03fce40b2db948b93285b95c6411d47527ad0e9dc72d58b213d9ac4575111"
+    },
+    {
+      "path": "g10-combined-freeze/typecheck-receipt.json",
+      "original_bytes": 474,
+      "original_sha256": "74202389c3664450dbcff92fea20fb8227585937480c57bb1570ff0ca215f493",
+      "stored_bytes": 474,
+      "stored_sha256": "74202389c3664450dbcff92fea20fb8227585937480c57bb1570ff0ca215f493"
+    },
+    {
+      "path": "g10-combined-freeze/typecheck.log.gz",
+      "original_bytes": 0,
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_bytes": 20,
+      "stored_sha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec"
+    }
+  ],
+  "total_original_bytes": 26791,
+  "total_stored_bytes": 12232
+}

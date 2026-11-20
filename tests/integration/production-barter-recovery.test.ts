@@ -9,7 +9,7 @@ import { signEnvelope, verifyEnvelope } from '../../packages/federation/src/inde
 import { bazaarDefinitions, inventoryHoldRepo, listingRepo, listingRevisionRepo, publicationRepo } from '../../packages/bazaar/src/index.ts';
 import { discoveryDefinitions, retainedListingRepo } from '../../packages/discovery/src/index.ts';
 import {
-  admitSignedGraph, coordinationRepo, discoverCycles, prepareProposal, PROPOSAL_TYPE, WANT_TYPE, wantRepo,
+  admitSignedGraph, coordinationRepo, discoverCycles, prepareProposal, PROPOSAL_TYPE, WANT_TYPE, WITHDRAWAL_TYPE, wantRepo, validateCoordinationRecord,
   type CoordinationState,
 } from '../../packages/mutiny/src/index.ts';
 import { openVault, type UnlockedVault, type Vault } from '../../packages/vault/src/index.ts';
@@ -167,6 +167,59 @@ describe('production barter record recovery', () => {
       const signature = await original.identity.sign(message);
       const backup = await original.exportBackup(passphrase);
       expect(await coordination(owner)).toEqual(before); // Export preflight must not freeze the live source.
+
+      // Signed evidence is genuine, but these two cached terminal reasons are
+      // local decisions. Check repeated replay without treating either as signed proof.
+      for (const reason of ['reservation_expired', 'local_reservation_lost'] as const) {
+        const cached = { ...before.data.state, status: 'frozen' as const, reason };
+        const verified = await validateCoordinationRecord(cached);
+        expect(verified).toMatchObject({ status: 'frozen', reason });
+        expect((await validateCoordinationRecord(verified)).reason).toBe(reason);
+      }
+      // A real signed terminal cancellation wins over a locally cached reason.
+      // The test never grants an unsigned cache reason authority over evidence.
+      const withdrawal = await signEnvelope(original.identity, {
+        type: WITHDRAWAL_TYPE, createdAt: clock.iso(), seq: 2, prev: opening.cid,
+        payload: { subjectId: proposal.snapshot.subjectId, revisionHash: proposal.revisionHash,
+          revisionNo: 1, reason: 'cancel' },
+      });
+      const cachedWithWithdrawal = { ...before.data.state, status: 'frozen' as const,
+        reason: 'local_reservation_lost',
+        evidence: [...before.data.state.evidence, { envelope: withdrawal, receivedAtLocal: clock.now() }] };
+      expect(await validateCoordinationRecord(cachedWithWithdrawal)).toMatchObject({
+        status: 'cancelled', reason: 'cancel',
+      });
+
+      // Exercise a real loss of the local hold through the ordinary inventory
+      // command, then repeat matching-enabled refresh: the reason must not drift
+      // to an unrelated conflicting-promise explanation.
+      const localHold = beforeInputs.holds.find(row => row.data.ownerId === principal && row.data.state === 'active');
+      expect(localHold).toBeDefined();
+      await owner.command('bazaar.inventory.release', { holdId: localHold!.id, expectedRevision: localHold!.revision });
+      expect(await owner.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
+      const lostOnce = await coordination(owner);
+      expect(lostOnce.data.state).toMatchObject({ status: 'frozen', reason: 'local_reservation_lost' });
+      expect(await owner.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
+      const lostAgain = await coordination(owner);
+      expect(lostAgain.data.state).toMatchObject({ status: 'frozen', reason: 'local_reservation_lost' });
+
+      // The independent peer has the same signed reservation/consent chain.
+      // Commit it through the normal handler, then advance only its clock:
+      // the owner's archived backup remains at the original timestamp.
+      await ingest(other, consents[0]!);
+      expect((await coordination(other)).data.state.status).toBe('committed');
+      const expiredClock = createFakeClock(clock.now() + 2 * DAY);
+      const expiredPeer = runtime({ principal: peer.principal, identity: peer, storage: peerStorage },
+        expiredClock, peerIds, categoryId);
+      expiredPeer.setMatchingPolicy({ enabled: true, blockedOwners: [] });
+      expect(await expiredPeer.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
+      expect((await coordination(expiredPeer)).data.state).toMatchObject({
+        status: 'frozen', reason: 'reservation_expired',
+      });
+      expect(await expiredPeer.command('mutiny.coordination.refresh', {})).toEqual({ refreshed: 1 });
+      expect((await coordination(expiredPeer)).data.state).toMatchObject({
+        status: 'frozen', reason: 'reservation_expired',
+      });
       await original.lock();
 
       const expected = { ...before, data: { ...before.data, state: { ...before.data.state,

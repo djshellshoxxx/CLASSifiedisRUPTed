@@ -139,7 +139,8 @@ function recordStore(d: DriverTx) {
         id: input.id,
         revision: cas.value + 1,
         data: jsonText(input.data, 'record data'),
-        idx: input.idx,
+        // Retained caller tuples must not mutate indexes outside a versioned write.
+        idx: [input.idx[0], input.idx[1], input.idx[2], input.idx[3]],
         createdAt: current?.createdAt ?? now,
         updatedAt: now,
       };
@@ -166,7 +167,7 @@ function recordStore(d: DriverTx) {
       const data = jsonText(rec.data, 'record data');
       const current = d.records.get(rec.tenantId, rec.type, rec.id);
       if (current) return current.revision === rec.revision && current.data === data ? ok('identical') : err(appError('CONFLICT_REVISION', { params: { currentRevision: current.revision } }));
-      d.records.upsert({ tenant: rec.tenantId, type: rec.type, id: rec.id, revision: rec.revision, data, idx, createdAt: rec.createdAt, updatedAt: rec.updatedAt });
+      d.records.upsert({ tenant: rec.tenantId, type: rec.type, id: rec.id, revision: rec.revision, data, idx: [idx[0], idx[1], idx[2], idx[3]], createdAt: rec.createdAt, updatedAt: rec.updatedAt });
       return ok('restored');
     },
   };
@@ -534,9 +535,10 @@ function blobStore(d: DriverTx, kind: DriverKind) {
 }
 
 function migrationStore(d: DriverTx) {
+  const copy = (row: MigrationRow): MigrationRow => ({ id: row.id, checksum: row.checksum, appliedAt: row.appliedAt });
   return {
-    list: (): MigrationRow[] => d.migrations.list(),
-    insert: (row: MigrationRow): void => d.migrations.insert(row),
+    list: (): MigrationRow[] => d.migrations.list().map(copy),
+    insert: (row: MigrationRow): void => d.migrations.insert(copy(row)),
   };
 }
 

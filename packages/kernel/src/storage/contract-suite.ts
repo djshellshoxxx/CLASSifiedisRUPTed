@@ -54,6 +54,58 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
     const ids = createDeterministicIds({ seed: 7, now: () => clock.now() });
     const scoped = (tx: Tx, tenantId = 'tenant-a') => writeScope({ tx, tenantId, clock, ids, deliveryEligible: true });
 
+    it(`${adapter}: orphan sweep validates limits, honors holders and cutoff, and requests encrypted shredding`, async () => {
+      const s = await make();
+      const upload = async (tenant: string, values: readonly number[], now: number, encrypted = false): Promise<string> => {
+        const result = await s.transaction(tx => tx.blobs.put({
+          tenant, bytes: Uint8Array.from(values), contentType: 'application/octet-stream',
+          privacy: encrypted ? 'P1' : 'P0', encrypted, now,
+        }));
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error('Could not create orphan-sweep fixture');
+        return result.value.ref;
+      };
+      const orphan = await upload('tenant-a', [1, 2, 3], T0 - 60_000, true);
+      const held = await upload('tenant-a', [4, 5, 6], T0 - 60_000);
+      const recent = await upload('tenant-a', [7, 8, 9], T0 + 60_000);
+      const foreign = await upload('tenant-b', [10, 11, 12], T0 - 60_000);
+      const attachment = await s.transaction(tx => tx.blobs.attach('tenant-a', held, 'listing/current'));
+      expect(attachment.ok).toBe(true);
+
+      // Reject malformed limits before an adapter's SELECT/slice can delete blobs.
+      for (const invalid of [-1, 0, 1.5, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        await expect(s.transaction(tx => ok(tx.blobs.collectOrphans(T0, invalid))))
+          .rejects.toThrow(RangeError);
+        for (const [tenant, ref] of [
+          ['tenant-a', orphan], ['tenant-a', held], ['tenant-a', recent], ['tenant-b', foreign],
+        ] as const) {
+          expect(await s.read(tx => tx.blobs.info(tenant, ref))).toBeDefined();
+        }
+      }
+
+      // The oldest eligible, unattached owner blob is removed in a bounded batch.
+      const first = await s.transaction(tx => ok({
+        removed: tx.blobs.collectOrphans(T0, 1), shredded: tx.blobs.shredded(),
+      }));
+      expect(first).toEqual(ok({
+        removed: 1, shredded: [{ tenant: 'tenant-a', ref: orphan }],
+      }));
+      expect(await s.read(tx => tx.blobs.info('tenant-a', orphan))).toBeUndefined();
+      expect(await s.read(tx => tx.blobs.info('tenant-a', held))).toMatchObject({ holders: 1 });
+      expect(await s.read(tx => tx.blobs.info('tenant-a', recent))).toBeDefined();
+      expect(await s.read(tx => tx.blobs.info('tenant-b', foreign))).toBeDefined();
+
+      // A second bounded batch removes the other tenant's orphan, not live or recent data.
+      const second = await s.transaction(tx => ok({
+        removed: tx.blobs.collectOrphans(T0, 1), shredded: tx.blobs.shredded(),
+      }));
+      expect(second).toEqual(ok({ removed: 1, shredded: [] }));
+      expect(await s.read(tx => tx.blobs.info('tenant-b', foreign))).toBeUndefined();
+      expect(await s.read(tx => tx.blobs.info('tenant-a', held))).toMatchObject({ holders: 1 });
+      expect(await s.read(tx => tx.blobs.info('tenant-a', recent))).toBeDefined();
+      expect(await s.transaction(tx => ok(tx.blobs.collectOrphans(T0, 1)))).toEqual(ok(0));
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

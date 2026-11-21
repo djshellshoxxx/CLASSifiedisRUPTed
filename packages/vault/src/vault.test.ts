@@ -48,6 +48,9 @@ describe('vault composition', () => {
       const throwingGetter = Object.defineProperty({ ...backupCodec(note) }, 'parse', {
         get(): never { throw new Error('internal codec secret must not leak'); },
       }) as BackupCodec;
+      // An array can shadow .map(); admission must inspect its actual elements.
+      const maskedInvalidCodec = [{ ...backupCodec(note), type: '' }];
+      Object.defineProperty(maskedInvalidCodec, 'map', { value: () => [] });
       const invalidRegistries: readonly (readonly BackupCodec[])[] = [
         [{ ...backupCodec(note), type: '' }],
         [backupCodec(note), backupCodec(note)],
@@ -58,6 +61,7 @@ describe('vault composition', () => {
         [{ ...backupCodec(note), restoreData: null } as unknown as BackupCodec],
         [{ ...backupCodec(note), recordId: [] } as unknown as BackupCodec],
         [throwingGetter],
+        maskedInvalidCodec,
       ];
       for (const [index, invalid] of invalidRegistries.entries()) {
         expect(() => vaultFromStorage(createMemoryStorage(), invalid)).toThrow(/^Invalid backup codecs$/);

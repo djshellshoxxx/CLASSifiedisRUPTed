@@ -609,8 +609,8 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
     it(`${adapter}: duplicate blob bytes cannot silently change declared content types`, async () => {
       const s = await make();
       const bytes = new Uint8Array([60, 115, 118, 103, 62]);
-      const put = (tenant: string, contentType: string, privacy: 'P0' | 'P2') =>
-        s.transaction(tx => tx.blobs.put({ tenant, bytes, contentType, privacy, encrypted: true, now: T0 }));
+      const put = (tenant: string, contentType: string, privacy: 'P0' | 'P2', encrypted = true) =>
+        s.transaction(tx => tx.blobs.put({ tenant, bytes, contentType, privacy, encrypted, now: T0 }));
       const image = await put('tenant-image', 'image/png', 'P2');
       const text = await put('tenant-text', 'text/plain', 'P2');
       expect(image.ok && text.ok).toBe(true);
@@ -634,6 +634,14 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(published.ok && published.value).toMatchObject({ ref, contentType: 'image/png', privacy: 'P0', encrypted: true });
       const repeated = await put('tenant-text', 'text/plain', 'P2');
       expect(repeated.ok && repeated.value).toMatchObject({ ref, contentType: 'text/plain', privacy: 'P2', encrypted: true });
+
+      // Public plaintext dedupe must enforce the same MIME boundary.
+      const publicImage = await put('tenant-public', 'image/png', 'P0', false);
+      expect(publicImage.ok && publicImage.value).toMatchObject({ ref, contentType: 'image/png', encrypted: false });
+      const publicAsHtml = await put('tenant-public', 'text/html', 'P0', false);
+      expect(!publicAsHtml.ok && publicAsHtml.error.code).toBe('CONFLICT_STATE');
+      expect(await s.read(tx => tx.blobs.info('tenant-public', ref)))
+        .toMatchObject({ contentType: 'image/png', encrypted: false });
     });
 
     it(`TEST-PS-119-09.T17 ${adapter}: encrypted blobs released by repository writes or the orphan sweep are reported as shredded in that transaction`, async () => {

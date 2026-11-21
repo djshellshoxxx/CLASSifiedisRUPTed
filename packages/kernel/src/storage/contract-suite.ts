@@ -311,6 +311,41 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(committed).toMatchObject({ status: 'done', attempts: 1, nextAttemptAt: null });
     });
 
+    it(`${adapter}: record CAS rejects unsafe revision numbers without mutating storage`, async () => {
+      const s = await make();
+      const input = {
+        tenant: 'tenant-a', type: 'test.item', id: 'safe-revision',
+        data: { name: 'lamp', status: 'draft' }, idx: ['draft', null, null, null] as const,
+        now: T0,
+      };
+      const created = await s.transaction(tx => tx.records.put({ ...input, expectedRevision: 0 }));
+      expect(created.ok).toBe(true);
+      if (!created.ok) throw new Error('Failed to create CAS fixture');
+      const baseline = created.value;
+
+      // Number.isInteger admits 2^53, which cannot represent every adjacent
+      // revision. Reject it before adapter reads, rather than returning a
+      // misleading normal CAS conflict or accepting an imprecise revision.
+      for (const invalid of [
+        Number.MAX_SAFE_INTEGER + 1, Number.NaN, Infinity, -1, 1.5,
+      ]) {
+        await expect(s.transaction(tx => tx.records.put({ ...input, expectedRevision: invalid })))
+          .rejects.toThrow(RangeError);
+        await expect(s.transaction(tx => tx.records.remove('tenant-a', 'test.item', 'safe-revision', invalid)))
+          .rejects.toThrow(RangeError);
+        expect(await s.read(tx => tx.records.get('tenant-a', 'test.item', 'safe-revision')))
+          .toEqual(baseline);
+      }
+
+      // The largest safe integer remains a well-formed (but stale) CAS value.
+      const stale = await s.transaction(tx =>
+        tx.records.remove('tenant-a', 'test.item', 'safe-revision', Number.MAX_SAFE_INTEGER));
+      expect(!stale.ok && stale.error.code).toBe('CONFLICT_REVISION');
+      const updated = await s.transaction(tx =>
+        tx.records.put({ ...input, data: { name: 'lamp', status: 'published' }, expectedRevision: 1 }));
+      expect(updated.ok && updated.value.revision).toBe(2);
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

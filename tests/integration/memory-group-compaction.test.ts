@@ -107,4 +107,58 @@ describe('ephemeral in-memory group indexes', () => {
     }
   });
 
+  it('keeps live holder indexes isolated from a persistence callback changing its change rows', async () => {
+    const owner = 'persist-owner';
+    const ref = 'blob:sha256-persist-owner';
+    const holder = 'listing/persist';
+    const driver = createMemoryDriver({
+      persist: async (changes) => {
+        for (const change of changes) if (change.table === 'blob_refs' && change.row) {
+          // A callback must not receive the same object indexed by the live driver.
+          (change.row as { tenant: string }).tenant = 'unexpected-tenant';
+        }
+      },
+    });
+    try {
+      driver.begin('write').blobs.attach(owner, ref, holder);
+      await driver.commit();
+      expect(driver.begin('read').blobs.holders(owner, ref)).toBe(1);
+      await driver.commit();
+
+      driver.begin('write').blobs.detach(owner, ref, holder);
+      await driver.commit();
+      const tx = driver.begin('read');
+      expect(tx.blobs.holders(owner, ref)).toBe(0);
+      expect(tx.blobs.holders('unexpected-tenant', ref)).toBe(0);
+      await driver.commit();
+    } finally {
+      await driver.close();
+    }
+  });
+
+  it('keeps committed blob bytes isolated from a persistence callback changing its change rows', async () => {
+    const owner = 'persist-bytes-owner';
+    const ref = 'blob:sha256-persist-bytes';
+    const driver = createMemoryDriver({
+      persist: async (changes) => {
+        for (const change of changes) if (change.table === 'blobs' && change.row) {
+          (change.row as { bytes: Uint8Array }).bytes[0] = 99;
+        }
+      },
+    });
+    try {
+      driver.begin('write').blobs.upsert({
+        tenant: owner, ref, bytes: new Uint8Array([1, 2, 3]), size: 3,
+        contentType: 'application/octet-stream', privacy: 'P0',
+        encrypted: false, createdAt: '2026-01-01T00:00:00.000Z',
+      });
+      await driver.commit();
+      const tx = driver.begin('read');
+      expect([...tx.blobs.get(owner, ref)!.bytes]).toEqual([1, 2, 3]);
+      await driver.commit();
+    } finally {
+      await driver.close();
+    }
+  });
+
 });

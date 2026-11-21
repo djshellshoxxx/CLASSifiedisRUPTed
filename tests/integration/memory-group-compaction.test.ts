@@ -55,7 +55,7 @@ describe('ephemeral in-memory group indexes', () => {
     const holder = 'listing/1';
     const row = { tenant: owner, ref, holder };
     // Durable snapshots use the same compound-key encoding as the memory driver.
-    const key = [owner, ref, holder].join('\\u0001');
+    const key = [owner, ref, holder].join('\u0001');
     const driver = createMemoryDriver({ snapshot: { blob_refs: [[key, row]] } });
     try {
       expect(driver.begin('read').blobs.holders(owner, ref)).toBe(1);
@@ -92,8 +92,8 @@ describe('ephemeral in-memory group indexes', () => {
       privacy: 'P0', encrypted: false, createdAt: '2026-01-01T00:00:00.000Z',
     };
     const driver = createMemoryDriver({ snapshot: {
-      records: [[[owner, type, id].join('\\u0001'), record]],
-      blobs: [[[owner, ref].join('\\u0001'), blob]],
+      records: [[[owner, type, id].join('\u0001'), record]],
+      blobs: [[[owner, ref].join('\u0001'), blob]],
     } });
     try {
       record.data = '{"text":"mutated-outside"}';

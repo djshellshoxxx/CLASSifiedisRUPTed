@@ -271,6 +271,11 @@ function outboxStore(d: DriverTx) {
       return row ? (JSON.parse(row.envelope) as EventEnvelope) : undefined;
     },
     pending(consumer: string, types: readonly string[], now: number, limit: number): PendingEvent[] {
+      // SQLite treats a negative LIMIT as unbounded, while memory truncates
+      // from the end. Enforce the same input contract before either driver runs.
+      if (!Number.isSafeInteger(limit) || limit < 0) {
+        throw new RangeError('Pending outbox limit must be a nonnegative safe integer');
+      }
       return d.outbox.pending({ consumer, types, now: toIso(now), limit }).map((r) => ({ seq: r.seq, envelope: JSON.parse(r.envelope) as EventEnvelope }));
     },
     oldestUndelivered(consumer: string, types: readonly string[]): EventEnvelope | undefined {

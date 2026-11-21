@@ -72,6 +72,15 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       const attachment = await s.transaction(tx => tx.blobs.attach('tenant-a', held, 'listing/current'));
       expect(attachment.ok).toBe(true);
 
+      // A rolled-back sweep may stage shredding, but must not remove durable bytes.
+      const aborted = await s.transaction(tx => {
+        expect(tx.blobs.collectOrphans(T0, 1)).toBe(1);
+        expect(tx.blobs.shredded()).toEqual([{ tenant: 'tenant-a', ref: orphan }]);
+        return err(appError('CONFLICT_STATE'));
+      });
+      expect(aborted.ok).toBe(false);
+      expect(await s.read(tx => tx.blobs.info('tenant-a', orphan))).toBeDefined();
+
       // Reject malformed limits before an adapter's SELECT/slice can delete blobs.
       for (const invalid of [-1, 0, 1.5, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
         await expect(s.transaction(tx => ok(tx.blobs.collectOrphans(T0, invalid))))

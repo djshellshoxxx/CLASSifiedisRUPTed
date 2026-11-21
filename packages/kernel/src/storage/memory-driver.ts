@@ -346,7 +346,9 @@ export interface MemoryDriverOptions {
 }
 
 function loadSnapshot(state: MemoryState, snapshot: Snapshot | undefined): void {
-  for (const t of TABLES) for (const [key, row] of snapshot?.[t] ?? []) state.write(t, key, row);
+  // IndexedDB provides detached rows, but other callers can retain and mutate
+  // supplied snapshots. Never let those references corrupt grouped indexes or bytes.
+  for (const t of TABLES) for (const [key, row] of snapshot?.[t] ?? []) state.write(t, key, structuredClone(row));
 }
 
 function changesOf(state: MemoryState, journal: Journal): Change[] {

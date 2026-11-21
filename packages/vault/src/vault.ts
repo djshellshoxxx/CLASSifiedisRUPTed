@@ -95,8 +95,13 @@ function snapshotBackupCodecs(codecs: readonly BackupCodec[]): readonly BackupCo
     if (!Array.isArray(codecs)) throw new Error('Invalid backup codecs');
     // Capture callable references with their receiver: codecs may use prototype
     // methods or private class state. Their trusted closure behavior is not frozen.
-    // Use the intrinsic traversal: a caller-defined array.map must not hide malformed codecs.
-    const registeredCodecs = Object.freeze(Array.prototype.map.call(codecs, (codec: BackupCodec) => {
+    // Traverse numeric own entries instead of Array#map: @@species can replace
+    // the destination array or suppress element writes even with intrinsic map.
+    if (codecs.length > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
+    const registeredCodecs: BackupCodec[] = [];
+    for (let index = 0; index < codecs.length; index++) {
+      if (!Object.prototype.hasOwnProperty.call(codecs, index)) throw new Error('Invalid backup codecs');
+      const codec = codecs[index];
       if (codec == null) throw new Error('Invalid backup codecs');
       const { type, parse, indexes, validate, restoreData, recordId } = codec;
       if (typeof type !== 'string' || type.length === 0 ||
@@ -106,12 +111,13 @@ function snapshotBackupCodecs(codecs: readonly BackupCodec[]): readonly BackupCo
           (recordId !== undefined && typeof recordId !== 'function')) {
         throw new Error('Invalid backup codecs');
       }
-      return Object.freeze({ type, parse: parse.bind(codec), indexes: indexes.bind(codec),
+      registeredCodecs.push(Object.freeze({ type, parse: parse.bind(codec), indexes: indexes.bind(codec),
         ...(validate === undefined ? {} : { validate: validate.bind(codec) }),
         ...(restoreData === undefined ? {} : { restoreData: restoreData.bind(codec) }),
         ...(recordId === undefined ? {} : { recordId: recordId.bind(codec) }),
-      });
-    }) as BackupCodec[]);
+      }));
+    }
+    Object.freeze(registeredCodecs);
     const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
     if (byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) {
       throw new Error('Invalid backup codecs');

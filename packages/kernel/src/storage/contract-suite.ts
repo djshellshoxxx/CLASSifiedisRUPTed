@@ -210,6 +210,35 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(await s.read(tx => tx.blobs.info(tenant, ref))).toMatchObject({ encrypted: false, holders: 1 });
     });
 
+    it(`${adapter}: shredded() report mutations cannot redirect pending key deletion`, async () => {
+      const s = await make();
+      const tenant = 'tenant-a';
+      const stored = await s.transaction(async tx => {
+        const created = await tx.blobs.put({
+          tenant, bytes: Uint8Array.from([81, 82, 83]), contentType: 'application/octet-stream',
+          privacy: 'P1', encrypted: true, now: T0 - 60_000,
+        });
+        return created.ok ? ok(created.value.ref) : created;
+      });
+      expect(stored.ok).toBe(true);
+      if (!stored.ok) throw new Error('Could not create encrypted fixture');
+      const ref = stored.value;
+
+      const removed = await s.transaction(tx => {
+        expect(tx.blobs.collectOrphans(T0, 1)).toBe(1);
+        const first = tx.blobs.shredded();
+        expect(first).toEqual([{ tenant, ref }]);
+        const exposed = first[0];
+        if (!exposed) throw new Error('Missing pending shred fixture');
+        // ShreddedBlob is readonly in TypeScript, but its runtime objects were
+        // directly shared with the internal map. A consumer can mutate them.
+        Object.assign(exposed, { tenant: 'tenant-b', ref: 'blob:sha256-forged' });
+        return ok(tx.blobs.shredded());
+      });
+      expect(removed).toEqual(ok([{ tenant, ref }]));
+      expect(await s.read(tx => tx.blobs.info(tenant, ref))).toBeUndefined();
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

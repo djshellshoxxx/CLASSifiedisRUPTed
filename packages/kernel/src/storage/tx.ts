@@ -545,6 +545,11 @@ function blobStore(d: DriverTx, kind: DriverKind) {
       if (existing && existing.encrypted !== snapshot.encrypted) {
         return err(appError('CONFLICT_STATE', { params: { reason: 'blob_encryption_mismatch', ref } }));
       }
+      // The byte-derived ref does not cover MIME metadata. A conflicting type
+      // must not silently retain a stale interpretation or lower privacy.
+      if (existing && existing.contentType !== snapshot.contentType) {
+        return err(appError('CONFLICT_STATE', { params: { reason: 'blob_content_type_mismatch', ref } }));
+      }
       if (existing && snapshot.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: snapshot.privacy });
       if (existing) {
         if (existing.encrypted) shredded.delete(shredKey(snapshot.tenant, ref));

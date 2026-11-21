@@ -134,12 +134,22 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(initial.ok).toBe(true);
       if (!initial.ok) throw new Error('Could not commit encrypted fixture');
       const ref = initial.value;
+      const foreign = await s.transaction(async tx => {
+        const created = await tx.blobs.put({ ...input(), tenant: 'tenant-b' });
+        expect(created.ok).toBe(true);
+        if (!created.ok) throw new Error('Could not create foreign encrypted fixture');
+        expect(tx.blobs.attach('tenant-b', created.value.ref, holder).ok).toBe(true);
+        return ok(created.value.ref);
+      });
+      expect(foreign).toEqual(ok(ref));
 
       // This deletes and recreates the identical content address before commit.
       // A stale shred request for a live restored blob would destroy its key.
       const renewed = await s.transaction(async tx => {
+        // The foreign tenant has the same ref and must retain its own shred request.
+        expect(tx.blobs.detach('tenant-b', ref, holder)).toEqual({ deleted: true, shred: true });
         expect(tx.blobs.detach(tenant, ref, holder)).toEqual({ deleted: true, shred: true });
-        expect(tx.blobs.shredded()).toEqual([{ tenant, ref }]);
+        expect(tx.blobs.shredded()).toEqual([{ tenant: 'tenant-b', ref }, { tenant, ref }]);
         const replaced = await tx.blobs.put(input());
         expect(replaced.ok).toBe(true);
         if (!replaced.ok) throw new Error('Could not restore same-content blob');
@@ -147,8 +157,9 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         expect(tx.blobs.attach(tenant, ref, holder).ok).toBe(true);
         return ok({ pendingShreds: tx.blobs.shredded(), holders: tx.blobs.info(tenant, ref)?.holders });
       });
-      expect(renewed).toEqual(ok({ pendingShreds: [], holders: 1 }));
+      expect(renewed).toEqual(ok({ pendingShreds: [{ tenant: 'tenant-b', ref }], holders: 1 }));
       expect(await s.read(tx => tx.blobs.get(tenant, ref)?.bytes)).toEqual(bytes);
+      expect(await s.read(tx => tx.blobs.info('tenant-b', ref))).toBeUndefined();
 
       // A later genuine final deletion still must request key shredding.
       const removed = await s.transaction(tx => ok({

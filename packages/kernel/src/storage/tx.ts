@@ -337,7 +337,14 @@ function toDeadLetter(r: DeadLetterRow): DeadLetter {
 
 function deadLetterStore(d: DriverTx) {
   return {
-    list: (consumer: string | undefined, limit = 100): DeadLetter[] => d.deadLetters.list(consumer, limit).map(toDeadLetter),
+    list(consumer: string | undefined, limit = 100): DeadLetter[] {
+      // SQLite LIMIT -1 reads the entire table; memory's negative slice is
+      // different but still unbounded by the caller's intended request.
+      if (!Number.isSafeInteger(limit) || limit < 0) {
+        throw new RangeError('Dead-letter listing limit must be a nonnegative safe integer');
+      }
+      return d.deadLetters.list(consumer, limit).map(toDeadLetter);
+    },
     get(consumer: string, eventId: string): DeadLetter | undefined {
       const r = d.deadLetters.get(consumer, eventId);
       return r ? toDeadLetter(r) : undefined;

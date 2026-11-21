@@ -476,8 +476,11 @@ function blobStore(d: DriverTx, kind: DriverKind) {
     if (b.encrypted) shredded.push({ tenant: b.tenant, ref: b.ref });
   };
   const detach = (tenant: string, ref: string, holder: string): { deleted: boolean; shred: boolean } => {
+    // A no-op detach cannot be the transition from a held blob to an orphan.
+    // In particular, it must not discard newly uploaded bytes before attachment.
+    const before = d.blobs.holders(tenant, ref);
     d.blobs.detach(tenant, ref, holder);
-    if (d.blobs.holders(tenant, ref) > 0) return { deleted: false, shred: false };
+    if (before === 0 || d.blobs.holders(tenant, ref) > 0) return { deleted: false, shred: false };
     const blob = d.blobs.get(tenant, ref);
     if (!blob) return { deleted: false, shred: false };
     removeBlob(blob);

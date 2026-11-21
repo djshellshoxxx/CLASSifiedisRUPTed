@@ -239,6 +239,29 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(await s.read(tx => tx.blobs.info(tenant, ref))).toBeUndefined();
     });
 
+    it(`${adapter}: pending outbox reads reject malformed limits before unbounded delivery queries`, async () => {
+      const s = await make();
+      const stored = await s.transaction(tx => {
+        tx.outbox.append(env('limit-event-1', 'limit-aggregate-1', 1));
+        tx.outbox.append(env('limit-event-2', 'limit-aggregate-2', 1));
+        return ok(undefined);
+      });
+      expect(stored.ok).toBe(true);
+
+      const pending = (limit: number) => s.read(tx => tx.outbox.pending(
+        'limit-consumer', ['test.item.changed'], T0, limit,
+      ));
+      // SQLite interprets LIMIT -1 as unbounded; memory's slice(0, -1)
+      // silently returns nearly every row instead of rejecting the request.
+      for (const invalid of [-1, -2, 0.5, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        await expect(pending(invalid)).rejects.toThrow(RangeError);
+      }
+      // Preserve the existing zero-result meaning and normal FIFO pagination.
+      expect(await pending(0)).toEqual([]);
+      expect((await pending(1)).map(e => e.envelope.eventId)).toEqual(['limit-event-1']);
+      expect((await pending(2)).map(e => e.envelope.eventId)).toEqual(['limit-event-1', 'limit-event-2']);
+    });
+
     it(`${adapter}: inbox reads cannot mutate committed delivery state without a write`, async () => {
       const s = await make();
       const consumer = 'isolation-consumer';

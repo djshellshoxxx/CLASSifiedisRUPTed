@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryState, createMemoryDriver } from '../../packages/kernel/src/storage/memory-driver.ts';
+import { createMemoryStorage } from '../../packages/kernel/src/storage/storage.ts';
+import { ok } from '../../packages/kernel/src/errors/result.ts';
 
 describe('ephemeral in-memory group indexes', () => {
   it('evicts the final key without disturbing another tenant or a surviving holder', () => {
@@ -104,6 +106,37 @@ describe('ephemeral in-memory group indexes', () => {
       await driver.commit();
     } finally {
       await driver.close();
+    }
+  });
+
+  it('preserves a newly stored unreferenced blob when detaching a nonexistent holder', async () => {
+    const storage = createMemoryStorage();
+    const tenant = 'detached-owner';
+    const bytes = new Uint8Array([3, 1, 4, 1, 5]);
+    try {
+      const created = await storage.transaction(tx => tx.blobs.put({
+        tenant, bytes, contentType: 'application/octet-stream',
+        privacy: 'P0', encrypted: false, now: Date.UTC(2026, 0, 1),
+      }));
+      expect(created.ok).toBe(true);
+      if (!created.ok) throw new Error('Could not create blob fixture');
+      const ref = created.value.ref;
+      expect(created.value.holders).toBe(0);
+
+      // A detach with no matching reference must not delete fresh upload bytes.
+      const missing = await storage.transaction(tx => ok(tx.blobs.detach(tenant, ref, 'listing/absent')));
+      expect(missing).toEqual(ok({ deleted: false, shred: false }));
+      const stillStored = await storage.read(tx => tx.blobs.get(tenant, ref));
+      expect(stillStored && [...stillStored.bytes]).toEqual([...bytes]);
+
+      // An actual last-holder detach should retain the existing delete semantics.
+      const attached = await storage.transaction(tx => tx.blobs.attach(tenant, ref, 'listing/present'));
+      expect(attached.ok).toBe(true);
+      const removed = await storage.transaction(tx => ok(tx.blobs.detach(tenant, ref, 'listing/present')));
+      expect(removed).toEqual(ok({ deleted: true, shred: false }));
+      expect(await storage.read(tx => tx.blobs.get(tenant, ref))).toBeUndefined();
+    } finally {
+      await storage.close();
     }
   });
 

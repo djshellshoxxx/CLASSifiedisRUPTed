@@ -110,7 +110,8 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
     });
   }));
   const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
-  if (byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
+  if (registeredCodecs.some(codec => typeof codec.type !== 'string' || codec.type.length === 0) ||
+      byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
   const registeredRecordTypes = Object.freeze([...byType.keys()].sort());
   const coverage = (tx: Tx, principal: string): BackupCoverage => {
     const found = tx.records.listTypes(principal, MAX_RECORD_TYPES + 1);

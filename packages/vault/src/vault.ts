@@ -86,26 +86,8 @@ export interface Vault {
   close(): Promise<void>;
 }
 
-export async function openVault(options: VaultOptions): Promise<Vault> {
-  if (!/^[A-Za-z0-9 _-]{1,80}$/.test(options.name)) throw new Error('Use a vault name of 1–80 letters, digits, spaces, _ or -');
-  const protectedStorage = await openEncryptedStorage({ ...options, name: `classrup-vault:${options.name}` });
-  const factory = options.indexedDB ?? globalThis.indexedDB;
-  let byName = unlockBackoffs.get(factory);
-  if (!byName) { byName = new Map(); unlockBackoffs.set(factory, byName); }
-  let backoff = byName.get(options.name);
-  if (!backoff) { backoff = createUnlockBackoff(); byName.set(options.name, backoff); }
-  // Codec registration can reject a malformed registry after opening IndexedDB.
-  // Dispose the newly acquired connection and writer lease before propagating it.
-  try {
-    return vaultFromStorage(protectedStorage.storage, options.codecs, protectedStorage.unlock, backoff);
-  } catch (error) {
-    try { await protectedStorage.storage.close(); } catch { /* Preserve the original registration failure. */ }
-    throw error;
-  }
-}
-
-/** Composition seam for contract tests; production callers use openVault's IndexedDB adapter. */
-export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = [], unlockStorage?: (passphrase: string, required: boolean, replacement?: object) => Promise<void>, backoff = createUnlockBackoff()): Vault {
+/** Validate and bind codec capabilities before opening any IndexedDB writer fence. */
+function snapshotBackupCodecs(codecs: readonly BackupCodec[]): readonly BackupCodec[] {
   // Capture callable references with their receiver: codecs may use prototype
   // methods or private class state. Their trusted closure behavior is not frozen.
   const registeredCodecs = Object.freeze(codecs.map(codec => {
@@ -119,6 +101,34 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
   const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
   if (registeredCodecs.some(codec => typeof codec.type !== 'string' || codec.type.length === 0) ||
       byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
+  return registeredCodecs;
+}
+
+export async function openVault(options: VaultOptions): Promise<Vault> {
+  if (!/^[A-Za-z0-9 _-]{1,80}$/.test(options.name)) throw new Error('Use a vault name of 1–80 letters, digits, spaces, _ or -');
+  // Invalid codec registries must not claim or supersede a live IndexedDB writer.
+  // vaultFromStorage independently snapshots this already-bound immutable registry.
+  const preparedCodecs = snapshotBackupCodecs(options.codecs ?? []);
+  const protectedStorage = await openEncryptedStorage({ ...options, name: `classrup-vault:${options.name}` });
+  const factory = options.indexedDB ?? globalThis.indexedDB;
+  let byName = unlockBackoffs.get(factory);
+  if (!byName) { byName = new Map(); unlockBackoffs.set(factory, byName); }
+  let backoff = byName.get(options.name);
+  if (!backoff) { backoff = createUnlockBackoff(); byName.set(options.name, backoff); }
+  // Codec registration can reject a malformed registry after opening IndexedDB.
+  // Dispose the newly acquired connection and writer lease before propagating it.
+  try {
+    return vaultFromStorage(protectedStorage.storage, preparedCodecs, protectedStorage.unlock, backoff);
+  } catch (error) {
+    try { await protectedStorage.storage.close(); } catch { /* Preserve the original registration failure. */ }
+    throw error;
+  }
+}
+
+/** Composition seam for contract tests; production callers use openVault's IndexedDB adapter. */
+export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = [], unlockStorage?: (passphrase: string, required: boolean, replacement?: object) => Promise<void>, backoff = createUnlockBackoff()): Vault {
+  const registeredCodecs = snapshotBackupCodecs(codecs);
+  const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
   const registeredRecordTypes = Object.freeze([...byType.keys()].sort());
   const coverage = (tx: Tx, principal: string): BackupCoverage => {
     const found = tx.records.listTypes(principal, MAX_RECORD_TYPES + 1);

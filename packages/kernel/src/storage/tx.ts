@@ -553,7 +553,8 @@ function blobStore(d: DriverTx, kind: DriverKind) {
       return list.length;
     },
     /** Pending old encrypted-key deletions, including refs replaced by unencrypted content. */
-    shredded: (): readonly ShreddedBlob[] => [...shredded.values()],
+    // Return detached objects: callers may mutate JS values despite readonly TS annotations.
+    shredded: (): readonly ShreddedBlob[] => [...shredded.values()].map(({ tenant, ref }) => ({ tenant, ref })),
   };
 }
 

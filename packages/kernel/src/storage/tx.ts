@@ -539,6 +539,12 @@ function blobStore(d: DriverTx, kind: DriverKind) {
       const snapshot = { ...admitted, bytes: new Uint8Array(admitted.bytes) };
       const ref = await blobRefOf(snapshot.bytes);
       const existing = d.blobs.get(snapshot.tenant, ref);
+      // The same content address must not silently turn a plaintext blob into
+      // supposedly encrypted content (or silently discard an encryption claim).
+      // Replacing the classification requires an explicit remove/reinsert.
+      if (existing && existing.encrypted !== snapshot.encrypted) {
+        return err(appError('CONFLICT_STATE', { params: { reason: 'blob_encryption_mismatch', ref } }));
+      }
       if (existing && snapshot.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: snapshot.privacy });
       if (existing) {
         if (existing.encrypted) shredded.delete(shredKey(snapshot.tenant, ref));

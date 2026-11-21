@@ -33,6 +33,34 @@ describe('vault composition', () => {
     }
     expect(occupied).toBe(false);
   }, 30000);
+  it('never supersedes an active writer when malformed codecs are rejected without Web Locks', async () => {
+    const indexedDB = new IDBFactory();
+    // Model a browser without exclusive Web Locks: competing opens receive a lock,
+    // so only the IndexedDB writer token protects the existing session.
+    const locks = {
+      request(_name: string, _options: { readonly mode: 'exclusive'; readonly ifAvailable: true },
+        callback: (lock: object | null) => Promise<void>): Promise<void> { return callback({}); },
+    };
+    const name = 'registry-early-admission-writer';
+    const original = await openVault({ name, indexedDB, locks, codecs });
+    const session = await original.create(passphrase);
+    try {
+      const invalidRegistries = [
+        [{ ...backupCodec(note), type: '' }],
+        [backupCodec(note), backupCodec(note)],
+      ];
+      for (const [index, invalid] of invalidRegistries.entries()) {
+        await expect(openVault({ name, indexedDB, locks, codecs: invalid })).rejects.toThrow('Invalid backup codecs');
+        const value = `value-${index}`;
+        const result = await session.storage.transaction(tx => tx.records.put({
+          tenant: session.principal, type: note.type, id: `kept-${index}`,
+          data: { text: value }, idx: [value, null, null, null], expectedRevision: 0, now: Date.now(),
+        }));
+        expect(result.ok).toBe(true);
+      }
+      expect(await session.storage.read(tx => tx.records.get(session.principal, note.type, 'kept-1')?.data)).toEqual({ text: 'value-1' });
+    } finally { await session.lock(); }
+  }, 30000);
   it('retains failed-unlock backoff when the application closes and reopens the same vault', async () => {
     const indexedDB = new IDBFactory();
     const original = await openVault({ name: 'unlock-backoff', indexedDB });

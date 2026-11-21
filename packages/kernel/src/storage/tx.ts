@@ -465,15 +465,20 @@ export interface ShreddedBlob {
 }
 
 /**
- * Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119). Every encrypted
- * blob deleted in this transaction, whether by detach, a repository write or the orphan sweep, is listed
- * by shredded() so the key owner deletes its per-object key in the same unit of work.
+ * Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119).
+ * shredded() reports pending encrypted key deletions for the current transaction state;
+ * re-adding identical content in the same unit of work cancels its pending deletion.
+ * The key owner must act only on the successful transaction's final returned list,
+ * never on an intermediate observation from a transaction that may roll back.
  */
 function blobStore(d: DriverTx, kind: DriverKind) {
-  const shredded: ShreddedBlob[] = [];
+  // Pending key deletions reflect the final transaction state, not intermediate
+  // detach/reinsert sequences for the same content address.
+  const shredKey = (tenant: string, ref: string): string => JSON.stringify([tenant, ref]);
+  const shredded = new Map<string, ShreddedBlob>();
   const removeBlob = (b: Pick<BlobRow, 'tenant' | 'ref' | 'encrypted'>): void => {
     d.blobs.remove(b.tenant, b.ref);
-    if (b.encrypted) shredded.push({ tenant: b.tenant, ref: b.ref });
+    if (b.encrypted) shredded.set(shredKey(b.tenant, b.ref), { tenant: b.tenant, ref: b.ref });
   };
   const detach = (tenant: string, ref: string, holder: string): { deleted: boolean; shred: boolean } => {
     // A no-op detach cannot be the transition from a held blob to an orphan.
@@ -505,9 +510,13 @@ function blobStore(d: DriverTx, kind: DriverKind) {
       const ref = await blobRefOf(snapshot.bytes);
       const existing = d.blobs.get(snapshot.tenant, ref);
       if (existing && snapshot.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: snapshot.privacy });
-      if (existing) return ok(toBlobInfo({ ...existing, privacy: snapshot.privacy < existing.privacy ? snapshot.privacy : existing.privacy }, d.blobs.holders(snapshot.tenant, ref)));
+      if (existing) {
+        shredded.delete(shredKey(snapshot.tenant, ref));
+        return ok(toBlobInfo({ ...existing, privacy: snapshot.privacy < existing.privacy ? snapshot.privacy : existing.privacy }, d.blobs.holders(snapshot.tenant, ref)));
+      }
       const row: BlobRow = { tenant: snapshot.tenant, ref, bytes: snapshot.bytes, size: snapshot.bytes.byteLength, contentType: snapshot.contentType, privacy: snapshot.privacy, encrypted: snapshot.encrypted === true, createdAt: toIso(snapshot.now) };
       d.blobs.upsert(row);
+      shredded.delete(shredKey(snapshot.tenant, ref));
       return ok(toBlobInfo(row, d.blobs.holders(snapshot.tenant, ref)));
     },
     get(tenant: string, ref: string): MediaBlob | undefined {
@@ -542,8 +551,8 @@ function blobStore(d: DriverTx, kind: DriverKind) {
       for (const o of list) removeBlob(o);
       return list.length;
     },
-    /** Encrypted blobs deleted so far in this transaction (empty again after rollback: the list dies with it). */
-    shredded: (): readonly ShreddedBlob[] => [...shredded],
+    /** Pending encrypted key deletions for blobs absent at the current transaction state. */
+    shredded: (): readonly ShreddedBlob[] => [...shredded.values()],
   };
 }
 

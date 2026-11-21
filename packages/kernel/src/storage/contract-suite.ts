@@ -115,6 +115,63 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(await s.transaction(tx => ok(tx.blobs.collectOrphans(T0, 1)))).toEqual(ok(0));
     });
 
+    it(`${adapter}: reinserted encrypted blob retains its key after same-transaction final-holder detach`, async () => {
+      const s = await make();
+      const tenant = 'tenant-a';
+      const holder = 'listing/current';
+      const bytes = Uint8Array.from([51, 52, 53, 54]);
+      const input = () => ({
+        tenant, bytes: bytes.slice(), contentType: 'application/octet-stream',
+        privacy: 'P1' as const, encrypted: true, now: T0 - 60_000,
+      });
+      const initial = await s.transaction(async tx => {
+        const created = await tx.blobs.put(input());
+        expect(created.ok).toBe(true);
+        if (!created.ok) throw new Error('Could not create encrypted fixture');
+        expect(tx.blobs.attach(tenant, created.value.ref, holder).ok).toBe(true);
+        return ok(created.value.ref);
+      });
+      expect(initial.ok).toBe(true);
+      if (!initial.ok) throw new Error('Could not commit encrypted fixture');
+      const ref = initial.value;
+      const foreign = await s.transaction(async tx => {
+        const created = await tx.blobs.put({ ...input(), tenant: 'tenant-b' });
+        expect(created.ok).toBe(true);
+        if (!created.ok) throw new Error('Could not create foreign encrypted fixture');
+        expect(tx.blobs.attach('tenant-b', created.value.ref, holder).ok).toBe(true);
+        return ok(created.value.ref);
+      });
+      expect(foreign).toEqual(ok(ref));
+
+      // This deletes and recreates the identical content address before commit.
+      // A stale shred request for a live restored blob would destroy its key.
+      const renewed = await s.transaction(async tx => {
+        // The foreign tenant has the same ref and must retain its own shred request.
+        expect(tx.blobs.detach('tenant-b', ref, holder)).toEqual({ deleted: true, shred: true });
+        expect(tx.blobs.detach(tenant, ref, holder)).toEqual({ deleted: true, shred: true });
+        expect(tx.blobs.shredded()).toEqual([{ tenant: 'tenant-b', ref }, { tenant, ref }]);
+        const replaced = await tx.blobs.put(input());
+        expect(replaced.ok).toBe(true);
+        if (!replaced.ok) throw new Error('Could not restore same-content blob');
+        expect(replaced.value.ref).toBe(ref);
+        expect(tx.blobs.attach(tenant, ref, holder).ok).toBe(true);
+        return ok({ pendingShreds: tx.blobs.shredded(), holders: tx.blobs.info(tenant, ref)?.holders });
+      });
+      expect(renewed).toEqual(ok({ pendingShreds: [{ tenant: 'tenant-b', ref }], holders: 1 }));
+      expect(await s.read(tx => tx.blobs.get(tenant, ref)?.bytes)).toEqual(bytes);
+      expect(await s.read(tx => tx.blobs.info('tenant-b', ref))).toBeUndefined();
+
+      // A later genuine final deletion still must request key shredding.
+      const removed = await s.transaction(tx => ok({
+        detached: tx.blobs.detach(tenant, ref, holder),
+        pendingShreds: tx.blobs.shredded(),
+      }));
+      expect(removed).toEqual(ok({
+        detached: { deleted: true, shred: true }, pendingShreds: [{ tenant, ref }],
+      }));
+      expect(await s.read(tx => tx.blobs.info(tenant, ref))).toBeUndefined();
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

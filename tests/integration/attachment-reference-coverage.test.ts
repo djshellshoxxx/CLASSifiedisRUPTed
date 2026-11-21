@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { createMemoryStorage, ok } from '../../packages/kernel/src/index.ts';
+import { createMemoryDriver, createMemoryStorage, createStorage, ok } from '../../packages/kernel/src/index.ts';
 import { openIndexedDbStorage } from '../../packages/kernel/src/storage/indexeddb.ts';
 import { openSqliteStorage } from '../../packages/kernel/src/storage/sqlite.ts';
 import { blobRefOf } from '../../packages/kernel/src/storage/tx.ts';
@@ -156,3 +156,45 @@ it('IndexedDB reference coverage reconstructs its tenant index after reopening',
     await reopened.close();
   }
 });
+
+it('reverts the tenant holder index after a failed durable write and accepts a clean retry', async () => {
+  // IndexedDB uses this journalled memory working set with an asynchronous
+  // persist callback. Reject the callback after the in-memory changes are staged.
+  let failPersist = true;
+  let persistAttempts = 0;
+  const storage = createStorage(createMemoryDriver({
+    kind: 'indexeddb',
+    persist: async () => {
+      persistAttempts++;
+      if (failPersist) throw new Error('simulated persistence failure');
+    },
+  }));
+  const tenant = 'persist-failure-owner';
+  const foreign = 'persist-failure-foreign';
+  const ref = await blobRefOf(new Uint8Array([11, 22, 33]));
+  const empty = { referenceCount: 0, holderCount: 0, missingCount: 0, limitExceeded: false };
+  try {
+    await expect(storage.transaction(tx => {
+      tx.blobs.attach(tenant, ref, 'owner/rolled-back');
+      tx.blobs.attach(foreign, ref, 'foreign/rolled-back');
+      return ok(undefined);
+    })).rejects.toThrow('simulated persistence failure');
+    expect(persistAttempts).toBe(1);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual(empty);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(foreign))).toEqual(empty);
+
+    failPersist = false;
+    const retried = await storage.transaction(tx => {
+      tx.blobs.attach(tenant, ref, 'owner/retried');
+      return ok(undefined);
+    });
+    expect(retried.ok).toBe(true);
+    expect(persistAttempts).toBe(2);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual({
+      referenceCount: 1, holderCount: 1, missingCount: 1, limitExceeded: false,
+    });
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(foreign))).toEqual(empty);
+  } finally {
+    await storage.close();
+  }
+}, 30000);

@@ -461,6 +461,40 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect([...seqs].sort((x, y) => x - y)).toEqual(seqs);
     });
 
+    it(`${adapter}: sync listing and head queries reject malformed limits before driver reads`, async () => {
+      const s = await make();
+      const saved = await s.transaction(tx => {
+        tx.sync.enqueue({
+          id: 'sync-limit-a', tenant: 'tenant-a', destination: 'relay:a',
+          envelope: { cid: 'sha256-limit-a', type: 't/v1' }, now: T0,
+        });
+        tx.sync.enqueue({
+          id: 'sync-limit-b', tenant: 'tenant-b', destination: 'relay:b',
+          envelope: { cid: 'sha256-limit-b', type: 't/v1' }, now: T0,
+        });
+        return ok(undefined);
+      });
+      expect(saved.ok).toBe(true);
+
+      const list = (limit: number) => s.read(tx => tx.sync.list({ limit }));
+      const heads = (limit: number) => s.read(tx => tx.sync.heads(T0, limit));
+      // SQLite LIMIT -1 is unlimited; memory's negative slice selects a
+      // different and still unexpectedly broad set of rows.
+      for (const invalid of [-2, -1, 0.5, Number.NaN, -Infinity, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        await expect(list(invalid)).rejects.toThrow(RangeError);
+        await expect(heads(invalid)).rejects.toThrow(RangeError);
+      }
+      expect(await list(0)).toEqual([]);
+      expect(await heads(0)).toEqual([]);
+      expect((await list(1)).map(v => v.ref)).toEqual(['sha256-limit-a']);
+      expect((await heads(1)).map(v => v.ref)).toEqual(['sha256-limit-a']);
+      expect((await list(2)).map(v => v.ref)).toEqual(['sha256-limit-a', 'sha256-limit-b']);
+      expect((await heads(2)).map(v => v.ref)).toEqual(['sha256-limit-a', 'sha256-limit-b']);
+      expect((await s.read(tx => tx.sync.list())).length).toBe(2);
+      expect((await s.read(tx => tx.sync.list({ tenant: 'tenant-b', limit: 2 }))).map(v => v.ref))
+        .toEqual(['sha256-limit-b']);
+    });
+
     it(`TEST-PS-119-09.T05 ${adapter}: sync outbox FIFO heads per destination and declared transitions only`, async () => {
       const s = await make();
       const c = createFakeClock(T0);

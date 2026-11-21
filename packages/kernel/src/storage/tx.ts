@@ -107,7 +107,8 @@ function jsonText(value: unknown, what: string): string {
 }
 
 function checkRevision(expected: number): void {
-  if (!Number.isInteger(expected) || expected < 0) throw new RangeError('expectedRevision must be an integer >= 0');
+  // A rounded revision above 2^53-1 is not safe for optimistic concurrency.
+  if (!Number.isSafeInteger(expected) || expected < 0) throw new RangeError('expectedRevision must be a nonnegative safe integer');
 }
 
 function casCheck(current: RecordRow | undefined, expected: number): Result<number, AppError> {

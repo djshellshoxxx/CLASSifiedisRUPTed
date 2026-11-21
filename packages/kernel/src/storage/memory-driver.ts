@@ -352,14 +352,14 @@ function loadSnapshot(state: MemoryState, snapshot: Snapshot | undefined): void 
 }
 
 function changesOf(state: MemoryState, journal: Journal): Change[] {
-  const seen = new Map<string, Change>();
-  for (const u of journal.undo) {
-    const row = state.table(u.table).get(u.key);
-    // Persist callbacks must never mutate the live rows used by grouped indexes
-    // or binary values while a commit is in flight.
-    seen.set(k(u.table, u.key), { table: u.table, key: u.key, row: row === undefined ? undefined : structuredClone(row) });
-  }
-  return [...seen.values()];
+  const seen = new Map<string, { table: TableName; key: string }>();
+  for (const u of journal.undo) seen.set(k(u.table, u.key), { table: u.table, key: u.key });
+  // Copy only the final value for each distinct key. Persistence callbacks
+  // must not mutate live indexed rows or binary bytes while commit is in flight.
+  return [...seen.values()].map(({ table, key }) => {
+    const row = state.table(table).get(key);
+    return { table, key, row: row === undefined ? undefined : structuredClone(row) };
+  });
 }
 
 function undo(state: MemoryState, journal: Journal): void {

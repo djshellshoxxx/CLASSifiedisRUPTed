@@ -50,7 +50,8 @@ interface Journal {
   readonly undo: Array<{ table: TableName; key: string; before: Row | undefined }>;
 }
 
-class MemoryState {
+/** Internal memory working-set type; exported for focused index invariant tests, not via the package entrypoint. */
+export class MemoryState {
   readonly tables = new Map<TableName, Map<string, Row>>(TABLES.map((t) => [t, new Map()]));
   readonly groups = new Map<string, Set<string>>();
   /** Tenant index for bounded attachment coverage; maintained with the journal. */
@@ -95,7 +96,12 @@ class MemoryState {
 
   private ungroup(table: TableName, key: string, row: Row): void {
     const g = groupOf(table, row);
-    if (g !== undefined) this.groups.get(k(table, g))?.delete(key);
+    if (g !== undefined) {
+      const groupId = k(table, g);
+      const keys = this.groups.get(groupId);
+      keys?.delete(key);
+      if (keys?.size === 0) this.groups.delete(groupId);
+    }
     if (table === 'blob_refs') {
       const tenant = (row as BlobRefRow).tenant;
       const keys = this.blobRefKeysByTenant.get(tenant);

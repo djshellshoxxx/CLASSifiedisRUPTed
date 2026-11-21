@@ -172,6 +172,44 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(await s.read(tx => tx.blobs.info(tenant, ref))).toBeUndefined();
     });
 
+    it(`${adapter}: plaintext replacement still shreds the removed encrypted blob's obsolete key`, async () => {
+      const s = await make();
+      const tenant = 'tenant-a';
+      const bytes = Uint8Array.from([71, 72, 73, 74]);
+      const initial = await s.transaction(async tx => {
+        const created = await tx.blobs.put({
+          tenant, bytes: bytes.slice(), contentType: 'application/octet-stream',
+          privacy: 'P1', encrypted: true, now: T0 - 60_000,
+        });
+        expect(created.ok).toBe(true);
+        if (!created.ok) throw new Error('Could not create encrypted fixture');
+        expect(tx.blobs.attach(tenant, created.value.ref, 'listing/old').ok).toBe(true);
+        return ok(created.value.ref);
+      });
+      expect(initial.ok).toBe(true);
+      if (!initial.ok) throw new Error('Could not commit encrypted fixture');
+      const ref = initial.value;
+
+      // The content address stays the same, but the final row no longer needs
+      // the *old encrypted object's key*. A same-byte plaintext replacement
+      // must not cancel that key-destruction intent.
+      const replacement = await s.transaction(async tx => {
+        expect(tx.blobs.detach(tenant, ref, 'listing/old')).toEqual({ deleted: true, shred: true });
+        const added = await tx.blobs.put({
+          tenant, bytes: bytes.slice(), contentType: 'application/octet-stream',
+          privacy: 'P0', encrypted: false, now: T0,
+        });
+        expect(added.ok).toBe(true);
+        if (!added.ok) throw new Error('Could not create unencrypted replacement');
+        expect(added.value.ref).toBe(ref);
+        expect(tx.blobs.attach(tenant, ref, 'listing/new').ok).toBe(true);
+        return ok({ pendingShreds: tx.blobs.shredded(), encrypted: tx.blobs.info(tenant, ref)?.encrypted });
+      });
+      expect(replacement).toEqual(ok({ pendingShreds: [{ tenant, ref }], encrypted: false }));
+      expect(await s.read(tx => tx.blobs.get(tenant, ref)?.bytes)).toEqual(bytes);
+      expect(await s.read(tx => tx.blobs.info(tenant, ref))).toMatchObject({ encrypted: false, holders: 1 });
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

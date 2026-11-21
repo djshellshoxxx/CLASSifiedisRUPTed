@@ -239,6 +239,32 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(await s.read(tx => tx.blobs.info(tenant, ref))).toBeUndefined();
     });
 
+    it(`${adapter}: dead-letter listing rejects invalid limits and preserves bounded ordering`, async () => {
+      const s = await make();
+      const first = env('dead-limit-1', 'dead-aggregate-1', 1);
+      const second = env('dead-limit-2', 'dead-aggregate-2', 1);
+      const stored = await s.transaction(tx => {
+        tx.inbox.markDead({ consumer: 'dead-limit-consumer', envelope: first, now: T0 }, 1, 'TEST_FAILURE');
+        tx.inbox.markDead({ consumer: 'dead-limit-consumer', envelope: second, now: T0 + 1000 }, 2, 'TEST_FAILURE');
+        return ok(undefined);
+      });
+      expect(stored.ok).toBe(true);
+
+      const list = (limit: number, consumer?: string) => s.read(
+        tx => tx.deadLetters.list(consumer, limit),
+      );
+      // SQLite treats LIMIT -1 as unlimited, while memory slices off one row.
+      for (const invalid of [-1, -2, 0.5, Number.NaN, -Infinity, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        await expect(list(invalid)).rejects.toThrow(RangeError);
+        await expect(list(invalid, 'dead-limit-consumer')).rejects.toThrow(RangeError);
+      }
+      expect(await list(0)).toEqual([]);
+      expect((await list(1, 'dead-limit-consumer')).map(d => d.eventId)).toEqual(['dead-limit-1']);
+      expect((await list(2)).map(d => d.eventId)).toEqual(['dead-limit-1', 'dead-limit-2']);
+      expect((await s.read(tx => tx.deadLetters.list('dead-limit-consumer'))).length).toBe(2);
+      expect((await list(2, 'other-consumer'))).toEqual([]);
+    });
+
     it(`${adapter}: pending outbox reads reject malformed limits before unbounded delivery queries`, async () => {
       const s = await make();
       const stored = await s.transaction(tx => {

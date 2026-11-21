@@ -465,9 +465,11 @@ export interface ShreddedBlob {
 }
 
 /**
- * Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119). Every encrypted
- * blob deleted in this transaction, whether by detach, a repository write or the orphan sweep, is listed
- * by shredded() so the key owner deletes its per-object key in the same unit of work.
+ * Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119).
+ * shredded() reports pending encrypted key deletions for the current transaction state;
+ * re-adding identical content in the same unit of work cancels its pending deletion.
+ * The key owner must act only on the successful transaction's final returned list,
+ * never on an intermediate observation from a transaction that may roll back.
  */
 function blobStore(d: DriverTx, kind: DriverKind) {
   // Pending key deletions reflect the final transaction state, not intermediate

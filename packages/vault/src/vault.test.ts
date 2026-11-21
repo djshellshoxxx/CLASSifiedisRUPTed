@@ -9,6 +9,30 @@ const note = defineRepo({ type: 'test.note', schema: z.strictObject({ text: z.st
 const codecs = [backupCodec(note)];
 
 describe('vault composition', () => {
+  it('releases the IndexedDB writer lease when codec registration rejects before a vault opens', async () => {
+    const indexedDB = new IDBFactory();
+    let occupied = false;
+    const locks = {
+      async request(_name: string, _options: { readonly mode: 'exclusive'; readonly ifAvailable: true },
+        callback: (lock: object | null) => Promise<void>): Promise<void> {
+        if (occupied) { await callback(null); return; }
+        occupied = true;
+        try { await callback({}); } finally { occupied = false; }
+      },
+    };
+    const name = 'registration-failure-cleanup';
+    const invalidRegistries = [
+      [{ ...backupCodec(note), type: '' }],
+      [backupCodec(note), backupCodec(note)],
+    ];
+    for (const invalid of invalidRegistries) {
+      await expect(openVault({ name, indexedDB, locks, codecs: invalid })).rejects.toThrow('Invalid backup codecs');
+      const reopened = await openVault({ name, indexedDB, locks, codecs });
+      try { expect(await reopened.isInitialized()).toBe(false); }
+      finally { await reopened.close(); }
+    }
+    expect(occupied).toBe(false);
+  }, 30000);
   it('retains failed-unlock backoff when the application closes and reopens the same vault', async () => {
     const indexedDB = new IDBFactory();
     const original = await openVault({ name: 'unlock-backoff', indexedDB });

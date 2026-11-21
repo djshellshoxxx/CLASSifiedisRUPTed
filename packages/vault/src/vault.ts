@@ -94,7 +94,14 @@ export async function openVault(options: VaultOptions): Promise<Vault> {
   if (!byName) { byName = new Map(); unlockBackoffs.set(factory, byName); }
   let backoff = byName.get(options.name);
   if (!backoff) { backoff = createUnlockBackoff(); byName.set(options.name, backoff); }
-  return vaultFromStorage(protectedStorage.storage, options.codecs, protectedStorage.unlock, backoff);
+  // Codec registration can reject a malformed registry after opening IndexedDB.
+  // Dispose the newly acquired connection and writer lease before propagating it.
+  try {
+    return vaultFromStorage(protectedStorage.storage, options.codecs, protectedStorage.unlock, backoff);
+  } catch (error) {
+    try { await protectedStorage.storage.close(); } catch { /* Preserve the original registration failure. */ }
+    throw error;
+  }
 }
 
 /** Composition seam for contract tests; production callers use openVault's IndexedDB adapter. */

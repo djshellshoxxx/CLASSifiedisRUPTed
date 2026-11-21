@@ -7,6 +7,24 @@ const passphrase = 'backup coverage test passphrase';
 const note = defineRepo({ type: 'test.note', schema: z.strictObject({ text: z.string() }), indexes: {} });
 
 describe('alpha backup coverage', () => {
+
+  it('rejects empty or malformed registered codec names while preserving normal registries', async () => {
+    const valid = backupCodec(note);
+    for (const invalidType of ['', null, 0] as readonly unknown[]) {
+      const storage = createMemoryStorage();
+      expect(() => vaultFromStorage(storage, [{ ...valid, type: invalidType as string }]))
+        .toThrow('Invalid backup codecs');
+      await storage.close();
+    }
+    const vault = vaultFromStorage(createMemoryStorage(), [valid]);
+    const session = await vault.create(passphrase);
+    try {
+      expect((await session.backupCoverage()).registeredRecordTypes).toEqual([note.type]);
+    } finally {
+      await session.lock();
+    }
+  }, 30000);
+
   it('blocks unsupported records instead of silently omitting them from an otherwise valid backup', async () => {
     const vault = vaultFromStorage(createMemoryStorage(), [backupCodec(note)]);
     const session = await vault.create(passphrase);

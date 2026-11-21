@@ -574,6 +574,38 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect([draft.ok && draft.value.privacy, published.ok && published.value.privacy]).toEqual(['P3', 'P0']);
     });
 
+    it(`${adapter}: content-addressed blobs cannot silently cross encryption classifications`, async () => {
+      const s = await make();
+      const bytes = new Uint8Array([137, 80, 78, 71, 5, 6, 7]);
+      const put = (tenant: string, encrypted: boolean, privacy: 'P0' | 'P2') =>
+        s.transaction(tx => tx.blobs.put({ tenant, bytes, contentType: 'image/png', privacy, encrypted, now: T0 }));
+      const sealed = await put('tenant-sealed', true, 'P2');
+      const plain = await put('tenant-plain', false, 'P0');
+      expect(sealed.ok && plain.ok).toBe(true);
+      const ref = sealed.ok ? sealed.value.ref : '';
+      expect(plain.ok && plain.value.ref).toBe(ref);
+
+      const originalSealed = await s.read(tx => tx.blobs.info('tenant-sealed', ref));
+      const originalPlain = await s.read(tx => tx.blobs.info('tenant-plain', ref));
+      // Both conflicts must fail before changing privacy or encryption metadata.
+      const asPlain = await put('tenant-sealed', false, 'P0');
+      const asEncrypted = await put('tenant-plain', true, 'P2');
+      expect(!asPlain.ok && asPlain.error.code).toBe('CONFLICT_STATE');
+      expect(!asEncrypted.ok && asEncrypted.error.code).toBe('CONFLICT_STATE');
+      expect(await s.read(tx => tx.blobs.info('tenant-sealed', ref))).toEqual(originalSealed);
+      expect(await s.read(tx => tx.blobs.info('tenant-plain', ref))).toEqual(originalPlain);
+      expect(Array.from((await s.read(tx => tx.blobs.get('tenant-sealed', ref)))?.bytes ?? []))
+        .toEqual(Array.from(bytes));
+      expect(Array.from((await s.read(tx => tx.blobs.get('tenant-plain', ref)))?.bytes ?? []))
+        .toEqual(Array.from(bytes));
+
+      // Matching encryption metadata remains idempotent, including intended publication.
+      const publish = await put('tenant-sealed', true, 'P0');
+      expect(publish.ok && publish.value).toMatchObject({ ref, encrypted: true, privacy: 'P0' });
+      const repeatPlain = await put('tenant-plain', false, 'P0');
+      expect(repeatPlain.ok && repeatPlain.value).toMatchObject({ ref, encrypted: false, privacy: 'P0' });
+    });
+
     it(`TEST-PS-119-09.T17 ${adapter}: encrypted blobs released by repository writes or the orphan sweep are reported as shredded in that transaction`, async () => {
       const s = await make();
       const thread = defineRepo({ type: 'test.thread', schema: z.strictObject({ media: z.array(z.string()) }), blobs: (d) => d.media });

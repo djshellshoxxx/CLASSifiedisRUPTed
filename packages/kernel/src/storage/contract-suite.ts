@@ -239,6 +239,29 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(await s.read(tx => tx.blobs.info(tenant, ref))).toBeUndefined();
     });
 
+    it(`${adapter}: inbox reads cannot mutate committed delivery state without a write`, async () => {
+      const s = await make();
+      const consumer = 'isolation-consumer';
+      const envelope = env('inbox-read-isolation', 'isolation-aggregate', 1);
+      const stored = await s.transaction(tx => {
+        tx.inbox.markDone({ consumer, envelope, now: T0 }, 1);
+        return ok(undefined);
+      });
+      expect(stored.ok).toBe(true);
+
+      const exposed = await s.read(tx => tx.inbox.get(consumer, envelope.eventId));
+      expect(exposed).toMatchObject({ status: 'done', attempts: 1, nextAttemptAt: null });
+      if (!exposed) throw new Error('Missing committed inbox row');
+      // Types are readonly, but an object retained from a read-only transaction
+      // must not alias the memory/IndexedDB working set after that transaction.
+      Object.assign(exposed, {
+        status: 'retry', attempts: 999, nextAttemptAt: new Date(T0).toISOString(),
+      });
+
+      const committed = await s.read(tx => tx.inbox.get(consumer, envelope.eventId));
+      expect(committed).toMatchObject({ status: 'done', attempts: 1, nextAttemptAt: null });
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

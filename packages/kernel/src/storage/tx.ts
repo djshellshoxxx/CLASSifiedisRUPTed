@@ -300,7 +300,12 @@ function inboxStore(d: DriverTx) {
     updatedAt: toIso(m.now),
   });
   return {
-    get: (consumer: string, eventId: string): InboxRow | undefined => d.inbox.get(consumer, eventId),
+    get(consumer: string, eventId: string): InboxRow | undefined {
+      const row = d.inbox.get(consumer, eventId);
+      // Never expose driver-owned rows to callers (especially memory/IndexedDB).
+      // A retained read result must not mutate delivery state outside a write.
+      return row ? { ...row } : undefined;
+    },
     markDone: (m: InboxMark, attempts: number): void => d.inbox.upsert(row(m, 'done', attempts, null, null)),
     markRetry: (m: InboxMark, attempts: number, nextAttemptAt: number, code: string): void => d.inbox.upsert(row(m, 'retry', attempts, toIso(nextAttemptAt), code)),
     markDead(m: InboxMark, attempts: number, code: string): void {

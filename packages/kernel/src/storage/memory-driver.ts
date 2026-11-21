@@ -353,7 +353,12 @@ function loadSnapshot(state: MemoryState, snapshot: Snapshot | undefined): void 
 
 function changesOf(state: MemoryState, journal: Journal): Change[] {
   const seen = new Map<string, Change>();
-  for (const u of journal.undo) seen.set(k(u.table, u.key), { table: u.table, key: u.key, row: state.table(u.table).get(u.key) });
+  for (const u of journal.undo) {
+    const row = state.table(u.table).get(u.key);
+    // Persist callbacks must never mutate the live rows used by grouped indexes
+    // or binary values while a commit is in flight.
+    seen.set(k(u.table, u.key), { table: u.table, key: u.key, row: row === undefined ? undefined : structuredClone(row) });
+  }
   return [...seen.values()];
 }
 

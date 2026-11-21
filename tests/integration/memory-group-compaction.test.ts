@@ -140,6 +140,42 @@ describe('ephemeral in-memory group indexes', () => {
     }
   });
 
+  it('rejects invalid orphan sweep limits without deleting unattached blob bytes', async () => {
+    const storage = createMemoryStorage();
+    const tenant = 'orphan-sweep-owner';
+    const cutoff = Date.UTC(2026, 0, 2);
+    try {
+      const first = await storage.transaction(tx => tx.blobs.put({
+        tenant, bytes: new Uint8Array([1, 2, 3]), contentType: 'application/octet-stream',
+        privacy: 'P0', encrypted: false, now: Date.UTC(2026, 0, 1),
+      }));
+      const second = await storage.transaction(tx => tx.blobs.put({
+        tenant, bytes: new Uint8Array([4, 5, 6]), contentType: 'application/octet-stream',
+        privacy: 'P0', encrypted: false, now: Date.UTC(2026, 0, 1),
+      }));
+      expect(first.ok && second.ok).toBe(true);
+      if (!first.ok || !second.ok) throw new Error('Could not create orphan fixtures');
+      const refs = [first.value.ref, second.value.ref];
+
+      // SQLite LIMIT -1 means no limit; memory Array#slice(0, -1) also
+      // selects rows. Neither may turn a bad caller limit into a bulk purge.
+      for (const invalid of [-1, 0, 1.5, Number.NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+        await expect(storage.transaction(tx => ok(tx.blobs.collectOrphans(cutoff, invalid))))
+          .rejects.toThrow(RangeError);
+        for (const ref of refs) {
+          expect(await storage.read(tx => tx.blobs.info(tenant, ref))).toBeDefined();
+        }
+      }
+
+      const removed = await storage.transaction(tx => ok(tx.blobs.collectOrphans(cutoff, 1)));
+      expect(removed).toEqual(ok(1));
+      const survivors = await Promise.all(refs.map(ref => storage.read(tx => tx.blobs.info(tenant, ref))));
+      expect(survivors.filter(Boolean)).toHaveLength(1);
+    } finally {
+      await storage.close();
+    }
+  });
+
   it('keeps live holder indexes isolated from a persistence callback changing its change rows', async () => {
     const owner = 'persist-owner';
     const ref = 'blob:sha256-persist-owner';

@@ -533,6 +533,11 @@ function blobStore(d: DriverTx, kind: DriverKind) {
     detach,
     /** Deletes stored blobs that no record references and that were created before the cutoff. */
     collectOrphans(createdBefore: number, limit = 100): number {
+      // SQLite treats LIMIT -1 as unlimited; a negative memory slice also
+      // selects rows. Reject malformed limits before touching any blob.
+      if (!Number.isSafeInteger(limit) || limit < 1) {
+        throw new RangeError('Orphan collection limit must be a positive safe integer');
+      }
       const list = d.blobs.orphans(toIso(createdBefore), limit);
       for (const o of list) removeBlob(o);
       return list.length;

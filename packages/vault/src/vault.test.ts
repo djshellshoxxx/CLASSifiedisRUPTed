@@ -51,6 +51,16 @@ describe('vault composition', () => {
       // An array can shadow .map(); admission must inspect its actual elements.
       const maskedInvalidCodec = [{ ...backupCodec(note), type: '' }];
       Object.defineProperty(maskedInvalidCodec, 'map', { value: () => [] });
+      // Array.prototype.map invokes @@species: a caller-supplied constructor can
+      // suppress writes and falsely produce an empty, apparently valid registry.
+      const speciesMaskedInvalid = [{ ...backupCodec(note), type: '' }];
+      Object.defineProperty(speciesMaskedInvalid, 'constructor', {
+        value: { [Symbol.species]: function () {
+          return new Proxy([], { defineProperty: () => true });
+        } },
+      });
+      // Sparse arrays must not silently skip a missing codec element.
+      const sparseInvalid = new Array<BackupCodec>(1);
       const invalidRegistries: readonly (readonly BackupCodec[])[] = [
         [{ ...backupCodec(note), type: '' }],
         [backupCodec(note), backupCodec(note)],
@@ -62,6 +72,8 @@ describe('vault composition', () => {
         [{ ...backupCodec(note), recordId: [] } as unknown as BackupCodec],
         [throwingGetter],
         maskedInvalidCodec,
+        speciesMaskedInvalid,
+        sparseInvalid,
       ];
       for (const [index, invalid] of invalidRegistries.entries()) {
         expect(() => vaultFromStorage(createMemoryStorage(), invalid)).toThrow(/^Invalid backup codecs$/);

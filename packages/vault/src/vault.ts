@@ -88,20 +88,37 @@ export interface Vault {
 
 /** Validate and bind codec capabilities before opening any IndexedDB writer fence. */
 function snapshotBackupCodecs(codecs: readonly BackupCodec[]): readonly BackupCodec[] {
-  // Capture callable references with their receiver: codecs may use prototype
-  // methods or private class state. Their trusted closure behavior is not frozen.
-  const registeredCodecs = Object.freeze(codecs.map(codec => {
-    const { type, parse, indexes, validate, restoreData, recordId } = codec;
-    return Object.freeze({ type, parse: parse.bind(codec), indexes: indexes.bind(codec),
-      ...(validate === undefined ? {} : { validate: validate.bind(codec) }),
-      ...(restoreData === undefined ? {} : { restoreData: restoreData.bind(codec) }),
-      ...(recordId === undefined ? {} : { recordId: recordId.bind(codec) }),
-    });
-  }));
-  const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
-  if (registeredCodecs.some(codec => typeof codec.type !== 'string' || codec.type.length === 0) ||
-      byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) throw new Error('Invalid backup codecs');
-  return registeredCodecs;
+  // Reject malformed runtime registries consistently before opening IndexedDB.
+  // This also contains exceptions from codec property getters, so diagnostic
+  // errors cannot reveal their arbitrary messages to the caller.
+  try {
+    if (!Array.isArray(codecs)) throw new Error('Invalid backup codecs');
+    // Capture callable references with their receiver: codecs may use prototype
+    // methods or private class state. Their trusted closure behavior is not frozen.
+    const registeredCodecs = Object.freeze(codecs.map(codec => {
+      if (codec == null) throw new Error('Invalid backup codecs');
+      const { type, parse, indexes, validate, restoreData, recordId } = codec;
+      if (typeof type !== 'string' || type.length === 0 ||
+          typeof parse !== 'function' || typeof indexes !== 'function' ||
+          (validate !== undefined && typeof validate !== 'function') ||
+          (restoreData !== undefined && typeof restoreData !== 'function') ||
+          (recordId !== undefined && typeof recordId !== 'function')) {
+        throw new Error('Invalid backup codecs');
+      }
+      return Object.freeze({ type, parse: parse.bind(codec), indexes: indexes.bind(codec),
+        ...(validate === undefined ? {} : { validate: validate.bind(codec) }),
+        ...(restoreData === undefined ? {} : { restoreData: restoreData.bind(codec) }),
+        ...(recordId === undefined ? {} : { recordId: recordId.bind(codec) }),
+      });
+    }));
+    const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
+    if (byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) {
+      throw new Error('Invalid backup codecs');
+    }
+    return registeredCodecs;
+  } catch {
+    throw new Error('Invalid backup codecs');
+  }
 }
 
 export async function openVault(options: VaultOptions): Promise<Vault> {

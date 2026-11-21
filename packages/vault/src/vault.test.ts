@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryStorage, defineRepo, z, ok } from '@classrup/kernel';
-import { vaultFromStorage, backupCodec, openVault } from './vault.ts';
+import { vaultFromStorage, backupCodec, openVault, type BackupCodec } from './vault.ts';
 import { IDBFactory } from 'fake-indexeddb';
 import { VaultUnlockRateLimitError } from './session-policy.ts';
 
@@ -45,12 +45,23 @@ describe('vault composition', () => {
     const original = await openVault({ name, indexedDB, locks, codecs });
     const session = await original.create(passphrase);
     try {
-      const invalidRegistries = [
+      const throwingGetter = Object.defineProperty({ ...backupCodec(note) }, 'parse', {
+        get(): never { throw new Error('internal codec secret must not leak'); },
+      }) as BackupCodec;
+      const invalidRegistries: readonly (readonly BackupCodec[])[] = [
         [{ ...backupCodec(note), type: '' }],
         [backupCodec(note), backupCodec(note)],
+        [null as unknown as BackupCodec],
+        [{ ...backupCodec(note), parse: 0 } as unknown as BackupCodec],
+        [{ ...backupCodec(note), indexes: false } as unknown as BackupCodec],
+        [{ ...backupCodec(note), validate: 'bad' } as unknown as BackupCodec],
+        [{ ...backupCodec(note), restoreData: null } as unknown as BackupCodec],
+        [{ ...backupCodec(note), recordId: [] } as unknown as BackupCodec],
+        [throwingGetter],
       ];
       for (const [index, invalid] of invalidRegistries.entries()) {
-        await expect(openVault({ name, indexedDB, locks, codecs: invalid })).rejects.toThrow('Invalid backup codecs');
+        expect(() => vaultFromStorage(createMemoryStorage(), invalid)).toThrow(/^Invalid backup codecs$/);
+        await expect(openVault({ name, indexedDB, locks, codecs: invalid })).rejects.toThrow(/^Invalid backup codecs$/);
         const value = `value-${index}`;
         const result = await session.storage.transaction(tx => tx.records.put({
           tenant: session.principal, type: note.type, id: `kept-${index}`,

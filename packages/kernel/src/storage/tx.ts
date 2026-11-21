@@ -389,6 +389,14 @@ export interface EnqueueStatement {
 }
 
 function syncStore(d: DriverTx) {
+  const checkedLimit = (limit: number): number => {
+    // A negative SQL LIMIT is unlimited; memory arrays slice differently.
+    // Validate at the shared boundary before querying any adapter.
+    if (!Number.isSafeInteger(limit) || limit < 0) {
+      throw new RangeError('Sync query limit must be a nonnegative safe integer');
+    }
+    return limit;
+  };
   return {
     enqueue(input: EnqueueStatement): SyncEntry {
       if (typeof input.envelope.cid !== 'string' || typeof input.envelope.type !== 'string') throw new TypeError('signed envelope requires cid and type');
@@ -401,8 +409,12 @@ function syncStore(d: DriverTx) {
       const r = d.sync.get(id);
       return r ? toSyncEntry(r) : undefined;
     },
-    list: (q: Partial<SyncListQuery> = {}): SyncEntry[] => d.sync.list({ ...q, limit: q.limit ?? 100 }).map(toSyncEntry),
-    heads: (now: number, limit: number): SyncEntry[] => d.sync.heads(toIso(now), limit).map(toSyncEntry),
+    list(q: Partial<SyncListQuery> = {}): SyncEntry[] {
+      return d.sync.list({ ...q, limit: checkedLimit(q.limit ?? 100) }).map(toSyncEntry);
+    },
+    heads(now: number, limit: number): SyncEntry[] {
+      return d.sync.heads(toIso(now), checkedLimit(limit)).map(toSyncEntry);
+    },
     /** Applies a declared sync-outbox transition; undeclared ones return CONFLICT_STATE. */
     transition(id: string, event: SyncEvent, patch: SyncTransitionPatch, now: number): Result<SyncEntry, AppError> {
       const row = d.sync.get(id);

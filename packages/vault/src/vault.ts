@@ -95,7 +95,8 @@ function snapshotBackupCodecs(codecs: readonly BackupCodec[]): readonly BackupCo
     if (!Array.isArray(codecs)) throw new Error('Invalid backup codecs');
     // Capture callable references with their receiver: codecs may use prototype
     // methods or private class state. Their trusted closure behavior is not frozen.
-    const registeredCodecs = Object.freeze(codecs.map(codec => {
+    // Use the intrinsic traversal: a caller-defined array.map must not hide malformed codecs.
+    const registeredCodecs = Object.freeze(Array.prototype.map.call(codecs, (codec: BackupCodec) => {
       if (codec == null) throw new Error('Invalid backup codecs');
       const { type, parse, indexes, validate, restoreData, recordId } = codec;
       if (typeof type !== 'string' || type.length === 0 ||
@@ -110,7 +111,7 @@ function snapshotBackupCodecs(codecs: readonly BackupCodec[]): readonly BackupCo
         ...(restoreData === undefined ? {} : { restoreData: restoreData.bind(codec) }),
         ...(recordId === undefined ? {} : { recordId: recordId.bind(codec) }),
       });
-    }));
+    }) as BackupCodec[]);
     const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
     if (byType.size !== registeredCodecs.length || byType.has(KEY_TYPE) || byType.size > MAX_RECORD_TYPES) {
       throw new Error('Invalid backup codecs');

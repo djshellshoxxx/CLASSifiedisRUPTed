@@ -356,7 +356,7 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         updatedAt: new Date(T0).toISOString(),
       };
       // A valid imported maximum-safe revision must remain readable, but it
-      // cannot be updated to 2^53 (an imprecise revision).
+      // cannot be updated to 2^53 (not all neighboring integers are representable).
       const restored = await s.transaction(tx => tx.records.restore(archived, ['draft', null, null, null]));
       expect(restored).toEqual(ok('restored'));
       const before = await s.read(tx => tx.records.get('tenant-a', 'test.item', 'revision-ceiling'));

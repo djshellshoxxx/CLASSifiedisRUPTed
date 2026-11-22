@@ -359,8 +359,17 @@ function inboxStore(d: DriverTx) {
     markDone: (m: InboxMark, attempts: number): void => d.inbox.upsert(row(m, 'done', attempts, null, null)),
     markRetry: (m: InboxMark, attempts: number, nextAttemptAt: number, code: string): void => d.inbox.upsert(row(m, 'retry', attempts, toIso(nextAttemptAt), code)),
     markDead(m: InboxMark, attempts: number, code: string): void {
-      d.inbox.upsert(row(m, 'dead', attempts, null, code));
-      d.deadLetters.upsert({ consumer: m.consumer, eventId: m.envelope.eventId, tenant: m.envelope.tenantId, type: m.envelope.type, envelope: jsonText(m.envelope, 'envelope'), attempts, errorCode: code, deadAt: toIso(m.now) });
+      // Complete both admissions before either durable write. A caller that
+      // catches a JSON serialization failure inside its transaction must not
+      // commit a dead inbox row without the corresponding dead letter.
+      const inboxRow = row(m, 'dead', attempts, null, code);
+      const letterRow: DeadLetterRow = {
+        consumer: m.consumer, eventId: m.envelope.eventId, tenant: m.envelope.tenantId,
+        type: m.envelope.type, envelope: jsonText(m.envelope, 'envelope'),
+        attempts, errorCode: code, deadAt: inboxRow.updatedAt,
+      };
+      d.inbox.upsert(inboxRow);
+      d.deadLetters.upsert(letterRow);
     },
   };
 }
@@ -399,8 +408,11 @@ function deadLetterStore(d: DriverTx) {
       const dl = d.deadLetters.get(consumer, eventId);
       const inbox = d.inbox.get(consumer, eventId);
       if (!dl || !inbox || inbox.status !== 'dead') return err(appError('NOT_FOUND'));
+      // Validate the due time before deleting a dead letter. Exceptions handled
+      // inside a transaction must not leave a letter missing from a dead row.
+      const dueAt = toIso(now);
       d.deadLetters.remove(consumer, eventId);
-      d.inbox.upsert({ ...inbox, status: 'retry', attempts: 0, nextAttemptAt: toIso(now), updatedAt: toIso(now) });
+      d.inbox.upsert({ ...inbox, status: 'retry', attempts: 0, nextAttemptAt: dueAt, updatedAt: dueAt });
       return ok(undefined);
     },
     /** Deletes dead letters that died before the cutoff (30-day RET-SHORT); returns the count. */

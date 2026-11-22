@@ -590,11 +590,17 @@ for (const count of [2, 3, 4]) {
       const proposal = await downloadedAction(coordinator, 'Propose this exact cycle');
       if (count === 2) await pages[1]!.evaluate(() => {
         const transaction = IDBDatabase.prototype.transaction;
-        let fail = true;
+        // Keep the injected fault active until the delivery warning is observed.
+        // A one-shot fault can be consumed by another inbox transaction, or a
+        // zero-delay full-jitter retry can recover in the same drain.
+        const fault = { enabled: true, injections: 0 };
+        (window as Window & { __classrupNotificationFault?: typeof fault }).__classrupNotificationFault = fault;
         IDBDatabase.prototype.transaction = function (...args: Parameters<IDBDatabase['transaction']>) {
           const stores = typeof args[0] === 'string' ? [args[0]] : Array.from(args[0]);
-          if (fail && args[1] === 'readwrite' && stores.includes('inbox')) {
-            fail = false;
+          // Notification delivery mutates records and the inbox receipt together.
+          // The subsequent failure receipt writes the inbox alone and must succeed.
+          if (fault.enabled && args[1] === 'readwrite' && stores.includes('inbox') && stores.includes('records')) {
+            fault.injections += 1;
             throw new DOMException('Injected notification commit failure', 'UnknownError');
           }
           return transaction.apply(this, args);
@@ -603,8 +609,17 @@ for (const count of [2, 3, 4]) {
       for (const page of pages.slice(1)) await importBarter(page, proposal);
       if (count === 2) {
         const peer = pages[1]!;
+        const injections = await peer.evaluate(() =>
+          (window as Window & { __classrupNotificationFault?: { injections: number } }).__classrupNotificationFault?.injections ?? 0);
+        expect(injections).toBeGreaterThan(0);
         await expect(peer.locator('#notification-delivery-status')).toContainText('Some local updates could not be processed');
         await expect(peer.locator('#notification-count')).toHaveText('0 unread notifications.');
+        // Allow subsequent retry only after both the failed write and pending state are proven.
+        await peer.evaluate(() => {
+          const fault = (window as Window & { __classrupNotificationFault?: { enabled: boolean } }).__classrupNotificationFault;
+          if (!fault) throw new Error('Notification fault hook was not installed');
+          fault.enabled = false;
+        });
         await peer.clock.setFixedTime(new Date(start + 17 * 60000));
         await peer.getByRole('button', { name: 'Refresh notifications', exact: true }).click();
         await expect(peer.locator('#notification-delivery-status')).toBeEmpty();

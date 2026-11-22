@@ -177,7 +177,16 @@ function recordStore(d: DriverTx) {
       }
       const data = jsonText(rec.data, 'record data');
       const current = d.records.get(rec.tenantId, rec.type, rec.id);
-      if (current) return current.revision === rec.revision && current.data === data ? ok('identical') : err(appError('CONFLICT_REVISION', { params: { currentRevision: current.revision } }));
+      if (current) {
+        // A restore is idempotent only when the entire persisted row agrees.
+        // Matching JSON/revision alone can conceal divergent timestamps or
+        // stale indexes, leaving normal readers with the wrong recovered state.
+        const identical = current.revision === rec.revision && current.data === data
+          && current.createdAt === rec.createdAt && current.updatedAt === rec.updatedAt
+          && current.idx.every((value, slot) => value === idx[slot]);
+        return identical ? ok('identical')
+          : err(appError('CONFLICT_REVISION', { params: { currentRevision: current.revision } }));
+      }
       d.records.upsert({ tenant: rec.tenantId, type: rec.type, id: rec.id, revision: rec.revision, data, idx: [idx[0], idx[1], idx[2], idx[3]], createdAt: rec.createdAt, updatedAt: rec.updatedAt });
       return ok('restored');
     },

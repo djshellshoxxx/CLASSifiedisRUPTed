@@ -1057,6 +1057,39 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         .toEqual(['sha256-limit-b']);
     });
 
+    it(`${adapter}: sync list filters reject malformed runtime values before adapter queries`, async () => {
+      const s = await make();
+      const created = await s.transaction(tx => {
+        tx.sync.enqueue({ id: 'sync-filter-a', tenant: 'tenant-a', destination: 'relay:a',
+          envelope: { cid: 'sha256-filter-a', type: 't/v1' }, now: T0 });
+        tx.sync.enqueue({ id: 'sync-filter-b', tenant: 'tenant-b', destination: 'relay:b',
+          envelope: { cid: 'sha256-filter-b', type: 't/v1' }, now: T0 + 1 });
+        return ok(undefined);
+      });
+      expect(created.ok).toBe(true);
+      const before = await s.read(tx => tx.sync.list({ limit: 10 }));
+      expect(before.map(entry => entry.id)).toEqual(['sync-filter-a', 'sync-filter-b']);
+
+      // The public typing does not protect a raw kernel boundary from runtime values.
+      // SQLite binding can accept invalid scalars that memory silently compares;
+      // unsupported state names can otherwise become empty successful reads.
+      const malformed: ReadonlyArray<readonly ['tenant' | 'destination' | 'ref' | 'state', unknown]> = [
+        ['tenant', null], ['tenant', 7], ['destination', false], ['destination', []],
+        ['ref', {}], ['ref', null], ['state', 'queued'], ['state', null], ['state', 1],
+      ];
+      for (const [field, value] of malformed) {
+        const q = { limit: 10, [field]: value } as unknown as Parameters<Tx['sync']['list']>[0];
+        await expect(s.read(tx => tx.sync.list(q))).rejects.toThrow(TypeError);
+        expect(await s.read(tx => tx.sync.list({ limit: 10 }))).toEqual(before);
+      }
+
+      const filtered = await s.read(tx => tx.sync.list({
+        tenant: 'tenant-a', destination: 'relay:a', ref: 'sha256-filter-a', state: 'prepared', limit: 10,
+      }));
+      expect(filtered.map(entry => entry.id)).toEqual(['sync-filter-a']);
+      expect(await s.read(tx => tx.sync.list({ state: 'failed', limit: 10 }))).toEqual([]);
+    });
+
     it(`${adapter}: duplicate sync IDs cannot overwrite acknowledged state or change tenant ownership`, async () => {
       const s = await make();
       const id = 'sync-collision-proof';

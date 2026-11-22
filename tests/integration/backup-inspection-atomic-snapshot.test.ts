@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { createMemoryStorage, defineRepo, type Storage, ok, z } from '@classrup/kernel';
+import { createMemoryStorage, defineRepo, type Storage, ok, z } from '../../packages/kernel/src/index.ts';
 import { openIndexedDbStorage } from '../../packages/kernel/src/storage/indexeddb.ts';
 import { openSqliteStorage } from '../../packages/kernel/src/storage/sqlite.ts';
 import { blobRefOf } from '../../packages/kernel/src/storage/tx.ts';
@@ -17,7 +17,7 @@ const idx = [null, null, null, null] as const;
 
 const factories: readonly { name: string; open(): Promise<Storage> }[] = [
   { name: 'memory', open: async () => createMemoryStorage() },
-  { name: 'sqlite', open: () => openSqliteStorage({ path: ':memory:' }) },
+  { name: 'sqlite', open: async () => openSqliteStorage({ path: ':memory:' }) },
   { name: 'indexeddb', open: () => openIndexedDbStorage({
     name: 'atomic-backup-snapshot', indexedDB: new IDBFactory(),
   }) },

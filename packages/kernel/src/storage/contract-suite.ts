@@ -745,6 +745,37 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         .toEqual(['sha256-limit-b']);
     });
 
+    it(`${adapter}: sync retry transitions reject invalid attempt counts without changing durable state`, async () => {
+      const s = await make();
+      const id = 'sync-attempts-validation';
+      const initial = await s.transaction(tx => ok(tx.sync.enqueue({
+        id, tenant: 'tenant-a', destination: 'relay:a',
+        envelope: { cid: 'sha256-attempts', type: 't/v1' }, now: T0,
+      })));
+      expect(initial.ok).toBe(true);
+      const before = await s.read(tx => tx.sync.get(id));
+      expect(before?.attempts).toBe(0);
+      const nextAttemptAt = new Date(T0 + 1000).toISOString();
+
+      // A malformed count must not enter a persisted retry state on any adapter.
+      for (const value of [-1, -0.5, NaN, Infinity, -Infinity,
+        Number.MAX_SAFE_INTEGER + 1, null, '1'] as unknown[]) {
+        await expect(s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+          attempts: value as number, nextAttemptAt,
+        }, T0 + 1))).rejects.toThrow(RangeError);
+        expect(await s.read(tx => tx.sync.get(id))).toEqual(before);
+      }
+      const zero = await s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+        attempts: 0, nextAttemptAt,
+      }, T0 + 1));
+      expect(zero.ok && zero.value.attempts).toBe(0);
+      const normal = await s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+        attempts: 1, nextAttemptAt,
+      }, T0 + 2));
+      expect(normal.ok && normal.value.attempts).toBe(1);
+      expect((await s.read(tx => tx.sync.get(id)))?.attempts).toBe(1);
+    });
+
     it(`TEST-PS-119-09.T05 ${adapter}: sync outbox FIFO heads per destination and declared transitions only`, async () => {
       const s = await make();
       const c = createFakeClock(T0);

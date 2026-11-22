@@ -418,6 +418,63 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         .toMatchObject({ attempts: 3, errorCode: 'FINAL_FAILURE' });
     });
 
+    it(`${adapter}: caught dead-letter preflight errors cannot commit partial inbox or requeue changes`, async () => {
+      const s = await make();
+      const consumer = 'deadletter-preflight';
+      const envelope = env('deadletter-preflight-event', 'deadletter-aggregate', 1);
+      const mark = { consumer, envelope, now: T0 };
+      const first = await s.transaction(tx => {
+        tx.inbox.markRetry(mark, 1, T0 + 1000, 'TRANSIENT');
+        return ok(undefined);
+      });
+      expect(first.ok).toBe(true);
+      const retryBefore = await s.read(tx => tx.inbox.get(consumer, envelope.eventId));
+      expect(retryBefore?.status).toBe('retry');
+
+      // Simulate an application that handles the serialization failure inside
+      // its transaction and successfully commits other work. The inbox update
+      // must not precede validation of the second dead-letter write.
+      const malformed = { ...envelope, payload: { nonJson: 1n } } as unknown as EventEnvelope;
+      const caughtMark = await s.transaction(tx => {
+        expect(() => tx.inbox.markDead({ ...mark, envelope: malformed }, 2, 'FINAL'))
+          .toThrow(TypeError);
+        return ok(undefined);
+      });
+      expect(caughtMark.ok).toBe(true);
+      expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId))).toEqual(retryBefore);
+      expect(await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId))).toBeUndefined();
+
+      // Normal dead-letter persistence remains supported.
+      const dead = await s.transaction(tx => {
+        tx.inbox.markDead(mark, 2, 'FINAL');
+        return ok(undefined);
+      });
+      expect(dead.ok).toBe(true);
+      const deadBefore = await s.read(tx => tx.inbox.get(consumer, envelope.eventId));
+      const letterBefore = await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId));
+      expect(deadBefore?.status).toBe('dead');
+      expect(letterBefore?.errorCode).toBe('FINAL');
+
+      // A malformed requeue time must be rejected before deleting the letter.
+      // Catching the exception inside the transaction must not commit a
+      // letter deletion with an unchanged dead inbox row.
+      const caughtRequeue = await s.transaction(tx => {
+        expect(() => tx.deadLetters.requeue(consumer, envelope.eventId, Number.NaN))
+          .toThrow(RangeError);
+        return ok(undefined);
+      });
+      expect(caughtRequeue.ok).toBe(true);
+      expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId))).toEqual(deadBefore);
+      expect(await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId))).toEqual(letterBefore);
+
+      const requeued = await s.transaction(tx =>
+        tx.deadLetters.requeue(consumer, envelope.eventId, T0 + 10_000));
+      expect(requeued).toEqual(ok(undefined));
+      expect(await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId))).toBeUndefined();
+      expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId)))
+        .toMatchObject({ status: 'retry', attempts: 0, nextAttemptAt: new Date(T0 + 10_000).toISOString() });
+    });
+
     it(`${adapter}: record CAS rejects unsafe revision numbers without mutating storage`, async () => {
       const s = await make();
       const input = {

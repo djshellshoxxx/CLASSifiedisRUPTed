@@ -311,6 +311,65 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(committed).toMatchObject({ status: 'done', attempts: 1, nextAttemptAt: null });
     });
 
+    it(`${adapter}: inbox retry attempt counts reject invalid values before any durable write`, async () => {
+      const s = await make();
+      const consumer = 'inbox-attempts-boundary';
+      const envelope = env('inbox-attempts-event', 'inbox-attempts-aggregate', 1);
+      const mark = { consumer, envelope, now: T0 };
+      const initial = await s.transaction(tx => {
+        tx.inbox.markRetry(mark, 1, T0 + 1000, 'TEMPORARY');
+        return ok(undefined);
+      });
+      expect(initial.ok).toBe(true);
+      const before = await s.read(tx => tx.inbox.get(consumer, envelope.eventId));
+      expect(before).toMatchObject({ status: 'retry', attempts: 1 });
+      expect(await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId))).toBeUndefined();
+
+      // Runtime callers can bypass the number type: reject before even a
+      // markDead write, which otherwise persists both inbox and dead-letter rows.
+      for (const value of [-1, -0.5, NaN, Infinity, -Infinity,
+        Number.MAX_SAFE_INTEGER + 1, null, '2'] as unknown[]) {
+        const attempts = value as number;
+        await expect(s.transaction(tx => {
+          tx.inbox.markDone(mark, attempts);
+          return ok(undefined);
+        })).rejects.toThrow(RangeError);
+        await expect(s.transaction(tx => {
+          tx.inbox.markRetry(mark, attempts, T0 + 2000, 'TEMPORARY');
+          return ok(undefined);
+        })).rejects.toThrow(RangeError);
+        await expect(s.transaction(tx => {
+          tx.inbox.markDead(mark, attempts, 'FINAL_FAILURE');
+          return ok(undefined);
+        })).rejects.toThrow(RangeError);
+        expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId))).toEqual(before);
+        expect(await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId))).toBeUndefined();
+      }
+
+      const zero = await s.transaction(tx => {
+        tx.inbox.markRetry(mark, 0, T0 + 2000, 'TEMPORARY');
+        return ok(undefined);
+      });
+      expect(zero.ok).toBe(true);
+      expect((await s.read(tx => tx.inbox.get(consumer, envelope.eventId)))?.attempts).toBe(0);
+      const completed = await s.transaction(tx => {
+        tx.inbox.markDone(mark, 1);
+        return ok(undefined);
+      });
+      expect(completed.ok).toBe(true);
+      expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId)))
+        .toMatchObject({ status: 'done', attempts: 1, lastError: null });
+      const dead = await s.transaction(tx => {
+        tx.inbox.markDead(mark, 2, 'FINAL_FAILURE');
+        return ok(undefined);
+      });
+      expect(dead.ok).toBe(true);
+      expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId)))
+        .toMatchObject({ status: 'dead', attempts: 2, lastError: 'FINAL_FAILURE' });
+      expect(await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId)))
+        .toMatchObject({ attempts: 2, errorCode: 'FINAL_FAILURE' });
+    });
+
     it(`${adapter}: record CAS rejects unsafe revision numbers without mutating storage`, async () => {
       const s = await make();
       const input = {

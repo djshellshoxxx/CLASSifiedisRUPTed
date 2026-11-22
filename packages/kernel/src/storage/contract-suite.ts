@@ -265,6 +265,51 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect((await list(2, 'other-consumer'))).toEqual([]);
     });
 
+    it(`${adapter}: duplicate outbox event IDs cannot replace delivered or cross-tenant events`, async () => {
+      const s = await make();
+      const original = env('outbox-collision-event', 'outbox-original', 1);
+      const consumer = 'outbox-collision-consumer';
+      const initial = await s.transaction(tx => {
+        const seq = tx.outbox.append(original);
+        tx.inbox.markDone({ consumer, envelope: original, now: T0 }, 1);
+        return ok(seq);
+      });
+      expect(initial.ok).toBe(true);
+      const snapshot = () => s.read(tx => ({
+        event: tx.outbox.get(original.eventId),
+        inbox: tx.inbox.get(consumer, original.eventId),
+        otherConsumer: tx.outbox.pending('outbox-independent-consumer', [original.type], T0, 10),
+      }));
+      const before = await snapshot();
+      expect(before.inbox?.status).toBe('done');
+      expect(before.otherConsumer.map(e => e.envelope.eventId)).toEqual([original.eventId]);
+
+      // SQLite rejects the unique event_id collision, but memory/IndexedDB
+      // previously replaced the event and incremented the outbox sequence.
+      // No adapter may erase an acknowledged event or transfer its tenant.
+      for (const duplicate of [
+        original,
+        { ...original, payload: { changed: true } },
+        { ...original, tenantId: 'tenant-b', aggregate: { type: 'item', id: 'foreign-aggregate' } },
+      ]) {
+        await expect(s.transaction(tx => ok(tx.outbox.append(duplicate))))
+          .rejects.toThrow('outbox event id already exists');
+        expect(await snapshot()).toEqual(before);
+      }
+
+      const distinct = env('outbox-distinct-event', 'outbox-next', 1);
+      const inserted = await s.transaction(tx => ok(tx.outbox.append(distinct)));
+      expect(inserted.ok).toBe(true);
+      if (!initial.ok || !inserted.ok) throw new Error('Outbox append setup failed');
+      // Rejected duplicates must not consume or silently rewrite sequence IDs.
+      expect(inserted.value).toBe(initial.value + 1);
+      const after = await s.read(tx => tx.outbox.pending(
+        'outbox-independent-consumer', [original.type], T0, 10,
+      ).map(e => e.envelope.eventId));
+      expect(after).toEqual([original.eventId, distinct.eventId]);
+      expect(await s.read(tx => tx.inbox.get(consumer, original.eventId))).toEqual(before.inbox);
+    });
+
     it(`${adapter}: pending outbox reads reject malformed limits before unbounded delivery queries`, async () => {
       const s = await make();
       const stored = await s.transaction(tx => {

@@ -288,6 +288,12 @@ export interface PendingEvent {
 function outboxStore(d: DriverTx) {
   return {
     append(env: EventEnvelope): number {
+      // Event IDs are global durable keys. SQLite already rejects duplicates,
+      // while memory/IndexedDB would overwrite an existing event and its
+      // sequence. Reject before any adapter write, including across tenants.
+      if (d.outbox.get(env.eventId)) {
+        throw new Error('outbox event id already exists');
+      }
       return d.outbox.append({
         eventId: env.eventId,
         tenant: env.tenantId,

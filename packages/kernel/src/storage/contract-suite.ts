@@ -745,6 +745,41 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         .toEqual(['sha256-limit-b']);
     });
 
+    it(`${adapter}: duplicate sync IDs cannot overwrite acknowledged state or change tenant ownership`, async () => {
+      const s = await make();
+      const id = 'sync-collision-proof';
+      const initial = await s.transaction(tx => ok(tx.sync.enqueue({
+        id, tenant: 'tenant-a', destination: 'relay:a',
+        envelope: { cid: 'sha256-original', type: 't/v1' }, now: T0,
+      })));
+      expect(initial.ok).toBe(true);
+      const accepted = await s.transaction(tx => tx.sync.transition(id, 'peer_ack', {
+        receipt: { peerAck: 'signed-proof' },
+      }, T0 + 1));
+      expect(accepted.ok && accepted.value.state).toBe('peer_accepted');
+      const before = await s.read(tx => tx.sync.get(id));
+
+      // The ID is a global storage key, not a (tenant, id) compound key.
+      // Enqueue must never silently replace a completed entry, even across tenants.
+      for (const [tenant, destination, cid] of [
+        ['tenant-a', 'relay:a', 'sha256-other'],
+        ['tenant-b', 'relay:b', 'sha256-cross-tenant'],
+        ['tenant-a', 'relay:a', 'sha256-original'],
+      ] as const) {
+        await expect(s.transaction(tx => ok(tx.sync.enqueue({
+          id, tenant, destination, envelope: { cid, type: 't/v1' }, now: T0 + 2,
+        })))).rejects.toThrow('sync enqueue id already exists');
+        expect(await s.read(tx => tx.sync.get(id))).toEqual(before);
+      }
+
+      const distinct = await s.transaction(tx => ok(tx.sync.enqueue({
+        id: 'sync-collision-safe', tenant: 'tenant-b', destination: 'relay:b',
+        envelope: { cid: 'sha256-cross-tenant', type: 't/v1' }, now: T0 + 2,
+      })));
+      expect(distinct.ok && distinct.value.state).toBe('prepared');
+      expect((await s.read(tx => tx.sync.get(id)))?.receipt).toEqual({ peerAck: 'signed-proof' });
+    });
+
     it(`${adapter}: sync retry transitions reject invalid attempt counts without changing durable state`, async () => {
       const s = await make();
       const id = 'sync-attempts-validation';

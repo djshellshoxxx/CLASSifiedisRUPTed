@@ -89,3 +89,38 @@ describe('alpha backup coverage', () => {
     await unsupported.close();
   }, 30000);
 });
+
+it('provides a single-session record and attachment preview without changing the v1 archive contract', async () => {
+  const vault = vaultFromStorage(createMemoryStorage(), [backupCodec(note)]);
+  const session = await vault.create(passphrase);
+  try {
+    const stored = await session.storage.transaction(async tx => {
+      const blob = await tx.blobs.put({
+        tenant: session.principal, bytes: new Uint8Array([1, 2, 3]),
+        contentType: 'image/png', privacy: 'P0', encrypted: false, now: 0,
+      });
+      if (!blob.ok) return blob;
+      tx.blobs.attach(session.principal, blob.value.ref, 'listing/preview');
+      return tx.records.put({
+        tenant: session.principal, type: note.type, id: 'preview',
+        data: { text: 'not displayed in inspection' },
+        idx: [null, null, null, null], expectedRevision: 0, now: 0,
+      });
+    });
+    expect(stored.ok).toBe(true);
+    const inspected = await session.backupInspection!();
+    expect(inspected.records).toMatchObject({
+      recordTypes: [{ type: note.type, count: 1 }], recordCount: 1,
+      unsupportedRecordTypes: [], typeLimitExceeded: false,
+    });
+    expect(inspected.attachments).toEqual({
+      referencedBlobs: 1, missingBlobs: 0, excludedStoredReferences: 1,
+      holderRows: 1, limitExceeded: false, holderAuthorityVerified: false,
+      includedInV1Backup: false,
+    });
+    expect(JSON.stringify(inspected)).not.toMatch(/not displayed in inspection|listing\/preview|blob:sha256-/);
+    const sealed = await session.exportBackup(passphrase);
+    expect(sealed.format).toBe('classrup.sealed/v1');
+  } finally { await session.lock(); }
+  await expect(session.backupInspection!()).rejects.toThrow(/Vault locked|Vault closed/);
+}, 30000);

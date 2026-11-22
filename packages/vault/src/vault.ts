@@ -75,6 +75,8 @@ export interface UnlockedVault {
   backupCoverage(): Promise<BackupCoverage>;
   /** Inspect this unlocked principal's blob-holder references; never returns refs or bytes. */
   attachmentCoverage(): Promise<AttachmentCoverage>;
+  /** Optional same-transaction record and attachment preview; diagnostics only, not a v1 archive. */
+  backupInspection?(): Promise<{ readonly records: BackupCoverage; readonly attachments: AttachmentCoverage | null }>;
   /** Alpha record backup, not the complete IOX export/recovery/rotation protocol. */
   exportBackup(passphrase: string): Promise<Sealed>;
 }
@@ -121,6 +123,19 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
       unsupportedRecordTypes: Object.freeze(recordTypes.filter(row => !byType.has(row.type)).map(row => row.type)),
       recordCount, typeLimitExceeded: found.length > MAX_RECORD_TYPES,
       recordLimitExceeded: recordCount > MAX_RECORDS, excludedStores,
+    });
+  };
+  /** One principal-scoped read can use both coverage functions without a cross-read race. */
+  const referenceCoverage = (tx: Tx, principal: string): AttachmentCoverage => {
+    const counts = tx.blobs.referenceCoverage(principal, MAX_REFERENCE_HOLDERS);
+    return Object.freeze({
+      referencedBlobs: counts.referenceCount,
+      missingBlobs: counts.missingCount,
+      excludedStoredReferences: counts.referenceCount === null || counts.missingCount === null ? null : counts.referenceCount - counts.missingCount,
+      holderRows: counts.holderCount,
+      limitExceeded: counts.limitExceeded,
+      holderAuthorityVerified: false as const,
+      includedInV1Backup: false as const,
     });
   };
   let session: UnlockedVault | undefined;
@@ -206,17 +221,23 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
       },
       async attachmentCoverage() {
         guard();
-        const counts = await storage.read(tx => tx.blobs.referenceCoverage(identity.principal, MAX_REFERENCE_HOLDERS));
+        const result = await storage.read(tx => referenceCoverage(tx, identity.principal));
         guard();
-        return Object.freeze({
-          referencedBlobs: counts.referenceCount,
-          missingBlobs: counts.missingCount,
-          excludedStoredReferences: counts.referenceCount === null || counts.missingCount === null ? null : counts.referenceCount - counts.missingCount,
-          holderRows: counts.holderCount,
-          limitExceeded: counts.limitExceeded,
-          holderAuthorityVerified: false as const,
-          includedInV1Backup: false as const,
+        return result;
+      },
+      async backupInspection() {
+        guard();
+        const result = await storage.read(tx => {
+          const records = coverage(tx, identity.principal);
+          // Attachment diagnostics are optional; never discard an otherwise
+          // valid required record report because the holder scan is unavailable.
+          let attachments: AttachmentCoverage | null = null;
+          try { attachments = referenceCoverage(tx, identity.principal); }
+          catch { /* Optional diagnostic failure is represented by null. */ }
+          return Object.freeze({ records, attachments });
         });
+        guard();
+        return result;
       },
       async exportBackup(passphrase) {
         guard();

@@ -346,6 +346,40 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(updated.ok && updated.value.revision).toBe(2);
     });
 
+    it(`${adapter}: record CAS must not increment beyond the safe integer ceiling`, async () => {
+      const s = await make();
+      const archived = {
+        tenantId: 'tenant-a', type: 'test.item', id: 'revision-ceiling',
+        revision: Number.MAX_SAFE_INTEGER,
+        data: { name: 'lamp', status: 'draft' },
+        createdAt: new Date(T0).toISOString(),
+        updatedAt: new Date(T0).toISOString(),
+      };
+      // A valid imported maximum-safe revision must remain readable, but it
+      // cannot be updated to 2^53 (not all neighboring integers are representable).
+      const restored = await s.transaction(tx => tx.records.restore(archived, ['draft', null, null, null]));
+      expect(restored).toEqual(ok('restored'));
+      const before = await s.read(tx => tx.records.get('tenant-a', 'test.item', 'revision-ceiling'));
+      expect(before?.revision).toBe(Number.MAX_SAFE_INTEGER);
+
+      await expect(s.transaction(tx => tx.records.put({
+        tenant: 'tenant-a', type: 'test.item', id: 'revision-ceiling',
+        data: { name: 'lamp', status: 'published' },
+        idx: ['published', null, null, null],
+        expectedRevision: Number.MAX_SAFE_INTEGER, now: T0 + 1,
+      }))).rejects.toThrow(RangeError);
+      expect(await s.read(tx => tx.records.get('tenant-a', 'test.item', 'revision-ceiling')))
+        .toEqual(before);
+
+      // Ordinary stale CAS inputs retain their existing conflict semantics.
+      const stale = await s.transaction(tx => tx.records.put({
+        tenant: 'tenant-a', type: 'test.item', id: 'revision-ceiling',
+        data: { name: 'lamp', status: 'draft' }, idx: ['draft', null, null, null],
+        expectedRevision: Number.MAX_SAFE_INTEGER - 1, now: T0 + 1,
+      }));
+      expect(!stale.ok && stale.error.code).toBe('CONFLICT_REVISION');
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

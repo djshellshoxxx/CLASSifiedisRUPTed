@@ -133,6 +133,11 @@ function recordStore(d: DriverTx) {
       const current = d.records.get(input.tenant, input.type, input.id);
       const cas = casCheck(current, input.expectedRevision);
       if (!cas.ok) return cas;
+      // Revision increments must remain exact; MAX_SAFE_INTEGER + 1 cannot
+      // represent all adjacent revisions, even with a valid CAS input.
+      if (cas.value === Number.MAX_SAFE_INTEGER) {
+        throw new RangeError('record revision would exceed the safe integer range');
+      }
       const now = toIso(input.now);
       const row: RecordRow = {
         tenant: input.tenant,

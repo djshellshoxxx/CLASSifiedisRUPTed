@@ -776,6 +776,40 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect((await s.read(tx => tx.sync.get(id)))?.attempts).toBe(1);
     });
 
+    it(`${adapter}: sync retry error metadata must be string or null across all adapters`, async () => {
+      const s = await make();
+      const id = 'sync-last-error-validation';
+      const initial = await s.transaction(tx => ok(tx.sync.enqueue({
+        id, tenant: 'tenant-a', destination: 'relay:a',
+        envelope: { cid: 'sha256-last-error', type: 't/v1' }, now: T0,
+      })));
+      expect(initial.ok).toBe(true);
+      const before = await s.read(tx => tx.sync.get(id));
+      expect(before?.lastError).toBeNull();
+
+      // TypeScript annotations do not validate untrusted runtime retry metadata.
+      // Each malformed patch must fail before any delivery-row write.
+      const invalid: unknown[] = [42, false, true, [], { code: 'RETRY' }, NaN, 1n];
+      for (const value of invalid) {
+        await expect(s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+          lastError: value as string,
+        }, T0 + 1))).rejects.toThrow(TypeError);
+        expect(await s.read(tx => tx.sync.get(id))).toEqual(before);
+      }
+
+      const retried = await s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+        attempts: 1, lastError: 'DEPENDENCY_UNAVAILABLE',
+      }, T0 + 2));
+      expect(retried.ok && retried.value.lastError).toBe('DEPENDENCY_UNAVAILABLE');
+      const retained = await s.transaction(tx => tx.sync.transition(id, 'retry_later', {}, T0 + 3));
+      expect(retained.ok && retained.value.lastError).toBe('DEPENDENCY_UNAVAILABLE');
+      const cleared = await s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+        lastError: null,
+      }, T0 + 4));
+      expect(cleared.ok && cleared.value.lastError).toBeNull();
+      expect((await s.read(tx => tx.sync.get(id)))?.lastError).toBeNull();
+    });
+
     it(`${adapter}: sync retries reject noncanonical due times before changing the delivery row`, async () => {
       const s = await make();
       const id = 'sync-due-time-validation';

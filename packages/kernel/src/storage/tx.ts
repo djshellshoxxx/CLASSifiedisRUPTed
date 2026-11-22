@@ -175,6 +175,12 @@ function recordStore(d: DriverTx) {
       return ok(undefined);
     },
     query<T = unknown>(q: RecordQuery): StoredRecord<T>[] {
+      // Direct kernel callers bypass typed repository pagination's 1..500 cap.
+      // Negative SQL LIMIT values can remove the bound, while memory slicing
+      // interprets them differently. Validate before touching any adapter.
+      if (!Number.isSafeInteger(q.limit) || q.limit < 0) {
+        throw new RangeError('Record query limit must be a nonnegative safe integer');
+      }
       return d.records.query(q).map((r) => toStored<T>(r));
     },
     /**

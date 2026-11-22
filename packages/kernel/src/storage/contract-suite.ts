@@ -4,6 +4,7 @@ import * as z from 'zod';
 import { appError } from '../errors/app-error.ts';
 import { err, ok } from '../errors/result.ts';
 import type { EventEnvelope } from '../events/envelope.ts';
+import type { RecordQuery } from './driver.ts';
 import { sweepRetention } from './maintenance.ts';
 import { defineRepo } from './repo.ts';
 import { writeScope } from './scope.ts';
@@ -827,6 +828,47 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect((await query(1)).map(row => row.id)).toEqual(['limit-a']);
       expect((await query(2)).map(row => row.id)).toEqual(['limit-a', 'limit-b']);
       expect((await s.read(tx => scoped(tx).repo(item).query({ limit: 1 }))).ok).toBe(true);
+    });
+
+    it(`${adapter}: raw record queries reject malformed selectors before any adapter read`, async () => {
+      const s = await make();
+      const inserted = await s.transaction(tx => tx.records.put({
+        tenant: 'tenant-a', type: 'test.item', id: 'query-guard', data: { name: 'guard', status: 'draft' },
+        idx: ['draft', null, null, null], expectedRevision: 0, now: T0,
+      }));
+      expect(inserted.ok).toBe(true);
+      const base: RecordQuery = {
+        tenant: 'tenant-a', type: 'test.item', filters: [], orderSlot: 0, dir: 'asc', limit: 10,
+      };
+      // SQLite interpolates identifiers and operators from these selectors.
+      // Runtime callers bypass TypeScript unions; reject before touching drivers.
+      const malformed: unknown[] = [
+        { ...base, orderSlot: '1 OR 1=1' },
+        { ...base, orderSlot: -1 },
+        { ...base, orderSlot: 5 },
+        { ...base, orderSlot: 1.5 },
+        { ...base, dir: 'sideways' },
+        { ...base, filters: null },
+        { ...base, filters: [null] },
+        { ...base, filters: new Array(1) },
+        { ...base, filters: [{ slot: 0, op: 'eq', value: 'draft' }] },
+        { ...base, filters: [{ slot: '1 OR 1=1', op: 'eq', value: 'draft' }] },
+        { ...base, filters: [{ slot: 1, op: 'eq OR 1=1', value: 'draft' }] },
+        { ...base, filters: [{ slot: 1, op: 'eq', value: null }] },
+        { ...base, after: null },
+        { ...base, after: { id: 7, value: 'draft' } },
+        { ...base, after: { id: 'query-guard', value: 7 } },
+      ];
+      for (const [caseNumber, value] of malformed.entries()) {
+        await expect(s.read(tx => tx.records.query(value as RecordQuery)), `case ${caseNumber}`)
+          .rejects.toThrow(TypeError);
+      }
+      expect((await s.read(tx => tx.records.query(base))).map(row => row.id))
+        .toEqual(['query-guard']);
+      expect((await s.read(tx => tx.records.query({
+        ...base, filters: [{ slot: 1, op: 'eq', value: 'draft' }],
+        orderSlot: 1, dir: 'asc', after: { id: 'before-query-guard', value: 'draft' },
+      }))).map(row => row.id)).toEqual(['query-guard']);
     });
 
     it(`TEST-PS-119-09.T01 ${adapter}: query by index equality, range, order and cursor pagination`, async () => {

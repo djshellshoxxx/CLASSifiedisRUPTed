@@ -421,6 +421,43 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         .toBe(Number.MAX_SAFE_INTEGER);
     });
 
+    it(`${adapter}: duplicate restore must match timestamps and indexes before claiming identity`, async () => {
+      const s = await make();
+      const archived = {
+        tenantId: 'tenant-a', type: 'test.item', id: 'restore-metadata-identity',
+        revision: 2, data: { name: 'lamp', status: 'draft' },
+        createdAt: new Date(T0).toISOString(),
+        updatedAt: new Date(T0 + 2000).toISOString(),
+      };
+      const idx = ['draft', null, null, null] as const;
+      const query = () => s.read(tx => tx.records.query({
+        tenant: 'tenant-a', type: 'test.item',
+        filters: [{ slot: 1 as const, op: 'eq' as const, value: 'draft' }],
+        orderSlot: 0, dir: 'asc', limit: 10,
+      }));
+      expect(await s.transaction(tx => tx.records.restore(archived, idx))).toEqual(ok('restored'));
+      const before = await s.read(tx => tx.records.get('tenant-a', 'test.item', archived.id));
+      const indexedBefore = await query();
+      expect(indexedBefore.map(row => row.id)).toEqual([archived.id]);
+
+      // Same revision and JSON cannot excuse contradictory durable metadata.
+      // The previous identical shortcut ignored both restored timestamps and
+      // canonical index tuples, silently leaving a different stored record.
+      for (const [record, indexes] of [
+        [{ ...archived, createdAt: new Date(T0 + 1000).toISOString() }, idx],
+        [{ ...archived, updatedAt: new Date(T0 + 3000).toISOString() }, idx],
+        [archived, ['published', null, null, null] as const],
+      ] as const) {
+        const attempt = await s.transaction(tx => tx.records.restore(record, indexes));
+        expect(!attempt.ok && attempt.error.code).toBe('CONFLICT_REVISION');
+        expect(await s.read(tx => tx.records.get('tenant-a', 'test.item', archived.id)))
+          .toEqual(before);
+        expect(await query()).toEqual(indexedBefore);
+      }
+      expect(await s.transaction(tx => tx.records.restore(archived, idx)))
+        .toEqual(ok('identical'));
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

@@ -794,6 +794,41 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(!gone.ok && gone.error.code).toBe('NOT_FOUND');
     });
 
+    it(`${adapter}: raw record queries reject invalid limits before adapter reads`, async () => {
+      const s = await make();
+      const inserted = await s.transaction(tx => {
+        for (const id of ['limit-a', 'limit-b']) {
+          const result = tx.records.put({
+            tenant: 'tenant-a', type: 'test.item', id,
+            data: { name: id, status: 'draft' },
+            idx: ['draft', null, null, null], expectedRevision: 0, now: T0,
+          });
+          if (!result.ok) return result;
+        }
+        return ok(undefined);
+      });
+      expect(inserted.ok).toBe(true);
+
+      const query = (limit: number) => s.read(tx => tx.records.query({
+        tenant: 'tenant-a', type: 'test.item',
+        filters: [], orderSlot: 0, dir: 'asc', limit,
+      }));
+      // SQLite LIMIT -1 is unlimited; memory slice(0, -1) returns almost all
+      // rows. Invalid direct-kernel requests must be rejected consistently.
+      for (const invalid of [
+        -2, -1, 0.5, Number.NaN, -Infinity, Infinity,
+        Number.MAX_SAFE_INTEGER + 1, null, '1',
+      ] as unknown[]) {
+        await expect(query(invalid as number)).rejects.toThrow(RangeError);
+      }
+      // Zero is valid for a raw storage query; typed repository pagination
+      // retains its separate public 1..500 cap and fetches limit + 1.
+      expect(await query(0)).toEqual([]);
+      expect((await query(1)).map(row => row.id)).toEqual(['limit-a']);
+      expect((await query(2)).map(row => row.id)).toEqual(['limit-a', 'limit-b']);
+      expect((await s.read(tx => scoped(tx).repo(item).query({ limit: 1 }))).ok).toBe(true);
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: query by index equality, range, order and cursor pagination`, async () => {
       const s = await make();
       await s.transaction((tx) => {

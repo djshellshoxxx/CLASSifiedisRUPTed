@@ -458,6 +458,53 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         .toEqual(ok('identical'));
     });
 
+    it(`${adapter}: restore rejects malformed index tuples before adapter access or duplicate success`, async () => {
+      const s = await make();
+      const archived = {
+        tenantId: 'tenant-a', type: 'test.item', id: 'restore-index-validation',
+        revision: 2, data: { name: 'lamp', status: 'draft' },
+        createdAt: new Date(T0).toISOString(),
+        updatedAt: new Date(T0 + 1000).toISOString(),
+      };
+      const idx = ['draft', null, null, null] as const;
+      expect(await s.transaction(tx => tx.records.restore(archived, idx))).toEqual(ok('restored'));
+      const before = await s.read(tx => tx.records.get(archived.tenantId, archived.type, archived.id));
+      const query = () => s.read(tx => tx.records.query({
+        tenant: archived.tenantId, type: archived.type,
+        filters: [{ slot: 1 as const, op: 'eq' as const, value: 'draft' }],
+        orderSlot: 0, dir: 'asc', limit: 10,
+      }));
+      const indexedBefore = await query();
+
+      // TypeScript's fixed-length tuple cannot protect the runtime restore port.
+      // A partial or non-string index must not be persisted or accepted as
+      // an identical duplicate through different adapter-specific behavior.
+      const malformed: unknown[] = [
+        ['draft', null, null],
+        ['draft', null, null, null, null],
+        ['draft', 7, null, null],
+        ['draft', undefined, null, null],
+        new Array(4),
+        { 0: 'draft', 1: null, 2: null, 3: null, length: 4 },
+        null,
+      ];
+      for (const [i, values] of malformed.entries()) {
+        const invalidIdx = values as typeof idx;
+        const newId = `restore-index-invalid-${i}`;
+        await expect(s.transaction(tx => tx.records.restore({
+          ...archived, id: newId,
+        }, invalidIdx))).rejects.toThrow(TypeError);
+        expect(await s.read(tx => tx.records.get(archived.tenantId, archived.type, newId)))
+          .toBeUndefined();
+        await expect(s.transaction(tx => tx.records.restore(archived, invalidIdx)))
+          .rejects.toThrow(TypeError);
+        expect(await s.read(tx => tx.records.get(archived.tenantId, archived.type, archived.id)))
+          .toEqual(before);
+        expect(await query()).toEqual(indexedBefore);
+      }
+      expect(await s.transaction(tx => tx.records.restore(archived, idx))).toEqual(ok('identical'));
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

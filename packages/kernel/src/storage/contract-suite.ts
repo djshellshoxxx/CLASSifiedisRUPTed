@@ -505,6 +505,62 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(await s.transaction(tx => tx.records.restore(archived, idx))).toEqual(ok('identical'));
     });
 
+    it(`${adapter}: record put rejects malformed index tuples without creating or updating rows`, async () => {
+      const s = await make();
+      const base = {
+        tenant: 'tenant-a', type: 'test.item', id: 'put-index-valid',
+        data: { name: 'lamp', status: 'draft' }, now: T0,
+      };
+      const validIdx = ['draft', null, null, null] as const;
+      const created = await s.transaction(tx => tx.records.put({
+        ...base, idx: validIdx, expectedRevision: 0,
+      }));
+      expect(created.ok && created.value.revision).toBe(1);
+      const before = await s.read(tx => tx.records.get(base.tenant, base.type, base.id));
+      const query = () => s.read(tx => tx.records.query({
+        tenant: base.tenant, type: base.type,
+        filters: [{ slot: 1 as const, op: 'eq' as const, value: 'draft' }],
+        orderSlot: 0, dir: 'asc', limit: 10,
+      }));
+      const indexedBefore = await query();
+      expect(indexedBefore.map(record => record.id)).toEqual([base.id]);
+
+      // A type annotation cannot reject malformed runtime tuples. Do not
+      // silently truncate a fifth slot or persist sparse/non-string entries.
+      const malformed: unknown[] = [
+        ['draft', null, null],
+        ['draft', null, null, null, null],
+        ['draft', 5, null, null],
+        ['draft', undefined, null, null],
+        new Array(4),
+        { 0: 'draft', 1: null, 2: null, 3: null, length: 4 },
+        null,
+      ];
+      for (const [i, value] of malformed.entries()) {
+        const idx = value as typeof validIdx;
+        const newId = `put-index-invalid-${i}`;
+        await expect(s.transaction(tx => tx.records.put({
+          ...base, id: newId, idx, expectedRevision: 0,
+        }))).rejects.toThrow(TypeError);
+        expect(await s.read(tx => tx.records.get(base.tenant, base.type, newId)))
+          .toBeUndefined();
+
+        await expect(s.transaction(tx => tx.records.put({
+          ...base, idx, expectedRevision: 1, now: T0 + 1000,
+          data: { name: 'lamp', status: 'published' },
+        }))).rejects.toThrow(TypeError);
+        expect(await s.read(tx => tx.records.get(base.tenant, base.type, base.id)))
+          .toEqual(before);
+        expect(await query()).toEqual(indexedBefore);
+      }
+
+      const updated = await s.transaction(tx => tx.records.put({
+        ...base, idx: ['published', null, null, null], expectedRevision: 1,
+        data: { name: 'lamp', status: 'published' }, now: T0 + 1000,
+      }));
+      expect(updated.ok && updated.value.revision).toBe(2);
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

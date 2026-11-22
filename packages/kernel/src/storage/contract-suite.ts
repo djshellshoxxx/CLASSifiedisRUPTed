@@ -370,6 +370,54 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
         .toMatchObject({ attempts: 2, errorCode: 'FINAL_FAILURE' });
     });
 
+    it(`${adapter}: inbox retry and dead-letter error codes require primitive strings`, async () => {
+      const s = await make();
+      const consumer = 'inbox-error-code-boundary';
+      const envelope = env('inbox-error-event', 'inbox-error-aggregate', 1);
+      const mark = { consumer, envelope, now: T0 };
+      const initial = await s.transaction(tx => {
+        tx.inbox.markRetry(mark, 1, T0 + 1000, 'INITIAL_FAILURE');
+        return ok(undefined);
+      });
+      expect(initial.ok).toBe(true);
+      const before = await s.read(tx => tx.inbox.get(consumer, envelope.eventId));
+      expect(before).toMatchObject({ status: 'retry', attempts: 1, lastError: 'INITIAL_FAILURE' });
+
+      // A runtime caller can bypass the static string type. Reject before
+      // either the inbox write or markDead's additional dead-letter write.
+      for (const value of [null, undefined, 0, false, NaN, {}, [], 1n] as unknown[]) {
+        const code = value as string;
+        await expect(s.transaction(tx => {
+          tx.inbox.markRetry(mark, 2, T0 + 2000, code);
+          return ok(undefined);
+        })).rejects.toThrow(TypeError);
+        await expect(s.transaction(tx => {
+          tx.inbox.markDead(mark, 2, code);
+          return ok(undefined);
+        })).rejects.toThrow(TypeError);
+        expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId))).toEqual(before);
+        expect(await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId))).toBeUndefined();
+      }
+
+      // Empty string is still a string and must retain the existing contract.
+      const retry = await s.transaction(tx => {
+        tx.inbox.markRetry(mark, 2, T0 + 2000, '');
+        return ok(undefined);
+      });
+      expect(retry.ok).toBe(true);
+      expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId)))
+        .toMatchObject({ status: 'retry', attempts: 2, lastError: '' });
+      const dead = await s.transaction(tx => {
+        tx.inbox.markDead(mark, 3, 'FINAL_FAILURE');
+        return ok(undefined);
+      });
+      expect(dead.ok).toBe(true);
+      expect(await s.read(tx => tx.inbox.get(consumer, envelope.eventId)))
+        .toMatchObject({ status: 'dead', attempts: 3, lastError: 'FINAL_FAILURE' });
+      expect(await s.read(tx => tx.deadLetters.get(consumer, envelope.eventId)))
+        .toMatchObject({ attempts: 3, errorCode: 'FINAL_FAILURE' });
+    });
+
     it(`${adapter}: record CAS rejects unsafe revision numbers without mutating storage`, async () => {
       const s = await make();
       const input = {

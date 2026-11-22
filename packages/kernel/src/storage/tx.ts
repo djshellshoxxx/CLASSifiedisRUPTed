@@ -181,6 +181,30 @@ function recordStore(d: DriverTx) {
       if (!Number.isSafeInteger(q.limit) || q.limit < 0) {
         throw new RangeError('Record query limit must be a nonnegative safe integer');
       }
+      // The SQLite driver interpolates index columns and comparison operators.
+      // Runtime callers can bypass the RecordQuery union types. Keep these
+      // selectors canonical across memory, IndexedDB, and SQLite before any read.
+      if (![0, 1, 2, 3, 4].includes(q.orderSlot)) {
+        throw new TypeError('Record query orderSlot must be 0..4');
+      }
+      if (q.dir !== 'asc' && q.dir !== 'desc') {
+        throw new TypeError('Record query direction must be asc or desc');
+      }
+      if (!Array.isArray(q.filters)) {
+        throw new TypeError('Record query filters must be an array');
+      }
+      for (const filter of q.filters) {
+        if (!filter || ![1, 2, 3, 4].includes(filter.slot)
+          || !['eq', 'lt', 'lte', 'gt', 'gte'].includes(filter.op)
+          || typeof filter.value !== 'string') {
+          throw new TypeError('Record query filter must have a valid slot, operator and string value');
+        }
+      }
+      if (q.after !== undefined
+        && (!q.after || typeof q.after.id !== 'string'
+          || (q.after.value !== null && typeof q.after.value !== 'string'))) {
+        throw new TypeError('Record query cursor must have a string id and string/null value');
+      }
       return d.records.query(q).map((r) => toStored<T>(r));
     },
     /**

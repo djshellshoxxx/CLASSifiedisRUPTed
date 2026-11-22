@@ -7,7 +7,7 @@ import { blobRefOf } from '../../packages/kernel/src/storage/tx.ts';
 import { backupCodec, vaultFromStorage } from '../../packages/vault/src/vault.ts';
 
 const repo = defineRepo({
-  type: 'test.backup-snapshot',
+  type: 'test.backupsnapshot',
   schema: z.strictObject({ text: z.string() }),
   indexes: {},
 });

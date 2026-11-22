@@ -170,6 +170,15 @@ function recordStore(d: DriverTx) {
      * absent ⇒ written; identical ⇒ skipped; different ⇒ CONFLICT_REVISION.
      */
     restore(rec: StoredRecord, idx: IndexValues): Result<'restored' | 'identical', AppError> {
+      // Archive inputs cross a runtime boundary: TypeScript tuples do not
+      // validate length, sparse holes, or element types. Reject them before
+      // either the duplicate shortcut or any adapter write can run.
+      if (!Array.isArray(idx) || idx.length !== 4
+        || [0, 1, 2, 3].some((slot) =>
+          !Object.prototype.hasOwnProperty.call(idx, slot)
+          || (idx[slot] !== null && typeof idx[slot] !== 'string'))) {
+        throw new TypeError('record indexes must be a four-element string/null tuple');
+      }
       // Stored revisions start at 1. Reject malformed archives before any
       // adapter read/write or an identical-record early return.
       if (!Number.isSafeInteger(rec.revision) || rec.revision < 1) {

@@ -333,6 +333,11 @@ function inboxStore(d: DriverTx) {
     if (!Number.isSafeInteger(attempts) || attempts < 0) {
       throw new RangeError('inbox attempts must be a nonnegative safe integer');
     }
+    // Retry and dead-letter error codes are required primitive strings; only
+    // completed inbox rows may carry null. Reject before either durable write.
+    if (code !== null && typeof code !== 'string') {
+      throw new TypeError('inbox error code must be a string or null');
+    }
     return {
       consumer: m.consumer,
       eventId: m.envelope.eventId,

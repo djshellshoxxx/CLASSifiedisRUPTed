@@ -272,3 +272,40 @@ it('does not publish a successful required inspection after session replacement 
   // is forbidden. The optional read may complete before the session guard rejects.
   expect(attachmentReads).toBeLessThanOrEqual(1);
 });
+
+it('prefers the atomic production inspection over separate potentially drifting reads', async () => {
+  let legacyCalls = 0;
+  let atomicCalls = 0;
+  const result = await readBackupInspection({
+    backupCoverage: async () => { legacyCalls++; return base; },
+    attachmentCoverage: async () => { legacyCalls++; return references; },
+    backupInspection: async () => { atomicCalls++; return { records: base, attachments: references }; },
+  });
+  expect(result).toEqual({ records: base, attachments: references });
+  expect(atomicCalls).toBe(1);
+  expect(legacyCalls).toBe(0);
+});
+
+it('preserves atomic record coverage when optional attachment values are malformed', async () => {
+  const result = await readBackupInspection({
+    backupCoverage: async () => { throw new Error('legacy path should not run'); },
+    attachmentCoverage: async () => { throw new Error('legacy path should not run'); },
+    backupInspection: async () => ({
+      records: base, attachments: { ...references, missingBlobs: Number.NaN },
+    }),
+  });
+  expect(result.records).toEqual(base);
+  expect(result.attachments).toBeNull();
+});
+
+it('fails closed on malformed atomic required coverage and does not fall back to a stale read', async () => {
+  let fallbackCalls = 0;
+  await expect(readBackupInspection({
+    backupCoverage: async () => { fallbackCalls++; return base; },
+    attachmentCoverage: async () => { fallbackCalls++; return references; },
+    backupInspection: async () => ({
+      records: { ...base, recordCount: 500 }, attachments: references,
+    }),
+  })).rejects.toThrow('Backup inspection unavailable; saved-record coverage could not be verified.');
+  expect(fallbackCalls).toBe(0);
+});

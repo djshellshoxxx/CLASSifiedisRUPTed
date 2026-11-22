@@ -69,7 +69,22 @@ function isCoherentBackupCoverage(input: unknown): input is BackupCoverage {
 export async function readBackupInspection(source: {
   backupCoverage(): Promise<BackupCoverage>;
   attachmentCoverage(): Promise<AttachmentCoverage>;
+  backupInspection?(): Promise<{ readonly records: BackupCoverage; readonly attachments: AttachmentCoverage | null }>;
 }): Promise<{ readonly records: BackupCoverage; readonly attachments: AttachmentCoverage | null }> {
+  // Production vaults read both diagnostics in one principal-scoped storage
+  // snapshot. Older/standalone consumers retain the two-call compatibility path.
+  if (typeof source.backupInspection === 'function') {
+    try {
+      const inspected = await source.backupInspection();
+      if (!inspected || !isCoherentBackupCoverage(inspected.records)) throw new Error('Malformed required coverage');
+      return {
+        records: inspected.records,
+        attachments: isCoherentAttachmentCoverage(inspected.attachments) ? inspected.attachments : null,
+      };
+    } catch {
+      throw new Error('Backup inspection unavailable; saved-record coverage could not be verified.');
+    }
+  }
   let records: BackupCoverage;
   try {
     records = await source.backupCoverage();

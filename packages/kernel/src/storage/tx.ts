@@ -433,6 +433,10 @@ function syncStore(d: DriverTx) {
   return {
     enqueue(input: EnqueueStatement): SyncEntry {
       if (typeof input.envelope.cid !== 'string' || typeof input.envelope.type !== 'string') throw new TypeError('signed envelope requires cid and type');
+      // sync_outbox is keyed globally by ID, not by (tenant, ID).
+      // INSERT OR REPLACE / memory upsert must never erase a previous
+      // acknowledgement, retry history, or a different tenant's entry.
+      if (d.sync.get(input.id)) throw new Error('sync enqueue id already exists');
       const now = toIso(input.now);
       const row: SyncRow = { id: input.id, tenant: input.tenant, destination: input.destination, ref: input.envelope.cid, envelope: jsonText(input.envelope, 'signed envelope'), state: 'prepared', attempts: 0, nextAttemptAt: null, lastError: null, receipt: null, createdAt: now, updatedAt: now };
       d.sync.upsert(row);

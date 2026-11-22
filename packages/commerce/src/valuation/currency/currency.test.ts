@@ -164,7 +164,10 @@ describe('Currency registry authenticated-reference checkpoint', () => {
     expect(val(first)).toEqual(val(replay));
     expect(e.k.events.filter(x => x.type === 'commerce.currency.status_changed')).toHaveLength(1);
     expect(code(await e.k.cmd('commerce.currency.set_status', { ...input, status: 'active' }))).toBe('CONFLICT_REVISION');
-    expect(val<CurrencyDef>(await e.get('TOK')).decimals).toBe(6);
+    // Either racing request may win the serialized registration. The persisted
+    // binding must match the actual successful command, not call-array order.
+    const winnerDecimals = concurrent[0]?.ok ? 6 : 18;
+    expect(val<CurrencyDef>(await e.get('TOK')).decimals).toBe(winnerDecimals);
   });
 
   it('bounds successful new registrations at twenty per hour without blocking disable or retirement', async () => {

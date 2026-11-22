@@ -464,6 +464,11 @@ function syncStore(d: DriverTx) {
           throw new TypeError('sync nextAttemptAt must be a canonical ISO timestamp or null');
         }
       }
+      // Delivery error metadata is persisted as a string or null in every driver.
+      // Runtime callers can bypass SyncTransitionPatch's static type annotation.
+      if (patch.lastError !== undefined && patch.lastError !== null && typeof patch.lastError !== 'string') {
+        throw new TypeError('sync lastError must be a string or null');
+      }
       const row = d.sync.get(id);
       if (!row) return err(appError('NOT_FOUND'));
       const to = syncMachine.next(row.state, event);

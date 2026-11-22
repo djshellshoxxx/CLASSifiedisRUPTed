@@ -170,6 +170,11 @@ function recordStore(d: DriverTx) {
      * absent ⇒ written; identical ⇒ skipped; different ⇒ CONFLICT_REVISION.
      */
     restore(rec: StoredRecord, idx: IndexValues): Result<'restored' | 'identical', AppError> {
+      // Stored revisions start at 1. Reject malformed archives before any
+      // adapter read/write or an identical-record early return.
+      if (!Number.isSafeInteger(rec.revision) || rec.revision < 1) {
+        throw new RangeError('record revision must be a positive safe integer');
+      }
       const data = jsonText(rec.data, 'record data');
       const current = d.records.get(rec.tenantId, rec.type, rec.id);
       if (current) return current.revision === rec.revision && current.data === data ? ok('identical') : err(appError('CONFLICT_REVISION', { params: { currentRevision: current.revision } }));

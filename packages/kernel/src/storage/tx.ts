@@ -455,6 +455,15 @@ function syncStore(d: DriverTx) {
       if (patch.attempts !== undefined && (!Number.isSafeInteger(patch.attempts) || patch.attempts < 0)) {
         throw new RangeError('sync attempts must be a nonnegative safe integer');
       }
+      // All drivers compare due times as canonical ISO strings. Reject malformed
+      // runtime values before they can indefinitely stall a prepared FIFO head.
+      if (patch.nextAttemptAt !== undefined && patch.nextAttemptAt !== null) {
+        const value = patch.nextAttemptAt;
+        const instant = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+        if (!Number.isFinite(instant) || new Date(instant).toISOString() !== value) {
+          throw new TypeError('sync nextAttemptAt must be a canonical ISO timestamp or null');
+        }
+      }
       const row = d.sync.get(id);
       if (!row) return err(appError('NOT_FOUND'));
       const to = syncMachine.next(row.state, event);

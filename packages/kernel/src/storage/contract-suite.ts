@@ -776,6 +776,46 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect((await s.read(tx => tx.sync.get(id)))?.attempts).toBe(1);
     });
 
+    it(`${adapter}: sync retries reject noncanonical due times before changing the delivery row`, async () => {
+      const s = await make();
+      const id = 'sync-due-time-validation';
+      const initial = await s.transaction(tx => ok(tx.sync.enqueue({
+        id, tenant: 'tenant-a', destination: 'relay:a',
+        envelope: { cid: 'sha256-due-time', type: 't/v1' }, now: T0,
+      })));
+      expect(initial.ok).toBe(true);
+      const before = await s.read(tx => tx.sync.get(id));
+      expect(before?.nextAttemptAt).toBeNull();
+
+      // A malformed due time can cause a prepared FIFO head to be skipped
+      // indefinitely by the adapter's lexicographic ISO-date comparison.
+      const invalid: unknown[] = [
+        'not-an-iso-date', '', '2026-02-30T00:00:00.000Z',
+        '2026-11-22', '2026-11-22T06:00:00Z',
+        '2026-11-22T06:00:00+00:00', 42, {},
+      ];
+      for (const value of invalid) {
+        await expect(s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+          nextAttemptAt: value as string,
+        }, T0 + 1))).rejects.toThrow(TypeError);
+        expect(await s.read(tx => tx.sync.get(id))).toEqual(before);
+      }
+
+      const later = new Date(T0 + 1000).toISOString();
+      const scheduled = await s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+        nextAttemptAt: later,
+      }, T0 + 1));
+      expect(scheduled.ok && scheduled.value.nextAttemptAt).toBe(later);
+      expect((await s.read(tx => tx.sync.heads(T0 + 1, 10))).map(e => e.id)).toEqual([]);
+      expect((await s.read(tx => tx.sync.heads(T0 + 1000, 10))).map(e => e.id)).toEqual([id]);
+
+      const cleared = await s.transaction(tx => tx.sync.transition(id, 'retry_later', {
+        nextAttemptAt: null,
+      }, T0 + 2));
+      expect(cleared.ok && cleared.value.nextAttemptAt).toBeNull();
+      expect((await s.read(tx => tx.sync.heads(T0 + 2, 10))).map(e => e.id)).toEqual([id]);
+    });
+
     it(`TEST-PS-119-09.T05 ${adapter}: sync outbox FIFO heads per destination and declared transitions only`, async () => {
       const s = await make();
       const c = createFakeClock(T0);

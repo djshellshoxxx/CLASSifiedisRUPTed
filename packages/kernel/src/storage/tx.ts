@@ -118,6 +118,17 @@ function casCheck(current: RecordRow | undefined, expected: number): Result<numb
   return ok(currentRevision);
 }
 
+function checkIndexValues(idx: IndexValues): void {
+  // Runtime callers and archive inputs can bypass TypeScript tuple typing.
+  // Require all four canonical string/null fields before any driver access.
+  if (!Array.isArray(idx) || idx.length !== 4
+    || [0, 1, 2, 3].some((slot) =>
+      !Object.prototype.hasOwnProperty.call(idx, slot)
+      || (idx[slot] !== null && typeof idx[slot] !== 'string'))) {
+    throw new TypeError('record indexes must be a four-element string/null tuple');
+  }
+}
+
 function recordStore(d: DriverTx) {
   return {
     listTypes(tenant: string, limit: number) {
@@ -130,6 +141,7 @@ function recordStore(d: DriverTx) {
     },
     put<T = unknown>(input: PutRecordInput): Result<StoredRecord<T>, AppError> {
       checkRevision(input.expectedRevision);
+      checkIndexValues(input.idx);
       const current = d.records.get(input.tenant, input.type, input.id);
       const cas = casCheck(current, input.expectedRevision);
       if (!cas.ok) return cas;
@@ -170,15 +182,7 @@ function recordStore(d: DriverTx) {
      * absent ⇒ written; identical ⇒ skipped; different ⇒ CONFLICT_REVISION.
      */
     restore(rec: StoredRecord, idx: IndexValues): Result<'restored' | 'identical', AppError> {
-      // Archive inputs cross a runtime boundary: TypeScript tuples do not
-      // validate length, sparse holes, or element types. Reject them before
-      // either the duplicate shortcut or any adapter write can run.
-      if (!Array.isArray(idx) || idx.length !== 4
-        || [0, 1, 2, 3].some((slot) =>
-          !Object.prototype.hasOwnProperty.call(idx, slot)
-          || (idx[slot] !== null && typeof idx[slot] !== 'string'))) {
-        throw new TypeError('record indexes must be a four-element string/null tuple');
-      }
+      checkIndexValues(idx);
       // Stored revisions start at 1. Reject malformed archives before any
       // adapter read/write or an identical-record early return.
       if (!Number.isSafeInteger(rec.revision) || rec.revision < 1) {

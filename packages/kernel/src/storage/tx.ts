@@ -450,6 +450,11 @@ function syncStore(d: DriverTx) {
     },
     /** Applies a declared sync-outbox transition; undeclared ones return CONFLICT_STATE. */
     transition(id: string, event: SyncEvent, patch: SyncTransitionPatch, now: number): Result<SyncEntry, AppError> {
+      // Persisted retry counts must remain nonnegative, exact integers across adapters.
+      // Check before reading or changing the delivery row, including for runtime callers.
+      if (patch.attempts !== undefined && (!Number.isSafeInteger(patch.attempts) || patch.attempts < 0)) {
+        throw new RangeError('sync attempts must be a nonnegative safe integer');
+      }
       const row = d.sync.get(id);
       if (!row) return err(appError('NOT_FOUND'));
       const to = syncMachine.next(row.state, event);

@@ -380,6 +380,47 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       expect(!stale.ok && stale.error.code).toBe('CONFLICT_REVISION');
     });
 
+    it(`${adapter}: restore rejects malformed revisions without changing stored records`, async () => {
+      const s = await make();
+      const archived = {
+        tenantId: 'tenant-a', type: 'test.item', id: 'restore-revision',
+        revision: 1, data: { name: 'lamp', status: 'draft' },
+        createdAt: new Date(T0).toISOString(),
+        updatedAt: new Date(T0).toISOString(),
+      };
+      const idx = ['draft', null, null, null] as const;
+      expect(await s.transaction(tx => tx.records.restore(archived, idx))).toEqual(ok('restored'));
+      const before = await s.read(tx => tx.records.get('tenant-a', 'test.item', archived.id));
+
+      // Imported records must not introduce revision zero, fractions, non-finite
+      // or inexact integers that normal CAS cannot subsequently manipulate.
+      for (const invalid of [
+        0, -1, 1.5, Number.NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1,
+      ]) {
+        const badId = `invalid-revision-${String(invalid)}`;
+        await expect(s.transaction(tx => tx.records.restore({
+          ...archived, id: badId, revision: invalid,
+        }, idx))).rejects.toThrow(RangeError);
+        expect(await s.read(tx => tx.records.get('tenant-a', 'test.item', badId))).toBeUndefined();
+
+        // A duplicate archive must not bypass validation on the identical or
+        // conflict branch and must leave the existing row unchanged.
+        await expect(s.transaction(tx => tx.records.restore({
+          ...archived, revision: invalid,
+        }, idx))).rejects.toThrow(RangeError);
+        expect(await s.read(tx => tx.records.get('tenant-a', 'test.item', archived.id)))
+          .toEqual(before);
+      }
+
+      expect(await s.transaction(tx => tx.records.restore(archived, idx))).toEqual(ok('identical'));
+      const maximum = await s.transaction(tx => tx.records.restore({
+        ...archived, id: 'restore-revision-maximum', revision: Number.MAX_SAFE_INTEGER,
+      }, idx));
+      expect(maximum).toEqual(ok('restored'));
+      expect((await s.read(tx => tx.records.get('tenant-a', 'test.item', 'restore-revision-maximum')))?.revision)
+        .toBe(Number.MAX_SAFE_INTEGER);
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: create, get, CAS update, conflicts, remove and JSON round trip`, async () => {
       const s = await make();
       const created = await s.transaction((tx) => scoped(tx).repo(item).put('a', { name: 'lamp', status: 'draft', tag: null }, { expectedRevision: 0 }));

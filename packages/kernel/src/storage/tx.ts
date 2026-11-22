@@ -327,16 +327,23 @@ export interface InboxMark {
 }
 
 function inboxStore(d: DriverTx) {
-  const row = (m: InboxMark, status: InboxRow['status'], attempts: number, next: string | null, code: string | null): InboxRow => ({
-    consumer: m.consumer,
-    eventId: m.envelope.eventId,
-    aggregateId: m.envelope.aggregate.id,
-    status,
-    attempts,
-    nextAttemptAt: next,
-    lastError: code,
-    updatedAt: toIso(m.now),
-  });
+  const row = (m: InboxMark, status: InboxRow['status'], attempts: number, next: string | null, code: string | null): InboxRow => {
+    // Enforce the same exact counter contract as sync-outbox transitions.
+    // In particular, reject bad markDead counts before either durable write.
+    if (!Number.isSafeInteger(attempts) || attempts < 0) {
+      throw new RangeError('inbox attempts must be a nonnegative safe integer');
+    }
+    return {
+      consumer: m.consumer,
+      eventId: m.envelope.eventId,
+      aggregateId: m.envelope.aggregate.id,
+      status,
+      attempts,
+      nextAttemptAt: next,
+      lastError: code,
+      updatedAt: toIso(m.now),
+    };
+  };
   return {
     get(consumer: string, eventId: string): InboxRow | undefined {
       const row = d.inbox.get(consumer, eventId);

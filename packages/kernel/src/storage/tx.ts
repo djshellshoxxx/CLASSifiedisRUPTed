@@ -205,6 +205,12 @@ function recordStore(d: DriverTx) {
           || (q.after.value !== null && typeof q.after.value !== 'string'))) {
         throw new TypeError('Record query cursor must have a string id and string/null value');
       }
+      // Indexed orders contain only non-null index values. SQLite comparisons
+      // against a null cursor evaluate to UNKNOWN, while memory treats null
+      // as an empty string. Reject the inconsistent cursor at the boundary.
+      if (q.orderSlot !== 0 && q.after !== undefined && q.after.value === null) {
+        throw new TypeError('Indexed record query cursor must have a string value');
+      }
       return d.records.query(q).map((r) => toStored<T>(r));
     },
     /**

@@ -871,6 +871,32 @@ export function storageContractSuite(adapter: string, factory: StorageFactory): 
       }))).map(row => row.id)).toEqual(['query-guard']);
     });
 
+    it(`${adapter}: indexed record queries reject null-valued cursors before driver reads`, async () => {
+      const s = await make();
+      const put = await s.transaction(tx => tx.records.put({
+        tenant: 'tenant-a', type: 'test.item', id: 'cursor-guard',
+        data: { name: 'cursor-guard', status: 'draft' },
+        idx: ['draft', null, null, null], expectedRevision: 0, now: T0,
+      }));
+      expect(put.ok).toBe(true);
+      const indexed = {
+        tenant: 'tenant-a', type: 'test.item', filters: [],
+        orderSlot: 1 as const, dir: 'asc' as const, limit: 10,
+      };
+      // Indexed queries exclude null index values. A null cursor instead
+      // produces an empty SQLite result but acts like '' in the memory adapter.
+      await expect(s.read(tx => tx.records.query({
+        ...indexed, after: { id: 'before-cursor-guard', value: null },
+      }))).rejects.toThrow(TypeError);
+      expect((await s.read(tx => tx.records.query({
+        ...indexed, after: { id: 'before-cursor-guard', value: 'draft' },
+      }))).map(row => row.id)).toEqual(['cursor-guard']);
+      // ID-ordered cursors have no index value; null remains legitimate here.
+      expect((await s.read(tx => tx.records.query({
+        ...indexed, orderSlot: 0, after: { id: 'before-cursor-guard', value: null },
+      }))).map(row => row.id)).toEqual(['cursor-guard']);
+    });
+
     it(`TEST-PS-119-09.T01 ${adapter}: query by index equality, range, order and cursor pagination`, async () => {
       const s = await make();
       await s.transaction((tx) => {

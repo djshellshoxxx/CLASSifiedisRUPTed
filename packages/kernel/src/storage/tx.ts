@@ -513,6 +513,18 @@ function syncStore(d: DriverTx) {
       return r ? toSyncEntry(r) : undefined;
     },
     list(q: Partial<SyncListQuery> = {}): SyncEntry[] {
+      // Raw callers can bypass SyncListQuery's static types. SQLite accepts
+      // some non-string bind values while memory silently compares them;
+      // reject malformed selectors before either adapter performs a read.
+      for (const key of ['tenant', 'destination', 'ref'] as const) {
+        if (q[key] !== undefined && typeof q[key] !== 'string') {
+          throw new TypeError(`Sync query ${key} must be a string`);
+        }
+      }
+      if (q.state !== undefined
+        && !['prepared', 'transport_acknowledged', 'peer_accepted', 'failed'].includes(q.state)) {
+        throw new TypeError('Sync query state must be a declared sync state');
+      }
       return d.sync.list({ ...q, limit: checkedLimit(q.limit ?? 100) }).map(toSyncEntry);
     },
     heads(now: number, limit: number): SyncEntry[] {

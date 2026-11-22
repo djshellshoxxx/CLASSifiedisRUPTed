@@ -1,5 +1,5 @@
 import { productionBackupCodecs } from './backup-codecs.ts';
-import { describeBackupCoverage } from './backup-coverage.ts';
+import { describeBackupCoverage, describeAttachmentCoverage, readBackupInspection } from './backup-coverage.ts';
 import { protectVaultSession, runForSession } from './vault-session.ts';
 import { defaultPeerSearch, parsePeerSearch } from './peer-search.ts';
 import { createBarterRuntime } from './barter-runtime.ts';
@@ -415,8 +415,11 @@ element('reset-peer-search').addEventListener('click', () => { void vaultAction(
 }); });
 element('inspect-backup').addEventListener('click', () => { void vaultAction(async () => {
   const session = current().vault;
-  const coverage = await runForSession(session, () => unlocked, () => session.backupCoverage());
-  element('backup-coverage').textContent = describeBackupCoverage(coverage);
+  element('backup-coverage').textContent = '';
+  const { records, attachments } = await runForSession(session, () => unlocked, () => readBackupInspection(session));
+  // The required record report survives a failed optional attachment check.
+  // Neither report proves complete attachment recovery or qualifies export.
+  element('backup-coverage').textContent = `${describeBackupCoverage(records)} ${describeAttachmentCoverage(attachments)}`;
 }); });
 element('backup').addEventListener('click', () => { void vaultAction(async () => {
   const password = element<HTMLInputElement>('backup-password');

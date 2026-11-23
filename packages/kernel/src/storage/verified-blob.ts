@@ -39,9 +39,23 @@ export async function readVerifiedBlob(
   storage: Storage, tenant: string, ref: string,
 ): Promise<MediaBlob | undefined> {
   if (!isBlobRef(ref)) throw new Error('Blob content integrity check failed');
-  const blob = await storage.read(tx => tx.blobs.get(tenant, ref));
+  // Detach the adapter-owned bytes before settling the read transaction.
+  // A returned memory/driver view must not be hashed after a subsequent write
+  // can alter or invalidate it. The digest is computed outside the read lock.
+  const blob = await storage.read(tx => {
+    const found = tx.blobs.get(tenant, ref);
+    if (!found) return undefined;
+    const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders } = found;
+    const sourceBytes = found.bytes;
+    if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
+      || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
+      || sourceBytes.byteLength !== size) {
+      throw new Error('Blob content integrity check failed');
+    }
+    return { ref: storedRef, size, contentType, privacy, encrypted, createdAt,
+      holders, bytes: new Uint8Array(sourceBytes) };
+  });
   if (!blob) return undefined;
-  if (blob.ref !== ref) throw new Error('Blob content integrity check failed');
   return verifyStoredBlob(blob);
 }
 

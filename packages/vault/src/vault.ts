@@ -422,6 +422,26 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
                 || current.createdAt !== expected.createdAt)) {
                 throw new Error('Attachment import blob metadata conflict');
               }
+              // Kernel deduplication returns an existing row by content-address
+              // key without rehashing its stored bytes. A damaged P0 row with
+              // matching metadata must not be accepted as recovered content.
+              if (current) {
+                const stored = tx.blobs.get(identity.principal, expected.ref);
+                if (!stored || !(stored.bytes instanceof Uint8Array)
+                  || stored.bytes.byteLength !== expected.size) {
+                  throw new Error('Attachment import existing blob content conflict');
+                }
+                const existingCopy = new Uint8Array(stored.bytes);
+                try {
+                  if (await blobRefOf(existingCopy) !== expected.ref) {
+                    throw new Error('Attachment import existing blob content conflict');
+                  }
+                  guard();
+                } finally {
+                  // Clear our own copy, not any adapter-owned stored buffer.
+                  existingCopy.fill(0);
+                }
+              }
               const put = await tx.blobs.put({ tenant: identity.principal, bytes: copies[i]!,
                 contentType: expected.contentType, privacy: 'P0', encrypted: false,
                 now: Date.parse(expected.createdAt) });

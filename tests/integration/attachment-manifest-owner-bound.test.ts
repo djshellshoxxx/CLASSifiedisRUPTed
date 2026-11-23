@@ -4,6 +4,7 @@ import { createMemoryStorage, defineRepo, z } from '../../packages/kernel/src/in
 import { unseal } from '../../packages/identity/src/index.ts';
 import { verifyEnvelope } from '../../packages/federation/src/index.ts';
 import { backupCodec, openVault, vaultFromStorage } from '../../packages/vault/src/vault.ts';
+import { verifySealedAttachmentManifest } from '../../packages/vault/src/attachment-manifest.ts';
 
 const passphrase = 'authenticated attachment manifest test passphrase';
 const note = defineRepo({
@@ -49,6 +50,13 @@ describe('separately signed owner-authorized attachment metadata', () => {
       await populate(session);
       const sealed = await session.exportAttachmentManifest(passphrase);
       const verified = await inspect(sealed, passphrase);
+      // Exercise the actual signed-and-sealed producer through the receiver,
+      // not only a synthetic fixture or the lower-level federation verifier.
+      const receiver = await verifySealedAttachmentManifest(sealed, passphrase, session.principal);
+      expect(receiver).toMatchObject({ principal: session.principal, links: 1, totalBytes: 3 });
+      expect(receiver.parents[0]?.id).toBe('image-1');
+      expect(receiver.blobs[0]?.ref).toBe((verified.payload as any).blobs[0].ref);
+      await expect(verifySealedAttachmentManifest(sealed, passphrase, 'wrong-principal')).rejects.toThrow();
       expect(verified.author).toBe(session.principal);
       expect(verified.payload).toMatchObject({
         principal: session.principal,
@@ -63,6 +71,7 @@ describe('separately signed owner-authorized attachment metadata', () => {
       await expect(session.exportAttachmentManifest('invalid passphrase')).rejects.toThrow();
       const legacy = await session.exportBackup(passphrase);
       expect((await inspectLegacy(legacy)).type).toBe('classrup.vault.alpha_backup/v1');
+      await expect(verifySealedAttachmentManifest(legacy, passphrase, session.principal)).rejects.toThrow();
     } finally { await session.lock(); }
   }, 30000);
 
@@ -77,7 +86,11 @@ describe('separately signed owner-authorized attachment metadata', () => {
     const reopened = await open();
     const unlocked = await reopened.unlock(passphrase);
     try {
-      const verified = await inspect(await unlocked.exportAttachmentManifest(passphrase), passphrase);
+      const reopenedSealed = await unlocked.exportAttachmentManifest(passphrase);
+      const verified = await inspect(reopenedSealed, passphrase);
+      const receiver = await verifySealedAttachmentManifest(reopenedSealed, passphrase, principal);
+      expect(receiver.parents).toHaveLength(1);
+      expect(receiver.blobs).toHaveLength(1);
       expect(verified.author).toBe(principal);
       expect((verified.payload as any).parents).toHaveLength(1);
     } finally { await unlocked.lock(); }

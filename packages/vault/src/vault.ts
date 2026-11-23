@@ -1,10 +1,10 @@
-import { ok, isBlobRef, MAX_BLOB_BYTES, MAX_VERIFIED_BLOB_BATCH_BYTES, MAX_VERIFIED_BLOB_BATCH_ITEMS, verifyStoredBlob, sha256Hex, type MediaBlob, type Storage, type StoredRecord, type RepoDef, type Tx, type Result, type TxMode } from '@classrup/kernel';
+import { ok, blobRefOf, isBlobRef, MAX_BLOB_BYTES, MAX_VERIFIED_BLOB_BATCH_BYTES, MAX_VERIFIED_BLOB_BATCH_ITEMS, verifyStoredBlob, sha256Hex, type MediaBlob, type Storage, type StoredRecord, type RepoDef, type Tx, type Result, type TxMode } from '@classrup/kernel';
 import { type IndexedDbOptions } from '@classrup/kernel/browser';
 import { openEncryptedStorage } from './encrypted-storage.ts';
 import { createIdentity, unlockIdentity, seal, unseal, IdentityCryptoError, type ProtectedIdentity, type UnlockedIdentity, type Sealed } from '@classrup/identity';
 import { signEnvelope, verifyEnvelope, strictCanonicalJson } from '@classrup/federation';
 import { createUnlockBackoff, type UnlockBackoff } from './session-policy.ts';
-import { verifySealedAttachmentManifest, type VerifiedAttachmentManifestMetadata } from './attachment-manifest.ts';
+import { verifySealedAttachmentManifest, verifySealedAttachmentBlobBatch, type VerifiedAttachmentManifestMetadata } from './attachment-manifest.ts';
 
 const KEY_TENANT = 'local-vault';
 const KEY_TYPE = 'vault.identity';
@@ -86,6 +86,8 @@ export interface UnlockedVault {
   exportAttachmentManifest(passphrase: string): Promise<Sealed>;
   /** Read-only: bind a signed manifest to this unlocked principal's canonical recovered records. */
   verifyAttachmentManifestOwners(sealed: unknown, passphrase: string): Promise<VerifiedAttachmentManifestMetadata>;
+  /** P0 plaintext-only first slice: authenticate owners inside the atomic destination write. */
+  importPublicAttachmentBatch(sealed: unknown, passphrase: string, byteSet: readonly Uint8Array[]): Promise<VerifiedAttachmentManifestMetadata>;
 }
 export interface Vault {
   isInitialized(): Promise<boolean>;
@@ -320,6 +322,136 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           }
         }
         return manifest;
+      },
+      async importPublicAttachmentBatch(sealed, passphrase, byteSet) {
+        guard();
+        // Authentication and bounded byte admission precede the write. Rehash
+        // detached bytes inside the transaction to defeat admission/write races.
+        const manifest = await verifySealedAttachmentBlobBatch(sealed, passphrase, identity.principal, byteSet);
+        guard();
+        // Private bytes and already-encrypted source blobs need a separate
+        // destination-key/transport contract; never relabel plaintext ciphertext.
+        if (manifest.blobs.some(blob => blob.privacy !== 'P0' || blob.encrypted)) {
+          throw new Error('Attachment import supports only public unencrypted source blobs');
+        }
+        const copies: Uint8Array[] = [];
+        try {
+          if (!Array.isArray(byteSet) || byteSet.length !== manifest.blobs.length) {
+            throw new Error('Attachment import batch changed after admission');
+          }
+          for (let i = 0; i < manifest.blobs.length; i += 1) {
+            const item = byteSet[i];
+            if (!(item instanceof Uint8Array) || item.byteLength !== manifest.blobs[i]!.size) {
+              throw new Error('Attachment import batch changed after admission');
+            }
+            copies.push(new Uint8Array(item));
+          }
+          const written = await storage.transaction(async tx => {
+            // This is a fresh destination write snapshot, not a prior successful
+            // read-only verifyAttachmentManifestOwners() result.
+            const scope = coverage(tx, identity.principal);
+            if (scope.typeLimitExceeded || scope.recordLimitExceeded || scope.unsupportedRecordTypes.length) {
+              throw new Error('Attachment import requires complete supported record coverage');
+            }
+            const actual: Array<{ readonly row: StoredRecord; readonly refs: readonly string[] }> = [];
+            let links = 0;
+            for (const codec of registeredCodecs) {
+              if (!codec.attachmentRefs) continue;
+              if (!codec.recordId) throw new Error('Attachment codec requires a canonical record key');
+              const rows = tx.records.query({ tenant: identity.principal, type: codec.type,
+                filters: [], orderSlot: 0, dir: 'asc', limit: MAX_RECORDS + 1 });
+              for (const row of rows) {
+                const data = codec.parse(structuredClone(row.data));
+                if (codec.recordId(data) !== row.id) throw new Error('Attachment parent key mismatch');
+                const declared = codec.attachmentRefs(structuredClone(data));
+                if (!Array.isArray(declared)) throw new Error('Invalid attachment references');
+                const count = declared.length;
+                if (!Number.isSafeInteger(count) || count < 0
+                  || count > MAX_VERIFIED_BLOB_BATCH_ITEMS - links) {
+                  throw new Error('Attachment owner link limit exceeded');
+                }
+                const refs: string[] = [];
+                const distinct = new Set<string>();
+                for (let i = 0; i < count; i += 1) {
+                  const ref = declared[i];
+                  if (!isBlobRef(ref) || distinct.has(ref)) throw new Error('Invalid attachment references');
+                  distinct.add(ref);
+                  refs.push(ref);
+                }
+                links += count;
+                if (refs.length) actual.push({ row: { ...row, data }, refs });
+              }
+            }
+            if (links !== manifest.links || actual.length !== manifest.parents.length) {
+              throw new Error('Attachment import owner scope mismatch');
+            }
+            actual.sort((a, b) => a.row.type === b.row.type
+              ? (a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0)
+              : (a.row.type < b.row.type ? -1 : 1));
+            await preflightRecords(actual.map(parent => parent.row),
+              identity.principal, registeredRecordTypes, guard, true);
+            for (let i = 0; i < actual.length; i += 1) {
+              const parent = actual[i]!;
+              const expected = manifest.parents[i]!;
+              const dataCid = `sha256-${await sha256Hex(strictCanonicalJson(parent.row.data))}`;
+              guard();
+              if (expected.type !== parent.row.type || expected.id !== parent.row.id
+                || expected.revision !== parent.row.revision || expected.dataCid !== dataCid
+                || expected.refs.length !== parent.refs.length
+                || expected.refs.some((ref, index) => ref !== parent.refs[index])) {
+                throw new Error('Attachment import owner record mismatch');
+              }
+            }
+            // No durable write occurs until every canonical parent and every
+            // detached content address has been rechecked under the write gate.
+            for (let i = 0; i < copies.length; i += 1) {
+              if (await blobRefOf(copies[i]!) !== manifest.blobs[i]!.ref) {
+                throw new Error('Attachment import content-address mismatch');
+              }
+              guard();
+            }
+            for (let i = 0; i < copies.length; i += 1) {
+              const expected = manifest.blobs[i]!;
+              // The kernel's normal deduplication can LOWER an existing privacy
+              // classification. Refuse a collision before calling put: a P0
+              // recovery must never reclassify an existing private object.
+              const current = tx.blobs.info(identity.principal, expected.ref);
+              if (current && (current.privacy !== 'P0' || current.encrypted
+                || current.contentType !== expected.contentType
+                || current.size !== expected.size
+                || current.createdAt !== expected.createdAt)) {
+                throw new Error('Attachment import blob metadata conflict');
+              }
+              const put = await tx.blobs.put({ tenant: identity.principal, bytes: copies[i]!,
+                contentType: expected.contentType, privacy: 'P0', encrypted: false,
+                now: Date.parse(expected.createdAt) });
+              guard();
+              if (!put.ok || put.value.ref !== expected.ref || put.value.size !== expected.size
+                || put.value.contentType !== expected.contentType
+                || put.value.privacy !== 'P0' || put.value.encrypted
+                || put.value.createdAt !== expected.createdAt) {
+                throw new Error('Attachment import blob metadata conflict');
+              }
+            }
+            for (const parent of actual) {
+              // Labels derive only from verified canonical parent records.
+              // Future deletion/rotation work must implement matched detaches.
+              const holder = 'classrup.attachment_owner/v1:' + JSON.stringify([parent.row.type, parent.row.id]);
+              for (const ref of parent.refs) {
+                const attached = tx.blobs.attach(identity.principal, ref, holder);
+                if (!attached.ok || !attached.value.present) {
+                  throw new Error('Attachment import holder attachment failure');
+                }
+              }
+            }
+            guard();
+            return ok(manifest);
+          });
+          if (!written.ok) throw new Error('Attachment import transaction failed');
+          return written.value;
+        } finally {
+          for (const bytes of copies) bytes.fill(0);
+        }
       },
       async exportAttachmentManifest(passphrase) {
         guard();

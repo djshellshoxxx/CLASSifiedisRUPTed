@@ -451,6 +451,7 @@ describe('production barter record recovery', () => {
       async exportBackup() { throw new Error('No backup in a view fixture'); },
       async exportAttachmentManifest() { throw new Error('No attachment manifest in a view fixture'); },
       async verifyAttachmentManifestOwners() { throw new Error('No attachment reconciliation in a view fixture'); },
+      async importPublicAttachmentBatch() { throw new Error('No attachment reconciliation in a view fixture'); },
       async backupCoverage() { throw new Error('No coverage in a view fixture'); },
       async attachmentCoverage() { throw new Error('No attachment coverage in a view fixture'); },
     };

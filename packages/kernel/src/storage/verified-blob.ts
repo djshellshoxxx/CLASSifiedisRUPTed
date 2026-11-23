@@ -40,10 +40,18 @@ export async function verifyStoredBlob(blob: MediaBlob): Promise<MediaBlob> {
   // Snapshot the bytes before the first await, not merely before returning.
   // Construct only declared fields; unknown source properties are not verified.
   const bytes = new Uint8Array(sourceBytes);
-  if (await blobRefOf(bytes) !== ref) {
-    throw new Error('Blob content integrity check failed');
+  let accepted = false;
+  try {
+    if (await blobRefOf(bytes) !== ref) {
+      throw new Error('Blob content integrity check failed');
+    }
+    accepted = true;
+    return { ref, size, contentType, privacy, encrypted, createdAt, holders, bytes };
+  } finally {
+    // A digest mismatch or hashing exception must not strand a detached
+    // potentially private plaintext/ciphertext copy until garbage collection.
+    if (!accepted) bytes.fill(0);
   }
-  return { ref, size, contentType, privacy, encrypted, createdAt, holders, bytes };
 }
 
 /**
@@ -75,7 +83,13 @@ export async function readVerifiedBlob(
       holders, bytes: new Uint8Array(sourceBytes) };
   });
   if (!blob) return undefined;
-  return verifyStoredBlob(blob);
+  try {
+    return await verifyStoredBlob(blob);
+  } finally {
+    // Only clear the intermediate transaction-owned copy, never the returned
+    // independently verified bytes or the live adapter-owned source.
+    blob.bytes.fill(0);
+  }
 }
 
 
@@ -123,31 +137,44 @@ export async function readVerifiedBlobBatch(
     seen.add(ref);
   }
 
-  const snapshots = await storage.read(tx => {
-    let total = 0;
-    return requested.map(ref => {
-      const blob = tx.blobs.get(tenant, ref);
-      if (!blob) throw new Error('Attachment batch integrity check failed');
-      // Capture the exact scalar and byte view that is admitted. Re-reading
-      // adapter-backed accessors after admission can return different values.
-      const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders, bytes: sourceBytes } = blob;
-      if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
-        || !Number.isSafeInteger(size) || size < 0
-        || size > MAX_BLOB_BYTES || sourceBytes.byteLength !== size
-        || size > maxTotalBytes - total
-        || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders }, storage.kind)) {
-        throw new Error('Attachment batch integrity check failed');
-      }
-      total += size;
-      // Do not retain an adapter byte view after transaction settlement.
-      return {
-        ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders,
-        bytes: new Uint8Array(sourceBytes),
-      };
-    });
-  });
-
+  // Keep all detached read copies reachable even if a later member fails
+  // inside the transaction callback, before storage.read() can return them.
+  const snapshots: MediaBlob[] = [];
   const verified: MediaBlob[] = [];
-  for (const snapshot of snapshots) verified.push(await verifyStoredBlob(snapshot));
-  return verified;
+  let complete = false;
+  try {
+    await storage.read(tx => {
+      let total = 0;
+      for (const ref of requested) {
+        const blob = tx.blobs.get(tenant, ref);
+        if (!blob) throw new Error('Attachment batch integrity check failed');
+        // Capture the exact scalar and byte view that is admitted. Re-reading
+        // adapter-backed accessors after admission can return different values.
+        const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders, bytes: sourceBytes } = blob;
+        if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
+          || !Number.isSafeInteger(size) || size < 0
+          || size > MAX_BLOB_BYTES || sourceBytes.byteLength !== size
+          || size > maxTotalBytes - total
+          || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders }, storage.kind)) {
+          throw new Error('Attachment batch integrity check failed');
+        }
+        total += size;
+        // The read snapshot is detached from the adapter; it is cleared once
+        // its independently hashed verification copy has been produced.
+        snapshots.push({
+          ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders,
+          bytes: new Uint8Array(sourceBytes),
+        });
+      }
+    });
+
+    for (const snapshot of snapshots) verified.push(await verifyStoredBlob(snapshot));
+    complete = true;
+    return verified;
+  } finally {
+    for (const snapshot of snapshots) snapshot.bytes.fill(0);
+    // Never retain a previously verified prefix after a subsequent failure.
+    // On success, the verified copies belong to the caller and are not cleared.
+    if (!complete) for (const blob of verified) blob.bytes.fill(0);
+  }
 }

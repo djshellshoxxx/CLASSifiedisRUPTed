@@ -412,6 +412,16 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
             }
             for (let i = 0; i < copies.length; i += 1) {
               const expected = manifest.blobs[i]!;
+              // The kernel's normal deduplication can LOWER an existing privacy
+              // classification. Refuse a collision before calling put: a P0
+              // recovery must never reclassify an existing private object.
+              const current = tx.blobs.info(identity.principal, expected.ref);
+              if (current && (current.privacy !== 'P0' || current.encrypted
+                || current.contentType !== expected.contentType
+                || current.size !== expected.size
+                || current.createdAt !== expected.createdAt)) {
+                throw new Error('Attachment import blob metadata conflict');
+              }
               const put = await tx.blobs.put({ tenant: identity.principal, bytes: copies[i]!,
                 contentType: expected.contentType, privacy: 'P0', encrypted: false,
                 now: Date.parse(expected.createdAt) });

@@ -104,8 +104,13 @@ export async function readVerifiedBlobBatch(
     || maxTotalBytes < 0 || maxTotalBytes > MAX_VERIFIED_BLOB_BATCH_BYTES) {
     throw new Error('Attachment batch integrity check failed');
   }
-  // Snapshot mutable input before the first await.
-  const requested = [...refs];
+  // Snapshot exactly the validated array indices before the first await.
+  // Array instances can override Symbol.iterator and yield more entries than
+  // their length (or yield entries from an empty array). Spreading such input
+  // bypasses the 32-item admission and can invoke arbitrary caller code.
+  const requested: string[] = [];
+  const count = refs.length;
+  for (let i = 0; i < count; i += 1) requested.push(refs[i]!);
   const seen = new Set<string>();
   for (const ref of requested) {
     if (!isBlobRef(ref) || seen.has(ref)) {

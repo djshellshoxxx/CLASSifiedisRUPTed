@@ -24,10 +24,14 @@ describe('authenticated attachment retirement boundaries', () => {
         if (!kept.ok) return kept;
         for (const id of ['current', 'removed', 'empty']) {
           const row = tx.records.put({ tenant: source.principal, type: repo.type, id,
-            data: { id, refs: id === 'empty' ? [] : [kept.value.ref] },
+            data: { id, refs: [kept.value.ref] },
             idx: [null, null, null, null], expectedRevision: 0, now: date });
           if (!row.ok) return row;
         }
+        const emptied = tx.records.put({ tenant: source.principal, type: repo.type, id: 'empty',
+          data: { id: 'empty', refs: [] }, idx: [null, null, null, null],
+          expectedRevision: 1, now: date });
+        if (!emptied.ok) return emptied;
         const removed = tx.records.remove(source.principal, repo.type, 'removed', 1);
         if (!removed.ok) return removed;
         return ok(kept.value.ref);

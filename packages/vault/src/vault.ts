@@ -86,8 +86,13 @@ export interface UnlockedVault {
   exportAttachmentManifest(passphrase: string): Promise<Sealed>;
   /** Read-only: bind a signed manifest to this unlocked principal's canonical recovered records. */
   verifyAttachmentManifestOwners(sealed: unknown, passphrase: string): Promise<VerifiedAttachmentManifestMetadata>;
-  /** P0 plaintext-only first slice: authenticate owners inside the atomic destination write. */
-  importPublicAttachmentBatch(sealed: unknown, passphrase: string, byteSet: readonly Uint8Array[]): Promise<VerifiedAttachmentManifestMetadata>;
+  /**
+   * P0 plaintext-only import. Optionally retire one stale managed holder only
+   * when the current signed manifest proves its parent no longer references
+   * that blob and another canonical parent still does. Never a final purge.
+   */
+  importPublicAttachmentBatch(sealed: unknown, passphrase: string, byteSet: readonly Uint8Array[],
+    retireOwner?: { readonly type: string; readonly id: string; readonly ref: string }): Promise<VerifiedAttachmentManifestMetadata>;
 }
 export interface Vault {
   isInitialized(): Promise<boolean>;
@@ -323,8 +328,20 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         }
         return manifest;
       },
-      async importPublicAttachmentBatch(sealed, passphrase, byteSet) {
+      async importPublicAttachmentBatch(sealed, passphrase, byteSet, retireOwner) {
         guard();
+        // Capture the explicit retirement request before the first await.
+        // A holder label alone is not authority to remove a reference.
+        const retirement = retireOwner === undefined ? undefined : {
+          type: retireOwner.type, id: retireOwner.id, ref: retireOwner.ref,
+        };
+        if (retirement && (
+          typeof retirement.type !== 'string' || !retirement.type || retirement.type.length > 256
+          || typeof retirement.id !== 'string' || !retirement.id || retirement.id.length > 256
+          || /[\u0000-\u001f\u007f]/u.test(retirement.type) || /[\u0000-\u001f\u007f]/u.test(retirement.id)
+          || !isBlobRef(retirement.ref))) {
+          throw new Error('Invalid attachment owner retirement');
+        }
         // Authentication and bounded byte admission precede the write. Rehash
         // detached bytes inside the transaction to defeat admission/write races.
         const manifest = await verifySealedAttachmentBlobBatch(sealed, passphrase, identity.principal, byteSet);
@@ -399,6 +416,17 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
                 throw new Error('Attachment import owner record mismatch');
               }
             }
+            // The signed current parent must still exist in the authenticated
+            // scope, no longer name this ref, and another current parent must
+            // name it. No authority for absent parents or final-holder purge.
+            if (retirement) {
+              const retiring = actual.find(parent =>
+                parent.row.type === retirement.type && parent.row.id === retirement.id);
+              if (!retiring || retiring.refs.includes(retirement.ref)
+                || !actual.some(parent => parent !== retiring && parent.refs.includes(retirement.ref))) {
+                throw new Error('Attachment owner retirement not authorized by current records');
+              }
+            }
             // No durable write occurs until every canonical parent and every
             // detached content address has been rechecked under the write gate.
             for (let i = 0; i < copies.length; i += 1) {
@@ -424,11 +452,11 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
               // matching metadata must not be accepted as recovered content.
               if (current) {
                 const stored = tx.blobs.get(identity.principal, expected.ref);
-                if (!stored || !(stored.bytes instanceof Uint8Array)
-                  || stored.bytes.byteLength !== expected.size) {
+                if (!stored) {
                   throw new Error('Attachment import existing blob content conflict');
                 }
-                const existingCopy = new Uint8Array(stored.bytes);
+                const existingCopy = copyAttachmentBatchMember(stored.bytes, expected.size,
+                  'Attachment import existing blob content conflict');
                 try {
                   if (await blobRefOf(existingCopy) !== expected.ref) {
                     throw new Error('Attachment import existing blob content conflict');
@@ -452,13 +480,22 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
             }
             for (const parent of actual) {
               // Labels derive only from verified canonical parent records.
-              // Future deletion/rotation work must implement matched detaches.
+              // Attach ALL currently authorized owners before any retirement.
               const holder = 'classrup.attachment_owner/v1:' + JSON.stringify([parent.row.type, parent.row.id]);
               for (const ref of parent.refs) {
                 const attached = tx.blobs.attach(identity.principal, ref, holder);
                 if (!attached.ok || !attached.value.present) {
                   throw new Error('Attachment import holder attachment failure');
                 }
+              }
+            }
+            if (retirement) {
+              const holder = 'classrup.attachment_owner/v1:' + JSON.stringify([retirement.type, retirement.id]);
+              const detached = tx.blobs.detach(identity.principal, retirement.ref, holder);
+              // At least one current canonical holder was just attached. A
+              // deletion or key-shred indication violates the transaction invariant.
+              if (detached.deleted || detached.shred || !tx.blobs.info(identity.principal, retirement.ref)) {
+                throw new Error('Attachment owner retirement would remove retained bytes');
               }
             }
             guard();

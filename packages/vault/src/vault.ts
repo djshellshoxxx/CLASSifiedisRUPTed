@@ -4,6 +4,7 @@ import { openEncryptedStorage } from './encrypted-storage.ts';
 import { createIdentity, unlockIdentity, seal, unseal, IdentityCryptoError, type ProtectedIdentity, type UnlockedIdentity, type Sealed } from '@classrup/identity';
 import { signEnvelope, verifyEnvelope, strictCanonicalJson } from '@classrup/federation';
 import { createUnlockBackoff, type UnlockBackoff } from './session-policy.ts';
+import { verifySealedAttachmentManifest, type VerifiedAttachmentManifestMetadata } from './attachment-manifest.ts';
 
 const KEY_TENANT = 'local-vault';
 const KEY_TYPE = 'vault.identity';
@@ -83,6 +84,8 @@ export interface UnlockedVault {
   exportBackup(passphrase: string): Promise<Sealed>;
   /** Separate encrypted, signed, metadata-only attachment manifest; no blob transfer or recovery. */
   exportAttachmentManifest(passphrase: string): Promise<Sealed>;
+  /** Read-only: bind a signed manifest to this unlocked principal's canonical recovered records. */
+  verifyAttachmentManifestOwners(sealed: unknown, passphrase: string): Promise<VerifiedAttachmentManifestMetadata>;
 }
 export interface Vault {
   isInitialized(): Promise<boolean>;
@@ -243,6 +246,80 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         });
         guard();
         return result;
+      },
+      async verifyAttachmentManifestOwners(sealed, passphrase) {
+        guard();
+        // Authenticate before reading destination records. A trusted unlocked
+        // principal, not a caller-supplied manifest field, sets the authority.
+        const manifest = await verifySealedAttachmentManifest(sealed, passphrase, identity.principal);
+        guard();
+        // Capture actual destination parents and codec-derived refs in a single
+        // principal-scoped read. v1 restore intentionally contains no blob bytes.
+        const actual = await storage.read(tx => {
+          const scope = coverage(tx, identity.principal);
+          if (scope.typeLimitExceeded || scope.recordLimitExceeded || scope.unsupportedRecordTypes.length) {
+            throw new Error('Attachment owner reconciliation requires complete supported record coverage');
+          }
+          const parents: Array<{ readonly row: StoredRecord; readonly refs: readonly string[] }> = [];
+          let links = 0;
+          for (const codec of registeredCodecs) {
+            if (!codec.attachmentRefs) continue;
+            if (!codec.recordId) throw new Error('Attachment codec requires a canonical record key');
+            const rows = tx.records.query({ tenant: identity.principal, type: codec.type,
+              filters: [], orderSlot: 0, dir: 'asc', limit: MAX_RECORDS + 1 });
+            for (const row of rows) {
+              const data = codec.parse(structuredClone(row.data));
+              if (codec.recordId(data) !== row.id) throw new Error('Attachment parent key mismatch');
+              const declared = codec.attachmentRefs(structuredClone(data));
+              if (!Array.isArray(declared)) throw new Error('Invalid attachment references');
+              const count = declared.length;
+              if (!Number.isSafeInteger(count) || count < 0
+                || count > MAX_VERIFIED_BLOB_BATCH_ITEMS - links) {
+                throw new Error('Attachment owner link limit exceeded');
+              }
+              const refs: string[] = [];
+              const distinct = new Set<string>();
+              for (let i = 0; i < count; i += 1) {
+                const ref = declared[i];
+                if (!isBlobRef(ref) || distinct.has(ref)) throw new Error('Invalid attachment references');
+                distinct.add(ref);
+                refs.push(ref);
+              }
+              links += count;
+              if (refs.length) {
+                parents.push({ row: { ...row, data }, refs });
+                if (parents.length > MAX_VERIFIED_BLOB_BATCH_ITEMS) {
+                  throw new Error('Attachment owner parent limit exceeded');
+                }
+              }
+            }
+          }
+          if (links !== manifest.links || parents.length !== manifest.parents.length) {
+            throw new Error('Attachment owner manifest scope mismatch');
+          }
+          parents.sort((a, b) => a.row.type === b.row.type
+            ? (a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0)
+            : (a.row.type < b.row.type ? -1 : 1));
+          return parents;
+        });
+        guard();
+        // Retain original signed-evidence and canonical-key admission for the
+        // current recovered records, without opening a write transaction.
+        await preflightRecords(actual.map(parent => parent.row),
+          identity.principal, registeredRecordTypes, guard, true);
+        for (let i = 0; i < actual.length; i += 1) {
+          const parent = actual[i]!;
+          const expected = manifest.parents[i]!;
+          const dataCid = `sha256-${await sha256Hex(strictCanonicalJson(parent.row.data))}`;
+          guard();
+          if (expected.type !== parent.row.type || expected.id !== parent.row.id
+            || expected.revision !== parent.row.revision || expected.dataCid !== dataCid
+            || expected.refs.length !== parent.refs.length
+            || expected.refs.some((ref, index) => ref !== parent.refs[index])) {
+            throw new Error('Attachment owner manifest record mismatch');
+          }
+        }
+        return manifest;
       },
       async exportAttachmentManifest(passphrase) {
         guard();

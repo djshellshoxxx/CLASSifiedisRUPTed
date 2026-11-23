@@ -96,6 +96,35 @@ describe('separately signed owner-authorized attachment metadata', () => {
     } finally { await unlocked.lock(); }
   }, 30000);
 
+
+  it('reconciles signed attachment parents after ordinary v1 record restore without requiring blob bytes', async () => {
+    const origin = vaultFromStorage(createMemoryStorage(), [owned]);
+    const source = await origin.create(passphrase);
+    try {
+      await populate(source);
+      const backup = await source.exportBackup(passphrase);
+      const manifest = await source.exportAttachmentManifest(passphrase);
+      const destination = vaultFromStorage(createMemoryStorage(), [owned]);
+      const recovered = await destination.restoreBackup(backup, passphrase);
+      try {
+        const bound = await recovered.verifyAttachmentManifestOwners(manifest, passphrase);
+        expect(bound).toMatchObject({ principal: recovered.principal, links: 1, totalBytes: 3 });
+        expect(bound.parents[0]?.id).toBe('image-1');
+        // v1 restores canonical parent data, not attachment byte storage.
+        const missing = await recovered.storage.read(tx => tx.blobs.get(recovered.principal, bound.blobs[0]!.ref));
+        expect(missing).toBeUndefined();
+        await expect(recovered.verifyAttachmentManifestOwners(manifest, 'wrong-passphrase')).rejects.toThrow();
+        const changed = await recovered.storage.transaction(tx => tx.records.put({
+          tenant: recovered.principal, type: note.type, id: 'image-1',
+          data: { id: 'image-1', ref: bound.blobs[0]!.ref },
+          idx: [null, null, null, null], expectedRevision: 1, now: now + 1000,
+        }));
+        expect(changed.ok).toBe(true);
+        await expect(recovered.verifyAttachmentManifestOwners(manifest, passphrase)).rejects.toThrow(/mismatch/);
+      } finally { await recovered.lock(); }
+    } finally { await source.lock(); }
+  }, 30000);
+
   it('rejects missing referenced bytes and canonical owner-key mismatches', async () => {
     const vault = vaultFromStorage(createMemoryStorage(), [owned]);
     const session = await vault.create(passphrase);

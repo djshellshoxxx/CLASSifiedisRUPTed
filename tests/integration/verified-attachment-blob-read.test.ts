@@ -4,7 +4,7 @@ import { createMemoryStorage, type Storage } from '../../packages/kernel/src/sto
 import { openIndexedDbStorage } from '../../packages/kernel/src/storage/indexeddb.ts';
 import { openSqliteStorage } from '../../packages/kernel/src/storage/sqlite.ts';
 import { blobRefOf, type MediaBlob, type Tx } from '../../packages/kernel/src/storage/tx.ts';
-import { readVerifiedBlob, verifyStoredBlob } from '../../packages/kernel/src/storage/verified-blob.ts';
+import { readVerifiedBlob, readVerifiedBlobBatch, verifyStoredBlob } from '../../packages/kernel/src/storage/verified-blob.ts';
 
 const now = Date.parse('2026-11-23T00:00:00.000Z');
 const adapters = [
@@ -14,7 +14,56 @@ const adapters = [
 ];
 
 describe('verified content-addressed attachment reads', () => {
+  it('rejects impossible stored metadata even when bytes have a valid SHA-256 address', async () => {
+    const bytes = Uint8Array.of(7, 3, 11);
+    const base: MediaBlob = {
+      ref: await blobRefOf(bytes), bytes, size: bytes.length,
+      contentType: 'image/png', privacy: 'P0', encrypted: false,
+      createdAt: new Date(now).toISOString(), holders: 0,
+    };
+    expect((await verifyStoredBlob(base)).bytes).toEqual(bytes);
+    const malformed: readonly Record<string, unknown>[] = [
+      { contentType: 'IMAGE/PNG' }, { contentType: 'image/png; charset=utf-8' },
+      { privacy: 'P4' }, { encrypted: 'false' },
+      { createdAt: 'not-a-date' }, { createdAt: '2026-11-23T00:00:00Z' },
+      { holders: -1 }, { holders: Number.MAX_SAFE_INTEGER + 1 },
+    ];
+    for (const invalid of malformed) {
+      await expect(verifyStoredBlob({ ...base, ...invalid } as MediaBlob)).rejects.toThrow(/integrity/);
+    }
+  });
+
   for (const adapter of adapters) {
+    it(adapter.name + ': rejects invalid adapter metadata in single and batch reads', async () => {
+      const storage = await adapter.open();
+      try {
+        const saved = await storage.transaction(tx => tx.blobs.put({
+          tenant: 'owner', bytes: Uint8Array.of(1, 5, 9),
+          contentType: 'image/png', privacy: 'P0', encrypted: false, now,
+        }));
+        expect(saved.ok).toBe(true);
+        if (!saved.ok) return;
+        const corrupted: Storage = {
+          ...storage,
+          read: async <T>(fn: (tx: Tx) => T | Promise<T>): Promise<T> => storage.read(tx => fn({
+            ...tx,
+            blobs: {
+              ...tx.blobs,
+              get: (tenant, ref) => {
+                const found = tx.blobs.get(tenant, ref);
+                return found ? { ...found, privacy: 'P4' as MediaBlob['privacy'] } : undefined;
+              },
+            },
+          })),
+        };
+        await expect(readVerifiedBlob(corrupted, 'owner', saved.value.ref)).rejects.toThrow(/integrity/);
+        await expect(readVerifiedBlobBatch(corrupted, 'owner', [saved.value.ref])).rejects.toThrow(/integrity/);
+        expect((await readVerifiedBlob(storage, 'owner', saved.value.ref))?.bytes).toEqual(Uint8Array.of(1, 5, 9));
+      } finally {
+        await storage.close();
+      }
+    });
+
 
     it(`${adapter.name}: detaches adapter-owned bytes before read completion`, async () => {
       const storage = await adapter.open();

@@ -342,6 +342,9 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           const blobs = new Map<string, MediaBlob>();
           let links = 0;
           let totalBytes = 0;
+          // If a later parent fails admission, storage.read rejects before it
+          // returns the snapshot. Clear all copies already collected here.
+          try {
           for (const codec of registeredCodecs) {
             if (!codec.attachmentRefs) continue;
             if (!codec.recordId) throw new Error('Attachment codec requires a canonical record key');
@@ -381,6 +384,10 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
             }
           }
           return { parents, blobs: [...blobs.values()] };
+          } catch (error) {
+            for (const blob of blobs.values()) blob.bytes.fill(0);
+            throw error;
+          }
         });
         try {
         guard();
@@ -392,11 +399,15 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         const blobEntries: Array<{ ref: string; size: number; contentType: string; privacy: string; encrypted: boolean; createdAt: string }> = [];
         for (const blob of snapshot.blobs) {
           const verified = await verifyStoredBlob(blob);
-          guard();
-          blobEntries.push({ ref: verified.ref, size: verified.size, contentType: verified.contentType,
-            privacy: verified.privacy, encrypted: verified.encrypted, createdAt: verified.createdAt });
-          // This signed product is metadata-only. Discard the second verified copy.
-          verified.bytes.fill(0);
+          try {
+            guard();
+            blobEntries.push({ ref: verified.ref, size: verified.size, contentType: verified.contentType,
+              privacy: verified.privacy, encrypted: verified.encrypted, createdAt: verified.createdAt });
+          } finally {
+            // A concurrent vault lock or metadata append error must not strand
+            // this second copy after its content address was successfully hashed.
+            verified.bytes.fill(0);
+          }
         }
         blobEntries.sort((a, b) => a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0);
         const parentEntries: Array<{ type: string; id: string; revision: number; dataCid: string; refs: readonly string[] }> = [];

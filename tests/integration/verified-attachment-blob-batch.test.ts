@@ -46,6 +46,61 @@ describe('bounded verified attachment batches', () => {
       await storage.close();
     }
   });
+  it('uses one admitted array-length snapshot even when a Proxy reports changing lengths', async () => {
+    const storage = createMemoryStorage();
+    try {
+      const bytes = Uint8Array.of(41, 17, 9);
+      const saved = await storage.transaction(tx => tx.blobs.put({
+        tenant: 'owner', bytes, contentType: 'image/png',
+        privacy: 'P0', encrypted: false, now,
+      }));
+      expect(saved.ok).toBe(true);
+      if (!saved.ok) return;
+
+      // Array.isArray(proxy) is true. The old implementation admitted length 1,
+      // then read a second, unbounded length for its indexed copy.
+      let lengthReads = 0;
+      const refs = new Proxy([saved.value.ref], {
+        get(target, property, receiver) {
+          if (property === 'length') {
+            lengthReads += 1;
+            return lengthReads === 1 ? 1 : MAX_VERIFIED_BLOB_BATCH_ITEMS + 100;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      const result = await readVerifiedBlobBatch(storage, 'owner', refs);
+      expect(result.map(blob => blob.ref)).toEqual([saved.value.ref]);
+      expect(result[0]?.bytes).toEqual(bytes);
+      expect(lengthReads).toBe(1);
+
+      // A zero-length admitted request must not grow between admission and
+      // snapshot, even when a hostile array Proxy claims extra indices.
+      let emptyLengthReads = 0;
+      const empty = new Proxy([] as string[], {
+        get(target, property, receiver) {
+          if (property === 'length') {
+            emptyLengthReads += 1;
+            return emptyLengthReads === 1 ? 0 : MAX_VERIFIED_BLOB_BATCH_ITEMS + 100;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      expect(await readVerifiedBlobBatch(storage, 'owner', empty)).toEqual([]);
+      expect(emptyLengthReads).toBe(1);
+
+      // Proxy lengths need admission even when the underlying target is an Array.
+      const negative = new Proxy([saved.value.ref], {
+        get(target, property, receiver) {
+          return property === 'length' ? -1 : Reflect.get(target, property, receiver);
+        },
+      });
+      await expect(readVerifiedBlobBatch(storage, 'owner', negative)).rejects.toThrow(/integrity/);
+    } finally {
+      await storage.close();
+    }
+  });
+
   for (const adapter of adapters) {
     it(adapter.name + ': reads detached tenant batches and fails closed on invalid members', async () => {
       const storage = await adapter.open();

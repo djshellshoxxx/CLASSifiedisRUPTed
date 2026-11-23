@@ -99,17 +99,21 @@ export async function readVerifiedBlobBatch(
   refs: readonly string[],
   maxTotalBytes: number = MAX_VERIFIED_BLOB_BATCH_BYTES,
 ): Promise<readonly MediaBlob[]> {
-  if (!Array.isArray(refs) || refs.length > MAX_VERIFIED_BLOB_BATCH_ITEMS
+  if (!Array.isArray(refs)) {
+    throw new Error('Attachment batch integrity check failed');
+  }
+  // Read the bounded length exactly once. Proxies of real arrays pass
+  // Array.isArray, but can return a different length on each property read.
+  // Admission and indexed copying must use the same captured count.
+  const count = refs.length;
+  if (!Number.isSafeInteger(count) || count < 0 || count > MAX_VERIFIED_BLOB_BATCH_ITEMS
     || !Number.isSafeInteger(maxTotalBytes)
     || maxTotalBytes < 0 || maxTotalBytes > MAX_VERIFIED_BLOB_BATCH_BYTES) {
     throw new Error('Attachment batch integrity check failed');
   }
-  // Snapshot exactly the validated array indices before the first await.
-  // Array instances can override Symbol.iterator and yield more entries than
-  // their length (or yield entries from an empty array). Spreading such input
-  // bypasses the 32-item admission and can invoke arbitrary caller code.
+  // Snapshot exactly the admitted indices before the first await. Do not
+  // invoke an Array's replaceable Symbol.iterator.
   const requested: string[] = [];
-  const count = refs.length;
   for (let i = 0; i < count; i += 1) requested.push(refs[i]!);
   const seen = new Set<string>();
   for (const ref of requested) {

@@ -69,6 +69,40 @@ describe('verified content-addressed attachment reads', () => {
     }
   });
 
+  it('sqlite: rejects a stored private-plaintext row even with a valid content address', async () => {
+    const storage = await openSqliteStorage({ path: ':memory:' });
+    try {
+      const bytes = Uint8Array.of(8, 9, 10);
+      const saved = await storage.transaction(tx => tx.blobs.put({
+        tenant: 'owner', bytes, contentType: 'image/png', privacy: 'P0', encrypted: false, now,
+      }));
+      expect(saved.ok).toBe(true);
+      if (!saved.ok) return;
+
+      // Model a corrupted relay row: SQLite write admission explicitly forbids
+      // P1/P2/P3 plaintext, but the bytes still match their valid SHA-256 ref.
+      const corrupted: Storage = {
+        ...storage,
+        read: async <T>(fn: (tx: Tx) => T | Promise<T>): Promise<T> => storage.read(tx => fn({
+          ...tx,
+          blobs: {
+            ...tx.blobs,
+            get: (tenant, ref) => {
+              const found = tx.blobs.get(tenant, ref);
+              return found ? { ...found, privacy: 'P2' as const, encrypted: false } : undefined;
+            },
+          },
+        })),
+      };
+      await expect(readVerifiedBlob(corrupted, 'owner', saved.value.ref)).rejects.toThrow(/integrity/);
+      await expect(readVerifiedBlobBatch(corrupted, 'owner', [saved.value.ref])).rejects.toThrow(/integrity/);
+      expect((await readVerifiedBlob(storage, 'owner', saved.value.ref))?.bytes).toEqual(bytes);
+      expect((await readVerifiedBlobBatch(storage, 'owner', [saved.value.ref]))[0]?.bytes).toEqual(bytes);
+    } finally {
+      await storage.close();
+    }
+  });
+
   for (const adapter of adapters) {
     it(adapter.name + ': rejects invalid adapter metadata in single and batch reads', async () => {
       const storage = await adapter.open();

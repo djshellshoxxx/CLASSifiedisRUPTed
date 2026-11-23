@@ -5,7 +5,7 @@ import { blobRefOf, isBlobRef, MAX_BLOB_BYTES, type MediaBlob } from './tx.ts';
 // verified snapshot. These are STRUCTURAL checks, not metadata authentication.
 // Keep the MIME form aligned with tx.ts's blob-write admission.
 const BLOB_MIME_RE = /^[a-z]+\/[a-z0-9.+-]{1,90}$/;
-function validStoredMetadata(blob: Pick<MediaBlob, 'contentType' | 'privacy' | 'encrypted' | 'createdAt' | 'holders'>): boolean {
+function validStoredMetadata(blob: Pick<MediaBlob, 'contentType' | 'privacy' | 'encrypted' | 'createdAt' | 'holders'>, kind?: Storage['kind']): boolean {
   const { contentType, privacy, encrypted, createdAt, holders } = blob;
   if (typeof contentType !== 'string' || !BLOB_MIME_RE.test(contentType)
     || (privacy !== 'P0' && privacy !== 'P1' && privacy !== 'P2' && privacy !== 'P3')
@@ -13,7 +13,10 @@ function validStoredMetadata(blob: Pick<MediaBlob, 'contentType' | 'privacy' | '
     || !Number.isSafeInteger(holders) || holders < 0
     || typeof createdAt !== 'string') return false;
   const timestamp = Date.parse(createdAt);
-  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === createdAt;
+  // Relay SQLite admission forbids private plaintext. A tampered stored row
+  // must not be promoted to a verified attachment solely by its byte digest.
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === createdAt
+    && !(kind === 'sqlite' && privacy !== 'P0' && encrypted !== true);
 }
 
 
@@ -65,7 +68,7 @@ export async function readVerifiedBlob(
     const sourceBytes = found.bytes;
     if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
       || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-      || sourceBytes.byteLength !== size || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders })) {
+      || sourceBytes.byteLength !== size || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders }, storage.kind)) {
       throw new Error('Blob content integrity check failed');
     }
     return { ref: storedRef, size, contentType, privacy, encrypted, createdAt,
@@ -123,7 +126,7 @@ export async function readVerifiedBlobBatch(
         || !Number.isSafeInteger(size) || size < 0
         || size > MAX_BLOB_BYTES || sourceBytes.byteLength !== size
         || size > maxTotalBytes - total
-        || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders })) {
+        || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders }, storage.kind)) {
         throw new Error('Attachment batch integrity check failed');
       }
       total += size;

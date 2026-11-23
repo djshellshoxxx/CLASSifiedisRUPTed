@@ -1,6 +1,22 @@
 import type { Storage } from './storage.ts';
 import { blobRefOf, isBlobRef, MAX_BLOB_BYTES, type MediaBlob } from './tx.ts';
 
+// Match the persisted blob admission shape before treating an adapter row as a
+// verified snapshot. These are STRUCTURAL checks, not metadata authentication.
+// Keep the MIME form aligned with tx.ts's blob-write admission.
+const BLOB_MIME_RE = /^[a-z]+\/[a-z0-9.+-]{1,90}$/;
+function validStoredMetadata(blob: Pick<MediaBlob, 'contentType' | 'privacy' | 'encrypted' | 'createdAt' | 'holders'>): boolean {
+  const { contentType, privacy, encrypted, createdAt, holders } = blob;
+  if (typeof contentType !== 'string' || !BLOB_MIME_RE.test(contentType)
+    || (privacy !== 'P0' && privacy !== 'P1' && privacy !== 'P2' && privacy !== 'P3')
+    || typeof encrypted !== 'boolean'
+    || !Number.isSafeInteger(holders) || holders < 0
+    || typeof createdAt !== 'string') return false;
+  const timestamp = Date.parse(createdAt);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === createdAt;
+}
+
+
 /**
  * Validate a detached stored-blob snapshot before considering its bytes for a
  * future portable attachment manifest. The content address covers stored
@@ -15,7 +31,7 @@ export async function verifyStoredBlob(blob: MediaBlob): Promise<MediaBlob> {
   const sourceBytes = blob.bytes;
   if (!isBlobRef(ref) || !(sourceBytes instanceof Uint8Array)
     || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-    || sourceBytes.byteLength !== size) {
+    || sourceBytes.byteLength !== size || !validStoredMetadata(blob)) {
     throw new Error('Blob content integrity check failed');
   }
   // Snapshot the bytes before the first await, not merely before returning.
@@ -49,7 +65,7 @@ export async function readVerifiedBlob(
     const sourceBytes = found.bytes;
     if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
       || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-      || sourceBytes.byteLength !== size) {
+      || sourceBytes.byteLength !== size || !validStoredMetadata(found)) {
       throw new Error('Blob content integrity check failed');
     }
     return { ref: storedRef, size, contentType, privacy, encrypted, createdAt,
@@ -102,7 +118,7 @@ export async function readVerifiedBlobBatch(
       if (!blob || blob.ref !== ref || !(blob.bytes instanceof Uint8Array)
         || !Number.isSafeInteger(blob.size) || blob.size < 0
         || blob.size > MAX_BLOB_BYTES || blob.bytes.byteLength !== blob.size
-        || blob.size > maxTotalBytes - total) {
+        || blob.size > maxTotalBytes - total || !validStoredMetadata(blob)) {
         throw new Error('Attachment batch integrity check failed');
       }
       total += blob.size;

@@ -142,6 +142,27 @@ export async function verifySealedAttachmentManifest(
   }
 }
 
+// Read the intrinsic view size rather than an own or subclass byteLength getter.
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), 'byteLength',
+)!.get!;
+
+/** Internal bounded copy shared by admission and the destination write preparation. */
+export function copyAttachmentBatchMember(source: unknown, size: number, error: string): Uint8Array {
+  if (!Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
+    || !(source instanceof Uint8Array) || typedArrayByteLength.call(source) !== size) {
+    throw new Error(error);
+  }
+  const copy = new Uint8Array(size);
+  try {
+    copy.set(source);
+    return copy;
+  } catch (cause) {
+    copy.fill(0);
+    throw cause;
+  }
+}
+
 /**
  * Authenticate a signed, encrypted manifest and verify a *complete* received
  * byte batch against its canonical, sorted content-addressed blob entries.
@@ -178,14 +199,10 @@ export async function verifySealedAttachmentBlobBatch(
     for (let i = 0; i < count; i += 1) {
       const source = byteSet[i];
       const expected = manifest.blobs[i]!;
-      if (!(source instanceof Uint8Array) || source.byteLength !== expected.size
-        || expected.size > MAX_BLOB_BYTES
-        || expected.size > MAX_VERIFIED_BLOB_BATCH_BYTES - total) {
+      if (expected.size > MAX_VERIFIED_BLOB_BATCH_BYTES - total) {
         throw new Error('Attachment transport byte size mismatch');
       }
-      const copy = new Uint8Array(expected.size);
-      detached.push(copy);
-      copy.set(source);
+      detached.push(copyAttachmentBatchMember(source, expected.size, 'Attachment transport byte size mismatch'));
       total += expected.size;
     }
     if (total !== manifest.totalBytes) {

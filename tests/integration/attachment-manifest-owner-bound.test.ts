@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { createMemoryStorage, defineRepo, z } from '../../packages/kernel/src/index.ts';
+import { createMemoryStorage, defineRepo, readVerifiedBlobBatch, z } from '../../packages/kernel/src/index.ts';
 import { unseal } from '../../packages/identity/src/index.ts';
 import { verifyEnvelope } from '../../packages/federation/src/index.ts';
 import { backupCodec, openVault, vaultFromStorage } from '../../packages/vault/src/vault.ts';
-import { verifySealedAttachmentManifest } from '../../packages/vault/src/attachment-manifest.ts';
+import { verifySealedAttachmentManifest, verifySealedAttachmentBlobBatch } from '../../packages/vault/src/attachment-manifest.ts';
 
 const passphrase = 'authenticated attachment manifest test passphrase';
 const note = defineRepo({
@@ -204,6 +204,60 @@ describe('separately signed owner-authorized attachment metadata', () => {
       await expect(session.exportAttachmentManifest(passphrase)).rejects.toThrow(/missing bytes/);
     } finally { await session.lock(); }
   }, 30000);
+
+  it('admits a complete authenticated blob-byte batch and rejects tampered, swapped or missing members', async () => {
+    const session = await vaultFromStorage(createMemoryStorage(), [owned]).create(passphrase);
+    try {
+      await populate(session);
+      const second = await session.storage.transaction(async tx => {
+        const blob = await tx.blobs.put({ tenant: session.principal,
+          bytes: Uint8Array.of(34, 55, 89, 144), contentType: 'image/png',
+          privacy: 'P0', encrypted: false, now: now + 1000 });
+        if (!blob.ok) return blob;
+        return tx.records.put({ tenant: session.principal, type: note.type, id: 'image-2',
+          data: { id: 'image-2', ref: blob.value.ref }, idx: [null, null, null, null],
+          expectedRevision: 0, now: now + 1000 });
+      });
+      expect(second.ok).toBe(true);
+
+      const sealed = await session.exportAttachmentManifest(passphrase);
+      const admitted = await verifySealedAttachmentManifest(sealed, passphrase, session.principal);
+      expect(admitted.blobs).toHaveLength(2);
+      const fetched = await readVerifiedBlobBatch(session.storage, session.principal,
+        admitted.blobs.map(row => row.ref));
+      const bytes = fetched.map(blob => new Uint8Array(blob.bytes));
+      const verified = await verifySealedAttachmentBlobBatch(
+        sealed, passphrase, session.principal, bytes);
+      expect(verified).toEqual(admitted);
+      expect(bytes.map(blob => blob.byteLength)).toEqual(
+        admitted.blobs.map(blob => blob.size));
+
+      const swapped = [bytes[1]!, bytes[0]!];
+      await expect(verifySealedAttachmentBlobBatch(sealed, passphrase, session.principal, swapped))
+        .rejects.toThrow(/size mismatch|content-address mismatch/);
+      const corrupted = bytes.map(blob => new Uint8Array(blob));
+      corrupted[0]![0] ^= 0xff;
+      await expect(verifySealedAttachmentBlobBatch(sealed, passphrase, session.principal, corrupted))
+        .rejects.toThrow(/content-address mismatch/);
+      await expect(verifySealedAttachmentBlobBatch(sealed, passphrase, session.principal, bytes.slice(0, 1)))
+        .rejects.toThrow(/batch invalid/);
+      await expect(verifySealedAttachmentBlobBatch(sealed, passphrase, session.principal,
+        [bytes[0]!, new Uint8Array(bytes[1]!.length + 1)]))
+        .rejects.toThrow(/size mismatch/);
+      await expect(verifySealedAttachmentBlobBatch(sealed, passphrase, 'wrong-principal', bytes))
+        .rejects.toThrow();
+
+      // A valid detached byte batch alone is not destination-owner authorization.
+      const backup = await session.exportBackup(passphrase);
+      const recovered = await vaultFromStorage(createMemoryStorage(), [owned])
+        .restoreBackup(backup, passphrase);
+      try {
+        expect((await recovered.verifyAttachmentManifestOwners(sealed, passphrase)).parents)
+          .toHaveLength(2);
+      } finally { await recovered.lock(); }
+    } finally { await session.lock(); }
+  }, 30000);
+
 });
 async function inspectLegacy(input: unknown) {
   const bytes = await unseal(input, passphrase);

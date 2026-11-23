@@ -290,7 +290,8 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
                   const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders, bytes: sourceBytes } = found;
                   if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
                     || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-                    || sourceBytes.byteLength !== size || size > MAX_VERIFIED_BLOB_BATCH_BYTES - totalBytes) {
+                    || sourceBytes.byteLength !== size || size > MAX_VERIFIED_BLOB_BATCH_BYTES - totalBytes
+                    || (storage.kind === 'sqlite' && privacy !== 'P0' && encrypted !== true)) {
                     throw new Error('Attachment manifest byte limit or integrity failure');
                   }
                   totalBytes += size;
@@ -304,6 +305,7 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           }
           return { parents, blobs: [...blobs.values()] };
         });
+        try {
         guard();
         if (!snapshot.parents.length) throw new Error('No authenticated attachment parents');
         // Reuse the signed-record compatibility and canonical-key preflight.
@@ -316,6 +318,8 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           guard();
           blobEntries.push({ ref: verified.ref, size: verified.size, contentType: verified.contentType,
             privacy: verified.privacy, encrypted: verified.encrypted, createdAt: verified.createdAt });
+          // This signed product is metadata-only. Discard the second verified copy.
+          verified.bytes.fill(0);
         }
         blobEntries.sort((a, b) => a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0);
         const parentEntries: Array<{ type: string; id: string; revision: number; dataCid: string; refs: readonly string[] }> = [];
@@ -337,6 +341,11 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         const plaintext = encoder.encode(JSON.stringify(manifest));
         try { const result = await seal(plaintext, passphrase); guard(); return result; }
         finally { plaintext.fill(0); }
+        } finally {
+          // Preflight, hashing, signing or sealing failures must not retain
+          // copied attachment bytes in the continuation closure.
+          for (const blob of snapshot.blobs) blob.bytes.fill(0);
+        }
       },
       async exportBackup(passphrase) {
         guard();

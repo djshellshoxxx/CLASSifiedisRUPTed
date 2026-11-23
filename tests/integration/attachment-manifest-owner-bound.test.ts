@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { createMemoryStorage, defineRepo, ok, z } from '../../packages/kernel/src/index.ts';
+import { createMemoryStorage, defineRepo, z } from '../../packages/kernel/src/index.ts';
 import { unseal } from '../../packages/identity/src/index.ts';
 import { verifyEnvelope } from '../../packages/federation/src/index.ts';
 import { backupCodec, openVault, vaultFromStorage } from '../../packages/vault/src/vault.ts';

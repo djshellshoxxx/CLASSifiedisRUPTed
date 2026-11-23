@@ -1,7 +1,7 @@
 import type { Storage } from './storage.ts';
 import { blobRefOf, isBlobRef, MAX_BLOB_BYTES, type MediaBlob } from './tx.ts';
 
-// Match the persisted blob admission shape before treating an adapter row as a
+// Match the persisted blob admission shape before treating a captured adapter row as a
 // verified snapshot. These are STRUCTURAL checks, not metadata authentication.
 // Keep the MIME form aligned with tx.ts's blob-write admission.
 const BLOB_MIME_RE = /^[a-z]+\/[a-z0-9.+-]{1,90}$/;
@@ -31,7 +31,7 @@ export async function verifyStoredBlob(blob: MediaBlob): Promise<MediaBlob> {
   const sourceBytes = blob.bytes;
   if (!isBlobRef(ref) || !(sourceBytes instanceof Uint8Array)
     || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-    || sourceBytes.byteLength !== size || !validStoredMetadata(blob)) {
+    || sourceBytes.byteLength !== size || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders })) {
     throw new Error('Blob content integrity check failed');
   }
   // Snapshot the bytes before the first await, not merely before returning.
@@ -65,7 +65,7 @@ export async function readVerifiedBlob(
     const sourceBytes = found.bytes;
     if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
       || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-      || sourceBytes.byteLength !== size || !validStoredMetadata(found)) {
+      || sourceBytes.byteLength !== size || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders })) {
       throw new Error('Blob content integrity check failed');
     }
     return { ref: storedRef, size, contentType, privacy, encrypted, createdAt,
@@ -115,18 +115,22 @@ export async function readVerifiedBlobBatch(
     let total = 0;
     return requested.map(ref => {
       const blob = tx.blobs.get(tenant, ref);
-      if (!blob || blob.ref !== ref || !(blob.bytes instanceof Uint8Array)
-        || !Number.isSafeInteger(blob.size) || blob.size < 0
-        || blob.size > MAX_BLOB_BYTES || blob.bytes.byteLength !== blob.size
-        || blob.size > maxTotalBytes - total || !validStoredMetadata(blob)) {
+      if (!blob) throw new Error('Attachment batch integrity check failed');
+      // Capture the exact scalar and byte view that is admitted. Re-reading
+      // adapter-backed accessors after admission can return different values.
+      const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders, bytes: sourceBytes } = blob;
+      if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
+        || !Number.isSafeInteger(size) || size < 0
+        || size > MAX_BLOB_BYTES || sourceBytes.byteLength !== size
+        || size > maxTotalBytes - total
+        || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders })) {
         throw new Error('Attachment batch integrity check failed');
       }
-      total += blob.size;
+      total += size;
       // Do not retain an adapter byte view after transaction settlement.
-      const { size, contentType, privacy, encrypted, createdAt, holders } = blob;
       return {
-        ref, size, contentType, privacy, encrypted, createdAt, holders,
-        bytes: new Uint8Array(blob.bytes),
+        ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders,
+        bytes: new Uint8Array(sourceBytes),
       };
     });
   });

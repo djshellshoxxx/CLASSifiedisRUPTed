@@ -61,7 +61,7 @@ describe('attachment manifest receiver boundary', () => {
       finally { plaintext.fill(0); }
       const result = await verifySealedAttachmentManifest(sealed, passphrase, identity.principal);
       expect(result).toMatchObject({ principal: identity.principal, links: 1, totalBytes: 3 });
-      expect(result.parents[0].refs).toEqual([ref]);
+      expect(result.parents[0]?.refs).toEqual([ref]);
     } finally {
       created.identity.lock();
     }

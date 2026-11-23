@@ -572,7 +572,9 @@ function syncStore(d: DriverTx) {
 }
 
 export const MAX_BLOB_BYTES = 5 * 1024 * 1024;
-const BLOB_REF_RE = /^blob:sha256-[A-Za-z0-9_-]{43}$/;
+// A SHA-256 digest is 32 bytes: 42 full base64url symbols followed by
+// four data bits and two *zero* pad bits. Reject alternate noncanonical spellings.
+const BLOB_REF_RE = /^blob:sha256-[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 const CONTENT_TYPE_RE = /^[a-z]+\/[a-z0-9.+-]{1,90}$/;
 
 export interface BlobInfo {

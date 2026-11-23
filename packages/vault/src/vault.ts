@@ -4,7 +4,7 @@ import { openEncryptedStorage } from './encrypted-storage.ts';
 import { createIdentity, unlockIdentity, seal, unseal, IdentityCryptoError, type ProtectedIdentity, type UnlockedIdentity, type Sealed } from '@classrup/identity';
 import { signEnvelope, verifyEnvelope, strictCanonicalJson } from '@classrup/federation';
 import { createUnlockBackoff, type UnlockBackoff } from './session-policy.ts';
-import { verifySealedAttachmentManifest, verifySealedAttachmentBlobBatch, type VerifiedAttachmentManifestMetadata } from './attachment-manifest.ts';
+import { copyAttachmentBatchMember, verifySealedAttachmentManifest, verifySealedAttachmentBlobBatch, type VerifiedAttachmentManifestMetadata } from './attachment-manifest.ts';
 
 const KEY_TENANT = 'local-vault';
 const KEY_TYPE = 'vault.identity';
@@ -340,11 +340,8 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
             throw new Error('Attachment import batch changed after admission');
           }
           for (let i = 0; i < manifest.blobs.length; i += 1) {
-            const item = byteSet[i];
-            if (!(item instanceof Uint8Array) || item.byteLength !== manifest.blobs[i]!.size) {
-              throw new Error('Attachment import batch changed after admission');
-            }
-            copies.push(new Uint8Array(item));
+            copies.push(copyAttachmentBatchMember(byteSet[i], manifest.blobs[i]!.size,
+              'Attachment import batch changed after admission'));
           }
           const written = await storage.transaction(async tx => {
             // This is a fresh destination write snapshot, not a prior successful

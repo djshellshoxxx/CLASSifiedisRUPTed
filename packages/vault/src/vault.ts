@@ -342,6 +342,9 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           const blobs = new Map<string, MediaBlob>();
           let links = 0;
           let totalBytes = 0;
+          // If a later parent fails admission, storage.read rejects before it
+          // returns the snapshot. Clear all copies already collected here.
+          try {
           for (const codec of registeredCodecs) {
             if (!codec.attachmentRefs) continue;
             if (!codec.recordId) throw new Error('Attachment codec requires a canonical record key');
@@ -381,6 +384,10 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
             }
           }
           return { parents, blobs: [...blobs.values()] };
+          } catch (error) {
+            for (const blob of blobs.values()) blob.bytes.fill(0);
+            throw error;
+          }
         });
         try {
         guard();

@@ -1,8 +1,8 @@
-import { ok, type Storage, type StoredRecord, type RepoDef, type Tx, type Result, type TxMode } from '@classrup/kernel';
+import { ok, isBlobRef, MAX_BLOB_BYTES, MAX_VERIFIED_BLOB_BATCH_BYTES, MAX_VERIFIED_BLOB_BATCH_ITEMS, verifyStoredBlob, sha256Hex, type MediaBlob, type Storage, type StoredRecord, type RepoDef, type Tx, type Result, type TxMode } from '@classrup/kernel';
 import { type IndexedDbOptions } from '@classrup/kernel/browser';
 import { openEncryptedStorage } from './encrypted-storage.ts';
 import { createIdentity, unlockIdentity, seal, unseal, IdentityCryptoError, type ProtectedIdentity, type UnlockedIdentity, type Sealed } from '@classrup/identity';
-import { signEnvelope, verifyEnvelope } from '@classrup/federation';
+import { signEnvelope, verifyEnvelope, strictCanonicalJson } from '@classrup/federation';
 import { createUnlockBackoff, type UnlockBackoff } from './session-policy.ts';
 
 const KEY_TENANT = 'local-vault';
@@ -50,6 +50,8 @@ export interface BackupCodec {
   restoreData?(input: unknown, principal: string): Promise<unknown>;
   /** Optional canonical storage key for data with a compound uniqueness invariant. */
   recordId?(input: unknown): string;
+  /** Explicit codec-authorized refs from canonical parent-record data, never blob holder labels. */
+  attachmentRefs?(input: unknown): readonly string[];
   indexes(input: unknown): readonly [string | null, string | null, string | null, string | null];
 }
 export function backupCodec<T, K extends string>(repo: RepoDef<T, K>): BackupCodec {
@@ -79,6 +81,8 @@ export interface UnlockedVault {
   backupInspection?(): Promise<{ readonly records: BackupCoverage; readonly attachments: AttachmentCoverage | null }>;
   /** Alpha record backup, not the complete IOX export/recovery/rotation protocol. */
   exportBackup(passphrase: string): Promise<Sealed>;
+  /** Separate encrypted, signed, metadata-only attachment manifest; no blob transfer or recovery. */
+  exportAttachmentManifest(passphrase: string): Promise<Sealed>;
 }
 export interface Vault {
   isInitialized(): Promise<boolean>;
@@ -104,11 +108,12 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
   // Capture callable references with their receiver: codecs may use prototype
   // methods or private class state. Their trusted closure behavior is not frozen.
   const registeredCodecs = Object.freeze(codecs.map(codec => {
-    const { type, parse, indexes, validate, restoreData, recordId } = codec;
+    const { type, parse, indexes, validate, restoreData, recordId, attachmentRefs } = codec;
     return Object.freeze({ type, parse: parse.bind(codec), indexes: indexes.bind(codec),
       ...(validate === undefined ? {} : { validate: validate.bind(codec) }),
       ...(restoreData === undefined ? {} : { restoreData: restoreData.bind(codec) }),
       ...(recordId === undefined ? {} : { recordId: recordId.bind(codec) }),
+      ...(attachmentRefs === undefined ? {} : { attachmentRefs: attachmentRefs.bind(codec) }),
     });
   }));
   const byType = new Map(registeredCodecs.map(codec => [codec.type, codec]));
@@ -238,6 +243,100 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         });
         guard();
         return result;
+      },
+      async exportAttachmentManifest(passphrase) {
+        guard();
+        // Do not advertise an empty manifest when no domain explicitly attests
+        // to canonical record ownership of attachments.
+        if (!registeredCodecs.some(codec => codec.attachmentRefs)) {
+          throw new Error('No authorized attachment codec');
+        }
+        const checked = await unlockIdentity(protectedIdentity, passphrase);
+        checked.lock();
+        guard();
+        // Parent records, codec-derived references and detached stored bytes
+        // MUST originate in the same principal-scoped transaction snapshot.
+        const snapshot = await storage.read(tx => {
+          const scope = coverage(tx, identity.principal);
+          if (scope.typeLimitExceeded || scope.recordLimitExceeded || scope.unsupportedRecordTypes.length) {
+            throw new Error('Attachment manifest requires complete supported record coverage');
+          }
+          const parents: Array<{ readonly row: StoredRecord; readonly refs: readonly string[] }> = [];
+          const blobs = new Map<string, MediaBlob>();
+          let links = 0;
+          let totalBytes = 0;
+          for (const codec of registeredCodecs) {
+            if (!codec.attachmentRefs) continue;
+            if (!codec.recordId) throw new Error('Attachment codec requires a canonical record key');
+            const rows = tx.records.query({ tenant: identity.principal, type: codec.type, filters: [], orderSlot: 0, dir: 'asc', limit: MAX_RECORDS + 1 });
+            for (const row of rows) {
+              const data = codec.parse(structuredClone(row.data));
+              if (codec.recordId(data) !== row.id) throw new Error('Attachment parent key mismatch');
+              const declared = codec.attachmentRefs(structuredClone(data));
+              if (!Array.isArray(declared)) throw new Error('Invalid attachment references');
+              const count = declared.length;
+              if (!Number.isSafeInteger(count) || count < 0 || count > MAX_VERIFIED_BLOB_BATCH_ITEMS
+                || count > MAX_VERIFIED_BLOB_BATCH_ITEMS - links) throw new Error('Attachment manifest item limit exceeded');
+              const refs: string[] = [];
+              const distinct = new Set<string>();
+              for (let i = 0; i < count; i += 1) {
+                const ref = declared[i];
+                if (!isBlobRef(ref) || distinct.has(ref)) throw new Error('Invalid attachment references');
+                distinct.add(ref);
+                refs.push(ref);
+                if (!blobs.has(ref)) {
+                  const found = tx.blobs.get(identity.principal, ref);
+                  if (!found) throw new Error('Attachment manifest references missing bytes');
+                  const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders, bytes: sourceBytes } = found;
+                  if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
+                    || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
+                    || sourceBytes.byteLength !== size || size > MAX_VERIFIED_BLOB_BATCH_BYTES - totalBytes) {
+                    throw new Error('Attachment manifest byte limit or integrity failure');
+                  }
+                  totalBytes += size;
+                  blobs.set(ref, { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders,
+                    bytes: new Uint8Array(sourceBytes) });
+                }
+              }
+              links += count;
+              if (refs.length) parents.push({ row: { ...row, data }, refs });
+            }
+          }
+          return { parents, blobs: [...blobs.values()] };
+        });
+        guard();
+        if (!snapshot.parents.length) throw new Error('No authenticated attachment parents');
+        // Reuse the signed-record compatibility and canonical-key preflight.
+        // Validation runs after closing the storage snapshot and cannot commit.
+        await preflightRecords(snapshot.parents.map(parent => parent.row),
+          identity.principal, registeredRecordTypes, guard, true);
+        const blobEntries: Array<{ ref: string; size: number; contentType: string; privacy: string; encrypted: boolean; createdAt: string }> = [];
+        for (const blob of snapshot.blobs) {
+          const verified = await verifyStoredBlob(blob);
+          guard();
+          blobEntries.push({ ref: verified.ref, size: verified.size, contentType: verified.contentType,
+            privacy: verified.privacy, encrypted: verified.encrypted, createdAt: verified.createdAt });
+        }
+        blobEntries.sort((a, b) => a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0);
+        const parentEntries: Array<{ type: string; id: string; revision: number; dataCid: string; refs: readonly string[] }> = [];
+        for (const parent of snapshot.parents) {
+          const dataCid = `sha256-${await sha256Hex(strictCanonicalJson(parent.row.data))}`;
+          guard();
+          parentEntries.push({ type: parent.row.type, id: parent.row.id, revision: parent.row.revision,
+            dataCid, refs: [...parent.refs] });
+        }
+        parentEntries.sort((a, b) => a.type === b.type
+          ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+          : (a.type < b.type ? -1 : 1));
+        const manifest = await signEnvelope(identity, {
+          type: 'classrup.vault.attachment_manifest/v1',
+          createdAt: new Date().toISOString(), seq: 1, prev: null,
+          payload: { principal: identity.principal, parents: parentEntries, blobs: blobEntries },
+        });
+        guard();
+        const plaintext = encoder.encode(JSON.stringify(manifest));
+        try { const result = await seal(plaintext, passphrase); guard(); return result; }
+        finally { plaintext.fill(0); }
       },
       async exportBackup(passphrase) {
         guard();

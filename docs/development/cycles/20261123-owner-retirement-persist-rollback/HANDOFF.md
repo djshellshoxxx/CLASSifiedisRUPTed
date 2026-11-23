@@ -1,0 +1,14 @@
+# ClassRup — non-final owner retirement late-persistence rollback (2026-11-23)
+
+Parent #151 9d4eec5a6653195bf709bff8d1863d074550ee3a, tree c0cf11e7978c7ffc1b7417fb1581f58a0677c05f, frozen branch codex/classrup-owner-retirement-reopen-20261123-t34. Current open PR search showed #150/#151 at tip and long stacked/alternative drafts. #57 merged; full production mixed registry recovery previously merged through #63. Initial and relevant later handoffs and remaining work inspected; exhaustive all-handoff reread not completed. Native Git DNS failed; connected Git-object publication on an isolated new branch codex/classrup-owner-retirement-persist-rollback-20261123-t35, no local worktree. No parent mutation.
+
+## Bounded test-only acceptance
+Use the actual vault import and memory driver persistence seam, seeded with valid retained public bytes, stale and unmanaged holders, and another canonical ref whose bytes are absent. The controlled persistence rejection fires only after both a new blob and stale-holder deletion are staged, with the two new canonical holder rows. Check the exact rejection, one rejected commit, byte/coverage snapshot equality, exact old/unmanaged/current holder membership via deliberately aborted observation transactions, then successful retry and post-retry labels. This tests working-set rollback on a rejected persistence callback, not an actual IndexedDB transaction abort or device failure. No runtime behavior, v1 format, key identity, crypto, caps, timeouts or retention policy changed. Existing reopen regression retained.
+
+## Qualification and independent review
+See QUALIFICATION.md. New test has not executed locally; hosted current-source qualification required. Independent workers unavailable; assignments below remain unexecuted and no self-review substitutes for them.
+- Code audit: inspect exact child commit/tree, callback timing and rollback observation oracle, verify actual changed rows and no production delta; classify ancestor integration order.
+- Functional bug hunt: run the new test and existing import/reopen/rollback suites serially; distinguish simulated persist rejection from native IDB abort. Check real IDB abort acceptance separately and record actual commands, counts, errors.
+- Defensive review: source-focused canonical owner authorization, retained bytes, non-final scope, transaction journal and error propagation; no interrupted reproduction follow-ups. Record exact source identities, findings and next instructions.
+
+Next: verify child CI, secure independent review, resolve #150 browser cancellation only under a concrete changed condition, and qualify ancestors before integration. Prioritize real encrypted IndexedDB transaction-abort acceptance, then explicit deleted-parent/final-retention and private destination-key contracts. No merge until all required actual gates and independent review, no release, deployment, force push, branch deletion or paid API.

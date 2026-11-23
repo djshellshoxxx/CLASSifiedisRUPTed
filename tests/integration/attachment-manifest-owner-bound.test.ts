@@ -236,7 +236,8 @@ describe('separately signed owner-authorized attachment metadata', () => {
       await expect(verifySealedAttachmentBlobBatch(sealed, passphrase, session.principal, swapped))
         .rejects.toThrow(/size mismatch|content-address mismatch/);
       const corrupted = bytes.map(blob => new Uint8Array(blob));
-      corrupted[0]![0] ^= 0xff;
+      const firstCorrupted = corrupted[0]!;
+      firstCorrupted[0] = (firstCorrupted[0] ?? 0) ^ 0xff;
       await expect(verifySealedAttachmentBlobBatch(sealed, passphrase, session.principal, corrupted))
         .rejects.toThrow(/content-address mismatch/);
       await expect(verifySealedAttachmentBlobBatch(sealed, passphrase, session.principal, bytes.slice(0, 1)))

@@ -125,6 +125,65 @@ describe('separately signed owner-authorized attachment metadata', () => {
     } finally { await source.lock(); }
   }, 30000);
 
+
+  it('rejects added and removed destination attachment owners without changing stored records', async () => {
+    const source = await vaultFromStorage(createMemoryStorage(), [owned]).create(passphrase);
+    try {
+      await populate(source);
+      const backup = await source.exportBackup(passphrase);
+      const manifest = await source.exportAttachmentManifest(passphrase);
+      const recovered = await vaultFromStorage(createMemoryStorage(), [owned]).restoreBackup(backup, passphrase);
+      try {
+        const verified = await recovered.verifyAttachmentManifestOwners(manifest, passphrase);
+        const extra = await recovered.storage.transaction(tx => tx.records.put({
+          tenant: recovered.principal, type: note.type, id: 'image-extra',
+          data: { id: 'image-extra', ref: verified.blobs[0]!.ref },
+          idx: [null, null, null, null], expectedRevision: 0, now: now + 1000,
+        }));
+        expect(extra.ok).toBe(true);
+        await expect(recovered.verifyAttachmentManifestOwners(manifest, passphrase))
+          .rejects.toThrow(/scope mismatch/);
+        expect(await recovered.storage.read(tx =>
+          tx.records.get(recovered.principal, note.type, 'image-extra'))).toBeDefined();
+
+        const removeExtra = await recovered.storage.transaction(tx =>
+          tx.records.remove(recovered.principal, note.type, 'image-extra', 1));
+        expect(removeExtra.ok).toBe(true);
+        expect((await recovered.verifyAttachmentManifestOwners(manifest, passphrase)).parents)
+          .toHaveLength(1);
+
+        const removeOwner = await recovered.storage.transaction(tx =>
+          tx.records.remove(recovered.principal, note.type, 'image-1', 1));
+        expect(removeOwner.ok).toBe(true);
+        await expect(recovered.verifyAttachmentManifestOwners(manifest, passphrase))
+          .rejects.toThrow(/scope mismatch/);
+      } finally { await recovered.lock(); }
+    } finally { await source.lock(); }
+  }, 30000);
+
+  it('rejects unsupported destination record types despite an otherwise matching signed manifest', async () => {
+    const source = await vaultFromStorage(createMemoryStorage(), [owned]).create(passphrase);
+    try {
+      await populate(source);
+      const backup = await source.exportBackup(passphrase);
+      const manifest = await source.exportAttachmentManifest(passphrase);
+      const recovered = await vaultFromStorage(createMemoryStorage(), [owned]).restoreBackup(backup, passphrase);
+      try {
+        const extra = await recovered.storage.transaction(tx => tx.records.put({
+          tenant: recovered.principal, type: 'test.unsupported_record', id: 'unexpected',
+          data: { name: 'unexpected' }, idx: [null, null, null, null],
+          expectedRevision: 0, now: now + 1000,
+        }));
+        expect(extra.ok).toBe(true);
+        await expect(recovered.verifyAttachmentManifestOwners(manifest, passphrase))
+          .rejects.toThrow(/complete supported record coverage/);
+        expect(await recovered.storage.read(tx =>
+          tx.records.get(recovered.principal, 'test.unsupported_record', 'unexpected')))
+          .toBeDefined();
+      } finally { await recovered.lock(); }
+    } finally { await source.lock(); }
+  }, 30000);
+
   it('rejects missing referenced bytes and canonical owner-key mismatches', async () => {
     const vault = vaultFromStorage(createMemoryStorage(), [owned]);
     const session = await vault.create(passphrase);

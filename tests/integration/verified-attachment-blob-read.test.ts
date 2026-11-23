@@ -14,6 +14,42 @@ const adapters = [
 ];
 
 describe('verified content-addressed attachment reads', () => {
+  it('rejects invalid captured metadata even when a later getter read looks valid', async () => {
+    const bytes = Uint8Array.of(47, 13, 5);
+    const blob: MediaBlob = {
+      ref: await blobRefOf(bytes), bytes, size: bytes.byteLength,
+      contentType: 'image/png', privacy: 'P0', encrypted: false,
+      createdAt: new Date(now).toISOString(), holders: 0,
+    };
+    // The previous verifier captured P4, re-read P0 for its admission check,
+    // then returned the first (invalid) value beside verified bytes.
+    let reads = 0;
+    Object.defineProperty(blob, 'privacy', {
+      configurable: true,
+      get: () => (++reads === 1 ? 'P4' : 'P0'),
+    });
+    await expect(verifyStoredBlob(blob)).rejects.toThrow(/integrity/);
+    expect(reads).toBe(1);
+  });
+
+  it('accepts an admitted captured metadata snapshot without getter re-reads', async () => {
+    const bytes = Uint8Array.of(17, 3, 55);
+    const blob: MediaBlob = {
+      ref: await blobRefOf(bytes), bytes, size: bytes.byteLength,
+      contentType: 'image/png', privacy: 'P0', encrypted: false,
+      createdAt: new Date(now).toISOString(), holders: 0,
+    };
+    let reads = 0;
+    Object.defineProperty(blob, 'privacy', {
+      configurable: true,
+      get: () => (++reads === 1 ? 'P0' : 'P4'),
+    });
+    const result = await verifyStoredBlob(blob);
+    expect(result.privacy).toBe('P0');
+    expect(result.bytes).toEqual(bytes);
+    expect(reads).toBe(1);
+  });
+
   it('rejects impossible stored metadata even when bytes have a valid SHA-256 address', async () => {
     const bytes = Uint8Array.of(7, 3, 11);
     const base: MediaBlob = {

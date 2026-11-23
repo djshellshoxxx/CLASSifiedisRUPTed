@@ -399,11 +399,15 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         const blobEntries: Array<{ ref: string; size: number; contentType: string; privacy: string; encrypted: boolean; createdAt: string }> = [];
         for (const blob of snapshot.blobs) {
           const verified = await verifyStoredBlob(blob);
-          guard();
-          blobEntries.push({ ref: verified.ref, size: verified.size, contentType: verified.contentType,
-            privacy: verified.privacy, encrypted: verified.encrypted, createdAt: verified.createdAt });
-          // This signed product is metadata-only. Discard the second verified copy.
-          verified.bytes.fill(0);
+          try {
+            guard();
+            blobEntries.push({ ref: verified.ref, size: verified.size, contentType: verified.contentType,
+              privacy: verified.privacy, encrypted: verified.encrypted, createdAt: verified.createdAt });
+          } finally {
+            // A concurrent vault lock or metadata append error must not strand
+            // this second copy after its content address was successfully hashed.
+            verified.bytes.fill(0);
+          }
         }
         blobEntries.sort((a, b) => a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0);
         const parentEntries: Array<{ type: string; id: string; revision: number; dataCid: string; refs: readonly string[] }> = [];

@@ -9,16 +9,22 @@ import { blobRefOf, isBlobRef, MAX_BLOB_BYTES, type MediaBlob } from './tx.ts';
  * Does not authenticate parent-record ownership or verify encryption keys.
  */
 export async function verifyStoredBlob(blob: MediaBlob): Promise<MediaBlob> {
-  if (!isBlobRef(blob.ref) || !(blob.bytes instanceof Uint8Array)
-    || !Number.isSafeInteger(blob.size) || blob.size < 0 || blob.size > MAX_BLOB_BYTES) {
+  // Snapshot scalar metadata before WebCrypto yields: later writes to the
+  // source object must not change what is paired with the verified bytes.
+  const { ref, size, contentType, privacy, encrypted, createdAt, holders } = blob;
+  const sourceBytes = blob.bytes;
+  if (!isBlobRef(ref) || !(sourceBytes instanceof Uint8Array)
+    || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
+    || sourceBytes.byteLength !== size) {
     throw new Error('Blob content integrity check failed');
   }
-  // Copy first: callers and adapter buffers may be mutable while hashing.
-  const bytes = new Uint8Array(blob.bytes);
-  if (bytes.byteLength !== blob.size || await blobRefOf(bytes) !== blob.ref) {
+  // Snapshot the bytes before the first await, not merely before returning.
+  // Construct only declared fields; unknown source properties are not verified.
+  const bytes = new Uint8Array(sourceBytes);
+  if (await blobRefOf(bytes) !== ref) {
     throw new Error('Blob content integrity check failed');
   }
-  return { ...blob, bytes };
+  return { ref, size, contentType, privacy, encrypted, createdAt, holders, bytes };
 }
 
 /**

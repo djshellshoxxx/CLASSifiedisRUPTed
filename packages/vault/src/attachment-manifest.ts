@@ -1,4 +1,4 @@
-import { isBlobRef, MAX_BLOB_BYTES, MAX_VERIFIED_BLOB_BATCH_BYTES, MAX_VERIFIED_BLOB_BATCH_ITEMS } from '@classrup/kernel';
+import { blobRefOf, isBlobRef, MAX_BLOB_BYTES, MAX_VERIFIED_BLOB_BATCH_BYTES, MAX_VERIFIED_BLOB_BATCH_ITEMS } from '@classrup/kernel';
 import { unseal } from '@classrup/identity';
 import { MAX_ENVELOPE_BYTES, verifyEnvelope } from '@classrup/federation';
 
@@ -139,5 +139,65 @@ export async function verifySealedAttachmentManifest(
     return validateAttachmentManifestPayload(envelope.payload, expectedPrincipal);
   } finally {
     plaintext.fill(0);
+  }
+}
+
+/**
+ * Authenticate a signed, encrypted manifest and verify a *complete* received
+ * byte batch against its canonical, sorted content-addressed blob entries.
+ *
+ * Input bytes correspond to manifest.blobs order. They are copied before the
+ * first digest await, bounded by the existing per-blob/aggregate limits, and
+ * zeroed on every exit. No input byte view is returned or persisted.
+ *
+ * This is a read-only transport-admission prerequisite, NOT attachment restore:
+ * callers must also reconcile actual destination canonical owners, authenticate
+ * their permissions and recheck those links within the eventual atomic write.
+ * The manifest signature protects metadata; this function does not encrypt an
+ * external transport channel or prove a destination storage encryption key.
+ */
+export async function verifySealedAttachmentBlobBatch(
+  sealed: unknown,
+  passphrase: string,
+  expectedPrincipal: string,
+  byteSet: readonly Uint8Array[],
+): Promise<VerifiedAttachmentManifestMetadata> {
+  const manifest = await verifySealedAttachmentManifest(sealed, passphrase, expectedPrincipal);
+  if (!Array.isArray(byteSet)) throw new Error('Attachment transport batch invalid');
+  const count = byteSet.length;
+  if (!Number.isSafeInteger(count) || count !== manifest.blobs.length
+    || count > MAX_VERIFIED_BLOB_BATCH_ITEMS) {
+    throw new Error('Attachment transport batch invalid');
+  }
+
+  // Do not use a caller-controlled array iterator or retain original byte views
+  // beyond this synchronous snapshot. Limit the allocation BEFORE copying.
+  const detached: Uint8Array[] = [];
+  try {
+    let total = 0;
+    for (let i = 0; i < count; i += 1) {
+      const source = byteSet[i];
+      const expected = manifest.blobs[i]!;
+      if (!(source instanceof Uint8Array) || source.byteLength !== expected.size
+        || expected.size > MAX_BLOB_BYTES
+        || expected.size > MAX_VERIFIED_BLOB_BATCH_BYTES - total) {
+        throw new Error('Attachment transport byte size mismatch');
+      }
+      const copy = new Uint8Array(expected.size);
+      detached.push(copy);
+      copy.set(source);
+      total += expected.size;
+    }
+    if (total !== manifest.totalBytes) {
+      throw new Error('Attachment transport aggregate size mismatch');
+    }
+    for (let i = 0; i < count; i += 1) {
+      if (await blobRefOf(detached[i]!) !== manifest.blobs[i]!.ref) {
+        throw new Error('Attachment transport content-address mismatch');
+      }
+    }
+    return manifest;
+  } finally {
+    for (const bytes of detached) bytes.fill(0);
   }
 }

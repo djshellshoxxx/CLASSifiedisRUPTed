@@ -104,7 +104,7 @@ export {
 } from './bus/ports.ts';
 export { createRelayAccess, loginMessage, relayAccessDefinitions, type Challenge, type LoginInput, type LoginResult, type RelayAccess, type RelayAccessOptions, type SignatureVerifier } from './bus/access.ts';
 export { createStorage, createMemoryStorage, type Storage, type TxMode } from './storage/storage.ts';
-export { DEFAULT_LEASE_TTL_MS, MAX_BLOB_BYTES, isBlobRef, type BlobInfo, type MediaBlob, type DeadLetter, type IdempotencyRecord, type Lease, type ShreddedBlob, type SignedEnvelope, type StoredRecord, type SyncEntry, type Tx } from './storage/tx.ts';
+export { DEFAULT_LEASE_TTL_MS, MAX_BLOB_BYTES, blobRefOf, isBlobRef, type BlobInfo, type MediaBlob, type DeadLetter, type IdempotencyRecord, type Lease, type ShreddedBlob, type SignedEnvelope, type StoredRecord, type SyncEntry, type Tx } from './storage/tx.ts';
 export { MAX_VERIFIED_BLOB_BATCH_BYTES, MAX_VERIFIED_BLOB_BATCH_ITEMS, readVerifiedBlob, readVerifiedBlobBatch, verifyStoredBlob } from './storage/verified-blob.ts';
 export { DEAD_LETTER_RETENTION_MS, OUTBOX_RETENTION_MS, runRetentionSweep, sweepRetention, type RetentionOptions, type RetentionReport } from './storage/maintenance.ts';
 export { defineRepo, type IndexFn, type Page, type Range, type ReadRepo, type Repo, type RepoDef, type RepoQuery } from './storage/repo.ts';

@@ -14,6 +14,38 @@ const adapters = [
 ];
 
 describe('bounded verified attachment batches', () => {
+  it('snapshots only bounded array entries without executing a caller-supplied iterator', async () => {
+    const storage = createMemoryStorage();
+    try {
+      const bytes = Uint8Array.of(101, 15, 3);
+      const saved = await storage.transaction(tx => tx.blobs.put({
+        tenant: 'owner', bytes, contentType: 'image/png',
+        privacy: 'P0', encrypted: false, now,
+      }));
+      expect(saved.ok).toBe(true);
+      if (!saved.ok) return;
+
+      // A real Array can replace its iterator. The prior spread evaluated the
+      // injected getter even though length was already admitted as one.
+      const refs = [saved.value.ref];
+      Object.defineProperty(refs, Symbol.iterator, {
+        get() { throw new Error('untrusted iterator must not run'); },
+      });
+      const verified = await readVerifiedBlobBatch(storage, 'owner', refs);
+      expect(verified.map(blob => blob.ref)).toEqual([saved.value.ref]);
+      expect(verified[0]?.bytes).toEqual(bytes);
+
+      // With length zero, the previous spread would accept extra refs from an
+      // override instead of returning the declared empty request.
+      const empty: string[] = [];
+      Object.defineProperty(empty, Symbol.iterator, {
+        value: function* () { yield saved.value.ref; },
+      });
+      expect(await readVerifiedBlobBatch(storage, 'owner', empty)).toEqual([]);
+    } finally {
+      await storage.close();
+    }
+  });
   for (const adapter of adapters) {
     it(adapter.name + ': reads detached tenant batches and fails closed on invalid members', async () => {
       const storage = await adapter.open();

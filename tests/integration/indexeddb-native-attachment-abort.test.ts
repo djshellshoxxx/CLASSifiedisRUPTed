@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { createStorage } from '../../packages/kernel/src/index.ts';
+import { createStorage, ok } from '../../packages/kernel/src/index.ts';
 import { createIndexedDbDriver, openIndexedDbStorage } from '../../packages/kernel/src/storage/indexeddb.ts';
 import { TABLES } from '../../packages/kernel/src/storage/memory-driver.ts';
 
@@ -66,7 +66,7 @@ describe('IndexedDB native transaction abort rollback', () => {
       expect(before.blob?.holders).toBe(2);
 
       abortNext = true;
-      await expect(storage.transaction(tx => tx.blobs.detach(tenant, ref, 'stale-owner')))
+      await expect(storage.transaction(tx => ok(tx.blobs.detach(tenant, ref, 'stale-owner'))))
         .rejects.toThrow();
       expect(aborted).toBe(1);
       expect(await storage.read(tx => ({
@@ -74,7 +74,7 @@ describe('IndexedDB native transaction abort rollback', () => {
         counts: tx.blobs.referenceCoverage(tenant),
       }))).toEqual(before);
 
-      const retried = await storage.transaction(tx => tx.blobs.detach(tenant, ref, 'stale-owner'));
+      const retried = await storage.transaction(tx => ok(tx.blobs.detach(tenant, ref, 'stale-owner')));
       expect(retried.ok).toBe(true);
       expect(await storage.read(tx => tx.blobs.get(tenant, ref))).toMatchObject({ holders: 1 });
     } finally {

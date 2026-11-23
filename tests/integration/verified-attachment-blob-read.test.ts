@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
-import { createMemoryStorage } from '../../packages/kernel/src/storage/storage.ts';
+import { createMemoryStorage, type Storage } from '../../packages/kernel/src/storage/storage.ts';
 import { openIndexedDbStorage } from '../../packages/kernel/src/storage/indexeddb.ts';
 import { openSqliteStorage } from '../../packages/kernel/src/storage/sqlite.ts';
-import { blobRefOf } from '../../packages/kernel/src/storage/tx.ts';
+import { blobRefOf, type MediaBlob, type Tx } from '../../packages/kernel/src/storage/tx.ts';
 import { readVerifiedBlob, verifyStoredBlob } from '../../packages/kernel/src/storage/verified-blob.ts';
 
 const now = Date.parse('2026-11-23T00:00:00.000Z');
@@ -15,6 +15,49 @@ const adapters = [
 
 describe('verified content-addressed attachment reads', () => {
   for (const adapter of adapters) {
+
+    it(`${adapter.name}: detaches adapter-owned bytes before read completion`, async () => {
+      const storage = await adapter.open();
+      try {
+        const original = Uint8Array.of(91, 14, 73, 5);
+        const saved = await storage.transaction(tx => tx.blobs.put({
+          tenant: 'owner', bytes: original, contentType: 'application/octet-stream',
+          privacy: 'P0', encrypted: false, now,
+        }));
+        expect(saved.ok).toBe(true);
+        if (!saved.ok) return;
+
+        // Model an adapter or transaction boundary that invalidates its issued
+        // byte view after the callback has finished. The old implementation
+        // returned this same view from storage.read and hashed it too late.
+        const storageWithLateMutation: Storage = {
+          ...storage,
+          read: async <T>(fn: (tx: Tx) => T | Promise<T>): Promise<T> => {
+            let observed: MediaBlob | undefined;
+            const result = await storage.read(tx => fn({
+              ...tx,
+              blobs: {
+                ...tx.blobs,
+                get: (tenant, ref) => {
+                  const found = tx.blobs.get(tenant, ref);
+                  observed = found;
+                  return found;
+                },
+              },
+            }));
+            observed?.bytes.fill(0);
+            return result;
+          },
+        };
+
+        const verified = await readVerifiedBlob(storageWithLateMutation, 'owner', saved.value.ref);
+        expect(verified?.bytes).toEqual(original);
+        expect(verified?.ref).toBe(saved.value.ref);
+        expect(verified?.bytes).not.toBe(original);
+      } finally {
+        await storage.close();
+      }
+    });
     it(`${adapter.name}: returns an isolated verified snapshot, rejects corruption and honors tenant scope`, async () => {
       const storage = await adapter.open();
       try {

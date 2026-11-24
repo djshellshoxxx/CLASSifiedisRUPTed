@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ import { migrationStatus, runMigrations } from './migrations.ts';
 import { defineRepo, type Page } from './repo.ts';
 import { writeScope } from './scope.ts';
 import { openSqliteStorage } from './sqlite.ts';
+import { KERNEL_SQL_MIGRATIONS, SCHEMA_MIGRATIONS_DDL } from './sqlite-schema.ts';
 import { createMemoryStorage, type Storage } from './storage.ts';
 import type { StoredRecord, Tx } from './tx.ts';
 
@@ -120,6 +122,42 @@ describe('SQLite relay adapter (PS-119)', () => {
     const owned = await target.read((tx) => scope(tx).repo(note).query({ where: { owner: 'o1' }, limit: 500 }));
     expect(owned.ok && owned.value.items).toHaveLength(40);
     await target.close();
+  });
+
+  it('opens the previous kernel schema without inventing lineage and persists new creation markers on reopen', async () => {
+    const path = join(dir, 'previous-schema-incarnation.db');
+    const now = '2026-11-04T10:00:00.000Z';
+    const raw = new DatabaseSync(path);
+    try {
+      raw.exec(SCHEMA_MIGRATIONS_DDL);
+      const previous = KERNEL_SQL_MIGRATIONS.slice(0, 2);
+      expect(previous.map(m => m.id)).toEqual(['kernel:0001_base', 'kernel:0002_media_blobs']);
+      for (const m of previous) {
+        raw.exec(m.sql);
+        raw.prepare('INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (?, ?, ?)').run(m.id, createHash('sha256').update(m.sql).digest('hex'), now);
+      }
+      raw.prepare('INSERT INTO records (tenant, type, id, revision, data, idx1, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run('tenant-a', note.type, 'legacy', 2, JSON.stringify({ owner: 'o', text: 'old' }), 'o', now, now);
+    } finally { raw.close(); }
+    const s = openSqliteStorage({ path });
+    let marker: string | undefined;
+    try {
+      expect(await s.read(tx => tx.records.incarnation('tenant-a', note.type, 'legacy'))).toBeUndefined();
+      const legacy = await s.read(tx => scope(tx).repo(note).get('legacy'));
+      expect(legacy).toMatchObject({ revision: 2, data: { owner: 'o', text: 'old' }, createdAt: now, updatedAt: now });
+      expect((await s.transaction(tx => scope(tx).repo(note).put('legacy', { owner: 'o', text: 'edited' }, { expectedRevision: 2 }))).ok).toBe(true);
+      expect(await s.read(tx => tx.records.incarnation('tenant-a', note.type, 'legacy'))).toBeUndefined();
+      expect((await s.transaction(tx => scope(tx).repo(note).put('new', { owner: 'o', text: 'new' }, { expectedRevision: 0 }))).ok).toBe(true);
+      marker = await s.read(tx => tx.records.incarnation('tenant-a', note.type, 'new'));
+      expect(marker).toMatch(/^[A-Za-z0-9_-]{21}[AQgw]$/);
+    } finally { await s.close(); }
+    const reopened = openSqliteStorage({ path });
+    try {
+      expect(await reopened.read(tx => tx.records.incarnation('tenant-a', note.type, 'new'))).toBe(marker);
+      expect(await reopened.read(tx => tx.records.incarnation('tenant-a', note.type, 'legacy'))).toBeUndefined();
+      const found = await reopened.read(tx => scope(tx).repo(note).query({ where: { owner: 'o' }, limit: 10 }));
+      expect(found.ok && found.value.items.map(x => x.id).sort()).toEqual(['legacy', 'new']);
+      expect(await reopened.read(tx => tx.migrations.list().map(m => m.id))).toEqual(['kernel:0001_base', 'kernel:0002_media_blobs', 'kernel:0003_record_incarnation']);
+    } finally { await reopened.close(); }
   });
 
   it('TEST-PS-119-09.T14 migrations are forward-only and recorded once; checksum drift stops startup', async () => {

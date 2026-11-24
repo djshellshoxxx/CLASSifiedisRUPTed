@@ -140,11 +140,38 @@ describe('encrypted domain persistence', () => {
     finally { spy.mockRestore(); }
     expect(await session.storage.read(tx => tx.records.get(session.principal, 'test.secret', 'failed'))).toBeUndefined();
     expect((await session.storage.transaction(tx => tx.records.put(put(session.principal, 'kept')))).ok).toBe(true);
+    const originalMarker = await session.storage.read(tx => tx.records.incarnation(session.principal, 'test.secret', 'kept'));
+    expect(originalMarker).toMatch(/^[A-Za-z0-9_-]{21}[AQgw]$/);
+    const persistedBefore = await rows(indexedDB, 'rollback');
+    expect(JSON.stringify(persistedBefore)).not.toContain(originalMarker!);
+    // Encryption can succeed while opening the durable write transaction fails.
+    // A rejected delete/recreate must not publish the replacement incarnation.
+    const originalTransaction = FakeDatabase.prototype.transaction;
+    const writeFailure = vi.spyOn(FakeDatabase.prototype, 'transaction').mockImplementation(function (this: IDBDatabase, ...args: Parameters<typeof originalTransaction>) {
+      if (args[1] === 'readwrite') throw new DOMException('injected durable write failure', 'QuotaExceededError');
+      return originalTransaction.apply(this, args);
+    });
+    try {
+      await expect(session.storage.transaction(tx => {
+        const removed = tx.records.remove(session.principal, 'test.secret', 'kept', 1);
+        if (!removed.ok) throw new Error('Fixture removal failed');
+        const recreated = tx.records.put(put(session.principal, 'kept', 'replacement'));
+        if (!recreated.ok) throw new Error('Fixture recreation failed');
+        expect(tx.records.incarnation(session.principal, 'test.secret', 'kept')).not.toBe(originalMarker);
+        return recreated;
+      })).rejects.toThrow('injected durable write failure');
+    } finally { writeFailure.mockRestore(); }
+    expect(await rows(indexedDB, 'rollback')).toEqual(persistedBefore);
+    expect(await session.storage.read(tx => tx.records.incarnation(session.principal, 'test.secret', 'kept'))).toBe(originalMarker);
+    expect(await session.storage.read(tx => tx.records.get(session.principal, 'test.secret', 'kept')?.data)).toEqual({ text: 'secret' });
     await session.lock();
     const reopened = await openVault({ name: 'rollback', indexedDB });
     const unlocked = await reopened.unlock(passphrase);
     expect(await unlocked.storage.read(tx => tx.records.get(unlocked.principal, 'test.secret', 'failed'))).toBeUndefined();
     expect(await unlocked.storage.read(tx => tx.records.get(unlocked.principal, 'test.secret', 'kept')?.revision)).toBe(1);
+    expect(await unlocked.storage.read(tx => tx.records.incarnation(unlocked.principal, 'test.secret', 'failed'))).toBeUndefined();
+    expect(await unlocked.storage.read(tx => tx.records.incarnation(unlocked.principal, 'test.secret', 'kept'))).toBe(originalMarker);
+    expect(await unlocked.storage.read(tx => tx.records.get(unlocked.principal, 'test.secret', 'kept')?.data)).toEqual({ text: 'secret' });
     await unlocked.lock();
   }, 30000);
 

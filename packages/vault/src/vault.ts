@@ -554,15 +554,20 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
                   const found = tx.blobs.get(identity.principal, ref);
                   if (!found) throw new Error('Attachment manifest references missing bytes');
                   const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders, bytes: sourceBytes } = found;
-                  if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
+                  if (storedRef !== ref
                     || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-                    || sourceBytes.byteLength !== size || size > MAX_VERIFIED_BLOB_BATCH_BYTES - totalBytes
+                    || size > MAX_VERIFIED_BLOB_BATCH_BYTES - totalBytes
                     || (storage.kind === 'sqlite' && privacy !== 'P0' && encrypted !== true)) {
                     throw new Error('Attachment manifest byte limit or integrity failure');
                   }
+                  // Use the same intrinsic-length and fixed-allocation admission
+                  // as import; the signed size and actual view must agree before
+                  // allocating the detached snapshot.
+                  const bytes = copyAttachmentBatchMember(sourceBytes, size,
+                    'Attachment manifest byte limit or integrity failure');
                   totalBytes += size;
                   blobs.set(ref, { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders,
-                    bytes: new Uint8Array(sourceBytes) });
+                    bytes });
                 }
               }
               links += count;

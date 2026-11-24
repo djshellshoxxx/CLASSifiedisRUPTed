@@ -1,0 +1,221 @@
+{
+  "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+  "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+  "checks": [
+    {
+      "name": "future-codec",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/integration/production-future-codec-rejection.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g16-final/future-codec.json"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:54:13.543616+00:00",
+      "duration_seconds": 14.547,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 103,
+      "log_sha256": "f1132fe2dc18595484cd5c8ef6d44bdb57ec73a83776778534c2701f4b2ade65"
+    },
+    {
+      "name": "typecheck",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.json",
+        "--noEmit"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:54:28.100303+00:00",
+      "duration_seconds": 15.258,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "spec",
+      "command": [
+        "node",
+        "tools/specgen/specgen.mjs",
+        "check"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:54:43.369297+00:00",
+      "duration_seconds": 1.615,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 48,
+      "log_sha256": "8b9ba7ae8d9683b9b5fb588f2ab3c07b905c848a93a045c538eaf902ab6ea865"
+    },
+    {
+      "name": "deps",
+      "command": [
+        "node",
+        "tools/deps/deps.mjs"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:54:45.001192+00:00",
+      "duration_seconds": 0.167,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 27,
+      "log_sha256": "18ccefde637fed45e661c7a82351c243d90de5057a27cb8012b80148037554ae"
+    },
+    {
+      "name": "registry",
+      "command": [
+        "node",
+        "packages/platform/scripts/gen-registry.mjs",
+        "--check",
+        "--strict"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:54:45.176832+00:00",
+      "duration_seconds": 1.032,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 173,
+      "log_sha256": "c3b6ff7f417c596b49533c67761aa3af268d00dba10b74bdff9c81a9fcf0b05d"
+    },
+    {
+      "name": "tooling",
+      "command": [
+        "node",
+        "--test",
+        "tests/tooling/ci-plan.test.mjs",
+        "tests/tooling/feature-registry.test.mjs",
+        "tests/tooling/status.test.mjs",
+        "tests/tooling/trace.test.mjs"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:54:46.218685+00:00",
+      "duration_seconds": 4.964,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 2523,
+      "log_sha256": "7619996067033096c768b52842bf2cd9e61cbc2daec5522ff1a077d42a6761bc"
+    },
+    {
+      "name": "cli",
+      "command": [
+        "node",
+        "--test",
+        "tests/cli/listings.test.mjs",
+        "tests/cli/public-nested-assets.test.mjs",
+        "tests/cli/public-symlink.test.mjs",
+        "tests/cli/records.test.mjs",
+        "tests/cli/serviceworker.test.mjs",
+        "tests/cli/setup.test.mjs"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:54:51.193911+00:00",
+      "duration_seconds": 25.585,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 4930,
+      "log_sha256": "72a4e8cd9b63eb78b957ac7b25dd56a97bf3ca04cec499e9fa97d8cb44de760c"
+    },
+    {
+      "name": "setup",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "setup",
+        "--non-interactive"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:55:16.790971+00:00",
+      "duration_seconds": 0.115,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 63,
+      "log_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939"
+    },
+    {
+      "name": "build",
+      "command": [
+        "node",
+        "tools/cli/classrup.mjs",
+        "build"
+      ],
+      "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+      "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+      "started_at": "2026-11-20T16:55:16.918576+00:00",
+      "duration_seconds": 0.468,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 53,
+      "log_sha256": "e3448c1899976f8e0d24f1ec0bbddb5f9ddb26eb1de0a5f9f2aa6183ceb3df60"
+    }
+  ]
+}

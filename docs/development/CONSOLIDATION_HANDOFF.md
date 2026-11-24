@@ -1,11 +1,26 @@
 # Consolidation completion and provenance
 
-## New owner-directed continuation
+The [combined vault and PWA handoff](cycles/20261124-combined-vault-recovery/HANDOFF.md)
+records the current integration candidate, its source branches and its verification.
+
+## Earlier PWA and restore-rejection consolidation
 
 The owner subsequently requested continuing incomplete features and successive
-fresh code, bug and defensive security reviews. The [recovery consolidation handoff](cycles/20261120-recovery-consolidation/HANDOFF.md)
-is the current continuation record. It supersedes the finite-task stop direction
+fresh code, bug and defensive security reviews. The [PWA and restore-rejection consolidation](cycles/20261120-pwa-recovery-consolidation/HANDOFF.md)
+records that phase. Its [publication checkpoint](cycles/20261120-pwa-recovery-consolidation/PUBLICATION.md)
+records draft PR #72, exact source preservation and the pending hosted gates.
+It supersedes the finite-task stop direction
 below for this newly authorized work. Existing automation settings are unchanged.
+
+That candidate combines [PR #70](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/70)'s PWA attachment-exclusion diagnostic with
+[PR #71](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/71)'s persisted
+restore-rejection proof. Both published histories and all contributed source
+blobs remain intact. Three assertions extend the existing browser coverage
+journey; the current local selection passes 30 integration cases, TypeScript,
+static checks, 27 tooling tests and 46 CLI tests. Native-browser execution and
+current-head hosted qualification remain pending. PR #69's full-run failures
+and pending entries remain preserved in the
+[parent handoff](cycles/20261120-recovery-consolidation/HANDOFF.md).
 
 PR #63 merged as `449a619f1ae7b66cb42d9cab43dd5493bfe42c2e`, preserving the
 PR #58/#59/#60/#61/#62 recovery histories. Actual main-push Alpha run

@@ -20,6 +20,59 @@ const futureCodec: BackupCodec = {
   },
 };
 
+type PersistedRows = Record<string, Array<readonly [IDBValidKey, unknown]>>;
+
+function readRequest<T>(request: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB observation failed'));
+  });
+}
+
+async function persistedRows(factory: IDBFactory, name: string): Promise<PersistedRows> {
+  // A raw observer must not claim the writer fence or create a misspelled database.
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = factory.open('classrup-vault:' + name);
+    let unexpectedUpgrade = false;
+    request.onupgradeneeded = () => {
+      unexpectedUpgrade = true;
+      const opened = request.result;
+      request.transaction?.abort();
+      opened.close();
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(unexpectedUpgrade
+      ? new Error('Expected an existing vault database for observation')
+      : request.error ?? new Error('IndexedDB observation open failed'));
+  });
+  try {
+    const tables = Array.from(db.objectStoreNames);
+    const tx = db.transaction(tables, 'readonly');
+    const completed = new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('IndexedDB observation failed'));
+      tx.onabort = () => reject(tx.error ?? new Error('IndexedDB observation aborted'));
+    });
+    const reading = Promise.all(tables.map(async table => {
+      const store = tx.objectStore(table);
+      const [keys, values] = await Promise.all([
+        readRequest(store.getAllKeys()), readRequest(store.getAll()),
+      ]);
+      if (keys.length !== values.length) throw new Error('Inconsistent IndexedDB observation');
+      return [table, keys.map((key, index) => [key, values[index]] as const)] as const;
+    }));
+    const [entries] = await Promise.all([reading, completed]);
+    return Object.fromEntries(entries);
+  } finally { db.close(); }
+}
+
+function withoutWriterFence(rows: PersistedRows): PersistedRows {
+  // Reopening legitimately replaces only this operational token, not stored payload.
+  return Object.fromEntries(Object.entries(rows).map(([table, entries]) => [
+    table, table === 'meta' ? entries.filter(([key]) => key !== 'writer') : entries,
+  ]));
+}
+
 describe('production backup compatibility with unknown future record types', () => {
   it('rejects a valid mixed future/current v1 backup without installing its supported records', async () => {
     const indexedDB = new IDBFactory();
@@ -110,22 +163,31 @@ describe('production backup compatibility with unknown future record types', () 
 
     // The older production registry must reject the *same* valid backup at
     // signed manifest scope admission, before installing even the known archive.
+    const destinationName = 'future-codec-destination';
     const destination = await openVault({
-      name: 'future-codec-destination', indexedDB, codecs: productionBackupCodecs,
+      name: destinationName, indexedDB, codecs: productionBackupCodecs,
     });
-    try {
-      await expect(destination.restoreBackup(exported.backup, passphrase))
-        .rejects.toThrow('Invalid or unsupported backup scope');
-      expect(await destination.isInitialized()).toBe(false);
-    } finally {
-      await destination.close();
-    }
+    const beforeRejection = await (async () => {
+      try {
+        const before = await persistedRows(indexedDB, destinationName);
+        expect(before.records).toEqual([]);
+        await expect(destination.restoreBackup(exported.backup, passphrase))
+          .rejects.toThrow('Invalid or unsupported backup scope');
+        expect(await destination.isInitialized()).toBe(false);
+        expect(await persistedRows(indexedDB, destinationName)).toEqual(before);
+        return before;
+      } finally {
+        await destination.close();
+      }
+    })();
 
     const reopened = await openVault({
-      name: 'future-codec-destination', indexedDB, codecs: productionBackupCodecs,
+      name: destinationName, indexedDB, codecs: productionBackupCodecs,
     });
     try {
       expect(await reopened.isInitialized()).toBe(false);
+      expect(withoutWriterFence(await persistedRows(indexedDB, destinationName)))
+        .toEqual(withoutWriterFence(beforeRejection));
     } finally {
       await reopened.close();
     }
@@ -151,7 +213,7 @@ describe('production backup compatibility with unknown future record types', () 
       expect(coverage.recordLimitExceeded).toBe(false);
     };
     const retry = await openVault({
-      name: 'future-codec-destination', indexedDB, codecs: futureRegistry,
+      name: destinationName, indexedDB, codecs: futureRegistry,
     });
     expect(await retry.isInitialized()).toBe(false);
     const retried = await retry.restoreBackup(exported.backup, passphrase);
@@ -160,9 +222,11 @@ describe('production backup compatibility with unknown future record types', () 
     } finally {
       await retried.lock();
     }
+    // The same observer must see the real records installed by the compatible retry.
+    expect((await persistedRows(indexedDB, destinationName)).records?.length).toBeGreaterThan(0);
 
     const retryReopen = await openVault({
-      name: 'future-codec-destination', indexedDB, codecs: futureRegistry,
+      name: destinationName, indexedDB, codecs: futureRegistry,
     });
     const stable = await retryReopen.unlock(passphrase);
     try {

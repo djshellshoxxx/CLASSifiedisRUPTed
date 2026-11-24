@@ -1,0 +1,7 @@
+# Owner-authenticated attachment manifest qualification — 2026-11-23
+
+- Parent #139 exact source `eeed9582261ecf53e0123e555809645169fd9491`; Alpha [45160141217](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/45160141217) **completed success** (plan, full domain/static/typecheck/build/browser); CLI [45160141482](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/45160141482) **completed success** (plan, Ubuntu Node 22.18.0 and 24.x). Those qualify **parent only**.
+- Child source includes production codec hook, signed/sealed manifest producer, and proposed integration tests for memory and encrypted IndexedDB reopen. **No local product tests or TypeScript/build run:** GitHub DNS blocked local clone; GitHub-hosted qualification must be inspected after publication. Do not characterize test source or static inspection as execution.
+- No independent code-audit, normal bug-hunt or defensive-security workers completed; zero submitted reviews/approvals at parent inspection.
+- No change to signed v1 backup, signing identities, KDF/crypto parameters, per-blob 5 MiB, 32-ref or 20 MiB aggregate limits, 10,000-record cap, or test timeouts.
+- Preserve historical failures/incomplete records, including #57 local complete domain runner exit 137 and #56 cancelled separate main-push Alpha 44658477772 (CLI 44658477821 passed). Exact child hosted checks, full reviews and ancestor integration are pending.

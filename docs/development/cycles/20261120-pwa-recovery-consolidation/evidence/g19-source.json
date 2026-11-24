@@ -1,0 +1,21 @@
+{
+  "source": "9cf6c56c9b65a421a95676f89e9fcc3800bca573",
+  "tree": "f506c9282299b034cef6b540017e49ffeac88362",
+  "merge_commit": "28b2c624d5b92056ddc066636501d3cae9544ec9",
+  "merge_parents": [
+    "b89e7047ea352a3d47703b134c6c12a7ea589a04",
+    "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9"
+  ],
+  "pr70_source": "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9",
+  "pr71_source": "b89e7047ea352a3d47703b134c6c12a7ea589a04",
+  "pr70_exact_paths": {
+    "apps/pwa/src/backup-coverage.ts": "4e7a86ded78e8a0940fa8bb4b6d959e7a7d33a86",
+    "apps/pwa/src/main.ts": "2e9679cc47ddc59891cec1db7ac1de2ffec532e5",
+    "tests/integration/backup-coverage.test.ts": "655e0778ee7b5a4f0b1caf1d63dbf7099c83252f",
+    "docs/development/cycles/20261120-pwa-attachment-diagnostic/HANDOFF.md": "afa4f4be9015631119bcc9b3455efb0054c23fb4"
+  },
+  "pr71_exact_test_blob": "ebc626830218ec8a05f2ed1669530be4134bb441",
+  "new_browser_assertions": 3,
+  "browser_source_sha256": "9216b7de9fc17979de7244a1a2cbe60a4a5503f6d063eb1e12ec2b56759f10e3",
+  "lock_sha256": "d72caa3b730141025fcbb083eedea8d5c1bf6774c5f2b7ed3e8e145f10308773"
+}

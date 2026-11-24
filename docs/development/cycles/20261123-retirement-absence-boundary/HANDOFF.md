@@ -1,0 +1,26 @@
+# ClassRup: attachment retirement authority boundary — 2026-11-23
+
+## Source and coordination
+Fresh census returned 93 open PRs. #57 and #63 are merged (mixed production-codec recovery already completed). #152 at 1136069ba8c8cf8f4eb708c53afb518c679befb0 has two complementary draft children: #153 07e3aa28e6bf66b2760950038f6746fa85079d7e exercises the raw IDB adapter; #154 d9e99ca3d91ebe22033b1162a1374ae942d4c149 exercises the actual authenticated importer, encrypted vault and durable reopen BEFORE retry. #154's coordination comment 7117242654 identifies both scopes. Do not duplicate or overwrite either active branch. This isolated child of frozen #154 addresses the next distinct authority boundary; code commits cceff464daa2f181f90dfc4c3fb2606a45ed14d3 and 526fcc65d7f9d7765bd7ab77d455392de0a93af6. Initial and directly relevant lifecycle handoffs and remaining work inspected; exhaustive historical reread incomplete.
+
+## Qualification checkpoint
+- #152 Alpha 45283496935 and CLI 45283496989 previously completed success.
+- #153 Alpha 45290606077: plan and domain jobs now completed success; typecheck/static/tooling/domain/build/browser journeys succeeded. CLI 45290612168: plan passed, Node 22 and 24 queued at observation.
+- #154 Alpha 45290654098 completed success; plan and domain/typecheck/static/tooling/build/browser steps passed. CLI 45290654083: plan passed, Node 22 queued, Node 24 in progress at observation. No assertion counts inferred from step success.
+- Both #153 and #154 have zero submitted reviews. Preserve #150 Alpha 45264062462 cancellation and CLI success, #56 main-push Alpha cancellation and CLI success, #57 local full-domain exit 137/no report. No unchanged reruns.
+- Current local git ls-remote exit 128: Could not resolve host: github.com. No local worktree or executed new product tests. GitHub isolated branch publication only. No separate engineering worker execution available; no review approval or exhausted credits claimed.
+
+## New bounded regression
+tests/integration/attachment-retirement-authority-boundary.test.ts seeds three real records with a shared P0 ref, explicitly removes one parent and updates another to zero refs, then creates a normal encrypted v1 backup and signed attachment manifest. Restore destination, seed stale managed and unmanaged holders and one separately held blob absent from the manifest. Require rejection and unchanged bytes/coverage for deleted-parent, zero-ref parent, and proposed final-holder retirement. A positive control imports the same valid manifest without retirement, registers the current owner, preserves all old labels and the last-held blob, and probes exact holder identities using an intentionally rolled-back transaction.
+
+Source-confirmed boundary: both export and importer include only nonempty-ref parents in the authenticated manifest; absence is NOT a tombstone or deletion authorization. Existing non-final retirement requires the retiring parent still present in that signed set and another current canonical owner of the ref. This is a test-only acceptance of the existing fail-closed boundary, not a production defect repair or implemented deletion feature. Do not change v1 manifest or backup format, signing identities, cryptography, caps or timeout.
+
+## Next contract (proposal, not implemented or authorized deletion)
+A separate authenticated deleted-parent/zero-ref transition must bind owner principal, canonical parent type/id, old ref, prior/current revision and authenticated deletion/transition evidence. Verify the authority and current state inside the same destination transaction, reject stale/replayed or incompatible evidence, and never infer authorization from mere absence in a manifest or local store. Non-final retirement requires another verified canonical reference and registration of all such holders before detachment. Final-holder purge requires an explicit retention/hold/evidence policy and complete canonical scope including missing registrations; default retain and never shred keys based solely on holder counts. Keep unknown holders untouched. Decide whether a distinct signed versioned envelope is needed; preserve v1 compatibility. Private destination key handling remains separate. No production or destructive implementation in this child.
+
+## Fresh successor assignments — not executed independently
+- Code audit: exact remote child, typecheck, test result unions, verify source removal/update and destination membership oracles; inspect sibling coverage, integrate only after separate reviews/qualification.
+- Functional bug hunt: execute targeted new regression serially, both #153 and #154 tests and prior memory rollback; distinguish fake-IDB from native browser interruption. Preserve failures, exact source, assertion counts, commands and limits.
+- Defensive security review: review deletion authority/anti-replay, complete reference coverage, retention and key lifecycle design; no interrupted reproduction follow-ups. Record findings and next instructions. No self-review counts as independent.
+
+Before integration verify current heads/trees, actual required child CI, independent reviewers, qualified ancestors, merge tree and main-push checks. No release, deployment, force push, branch deletion or paid external API. Older paused tasks unchanged.

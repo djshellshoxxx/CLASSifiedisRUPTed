@@ -449,6 +449,10 @@ describe('production barter record recovery', () => {
       identity: { principal, sign: vi.fn(async () => { throw new Error('No signing in a view fixture'); }), lock() {} },
       async lock() { await storage.close(); },
       async exportBackup() { throw new Error('No backup in a view fixture'); },
+      async exportAttachmentManifest() { throw new Error('No attachment manifest in a view fixture'); },
+      async verifyAttachmentManifestOwners() { throw new Error('No attachment reconciliation in a view fixture'); },
+      async verifyAttachmentZeroRefTransition() { throw new Error('No attachment transitions in a view fixture'); },
+      async importPublicAttachmentBatch() { throw new Error('No attachment reconciliation in a view fixture'); },
       async backupCoverage() { throw new Error('No coverage in a view fixture'); },
       async attachmentCoverage() { throw new Error('No attachment coverage in a view fixture'); },
     };

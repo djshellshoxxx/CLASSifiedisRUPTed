@@ -7,6 +7,24 @@ const passphrase = 'backup coverage test passphrase';
 const note = defineRepo({ type: 'test.note', schema: z.strictObject({ text: z.string() }), indexes: {} });
 
 describe('alpha backup coverage', () => {
+
+  it('rejects empty or malformed registered codec names while preserving normal registries', async () => {
+    const valid = backupCodec(note);
+    for (const invalidType of ['', null, 0] as readonly unknown[]) {
+      const storage = createMemoryStorage();
+      expect(() => vaultFromStorage(storage, [{ ...valid, type: invalidType as string }]))
+        .toThrow('Invalid backup codecs');
+      await storage.close();
+    }
+    const vault = vaultFromStorage(createMemoryStorage(), [valid]);
+    const session = await vault.create(passphrase);
+    try {
+      expect((await session.backupCoverage()).registeredRecordTypes).toEqual([note.type]);
+    } finally {
+      await session.lock();
+    }
+  }, 30000);
+
   it('blocks unsupported records instead of silently omitting them from an otherwise valid backup', async () => {
     const vault = vaultFromStorage(createMemoryStorage(), [backupCodec(note)]);
     const session = await vault.create(passphrase);
@@ -89,3 +107,38 @@ describe('alpha backup coverage', () => {
     await unsupported.close();
   }, 30000);
 });
+
+it('provides a single-session record and attachment preview without changing the v1 archive contract', async () => {
+  const vault = vaultFromStorage(createMemoryStorage(), [backupCodec(note)]);
+  const session = await vault.create(passphrase);
+  try {
+    const stored = await session.storage.transaction(async tx => {
+      const blob = await tx.blobs.put({
+        tenant: session.principal, bytes: new Uint8Array([1, 2, 3]),
+        contentType: 'image/png', privacy: 'P0', encrypted: false, now: 0,
+      });
+      if (!blob.ok) return blob;
+      tx.blobs.attach(session.principal, blob.value.ref, 'listing/preview');
+      return tx.records.put({
+        tenant: session.principal, type: note.type, id: 'preview',
+        data: { text: 'not displayed in inspection' },
+        idx: [null, null, null, null], expectedRevision: 0, now: 0,
+      });
+    });
+    expect(stored.ok).toBe(true);
+    const inspected = await session.backupInspection!();
+    expect(inspected.records).toMatchObject({
+      recordTypes: [{ type: note.type, count: 1 }], recordCount: 1,
+      unsupportedRecordTypes: [], typeLimitExceeded: false,
+    });
+    expect(inspected.attachments).toEqual({
+      referencedBlobs: 1, missingBlobs: 0, excludedStoredReferences: 1,
+      holderRows: 1, limitExceeded: false, holderAuthorityVerified: false,
+      includedInV1Backup: false,
+    });
+    expect(JSON.stringify(inspected)).not.toMatch(/not displayed in inspection|listing\/preview|blob:sha256-/);
+    const sealed = await session.exportBackup(passphrase);
+    expect(sealed.format).toBe('classrup.sealed/v1');
+  } finally { await session.lock(); }
+  await expect(session.backupInspection!()).rejects.toThrow(/Vault locked|Vault closed/);
+}, 30000);

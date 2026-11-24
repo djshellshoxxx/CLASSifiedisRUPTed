@@ -1,0 +1,30 @@
+{
+  "source": "9cf6c56c9b65a421a95676f89e9fcc3800bca573",
+  "tree": "f506c9282299b034cef6b540017e49ffeac88362",
+  "checks": [
+    {
+      "name": "install",
+      "command": [
+        "corepack",
+        "pnpm",
+        "install",
+        "--offline",
+        "--frozen-lockfile"
+      ],
+      "source": "9cf6c56c9b65a421a95676f89e9fcc3800bca573",
+      "tree": "f506c9282299b034cef6b540017e49ffeac88362",
+      "started_at": "2026-11-20T17:17:29.892939+00:00",
+      "duration_seconds": 1.178,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 1458,
+      "log_sha256": "875881c5b2cb0b75ed25ef1b43bfefc0dca8db9bb590dcc4a3050a36fe119f52"
+    }
+  ]
+}

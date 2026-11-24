@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryStorage, defineRepo, z, ok } from '@classrup/kernel';
-import { vaultFromStorage, backupCodec, openVault } from './vault.ts';
+import { vaultFromStorage, backupCodec, openVault, type BackupCodec } from './vault.ts';
 import { IDBFactory } from 'fake-indexeddb';
 import { VaultUnlockRateLimitError } from './session-policy.ts';
 
@@ -9,6 +9,86 @@ const note = defineRepo({ type: 'test.note', schema: z.strictObject({ text: z.st
 const codecs = [backupCodec(note)];
 
 describe('vault composition', () => {
+  it('releases the IndexedDB writer lease when codec registration rejects before a vault opens', async () => {
+    const indexedDB = new IDBFactory();
+    let occupied = false;
+    const locks = {
+      async request(_name: string, _options: { readonly mode: 'exclusive'; readonly ifAvailable: true },
+        callback: (lock: object | null) => Promise<void>): Promise<void> {
+        if (occupied) { await callback(null); return; }
+        occupied = true;
+        try { await callback({}); } finally { occupied = false; }
+      },
+    };
+    const name = 'registration-failure-cleanup';
+    const invalidRegistries = [
+      [{ ...backupCodec(note), type: '' }],
+      [backupCodec(note), backupCodec(note)],
+    ];
+    for (const invalid of invalidRegistries) {
+      await expect(openVault({ name, indexedDB, locks, codecs: invalid })).rejects.toThrow('Invalid backup codecs');
+      const reopened = await openVault({ name, indexedDB, locks, codecs });
+      try { expect(await reopened.isInitialized()).toBe(false); }
+      finally { await reopened.close(); }
+    }
+    expect(occupied).toBe(false);
+  }, 30000);
+  it('never supersedes an active writer when malformed codecs are rejected without Web Locks', async () => {
+    const indexedDB = new IDBFactory();
+    // Model a browser without exclusive Web Locks: competing opens receive a lock,
+    // so only the IndexedDB writer token protects the existing session.
+    const locks = {
+      request(_name: string, _options: { readonly mode: 'exclusive'; readonly ifAvailable: true },
+        callback: (lock: object | null) => Promise<void>): Promise<void> { return callback({}); },
+    };
+    const name = 'registry-early-admission-writer';
+    const original = await openVault({ name, indexedDB, locks, codecs });
+    const session = await original.create(passphrase);
+    try {
+      const throwingGetter = Object.defineProperty({ ...backupCodec(note) }, 'parse', {
+        get(): never { throw new Error('internal codec secret must not leak'); },
+      }) as BackupCodec;
+      // An array can shadow .map(); admission must inspect its actual elements.
+      const maskedInvalidCodec = [{ ...backupCodec(note), type: '' }];
+      Object.defineProperty(maskedInvalidCodec, 'map', { value: () => [] });
+      // Array.prototype.map invokes @@species: a caller-supplied constructor can
+      // suppress writes and falsely produce an empty, apparently valid registry.
+      const speciesMaskedInvalid = [{ ...backupCodec(note), type: '' }];
+      Object.defineProperty(speciesMaskedInvalid, 'constructor', {
+        value: { [Symbol.species]: function () {
+          return new Proxy([], { defineProperty: () => true });
+        } },
+      });
+      // Sparse arrays must not silently skip a missing codec element.
+      const sparseInvalid = new Array<BackupCodec>(1);
+      const invalidRegistries: readonly (readonly BackupCodec[])[] = [
+        [{ ...backupCodec(note), type: '' }],
+        [backupCodec(note), backupCodec(note)],
+        [null as unknown as BackupCodec],
+        [{ ...backupCodec(note), parse: 0 } as unknown as BackupCodec],
+        [{ ...backupCodec(note), indexes: false } as unknown as BackupCodec],
+        [{ ...backupCodec(note), validate: 'bad' } as unknown as BackupCodec],
+        [{ ...backupCodec(note), restoreData: null } as unknown as BackupCodec],
+        [{ ...backupCodec(note), recordId: [] } as unknown as BackupCodec],
+        [{ ...backupCodec(note), attachmentRefs: 'bad' } as unknown as BackupCodec],
+        [throwingGetter],
+        maskedInvalidCodec,
+        speciesMaskedInvalid,
+        sparseInvalid,
+      ];
+      for (const [index, invalid] of invalidRegistries.entries()) {
+        expect(() => vaultFromStorage(createMemoryStorage(), invalid)).toThrow(/^Invalid backup codecs$/);
+        await expect(openVault({ name, indexedDB, locks, codecs: invalid })).rejects.toThrow(/^Invalid backup codecs$/);
+        const value = `value-${index}`;
+        const result = await session.storage.transaction(tx => tx.records.put({
+          tenant: session.principal, type: note.type, id: `kept-${index}`,
+          data: { text: value }, idx: [value, null, null, null], expectedRevision: 0, now: Date.now(),
+        }));
+        expect(result.ok).toBe(true);
+      }
+      expect(await session.storage.read(tx => tx.records.get(session.principal, note.type, 'kept-1')?.data)).toEqual({ text: 'value-1' });
+    } finally { await session.lock(); }
+  }, 30000);
   it('retains failed-unlock backoff when the application closes and reopens the same vault', async () => {
     const indexedDB = new IDBFactory();
     const original = await openVault({ name: 'unlock-backoff', indexedDB });

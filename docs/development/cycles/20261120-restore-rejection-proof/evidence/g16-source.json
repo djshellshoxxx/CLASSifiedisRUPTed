@@ -1,0 +1,8 @@
+{
+  "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+  "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+  "base": "6d4f6ea7ba9bcf886ae69edd0f167a621308d4b2",
+  "changed_file": "tests/integration/production-future-codec-rejection.test.ts",
+  "test_blob": "ebc626830218ec8a05f2ed1669530be4134bb441",
+  "summary": "[codex/classrup-restore-rejection-proof-20261120 53aa9fe9] test: prove rejected future-codec restores leave durable rows unchanged"
+}

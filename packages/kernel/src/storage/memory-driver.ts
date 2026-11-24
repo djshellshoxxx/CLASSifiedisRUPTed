@@ -50,7 +50,8 @@ interface Journal {
   readonly undo: Array<{ table: TableName; key: string; before: Row | undefined }>;
 }
 
-class MemoryState {
+/** Internal memory working-set type; exported for focused index invariant tests, not via the package entrypoint. */
+export class MemoryState {
   readonly tables = new Map<TableName, Map<string, Row>>(TABLES.map((t) => [t, new Map()]));
   readonly groups = new Map<string, Set<string>>();
   /** Tenant index for bounded attachment coverage; maintained with the journal. */
@@ -95,7 +96,12 @@ class MemoryState {
 
   private ungroup(table: TableName, key: string, row: Row): void {
     const g = groupOf(table, row);
-    if (g !== undefined) this.groups.get(k(table, g))?.delete(key);
+    if (g !== undefined) {
+      const groupId = k(table, g);
+      const keys = this.groups.get(groupId);
+      keys?.delete(key);
+      if (keys?.size === 0) this.groups.delete(groupId);
+    }
     if (table === 'blob_refs') {
       const tenant = (row as BlobRefRow).tenant;
       const keys = this.blobRefKeysByTenant.get(tenant);
@@ -340,13 +346,20 @@ export interface MemoryDriverOptions {
 }
 
 function loadSnapshot(state: MemoryState, snapshot: Snapshot | undefined): void {
-  for (const t of TABLES) for (const [key, row] of snapshot?.[t] ?? []) state.write(t, key, row);
+  // IndexedDB provides detached rows, but other callers can retain and mutate
+  // supplied snapshots. Never let those references corrupt grouped indexes or bytes.
+  for (const t of TABLES) for (const [key, row] of snapshot?.[t] ?? []) state.write(t, key, structuredClone(row));
 }
 
 function changesOf(state: MemoryState, journal: Journal): Change[] {
-  const seen = new Map<string, Change>();
-  for (const u of journal.undo) seen.set(k(u.table, u.key), { table: u.table, key: u.key, row: state.table(u.table).get(u.key) });
-  return [...seen.values()];
+  const seen = new Map<string, { table: TableName; key: string }>();
+  for (const u of journal.undo) seen.set(k(u.table, u.key), { table: u.table, key: u.key });
+  // Copy only the final value for each distinct key. Persistence callbacks
+  // must not mutate live indexed rows or binary bytes while commit is in flight.
+  return [...seen.values()].map(({ table, key }) => {
+    const row = state.table(table).get(key);
+    return { table, key, row: row === undefined ? undefined : structuredClone(row) };
+  });
 }
 
 function undo(state: MemoryState, journal: Journal): void {

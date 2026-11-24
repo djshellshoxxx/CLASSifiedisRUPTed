@@ -112,8 +112,12 @@ describe('vault composition', () => {
     const principal = session.principal;
     const result = await session.storage.transaction(tx => tx.records.put({ tenant: principal, type: note.type, id: 'one', data: { text: 'private note' }, idx: ['private note', null, null, null], expectedRevision: 0, now: Date.now() }));
     expect(result.ok).toBe(true);
+    const marker = await session.storage.read(tx => tx.records.incarnation(principal, note.type, 'one'));
+    expect(marker).toMatch(/^[A-Za-z0-9_-]{21}[AQgw]$/);
+    if (result.ok) expect(result.value).not.toHaveProperty('incarnation');
     const backup = await session.exportBackup(passphrase);
     expect(JSON.stringify(backup)).not.toContain('private note');
+    expect(JSON.stringify(backup)).not.toContain(marker!);
     await session.lock();
     await expect(session.storage.read(() => undefined)).rejects.toThrow();
     await expect(session.identity.sign(new Uint8Array())).rejects.toThrow();
@@ -121,11 +125,13 @@ describe('vault composition', () => {
     const unlocked = await reopened.unlock(passphrase);
     expect(unlocked.principal).toBe(principal);
     expect(await unlocked.storage.read(tx => tx.records.get(principal, note.type, 'one')?.data)).toEqual({ text: 'private note' });
+    expect(await unlocked.storage.read(tx => tx.records.incarnation(principal, note.type, 'one'))).toBe(marker);
     await unlocked.lock();
     const destination = vaultFromStorage(createMemoryStorage(), codecs);
     const restored = await destination.restoreBackup(backup, passphrase);
     expect(restored.principal).toBe(principal);
     expect(await restored.storage.read(tx => tx.records.get(principal, note.type, 'one')?.revision)).toBe(1);
+    expect(await restored.storage.read(tx => tx.records.incarnation(principal, note.type, 'one'))).toBeUndefined();
     await expect(destination.restoreBackup(backup, passphrase)).rejects.toThrow();
     await restored.lock();
   }, 30000);

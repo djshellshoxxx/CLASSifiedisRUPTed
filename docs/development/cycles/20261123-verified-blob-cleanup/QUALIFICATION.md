@@ -1,0 +1,7 @@
+# Exact-source qualification — verification scratch-byte cleanup
+- Parent PR #144: `5ba6edc83c441cd7cb9a826b9e6e7d4ec6f5cc9a` / tree `1d999ea7bfea125cfff69b57cbb4eed042cec996`; its Alpha run 45199506579 and CLI run 45199506660 both completed successfully. These runs DO NOT qualify this candidate.
+- Child branch: `codex/classrup-verified-blob-cleanup-20261123-t28`. Its final GitHub SHA/tree and PR number are recorded in the published PR comment; verify them against the current remote ref before integration.
+- New regression source includes three targeted memory test cases for digest mismatch wipe, successful read retained output versus discarded intermediate copies, and failed later member after earlier copy. No native product tests executed locally due to DNS resolution failure; adding tests is not proof of passing.
+- Current child exact-source Alpha, CLI, browser, full domain suite and independent code-audit, bug-hunt and defensive-security reviews: pending until individually observed.
+- Former killed local full-suite exit 137 is incomplete; previous compiler failures and cancelled main-push Alpha remain historical evidence. Never change test caps, signed v1 format, identity, security constraints or use ancestor success as a substitute.
+- Draft only; no merge/deploy/release. After source qualification and independent reviews, inspect qualified ancestor chain, merge tree and separate main-push checks before integration.

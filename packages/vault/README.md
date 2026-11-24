@@ -45,20 +45,34 @@ peer evidence. The application must register every supported domain record type;
 unknown types are rejected. Indexes are regenerated from current schemas.
 
 `backupCoverage()` reports populated record types and counts for the unlocked
-principal without returning record payloads. The PWA exposes this as **Check
-backup coverage** and clears the result on lock. Export rechecks actual types in
-its own read transaction and refuses unknown types instead of silently omitting
-saved data. Coverage is bounded to 256 types and 10,000 records; the report marks
-overflow explicitly. Successful coverage does not waive schema, signature,
-passphrase or envelope-size validation. The accepted codec registry is copied
-when the vault opens, so caller mutation cannot change export coverage.
+principal without returning record payloads. Export rechecks actual types in its
+own read transaction and refuses unknown types instead of silently omitting saved
+data. Record coverage is bounded to 256 types and 10,000 records; the report marks
+overflow explicitly. Successful record coverage does not waive schema, signature,
+passphrase or envelope-size validation. The accepted codec registry is copied when
+the vault opens, so caller mutation cannot change export coverage.
+
+`attachmentCoverage()` reports distinct held references, missing blobs,
+present-but-excluded references and holder-row counts for the same principal.
+Several holder rows can name one reference. Missing means no stored blob exists
+for that reference; a present blob remains excluded from v1 backup. The separate
+10,000-holder limit makes all attachment counts unavailable (`null`) on overflow.
+Unheld blobs are outside the counts, so zero does not certify completeness. Holder
+labels are not authenticated parent-record authority. V1 excludes both attachment
+bytes and references.
+
+The PWA's **Check backup coverage** action uses `backupInspection()` to read both
+reports in one session-guarded storage snapshot. It still displays valid record
+coverage when the optional attachment diagnostic is unavailable. Adapters that only
+expose the two individual diagnostics use successive reads. The PWA clears the
+previous report before reading and clears both reports on lock.
 See [the coverage contract](../../docs/development/BACKUP_SCOPE.md).
 
 This is an explicitly scoped `classrup.vault.alpha_backup/v1` format, **not** a
 complete CTR-IOX-001 export or the 24-word recovery protocol. It excludes blobs,
-outbox/inbox, lease and delivery state. Export is bounded by the federation
-primitive's 1 MiB signed-envelope limit and 10,000 records. The preserved signing
-identity still uses the original passphrase. There is no password reset,
+blob references, outbox/inbox, lease and delivery state. Export is bounded by the
+federation primitive's 1 MiB signed-envelope limit and 10,000 records. The preserved
+signing identity still uses the original passphrase. There is no password reset,
 delegated device identity, device rotation/revocation, recovery notice or
 72-hour dispute workflow in this slice. Users must review coordination after a
 restore; a copied signing identity can create conflicting commitments.

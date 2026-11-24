@@ -1,0 +1,33 @@
+{
+  "name": "focused",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/backup-coverage.test.ts",
+    "tests/integration/attachment-reference-coverage.test.ts",
+    "tests/integration/production-future-codec-rejection.test.ts",
+    "tests/integration/production-downgrade-export.test.ts",
+    "tests/integration/production-foreign-codec-isolation.test.ts",
+    "tests/integration/vault-session.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g19-final/focused.json"
+  ],
+  "source": "9cf6c56c9b65a421a95676f89e9fcc3800bca573",
+  "tree": "f506c9282299b034cef6b540017e49ffeac88362",
+  "started_at": "2026-11-20T17:17:48.534611+00:00",
+  "duration_seconds": 47.14,
+  "timeout_seconds": 900,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 98,
+  "log_sha256": "caa39b7273e85f79e73d2d0b5d34484bba873cb787432950c6228db626da3c52"
+}

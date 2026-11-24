@@ -107,7 +107,8 @@ function jsonText(value: unknown, what: string): string {
 }
 
 function checkRevision(expected: number): void {
-  if (!Number.isInteger(expected) || expected < 0) throw new RangeError('expectedRevision must be an integer >= 0');
+  // A rounded revision above 2^53-1 is not safe for optimistic concurrency.
+  if (!Number.isSafeInteger(expected) || expected < 0) throw new RangeError('expectedRevision must be a nonnegative safe integer');
 }
 
 function casCheck(current: RecordRow | undefined, expected: number): Result<number, AppError> {
@@ -115,6 +116,17 @@ function casCheck(current: RecordRow | undefined, expected: number): Result<numb
   const currentRevision = current?.revision ?? 0;
   if (currentRevision !== expected) return err(appError('CONFLICT_REVISION', { params: { currentRevision } }));
   return ok(currentRevision);
+}
+
+function checkIndexValues(idx: IndexValues): void {
+  // Runtime callers and archive inputs can bypass TypeScript tuple typing.
+  // Require all four canonical string/null fields before any driver access.
+  if (!Array.isArray(idx) || idx.length !== 4
+    || [0, 1, 2, 3].some((slot) =>
+      !Object.prototype.hasOwnProperty.call(idx, slot)
+      || (idx[slot] !== null && typeof idx[slot] !== 'string'))) {
+    throw new TypeError('record indexes must be a four-element string/null tuple');
+  }
 }
 
 function recordStore(d: DriverTx) {
@@ -129,9 +141,15 @@ function recordStore(d: DriverTx) {
     },
     put<T = unknown>(input: PutRecordInput): Result<StoredRecord<T>, AppError> {
       checkRevision(input.expectedRevision);
+      checkIndexValues(input.idx);
       const current = d.records.get(input.tenant, input.type, input.id);
       const cas = casCheck(current, input.expectedRevision);
       if (!cas.ok) return cas;
+      // Revision increments must remain exact; MAX_SAFE_INTEGER + 1 cannot
+      // represent all adjacent revisions, even with a valid CAS input.
+      if (cas.value === Number.MAX_SAFE_INTEGER) {
+        throw new RangeError('record revision would exceed the safe integer range');
+      }
       const now = toIso(input.now);
       const row: RecordRow = {
         tenant: input.tenant,
@@ -157,6 +175,42 @@ function recordStore(d: DriverTx) {
       return ok(undefined);
     },
     query<T = unknown>(q: RecordQuery): StoredRecord<T>[] {
+      // Direct kernel callers bypass typed repository pagination's 1..500 cap.
+      // Negative SQL LIMIT values can remove the bound, while memory slicing
+      // interprets them differently. Validate before touching any adapter.
+      if (!Number.isSafeInteger(q.limit) || q.limit < 0) {
+        throw new RangeError('Record query limit must be a nonnegative safe integer');
+      }
+      // The SQLite driver interpolates index columns and comparison operators.
+      // Runtime callers can bypass the RecordQuery union types. Keep these
+      // selectors canonical across memory, IndexedDB, and SQLite before any read.
+      if (![0, 1, 2, 3, 4].includes(q.orderSlot)) {
+        throw new TypeError('Record query orderSlot must be 0..4');
+      }
+      if (q.dir !== 'asc' && q.dir !== 'desc') {
+        throw new TypeError('Record query direction must be asc or desc');
+      }
+      if (!Array.isArray(q.filters)) {
+        throw new TypeError('Record query filters must be an array');
+      }
+      for (const filter of q.filters) {
+        if (!filter || ![1, 2, 3, 4].includes(filter.slot)
+          || !['eq', 'lt', 'lte', 'gt', 'gte'].includes(filter.op)
+          || typeof filter.value !== 'string') {
+          throw new TypeError('Record query filter must have a valid slot, operator and string value');
+        }
+      }
+      if (q.after !== undefined
+        && (!q.after || typeof q.after.id !== 'string'
+          || (q.after.value !== null && typeof q.after.value !== 'string'))) {
+        throw new TypeError('Record query cursor must have a string id and string/null value');
+      }
+      // Indexed orders contain only non-null index values. SQLite comparisons
+      // against a null cursor evaluate to UNKNOWN, while memory treats null
+      // as an empty string. Reject the inconsistent cursor at the boundary.
+      if (q.orderSlot !== 0 && q.after !== undefined && q.after.value === null) {
+        throw new TypeError('Indexed record query cursor must have a string value');
+      }
       return d.records.query(q).map((r) => toStored<T>(r));
     },
     /**
@@ -164,9 +218,24 @@ function recordStore(d: DriverTx) {
      * absent ⇒ written; identical ⇒ skipped; different ⇒ CONFLICT_REVISION.
      */
     restore(rec: StoredRecord, idx: IndexValues): Result<'restored' | 'identical', AppError> {
+      checkIndexValues(idx);
+      // Stored revisions start at 1. Reject malformed archives before any
+      // adapter read/write or an identical-record early return.
+      if (!Number.isSafeInteger(rec.revision) || rec.revision < 1) {
+        throw new RangeError('record revision must be a positive safe integer');
+      }
       const data = jsonText(rec.data, 'record data');
       const current = d.records.get(rec.tenantId, rec.type, rec.id);
-      if (current) return current.revision === rec.revision && current.data === data ? ok('identical') : err(appError('CONFLICT_REVISION', { params: { currentRevision: current.revision } }));
+      if (current) {
+        // A restore is idempotent only when the entire persisted row agrees.
+        // Matching JSON/revision alone can conceal divergent timestamps or
+        // stale indexes, leaving normal readers with the wrong recovered state.
+        const identical = current.revision === rec.revision && current.data === data
+          && current.createdAt === rec.createdAt && current.updatedAt === rec.updatedAt
+          && current.idx.every((value, slot) => value === idx[slot]);
+        return identical ? ok('identical')
+          : err(appError('CONFLICT_REVISION', { params: { currentRevision: current.revision } }));
+      }
       d.records.upsert({ tenant: rec.tenantId, type: rec.type, id: rec.id, revision: rec.revision, data, idx: [idx[0], idx[1], idx[2], idx[3]], createdAt: rec.createdAt, updatedAt: rec.updatedAt });
       return ok('restored');
     },
@@ -255,6 +324,12 @@ export interface PendingEvent {
 function outboxStore(d: DriverTx) {
   return {
     append(env: EventEnvelope): number {
+      // Event IDs are global durable keys. SQLite already rejects duplicates,
+      // while memory/IndexedDB would overwrite an existing event and its
+      // sequence. Reject before any adapter write, including across tenants.
+      if (d.outbox.get(env.eventId)) {
+        throw new Error('outbox event id already exists');
+      }
       return d.outbox.append({
         eventId: env.eventId,
         tenant: env.tenantId,
@@ -271,6 +346,11 @@ function outboxStore(d: DriverTx) {
       return row ? (JSON.parse(row.envelope) as EventEnvelope) : undefined;
     },
     pending(consumer: string, types: readonly string[], now: number, limit: number): PendingEvent[] {
+      // SQLite treats a negative LIMIT as unbounded, while memory truncates
+      // from the end. Enforce the same input contract before either driver runs.
+      if (!Number.isSafeInteger(limit) || limit < 0) {
+        throw new RangeError('Pending outbox limit must be a nonnegative safe integer');
+      }
       return d.outbox.pending({ consumer, types, now: toIso(now), limit }).map((r) => ({ seq: r.seq, envelope: JSON.parse(r.envelope) as EventEnvelope }));
     },
     oldestUndelivered(consumer: string, types: readonly string[]): EventEnvelope | undefined {
@@ -289,23 +369,49 @@ export interface InboxMark {
 }
 
 function inboxStore(d: DriverTx) {
-  const row = (m: InboxMark, status: InboxRow['status'], attempts: number, next: string | null, code: string | null): InboxRow => ({
-    consumer: m.consumer,
-    eventId: m.envelope.eventId,
-    aggregateId: m.envelope.aggregate.id,
-    status,
-    attempts,
-    nextAttemptAt: next,
-    lastError: code,
-    updatedAt: toIso(m.now),
-  });
+  const row = (m: InboxMark, status: InboxRow['status'], attempts: number, next: string | null, code: string | null): InboxRow => {
+    // Enforce the same exact counter contract as sync-outbox transitions.
+    // In particular, reject bad markDead counts before either durable write.
+    if (!Number.isSafeInteger(attempts) || attempts < 0) {
+      throw new RangeError('inbox attempts must be a nonnegative safe integer');
+    }
+    // Retry and dead-letter rows require primitive strings; completed rows
+    // explicitly clear the error with null. Reject before either durable write.
+    if (status === 'done' ? code !== null : typeof code !== 'string') {
+      throw new TypeError('inbox error code must match its delivery status');
+    }
+    return {
+      consumer: m.consumer,
+      eventId: m.envelope.eventId,
+      aggregateId: m.envelope.aggregate.id,
+      status,
+      attempts,
+      nextAttemptAt: next,
+      lastError: code,
+      updatedAt: toIso(m.now),
+    };
+  };
   return {
-    get: (consumer: string, eventId: string): InboxRow | undefined => d.inbox.get(consumer, eventId),
+    get(consumer: string, eventId: string): InboxRow | undefined {
+      const row = d.inbox.get(consumer, eventId);
+      // Never expose driver-owned rows to callers (especially memory/IndexedDB).
+      // A retained read result must not mutate delivery state outside a write.
+      return row ? { ...row } : undefined;
+    },
     markDone: (m: InboxMark, attempts: number): void => d.inbox.upsert(row(m, 'done', attempts, null, null)),
     markRetry: (m: InboxMark, attempts: number, nextAttemptAt: number, code: string): void => d.inbox.upsert(row(m, 'retry', attempts, toIso(nextAttemptAt), code)),
     markDead(m: InboxMark, attempts: number, code: string): void {
-      d.inbox.upsert(row(m, 'dead', attempts, null, code));
-      d.deadLetters.upsert({ consumer: m.consumer, eventId: m.envelope.eventId, tenant: m.envelope.tenantId, type: m.envelope.type, envelope: jsonText(m.envelope, 'envelope'), attempts, errorCode: code, deadAt: toIso(m.now) });
+      // Complete both admissions before either durable write. A caller that
+      // catches a JSON serialization failure inside its transaction must not
+      // commit a dead inbox row without the corresponding dead letter.
+      const inboxRow = row(m, 'dead', attempts, null, code);
+      const letterRow: DeadLetterRow = {
+        consumer: m.consumer, eventId: m.envelope.eventId, tenant: m.envelope.tenantId,
+        type: m.envelope.type, envelope: jsonText(m.envelope, 'envelope'),
+        attempts, errorCode: code, deadAt: inboxRow.updatedAt,
+      };
+      d.inbox.upsert(inboxRow);
+      d.deadLetters.upsert(letterRow);
     },
   };
 }
@@ -327,7 +433,14 @@ function toDeadLetter(r: DeadLetterRow): DeadLetter {
 
 function deadLetterStore(d: DriverTx) {
   return {
-    list: (consumer: string | undefined, limit = 100): DeadLetter[] => d.deadLetters.list(consumer, limit).map(toDeadLetter),
+    list(consumer: string | undefined, limit = 100): DeadLetter[] {
+      // SQLite LIMIT -1 reads the entire table; memory's negative slice is
+      // different but still unbounded by the caller's intended request.
+      if (!Number.isSafeInteger(limit) || limit < 0) {
+        throw new RangeError('Dead-letter listing limit must be a nonnegative safe integer');
+      }
+      return d.deadLetters.list(consumer, limit).map(toDeadLetter);
+    },
     get(consumer: string, eventId: string): DeadLetter | undefined {
       const r = d.deadLetters.get(consumer, eventId);
       return r ? toDeadLetter(r) : undefined;
@@ -337,8 +450,11 @@ function deadLetterStore(d: DriverTx) {
       const dl = d.deadLetters.get(consumer, eventId);
       const inbox = d.inbox.get(consumer, eventId);
       if (!dl || !inbox || inbox.status !== 'dead') return err(appError('NOT_FOUND'));
+      // Validate the due time before deleting a dead letter. Exceptions handled
+      // inside a transaction must not leave a letter missing from a dead row.
+      const dueAt = toIso(now);
       d.deadLetters.remove(consumer, eventId);
-      d.inbox.upsert({ ...inbox, status: 'retry', attempts: 0, nextAttemptAt: toIso(now), updatedAt: toIso(now) });
+      d.inbox.upsert({ ...inbox, status: 'retry', attempts: 0, nextAttemptAt: dueAt, updatedAt: dueAt });
       return ok(undefined);
     },
     /** Deletes dead letters that died before the cutoff (30-day RET-SHORT); returns the count. */
@@ -372,9 +488,21 @@ export interface EnqueueStatement {
 }
 
 function syncStore(d: DriverTx) {
+  const checkedLimit = (limit: number): number => {
+    // A negative SQL LIMIT is unlimited; memory arrays slice differently.
+    // Validate at the shared boundary before querying any adapter.
+    if (!Number.isSafeInteger(limit) || limit < 0) {
+      throw new RangeError('Sync query limit must be a nonnegative safe integer');
+    }
+    return limit;
+  };
   return {
     enqueue(input: EnqueueStatement): SyncEntry {
       if (typeof input.envelope.cid !== 'string' || typeof input.envelope.type !== 'string') throw new TypeError('signed envelope requires cid and type');
+      // sync_outbox is keyed globally by ID, not by (tenant, ID).
+      // INSERT OR REPLACE / memory upsert must never erase a previous
+      // acknowledgement, retry history, or a different tenant's entry.
+      if (d.sync.get(input.id)) throw new Error('sync enqueue id already exists');
       const now = toIso(input.now);
       const row: SyncRow = { id: input.id, tenant: input.tenant, destination: input.destination, ref: input.envelope.cid, envelope: jsonText(input.envelope, 'signed envelope'), state: 'prepared', attempts: 0, nextAttemptAt: null, lastError: null, receipt: null, createdAt: now, updatedAt: now };
       d.sync.upsert(row);
@@ -384,10 +512,45 @@ function syncStore(d: DriverTx) {
       const r = d.sync.get(id);
       return r ? toSyncEntry(r) : undefined;
     },
-    list: (q: Partial<SyncListQuery> = {}): SyncEntry[] => d.sync.list({ ...q, limit: q.limit ?? 100 }).map(toSyncEntry),
-    heads: (now: number, limit: number): SyncEntry[] => d.sync.heads(toIso(now), limit).map(toSyncEntry),
+    list(q: Partial<SyncListQuery> = {}): SyncEntry[] {
+      // Raw callers can bypass SyncListQuery's static types. SQLite accepts
+      // some non-string bind values while memory silently compares them;
+      // reject malformed selectors before either adapter performs a read.
+      for (const key of ['tenant', 'destination', 'ref'] as const) {
+        if (q[key] !== undefined && typeof q[key] !== 'string') {
+          throw new TypeError(`Sync query ${key} must be a string`);
+        }
+      }
+      if (q.state !== undefined
+        && !['prepared', 'transport_acknowledged', 'peer_accepted', 'failed'].includes(q.state)) {
+        throw new TypeError('Sync query state must be a declared sync state');
+      }
+      return d.sync.list({ ...q, limit: checkedLimit(q.limit ?? 100) }).map(toSyncEntry);
+    },
+    heads(now: number, limit: number): SyncEntry[] {
+      return d.sync.heads(toIso(now), checkedLimit(limit)).map(toSyncEntry);
+    },
     /** Applies a declared sync-outbox transition; undeclared ones return CONFLICT_STATE. */
     transition(id: string, event: SyncEvent, patch: SyncTransitionPatch, now: number): Result<SyncEntry, AppError> {
+      // Persisted retry counts must remain nonnegative, exact integers across adapters.
+      // Check before reading or changing the delivery row, including for runtime callers.
+      if (patch.attempts !== undefined && (!Number.isSafeInteger(patch.attempts) || patch.attempts < 0)) {
+        throw new RangeError('sync attempts must be a nonnegative safe integer');
+      }
+      // All drivers compare due times as canonical ISO strings. Reject malformed
+      // runtime values before they can indefinitely stall a prepared FIFO head.
+      if (patch.nextAttemptAt !== undefined && patch.nextAttemptAt !== null) {
+        const value = patch.nextAttemptAt;
+        const instant = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+        if (!Number.isFinite(instant) || new Date(instant).toISOString() !== value) {
+          throw new TypeError('sync nextAttemptAt must be a canonical ISO timestamp or null');
+        }
+      }
+      // Delivery error metadata is persisted as a string or null in every driver.
+      // Runtime callers can bypass SyncTransitionPatch's static type annotation.
+      if (patch.lastError !== undefined && patch.lastError !== null && typeof patch.lastError !== 'string') {
+        throw new TypeError('sync lastError must be a string or null');
+      }
       const row = d.sync.get(id);
       if (!row) return err(appError('NOT_FOUND'));
       const to = syncMachine.next(row.state, event);
@@ -409,7 +572,9 @@ function syncStore(d: DriverTx) {
 }
 
 export const MAX_BLOB_BYTES = 5 * 1024 * 1024;
-const BLOB_REF_RE = /^blob:sha256-[A-Za-z0-9_-]{43}$/;
+// A SHA-256 digest is 32 bytes: 42 full base64url symbols followed by
+// four data bits and two *zero* pad bits. Reject alternate noncanonical spellings.
+const BLOB_REF_RE = /^blob:sha256-[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 const CONTENT_TYPE_RE = /^[a-z]+\/[a-z0-9.+-]{1,90}$/;
 
 export interface BlobInfo {
@@ -465,19 +630,28 @@ export interface ShreddedBlob {
 }
 
 /**
- * Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119). Every encrypted
- * blob deleted in this transaction, whether by detach, a repository write or the orphan sweep, is listed
- * by shredded() so the key owner deletes its per-object key in the same unit of work.
+ * Content-addressed media blobs with holder-based reference counting (MediaBlob, PS-119).
+ * shredded() reports pending encrypted key deletions for the current transaction state;
+ * re-adding identical encrypted content in the same unit of work cancels its pending deletion;
+ * an unencrypted replacement does not reuse the old encrypted object's key.
+ * The key owner must act only on the successful transaction's final returned list,
+ * never on an intermediate observation from a transaction that may roll back.
  */
 function blobStore(d: DriverTx, kind: DriverKind) {
-  const shredded: ShreddedBlob[] = [];
+  // Pending key deletions reflect the final encryption state, not intermediate
+  // detach/reinsert sequences for the same content address.
+  const shredKey = (tenant: string, ref: string): string => JSON.stringify([tenant, ref]);
+  const shredded = new Map<string, ShreddedBlob>();
   const removeBlob = (b: Pick<BlobRow, 'tenant' | 'ref' | 'encrypted'>): void => {
     d.blobs.remove(b.tenant, b.ref);
-    if (b.encrypted) shredded.push({ tenant: b.tenant, ref: b.ref });
+    if (b.encrypted) shredded.set(shredKey(b.tenant, b.ref), { tenant: b.tenant, ref: b.ref });
   };
   const detach = (tenant: string, ref: string, holder: string): { deleted: boolean; shred: boolean } => {
+    // A no-op detach cannot be the transition from a held blob to an orphan.
+    // In particular, it must not discard newly uploaded bytes before attachment.
+    const before = d.blobs.holders(tenant, ref);
     d.blobs.detach(tenant, ref, holder);
-    if (d.blobs.holders(tenant, ref) > 0) return { deleted: false, shred: false };
+    if (before === 0 || d.blobs.holders(tenant, ref) > 0) return { deleted: false, shred: false };
     const blob = d.blobs.get(tenant, ref);
     if (!blob) return { deleted: false, shred: false };
     removeBlob(blob);
@@ -501,10 +675,25 @@ function blobStore(d: DriverTx, kind: DriverKind) {
       const snapshot = { ...admitted, bytes: new Uint8Array(admitted.bytes) };
       const ref = await blobRefOf(snapshot.bytes);
       const existing = d.blobs.get(snapshot.tenant, ref);
+      // The same content address must not silently turn a plaintext blob into
+      // supposedly encrypted content (or silently discard an encryption claim).
+      // Replacing the classification requires an explicit remove/reinsert.
+      if (existing && existing.encrypted !== snapshot.encrypted) {
+        return err(appError('CONFLICT_STATE', { params: { reason: 'blob_encryption_mismatch', ref } }));
+      }
+      // The byte-derived ref does not cover MIME metadata. A conflicting type
+      // must not silently retain a stale interpretation or lower privacy.
+      if (existing && existing.contentType !== snapshot.contentType) {
+        return err(appError('CONFLICT_STATE', { params: { reason: 'blob_content_type_mismatch', ref } }));
+      }
       if (existing && snapshot.privacy < existing.privacy) d.blobs.upsert({ ...existing, privacy: snapshot.privacy });
-      if (existing) return ok(toBlobInfo({ ...existing, privacy: snapshot.privacy < existing.privacy ? snapshot.privacy : existing.privacy }, d.blobs.holders(snapshot.tenant, ref)));
+      if (existing) {
+        if (existing.encrypted) shredded.delete(shredKey(snapshot.tenant, ref));
+        return ok(toBlobInfo({ ...existing, privacy: snapshot.privacy < existing.privacy ? snapshot.privacy : existing.privacy }, d.blobs.holders(snapshot.tenant, ref)));
+      }
       const row: BlobRow = { tenant: snapshot.tenant, ref, bytes: snapshot.bytes, size: snapshot.bytes.byteLength, contentType: snapshot.contentType, privacy: snapshot.privacy, encrypted: snapshot.encrypted === true, createdAt: toIso(snapshot.now) };
       d.blobs.upsert(row);
+      if (row.encrypted) shredded.delete(shredKey(snapshot.tenant, ref));
       return ok(toBlobInfo(row, d.blobs.holders(snapshot.tenant, ref)));
     },
     get(tenant: string, ref: string): MediaBlob | undefined {
@@ -530,12 +719,18 @@ function blobStore(d: DriverTx, kind: DriverKind) {
     detach,
     /** Deletes stored blobs that no record references and that were created before the cutoff. */
     collectOrphans(createdBefore: number, limit = 100): number {
+      // SQLite treats LIMIT -1 as unlimited; a negative memory slice also
+      // selects rows. Reject malformed limits before touching any blob.
+      if (!Number.isSafeInteger(limit) || limit < 1) {
+        throw new RangeError('Orphan collection limit must be a positive safe integer');
+      }
       const list = d.blobs.orphans(toIso(createdBefore), limit);
       for (const o of list) removeBlob(o);
       return list.length;
     },
-    /** Encrypted blobs deleted so far in this transaction (empty again after rollback: the list dies with it). */
-    shredded: (): readonly ShreddedBlob[] => [...shredded],
+    /** Pending old encrypted-key deletions, including refs replaced by unencrypted content. */
+    // Return detached objects: callers may mutate JS values despite readonly TS annotations.
+    shredded: (): readonly ShreddedBlob[] => [...shredded.values()].map(({ tenant, ref }) => ({ tenant, ref })),
   };
 }
 

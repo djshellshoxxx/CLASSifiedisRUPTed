@@ -1,5 +1,27 @@
 # Project status
 
+## November 20, 2026 recovery and PWA consolidation
+
+PR #63 merged as `449a619f1ae7b66cb42d9cab43dd5493bfe42c2e`. Its actual main-push
+Alpha `44713847841` and CLI `44713847763` passed; the inspected Alpha log records
+78 product browser journeys at that main source. The [recovery consolidation handoff](../development/cycles/20261120-recovery-consolidation/HANDOFF.md)
+keeps those results distinct from later candidates.
+
+[Draft PR #72](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/72) combines
+PR #70's PWA attachment-exclusion diagnostic with PR #71's persisted restore-
+rejection proof, retaining both parents and the PR #64–#69 histories. Its exact
+published head is `93dae3705fe4d8d63e2a34401e3352e1e9c5cbbc`. Local qualification
+passed 30 selected integration cases, 27 tooling tests, 46 CLI tests and
+compiler/static/setup/build checks. The three added browser assertions are
+compiled only; the complete domain suite was not rerun locally for this candidate.
+
+The [publication checkpoint](../development/cycles/20261120-pwa-recovery-consolidation/PUBLICATION.md)
+records the complete tree, independent preservation verification and **17:25 UTC**
+queued Alpha/CLI observations. This is not a merged or hosted-qualified main
+change. The [current continuation](../development/CONSOLIDATION_HANDOFF.md) and
+[remaining-work register](../development/REMAINING_WORK.md) carry the next gates;
+older dated sections below retain their original source-specific observations.
+
 ## November 19, 2026 engineering and audit continuation
 
 [PR #56](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/56) merged normally

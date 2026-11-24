@@ -1,0 +1,9 @@
+{
+  "node": "v24.22.3",
+  "pnpm": "10.28.0",
+  "typescript": "7.0.2",
+  "vitest": "5.1.0",
+  "@playwright/test": "1.64.1",
+  "fake-indexeddb": "6.2.6",
+  "lock_sha256": "d72caa3b730141025fcbb083eedea8d5c1bf6774c5f2b7ed3e8e145f10308773"
+}

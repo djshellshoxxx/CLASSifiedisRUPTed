@@ -411,3 +411,110 @@ it('IndexedDB reference coverage reconstructs its tenant index after reopening',
     await reopened.close();
   }
 });
+
+it('reverts the tenant holder index after a failed durable write and accepts a clean retry', async () => {
+  // IndexedDB uses this journalled memory working set with an asynchronous
+  // persist callback. Reject the callback after the in-memory changes are staged.
+  let failPersist = true;
+  let persistAttempts = 0;
+  const storage = createStorage(createMemoryDriver({
+    kind: 'indexeddb',
+    persist: async () => {
+      persistAttempts++;
+      if (failPersist) throw new Error('simulated persistence failure');
+    },
+  }));
+  const tenant = 'persist-failure-owner';
+  const foreign = 'persist-failure-foreign';
+  const ref = await blobRefOf(new Uint8Array([11, 22, 33]));
+  const empty = { referenceCount: 0, holderCount: 0, missingCount: 0, limitExceeded: false };
+  try {
+    await expect(storage.transaction(tx => {
+      tx.blobs.attach(tenant, ref, 'owner/rolled-back');
+      tx.blobs.attach(foreign, ref, 'foreign/rolled-back');
+      return ok(undefined);
+    })).rejects.toThrow('simulated persistence failure');
+    expect(persistAttempts).toBe(1);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual(empty);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(foreign))).toEqual(empty);
+
+    failPersist = false;
+    const retried = await storage.transaction(tx => {
+      tx.blobs.attach(tenant, ref, 'owner/retried');
+      return ok(undefined);
+    });
+    expect(retried.ok).toBe(true);
+    expect(persistAttempts).toBe(2);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(tenant))).toEqual({
+      referenceCount: 1, holderCount: 1, missingCount: 1, limitExceeded: false,
+    });
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(foreign))).toEqual(empty);
+  } finally {
+    await storage.close();
+  }
+}, 30000);
+
+it('restores stored bytes and both tenant holder indexes when final-holder deletion cannot persist', async () => {
+  let failDeletion = false;
+  let persistAttempts = 0;
+  const storage = createStorage(createMemoryDriver({
+    kind: 'indexeddb',
+    persist: async () => {
+      persistAttempts++;
+      if (failDeletion) throw new Error('simulated deletion persistence failure');
+    },
+  }));
+  const owner = 'persist-delete-owner';
+  const foreign = 'persist-delete-foreign';
+  const empty = { referenceCount: 0, holderCount: 0, missingCount: 0, limitExceeded: false };
+  const ownerCounts = { referenceCount: 1, holderCount: 2, missingCount: 0, limitExceeded: false };
+  const foreignCounts = { referenceCount: 1, holderCount: 1, missingCount: 1, limitExceeded: false };
+  try {
+    const seeded = await storage.transaction(async tx => {
+      const added = await tx.blobs.put({ tenant: owner, bytes, contentType: 'image/png',
+        privacy: 'P0', encrypted: false, now });
+      if (!added.ok) return added;
+      tx.blobs.attach(owner, added.value.ref, 'owner/first');
+      tx.blobs.attach(owner, added.value.ref, 'owner/last');
+      // No foreign blob is present; the same address must remain tenant-specific.
+      tx.blobs.attach(foreign, added.value.ref, 'foreign/holder');
+      return ok(added.value.ref);
+    });
+    expect(seeded.ok).toBe(true);
+    if (!seeded.ok) throw new Error('blob seed failed');
+    const ref = seeded.value;
+    expect(persistAttempts).toBe(1);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(owner))).toEqual(ownerCounts);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(foreign))).toEqual(foreignCounts);
+    failDeletion = true;
+    await expect(storage.transaction(tx => {
+      tx.blobs.detach(owner, ref, 'owner/first');
+      // This last-holder detach stages deletion of the stored bytes as well.
+      expect(tx.blobs.detach(owner, ref, 'owner/last')).toEqual({ deleted: true, shred: false });
+      tx.blobs.detach(foreign, ref, 'foreign/holder');
+      return ok(undefined);
+    })).rejects.toThrow('simulated deletion persistence failure');
+    expect(persistAttempts).toBe(2);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(owner))).toEqual(ownerCounts);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(foreign))).toEqual(foreignCounts);
+    expect(await storage.read(tx => tx.blobs.info(owner, ref)?.holders)).toBe(2);
+    expect(await storage.read(tx => [...(tx.blobs.get(owner, ref)?.bytes ?? [])])).toEqual([...bytes]);
+    expect(await storage.read(tx => tx.blobs.info(foreign, ref))).toBeUndefined();
+
+    failDeletion = false;
+    const retried = await storage.transaction(tx => {
+      tx.blobs.detach(owner, ref, 'owner/first');
+      return ok(undefined);
+    });
+    expect(retried.ok).toBe(true);
+    expect(persistAttempts).toBe(3);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(owner))).toEqual({
+      referenceCount: 1, holderCount: 1, missingCount: 0, limitExceeded: false,
+    });
+    expect(await storage.read(tx => tx.blobs.referenceCoverage(foreign))).toEqual(foreignCounts);
+    expect(await storage.read(tx => tx.blobs.info(owner, ref)?.holders)).toBe(1);
+    expect(await storage.read(tx => tx.blobs.referenceCoverage('unrelated'))).toEqual(empty);
+  } finally {
+    await storage.close();
+  }
+}, 30000);

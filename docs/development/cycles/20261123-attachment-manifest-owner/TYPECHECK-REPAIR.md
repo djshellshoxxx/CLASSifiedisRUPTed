@@ -1,0 +1,8 @@
+# ClassRup manifest child — current-source typecheck correction and security hardening
+Date: 2026-11-23 UTC. PR #140 original source `c72159624467b256b619f667a4acd1382559a9da` / tree `a94a6985863b5ef319ff64ba1dec2d752069b7d3`.
+
+Original Alpha [45169663837](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/actions/runs/45169663837) **failed** the typecheck step. Exact hosted diagnostics: `tests/integration/barter-want-intent.test.ts(35,9) TS2741` and `tests/integration/production-barter-recovery.test.ts(448,11) TS2741`, because two existing `UnlockedVault` test fixtures omitted the newly required manifest method. This was a compiler/setup gate failure, NOT a product regression or a successful test suite. Original failed run preserved.
+
+Correction adds explicit throw-only manifest methods to the two test fixtures, without relaxing the actual production interface. A defensive source pass also rejects invalid SQLite private/plaintext metadata during manifest snapshot admission, and zeroes copied bytes in the manifest finalization path; it does not alter the 5 MiB per-blob or 20 MiB aggregate bounds. Unused test import removed. New current-head Alpha/CLI qualification is required; do not treat previous parent checks or failing first child run as passing.
+
+Fresh separate code, bug and defensive security reviews remain unexecuted. No independent review approvals; do not merge. First-cycle HANDOFF.md contains intended source scope and successor assignments. No native local product tests because GitHub DNS failed. No ancestor/main mutations, release, deployment, force push, branch deletion, paid API or other automation changes.

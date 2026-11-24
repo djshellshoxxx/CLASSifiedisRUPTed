@@ -1,0 +1,28 @@
+{
+  "name": "future-codec",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "tests/integration/production-future-codec-rejection.test.ts",
+    "--pool=forks",
+    "--maxWorkers=1",
+    "--fileParallelism=false",
+    "--reporter=json",
+    "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g16-final/future-codec.json"
+  ],
+  "source": "53aa9fe93c8599c41c0b9b2df4f438b969f14ce9",
+  "tree": "81a97a7be19975fe653bce41bda5d7e0991efcbb",
+  "started_at": "2026-11-20T16:54:13.543616+00:00",
+  "duration_seconds": 14.547,
+  "timeout_seconds": 900,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 103,
+  "log_sha256": "f1132fe2dc18595484cd5c8ef6d44bdb57ec73a83776778534c2701f4b2ade65"
+}

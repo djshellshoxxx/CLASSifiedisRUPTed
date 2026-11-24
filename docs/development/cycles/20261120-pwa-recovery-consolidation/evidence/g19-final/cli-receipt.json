@@ -1,0 +1,27 @@
+{
+  "name": "cli",
+  "command": [
+    "node",
+    "--test",
+    "tests/cli/listings.test.mjs",
+    "tests/cli/public-nested-assets.test.mjs",
+    "tests/cli/public-symlink.test.mjs",
+    "tests/cli/records.test.mjs",
+    "tests/cli/serviceworker.test.mjs",
+    "tests/cli/setup.test.mjs"
+  ],
+  "source": "9cf6c56c9b65a421a95676f89e9fcc3800bca573",
+  "tree": "f506c9282299b034cef6b540017e49ffeac88362",
+  "started_at": "2026-11-20T17:18:59.650177+00:00",
+  "duration_seconds": 25.702,
+  "timeout_seconds": 900,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 4932,
+  "log_sha256": "b4af64559e5fdb29409a5dee3192d25a19966bd2c0d51c67e725f5ff8ffc1cf7"
+}

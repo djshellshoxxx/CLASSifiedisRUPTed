@@ -6,6 +6,8 @@ import { signEnvelope, verifyEnvelope, strictCanonicalJson } from '@classrup/fed
 import { createUnlockBackoff, type UnlockBackoff } from './session-policy.ts';
 import { copyAttachmentBatchMember, verifySealedAttachmentManifest, verifySealedAttachmentBlobBatch, type VerifiedAttachmentManifestMetadata } from './attachment-manifest.ts';
 
+import { verifySealedAttachmentZeroRefTransition, type AttachmentZeroRefTransition } from './attachment-transition.ts';
+
 const KEY_TENANT = 'local-vault';
 const KEY_TYPE = 'vault.identity';
 const KEY_ID = 'root';
@@ -86,6 +88,9 @@ export interface UnlockedVault {
   exportAttachmentManifest(passphrase: string): Promise<Sealed>;
   /** Read-only: bind a signed manifest to this unlocked principal's canonical recovered records. */
   verifyAttachmentManifestOwners(sealed: unknown, passphrase: string): Promise<VerifiedAttachmentManifestMetadata>;
+  /** Read-only prior/current evidence check. Not deletion authority or replay protection. */
+  verifyAttachmentZeroRefTransition(priorManifest: unknown, sealedTransition: unknown,
+    passphrase: string): Promise<AttachmentZeroRefTransition>;
   /**
    * P0 plaintext-only import. Optionally retire one stale managed holder only
    * when the current signed manifest proves its parent no longer references
@@ -327,6 +332,31 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
           }
         }
         return manifest;
+      },
+      async verifyAttachmentZeroRefTransition(priorManifest, sealedTransition, passphrase) {
+        guard();
+        const evidence = await verifySealedAttachmentZeroRefTransition(
+          priorManifest, sealedTransition, passphrase, identity.principal);
+        guard();
+        const codec = byType.get(evidence.type);
+        if (!codec?.recordId || !codec.attachmentRefs) throw new Error('Attachment transition requires an authorized codec');
+        // Observe the actual current destination row, not caller-provided data
+        // or absence from the current manifest. Read-only: even a valid result
+        // cannot authorize future mutation without transaction-local revalidation.
+        const row = await storage.read(tx => tx.records.get(identity.principal, evidence.type, evidence.id));
+        guard();
+        if (!row || row.revision !== evidence.currentRevision) {
+          throw new Error('Attachment transition current record mismatch');
+        }
+        const data = codec.parse(structuredClone(row.data));
+        if (codec.recordId(data) !== row.id) throw new Error('Attachment parent key mismatch');
+        const refs = codec.attachmentRefs(structuredClone(data));
+        if (!Array.isArray(refs) || refs.length !== 0) throw new Error('Attachment transition requires zero current references');
+        await preflightRecords([{ ...row, data }], identity.principal, registeredRecordTypes, guard, true);
+        const dataCid = `sha256-${await sha256Hex(strictCanonicalJson(data))}`;
+        guard();
+        if (dataCid !== evidence.currentDataCid) throw new Error('Attachment transition current record mismatch');
+        return evidence;
       },
       async importPublicAttachmentBatch(sealed, passphrase, byteSet, retireOwner) {
         guard();

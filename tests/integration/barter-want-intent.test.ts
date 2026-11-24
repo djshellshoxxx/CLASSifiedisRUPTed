@@ -39,6 +39,7 @@ async function fixture() {
     async exportBackup() { throw new Error('Backup is outside this fixture'); },
     async exportAttachmentManifest() { throw new Error('Attachment manifest is outside this fixture'); },
     async verifyAttachmentManifestOwners() { throw new Error('Attachment owner reconciliation is outside this fixture'); },
+    async verifyAttachmentZeroRefTransition() { throw new Error('Attachment transitions are outside this fixture'); },
     async importPublicAttachmentBatch() { throw new Error('Public attachment import is outside this fixture'); },
   };
   const runtime = createBarterRuntime(session);

@@ -32,12 +32,32 @@ function request<T>(r: IDBRequest<T>): Promise<T> {
   });
 }
 
+// A request error can bubble to the transaction before the terminal abort.
+// Only complete/abort establish that a transaction no longer owns its work.
 function completion(tx: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
     tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'));
   });
+}
+
+// Observe terminal settlement before scheduling requests. If scheduling or
+// reading fails, abort any already-enqueued work and drain the terminal event
+// before returning the original error to the working-set rollback path.
+async function withTransaction<T>(tx: IDBTransaction, work: () => T | Promise<T>): Promise<T> {
+  const done = completion(tx);
+  // The transaction can abort while work is still awaiting a request.
+  void done.catch(() => undefined);
+  let value: T;
+  try {
+    value = await work();
+  } catch (error) {
+    try { tx.abort(); } catch { /* already committing or finished */ }
+    await done.catch(() => undefined);
+    throw error;
+  }
+  await done;
+  return value;
 }
 
 function openDb(factory: IDBFactory, name: string): Promise<IDBDatabase> {
@@ -54,53 +74,63 @@ function openDb(factory: IDBFactory, name: string): Promise<IDBDatabase> {
 
 async function loadSnapshot(db: IDBDatabase): Promise<Snapshot> {
   const tx = db.transaction([...TABLES], 'readonly');
-  const snapshot: Partial<Record<TableName, Array<readonly [string, object]>>> = {};
-  await Promise.all(
-    TABLES.map(async (t) => {
-      const store = tx.objectStore(t);
-      const [keys, values] = await Promise.all([request(store.getAllKeys()), request(store.getAll())]);
-      const rows = keys.map((k, i) => [String(k), values[i] as object] as const);
-      snapshot[t] = t === 'meta' ? rows.filter(([k]) => k !== WRITER_KEY) : rows;
-    }),
-  );
-  await completion(tx);
-  return snapshot;
+  return withTransaction(tx, async () => {
+    const snapshot: Partial<Record<TableName, Array<readonly [string, object]>>> = {};
+    await Promise.all(
+      TABLES.map(async (t) => {
+        const store = tx.objectStore(t);
+        // Create both requests before wrapping either in a promise: if the
+        // second call throws synchronously there is no orphaned first promise.
+        const keyRequest = store.getAllKeys();
+        const valueRequest = store.getAll();
+        const [keys, values] = await Promise.all([request(keyRequest), request(valueRequest)]);
+        const rows = keys.map((k, i) => [String(k), values[i] as object] as const);
+        snapshot[t] = t === 'meta' ? rows.filter(([k]) => k !== WRITER_KEY) : rows;
+      }),
+    );
+    return snapshot;
+  });
 }
 
 /** Records this connection as the vault's writer; a connection opened earlier is fenced off from then on. */
 async function claimWriter(db: IDBDatabase, token: string): Promise<void> {
   const tx = db.transaction(['meta'], 'readwrite');
-  const done = completion(tx);
-  tx.objectStore('meta').put({ token }, WRITER_KEY);
-  await done;
+  await withTransaction(tx, () => {
+    tx.objectStore('meta').put({ token }, WRITER_KEY);
+  });
 }
 
 async function persist(db: IDBDatabase, changes: readonly Change[], writer: string | undefined): Promise<void> {
   const tables = [...new Set<TableName>([...(writer === undefined ? [] : ['meta' as const]), ...changes.map((c) => c.table)])];
   const tx = db.transaction(tables, 'readwrite');
-  const done = completion(tx);
-  let superseded = false;
-  const write = (): void => {
-    for (const c of changes) {
-      const store = tx.objectStore(c.table);
-      if (c.row === undefined) store.delete(c.key);
-      else store.put(c.row, c.key);
-    }
-  };
-  if (writer === undefined) write();
-  else {
-    const check = tx.objectStore('meta').get(WRITER_KEY);
-    check.onsuccess = () => {
-      if ((check.result as { token?: unknown } | undefined)?.token === writer) return write();
-      superseded = true;
-      tx.abort();
+  await withTransaction(tx, () => {
+    const write = (): void => {
+      for (const c of changes) {
+        const store = tx.objectStore(c.table);
+        if (c.row === undefined) store.delete(c.key);
+        else store.put(c.row, c.key);
+      }
     };
-  }
-  try {
-    await done;
-  } catch (e) {
-    throw superseded ? vaultBusy('vault_superseded') : e;
-  }
+    if (writer === undefined) return write();
+    // Keep the check and scheduling of writes in the same IDB success
+    // callback, where the transaction is active on every supported browser.
+    return new Promise<void>((resolve, reject) => {
+      const check = tx.objectStore('meta').get(WRITER_KEY);
+      check.onerror = () => reject(check.error ?? new Error('IndexedDB writer check failed'));
+      check.onsuccess = () => {
+        try {
+          if ((check.result as { token?: unknown } | undefined)?.token !== writer) throw vaultBusy('vault_superseded');
+          write();
+          resolve();
+        } catch (error) {
+          // Do not let a synchronous scheduling failure escape the callback or
+          // allow earlier queued writes to commit. withTransaction drains abort.
+          try { tx.abort(); } catch { /* already aborted */ }
+          reject(error);
+        }
+      };
+    });
+  });
 }
 
 export interface IndexedDbDriverOptions {

@@ -126,6 +126,38 @@ describe('authenticated zero-reference transition evidence', () => {
     expect(await snapshot()).toEqual(before);
   }, 30000);
 
+  it('rejects an incorrect issuance passphrase without changing the recovered record or retained bytes', async () => {
+    await putParent(destination, emptyParent, 1);
+    const before = await snapshot();
+    const owner = { type: repo.type, id: 'parent', ref: payload.ref };
+    await expect(destination.exportAttachmentZeroRefTransition(prior, password + '-incorrect', owner))
+      .rejects.toThrow();
+    expect(await snapshot()).toEqual(before);
+    const issued = await destination.exportAttachmentZeroRefTransition(prior, password, owner);
+    expect(await verify(issued)).toEqual(payload);
+    expect(await snapshot()).toEqual(before);
+  }, 30000);
+
+  it('requires the prior manifest to belong to the unlocked identity even for matching public bytes', async () => {
+    await putParent(destination, emptyParent, 1);
+    const other = await vaultFromStorage(createMemoryStorage(), [codec]).create(password);
+    try {
+      expect(other.principal).not.toBe(destination.principal);
+      const ref = await retainBlob(other);
+      expect(ref).toBe(payload.ref);
+      await putParent(other, { id: 'parent', refs: [ref] }, 0);
+      const foreignPrior = await other.exportAttachmentManifest(password);
+      const before = await snapshot();
+      const owner = { type: repo.type, id: 'parent', ref };
+      await expect(destination.exportAttachmentZeroRefTransition(foreignPrior, password, owner))
+        .rejects.toThrow(/Unauthorized author/);
+      expect(await snapshot()).toEqual(before);
+      const issued = await destination.exportAttachmentZeroRefTransition(prior, password, owner);
+      expect(await verify(issued)).toEqual(payload);
+      expect(await snapshot()).toEqual(before);
+    } finally { await other.lock(); }
+  }, 30000);
+
   it.each([
     ['different prior digest', { priorDataCid: 'sha256-' + '0'.repeat(64) }, /prior evidence mismatch/],
     ['nonconsecutive revision', { currentRevision: 3 }, /transition fields/],

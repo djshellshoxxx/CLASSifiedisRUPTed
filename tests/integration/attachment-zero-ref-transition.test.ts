@@ -1,6 +1,6 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryStorage, defineRepo, ok, sha256Hex, type Storage, z } from '../../packages/kernel/src/index.ts';
-import { seal, type Sealed } from '../../packages/identity/src/index.ts';
+import * as identity from '../../packages/identity/src/index.ts';
 import { signEnvelope, strictCanonicalJson } from '../../packages/federation/src/index.ts';
 import { backupCodec, vaultFromStorage, type UnlockedVault } from '../../packages/vault/src/vault.ts';
 import { verifySealedAttachmentManifest } from '../../packages/vault/src/attachment-manifest.ts';
@@ -39,13 +39,13 @@ async function retainBlob(session: UnlockedVault) {
 async function assertion(signer: UnlockedVault, payload: unknown) {
   const envelope = await signEnvelope(signer.identity, { type: ZERO_REF_TRANSITION_TYPE,
     createdAt: new Date().toISOString(), seq: 1, prev: null, payload });
-  return seal(new TextEncoder().encode(JSON.stringify(envelope)), password);
+  return identity.seal(new TextEncoder().encode(JSON.stringify(envelope)), password);
 }
 
 describe('authenticated zero-reference transition evidence', () => {
-  let archive: Sealed;
-  let prior: Sealed;
-  let proof: Sealed;
+  let archive: identity.Sealed;
+  let prior: identity.Sealed;
+  let proof: identity.Sealed;
   let payload: AttachmentZeroRefTransition;
   let destination: UnlockedVault;
   let readActiveAtValidation: boolean[];
@@ -88,7 +88,7 @@ describe('authenticated zero-reference transition evidence', () => {
     blob: tx.blobs.get(destination.principal, payload.ref),
     coverage: tx.blobs.referenceCoverage(destination.principal),
   }));
-  const verify = (sealed: Sealed) => destination.verifyAttachmentZeroRefTransition(prior, sealed, password);
+  const verify = (sealed: identity.Sealed) => destination.verifyAttachmentZeroRefTransition(prior, sealed, password);
 
   it('accepts repeated verification on a recovered record and releases the read before codec validation', async () => {
     await putParent(destination, emptyParent, 1);
@@ -108,6 +108,28 @@ describe('authenticated zero-reference transition evidence', () => {
     const sealed = await destination.exportAttachmentZeroRefTransition(prior, password, owner);
     expect(await verify(sealed)).toEqual(payload);
     expect(await snapshot()).toEqual(before);
+  }, 30000);
+
+  it('rejects issuance and clears its plaintext if the session locks as sealing completes', async () => {
+    await putParent(destination, emptyParent, 1);
+    const owner = { type: repo.type, id: 'parent', ref: payload.ref };
+    const seal = identity.seal;
+    const sealing = vi.spyOn(identity, 'seal').mockImplementationOnce(async (plaintext, passphrase) => {
+      const sealed = await seal(plaintext, passphrase);
+      await destination.lock();
+      return sealed;
+    });
+    try {
+      await expect(destination.exportAttachmentZeroRefTransition(prior, password, owner))
+        .rejects.toThrow(/Vault closed|Vault locked/);
+      expect(sealing).toHaveBeenCalledTimes(1);
+      const [plaintext] = sealing.mock.calls[0]!;
+      expect(plaintext.byteLength).toBeGreaterThan(0);
+      expect(plaintext.every(byte => byte === 0)).toBe(true);
+      await expect(destination.exportAttachmentZeroRefTransition(prior, password, owner))
+        .rejects.toThrow(/Vault closed|Vault locked/);
+      expect(sealing).toHaveBeenCalledTimes(1);
+    } finally { sealing.mockRestore(); }
   }, 30000);
 
   it('does not issue an assertion while the signed prior parent still owns the attachment', async () => {

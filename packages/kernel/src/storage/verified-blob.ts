@@ -1,6 +1,26 @@
 import type { Storage } from './storage.ts';
 import { blobRefOf, isBlobRef, MAX_BLOB_BYTES, type MediaBlob } from './tx.ts';
 
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  Object.getPrototypeOf(Uint8Array.prototype), 'byteLength',
+)!.get!;
+
+/** Copy exactly the intrinsic byte view after checking its declared size and the per-blob cap. */
+export function copyBoundedBlobBytes(source: unknown, size: number, error: string): Uint8Array {
+  if (!Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
+    || !(source instanceof Uint8Array) || typedArrayByteLength.call(source) !== size) {
+    throw new Error(error);
+  }
+  const copy = new Uint8Array(size);
+  try {
+    copy.set(source);
+    return copy;
+  } catch (cause) {
+    copy.fill(0);
+    throw cause;
+  }
+}
+
 // Match the persisted blob admission shape before treating a captured adapter row as a
 // verified snapshot. These are STRUCTURAL checks, not metadata authentication.
 // Keep the MIME form aligned with tx.ts's blob-write admission.
@@ -32,14 +52,12 @@ export async function verifyStoredBlob(blob: MediaBlob): Promise<MediaBlob> {
   // source object must not change what is paired with the verified bytes.
   const { ref, size, contentType, privacy, encrypted, createdAt, holders } = blob;
   const sourceBytes = blob.bytes;
-  if (!isBlobRef(ref) || !(sourceBytes instanceof Uint8Array)
-    || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-    || sourceBytes.byteLength !== size || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders })) {
+  if (!isBlobRef(ref) || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders })) {
     throw new Error('Blob content integrity check failed');
   }
   // Snapshot the bytes before the first await, not merely before returning.
   // Construct only declared fields; unknown source properties are not verified.
-  const bytes = new Uint8Array(sourceBytes);
+  const bytes = copyBoundedBlobBytes(sourceBytes, size, 'Blob content integrity check failed');
   let accepted = false;
   try {
     if (await blobRefOf(bytes) !== ref) {
@@ -69,26 +87,23 @@ export async function readVerifiedBlob(
   // Detach the adapter-owned bytes before settling the read transaction.
   // A returned memory/driver view must not be hashed after a subsequent write
   // can alter or invalidate it. The digest is computed outside the read lock.
-  const blob = await storage.read(tx => {
-    const found = tx.blobs.get(tenant, ref);
-    if (!found) return undefined;
-    const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders } = found;
-    const sourceBytes = found.bytes;
-    if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
-      || !Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-      || sourceBytes.byteLength !== size || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders }, storage.kind)) {
-      throw new Error('Blob content integrity check failed');
-    }
-    return { ref: storedRef, size, contentType, privacy, encrypted, createdAt,
-      holders, bytes: new Uint8Array(sourceBytes) };
-  });
-  if (!blob) return undefined;
+  let snapshot: MediaBlob | undefined;
   try {
-    return await verifyStoredBlob(blob);
+    await storage.read(tx => {
+      const found = tx.blobs.get(tenant, ref);
+      if (!found) return;
+      const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders, bytes } = found;
+      if (storedRef !== ref || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders }, storage.kind)) {
+        throw new Error('Blob content integrity check failed');
+      }
+      snapshot = { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders,
+        bytes: copyBoundedBlobBytes(bytes, size, 'Blob content integrity check failed') };
+    });
+    if (snapshot) return await verifyStoredBlob(snapshot);
   } finally {
-    // Only clear the intermediate transaction-owned copy, never the returned
-    // independently verified bytes or the live adapter-owned source.
-    blob.bytes.fill(0);
+    // The adapter may reject after its callback succeeds. Retain ownership of
+    // this intermediate copy until both the read and verification have settled.
+    snapshot?.bytes.fill(0);
   }
 }
 
@@ -151,10 +166,7 @@ export async function readVerifiedBlobBatch(
         // Capture the exact scalar and byte view that is admitted. Re-reading
         // adapter-backed accessors after admission can return different values.
         const { ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders, bytes: sourceBytes } = blob;
-        if (storedRef !== ref || !(sourceBytes instanceof Uint8Array)
-          || !Number.isSafeInteger(size) || size < 0
-          || size > MAX_BLOB_BYTES || sourceBytes.byteLength !== size
-          || size > maxTotalBytes - total
+        if (storedRef !== ref || !Number.isSafeInteger(size) || size > maxTotalBytes - total
           || !validStoredMetadata({ contentType, privacy, encrypted, createdAt, holders }, storage.kind)) {
           throw new Error('Attachment batch integrity check failed');
         }
@@ -163,7 +175,7 @@ export async function readVerifiedBlobBatch(
         // its independently hashed verification copy has been produced.
         snapshots.push({
           ref: storedRef, size, contentType, privacy, encrypted, createdAt, holders,
-          bytes: new Uint8Array(sourceBytes),
+          bytes: copyBoundedBlobBytes(sourceBytes, size, 'Attachment batch integrity check failed'),
         });
       }
     });

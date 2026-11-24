@@ -32,3 +32,11 @@ No production behavior, v1, signing identity, encryption, caps, dependencies, ti
 - Functional bug hunt: full typecheck first on isolated current child; run issuance/verification and both barter integration files serially, then actual hosted Alpha/CLI. If additional compiler/test errors arise, record logs and fix narrowly; do not rerun unchanged queues. Verify prior tests still run unchanged.
 - Defensive security review: source-only check that throwing stubs do not become production callers or grant mutation authority; verify trusted owner, lock guards, snapshot-only semantics, incarnation/replay limitations. No interrupted reproduction follow-ups.
 No independent review is claimed by this assignment. Require distinct actual worker evidence. Prioritize integrating qualified #158 with verified reviewed code/tree and main's own push qualification before downstream consolidation. Durable incarnation tracking and authenticated mutation journal remain the next feature, but no irreversible retirement until replay, retention and private-key contracts are accepted. No release, deployment, force push, deletion or paid API.
+
+## Qualification on the repaired attachment storage
+
+PR #161 now carries the read-only issuer from #159, its passphrase and owner checks from #160, and the two typed fixture repairs. The original #159 and #160 Alpha runs failed their typecheck. The original #161 head (`22c74650ef917e68e4f093cde1349d54a9d59748`) then passed both hosted Alpha and CLI.
+
+The issuer is combined with the repaired #158 storage tree `a631ea4f2d44240f659710e33ea57bf8721faa8d`. A deterministic regression calls the public lock after the real seal operation completes and before its result reaches the caller. The export rejects, wipes its plaintext, and a retry on the locked session never reaches the seal operation. The new case and its ordinary unlocked control both passed locally, along with TypeScript checks, on the #161 source before combining the storage repair.
+
+Use the combined PR's own checks for the integrated issuer. The assertion describes a snapshot. Durable record incarnation, atomic proof consumption, final-holder retention and a production media workflow remain open.

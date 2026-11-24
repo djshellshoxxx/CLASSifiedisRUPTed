@@ -101,6 +101,31 @@ describe('authenticated zero-reference transition evidence', () => {
     expect(await snapshot()).toEqual(before);
   }, 30000);
 
+  it('issues a verifiable owner assertion from the actual zero-reference record without writing', async () => {
+    await putParent(destination, emptyParent, 1);
+    const before = await snapshot();
+    const owner = { type: repo.type, id: 'parent', ref: payload.ref };
+    const sealed = await destination.exportAttachmentZeroRefTransition(prior, password, owner);
+    expect(await verify(sealed)).toEqual(payload);
+    expect(await snapshot()).toEqual(before);
+  }, 30000);
+
+  it('does not issue an assertion while the signed prior parent still owns the attachment', async () => {
+    const before = await snapshot();
+    const owner = { type: repo.type, id: 'parent', ref: payload.ref };
+    await expect(destination.exportAttachmentZeroRefTransition(prior, password, owner))
+      .rejects.toThrow(/current record mismatch/);
+    expect(await snapshot()).toEqual(before);
+  }, 30000);
+
+  it('rejects issuance for a parent absent from the authenticated prior manifest', async () => {
+    await putParent(destination, emptyParent, 1);
+    const before = await snapshot();
+    await expect(destination.exportAttachmentZeroRefTransition(prior, password,
+      { type: repo.type, id: 'absent', ref: payload.ref })).rejects.toThrow(/prior evidence mismatch/);
+    expect(await snapshot()).toEqual(before);
+  }, 30000);
+
   it.each([
     ['different prior digest', { priorDataCid: 'sha256-' + '0'.repeat(64) }, /prior evidence mismatch/],
     ['nonconsecutive revision', { currentRevision: 3 }, /transition fields/],

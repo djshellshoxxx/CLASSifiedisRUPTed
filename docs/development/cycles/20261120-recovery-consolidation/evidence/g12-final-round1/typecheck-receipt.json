@@ -1,0 +1,24 @@
+{
+  "name": "typecheck",
+  "command": [
+    "node",
+    "node_modules/typescript/bin/tsc",
+    "-p",
+    "tsconfig.json",
+    "--noEmit"
+  ],
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "started_at": "2026-11-20T16:05:35.492692+00:00",
+  "duration_seconds": 13.953,
+  "timeout_seconds": 300,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 0,
+  "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

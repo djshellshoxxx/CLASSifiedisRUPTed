@@ -1,0 +1,7 @@
+{
+  "node": "v24.22.3",
+  "pnpm_pinned": "10.28.0",
+  "typescript": "7.0.2",
+  "vitest": "5.1.0",
+  "lockfile_sha256": "d72caa3b730141025fcbb083eedea8d5c1bf6774c5f2b7ed3e8e145f10308773"
+}

@@ -1,0 +1,25 @@
+{
+  "name": "tooling",
+  "command": [
+    "node",
+    "--test",
+    "tests/tooling/ci-plan.test.mjs",
+    "tests/tooling/feature-registry.test.mjs",
+    "tests/tooling/status.test.mjs",
+    "tests/tooling/trace.test.mjs"
+  ],
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "started_at": "2026-11-20T16:27:55.639530+00:00",
+  "duration_seconds": 4.348,
+  "timeout_seconds": 900,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 2525,
+  "log_sha256": "3478a99a3563b7632f35f07824e70a86a3a89573764461056ef4efa80d1489a4"
+}

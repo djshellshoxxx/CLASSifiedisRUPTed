@@ -141,6 +141,14 @@ export interface BlobRow {
   readonly createdAt: string;
 }
 
+/** Bounded tenant-scoped holder inventory; counts are unavailable after overflow. */
+export interface BlobReferenceCounts {
+  readonly referenceCount: number | null;
+  readonly holderCount: number | null;
+  readonly missingCount: number | null;
+  readonly limitExceeded: boolean;
+}
+
 export interface MigrationRow {
   readonly id: string;
   readonly checksum: string;
@@ -204,6 +212,8 @@ export interface DriverTx {
     remove(tenant: string, ref: string): void;
     /** Number of holder rows (referencing records) for the ref. */
     holders(tenant: string, ref: string): number;
+    /** Read-only counts for at most limit holder rows; no refs, holders or blob bytes. */
+    referenceCoverage(tenant: string, limit: number): BlobReferenceCounts;
     attach(tenant: string, ref: string, holder: string): void;
     detach(tenant: string, ref: string, holder: string): void;
     /** Refs of stored blobs without holders created before the cutoff, oldest first (no bytes read). */

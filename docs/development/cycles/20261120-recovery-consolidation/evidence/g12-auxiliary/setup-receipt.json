@@ -1,0 +1,23 @@
+{
+  "name": "setup",
+  "command": [
+    "node",
+    "tools/cli/classrup.mjs",
+    "setup",
+    "--non-interactive"
+  ],
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "started_at": "2026-11-20T16:28:25.001419+00:00",
+  "duration_seconds": 0.115,
+  "timeout_seconds": 900,
+  "timed_out": false,
+  "exit_code": 0,
+  "environment": {
+    "GOMAXPROCS": "1",
+    "GOMEMLIMIT": "384MiB",
+    "NODE_OPTIONS": "--max-old-space-size=1024"
+  },
+  "log_bytes": 63,
+  "log_sha256": "c89d07790ea5afee06615d737cc5268a492980da0e97fe6f063af24aefcea939"
+}

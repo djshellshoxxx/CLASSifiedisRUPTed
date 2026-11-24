@@ -1,0 +1,18 @@
+{
+  "command": [
+    "npx",
+    "--yes",
+    "pnpm@10.28.0",
+    "install",
+    "--frozen-lockfile",
+    "--prefer-offline",
+    "--fetch-retries=0",
+    "--fetch-timeout=10000"
+  ],
+  "source": "29daa061b4ad8b2899f6a8eaa910d12c80c93671",
+  "started_at": "2026-11-20T15:52:54.234597+00:00",
+  "duration_seconds": 17.448,
+  "exit_code": 0,
+  "log_bytes": 1946,
+  "log_sha256": "41cf0f3a3fdee45ea8665c18454911b5f748a70594b93e394cf42609922d0a4a"
+}

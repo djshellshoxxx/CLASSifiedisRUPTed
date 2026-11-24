@@ -4,9 +4,16 @@ This register accompanies the [comprehensive branch consolidation](BRANCH_CONSOL
 It is based on the current runtime, retained unique branch changes, actual test
 coverage and existing contracts. Specifications and generated source-path counts
 do not establish completion. The owner has authorized continued incomplete-
-feature work and successive independent audits; see the [current handoff](cycles/20261120-full-registry-recovery/HANDOFF.md).
+feature work and successive independent audits; see the [current handoff](cycles/20261120-recovery-consolidation/HANDOFF.md).
 
 ## Completed slices to preserve
+
+PR #63 has since merged as `449a619f1ae7b66cb42d9cab43dd5493bfe42c2e`,
+preserving the PR #58–#62 histories. Actual main-push Alpha `44713847841`
+and CLI `44713847763` passed. The inspected Alpha log records 78 passed
+product browser journeys at that exact main. Earlier source-specific local
+results and pending-gate statements below remain historical evidence; they
+must not be substituted for the new PR #64–#68 consolidation's qualification.
 
 - Reviewed local alpha and encrypted persistence from PRs #37 and #38.
 - Owner listing history from PR #39, plus later archive/recovery, pagination,
@@ -118,6 +125,20 @@ those findings require evidence reconciliation and are not 51 newly confirmed
 runtime vulnerabilities. No release or deployment was performed.
 
 ## Recommended next bounded milestone
+
+The current continuation integrates independent codec compatibility candidates
+#64–#66 with the attachment scope and diagnostic candidates #67–#68. It adds
+a tenant-indexed holder query and ordinary acceptance for rollback, encrypted
+reopen, lock revocation and compatible retry into a previously rejected restore
+destination. Complete this candidate's exact-source qualification before merge.
+The [attachment source inventory](cycles/20261120-recovery-consolidation/ATTACHMENT-SOURCE-INVENTORY.md)
+identifies the next substantive dependencies: an owning media domain with a
+canonical authenticated parent/revision contract, production admission and
+retention, followed by a separately versioned portable format and atomic
+destination persistence. Existing holder labels and arbitrary record fields
+must not be promoted into attachment authority.
+
+The preceding recommendation and qualification history follows for provenance.
 
 The merged [backup implementation](BACKUP_SCOPE.md) provides the previously
 recommended shared recovery preflight and record inventory. Its focused acceptance checks

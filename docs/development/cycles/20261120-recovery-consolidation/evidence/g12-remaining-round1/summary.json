@@ -1,0 +1,202 @@
+{
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "checks": [
+    {
+      "name": "domain-2",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-remaining-round1/domain-2.json",
+        "--shard=2/8"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:13:50.540437+00:00",
+      "duration_seconds": 93.152,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 110,
+      "log_sha256": "73b10846cc2ea6b6368bc968f86b045052b8147641b2c7bf05e83d33ff98d457"
+    },
+    {
+      "name": "domain-3",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-remaining-round1/domain-3.json",
+        "--shard=3/8"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:15:23.758945+00:00",
+      "duration_seconds": 103.969,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 110,
+      "log_sha256": "62980c3f0b25ac27493d0dcb8b597fa51d720370e17e2bda4f5f7c171c50730a"
+    },
+    {
+      "name": "domain-4",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-remaining-round1/domain-4.json",
+        "--shard=4/8"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:17:07.753278+00:00",
+      "duration_seconds": 30.853,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 110,
+      "log_sha256": "c827ef5982be3a650ecf49cb035c78aca2f456a6df03ab7325648c6380e6ce9d"
+    },
+    {
+      "name": "domain-5",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-remaining-round1/domain-5.json",
+        "--shard=5/8"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:17:38.615249+00:00",
+      "duration_seconds": 79.36,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 110,
+      "log_sha256": "a233a7dcb6261371f278b005c514f36ac87dc2805fa177ac7772706905ddb95c"
+    },
+    {
+      "name": "domain-6",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-remaining-round1/domain-6.json",
+        "--shard=6/8"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:18:58.030927+00:00",
+      "duration_seconds": 14.654,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 110,
+      "log_sha256": "8f4506b960c5cdd9ca2d7476c35fceb19b26ea03a7d22a2ce1e8d5fa97e58561"
+    },
+    {
+      "name": "domain-7",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-remaining-round1/domain-7.json",
+        "--shard=7/8"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:19:12.774710+00:00",
+      "duration_seconds": 159.333,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 1,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 285,
+      "log_sha256": "949c13fcfc3831d3f131faadb1bb30b88308e653ce34a8a856a94970ca2ae489"
+    },
+    {
+      "name": "domain-8",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-remaining-round1/domain-8.json",
+        "--shard=8/8"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:21:52.393644+00:00",
+      "duration_seconds": 71.664,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 1,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 110,
+      "log_sha256": "7b8b4150962f85da537b76a97bcb2c79e7c794ed12d53fbff8fd6f2b85106061"
+    }
+  ]
+}

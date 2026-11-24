@@ -1,0 +1,155 @@
+{
+  "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+  "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+  "checks": [
+    {
+      "name": "typecheck",
+      "command": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.json",
+        "--noEmit"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:05:35.492692+00:00",
+      "duration_seconds": 13.953,
+      "timeout_seconds": 300,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "focused-recovery",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/integration/attachment-reference-coverage.test.ts",
+        "tests/integration/production-future-codec-rejection.test.ts",
+        "tests/integration/production-downgrade-export.test.ts",
+        "tests/integration/production-foreign-codec-isolation.test.ts",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-final-round1/focused-recovery.json"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:05:49.458280+00:00",
+      "duration_seconds": 51.084,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 114,
+      "log_sha256": "00c7b5c6a8e3d021d1077dfa6f384fcc1f79316f9db3ef4db97cbdc7186ce82f"
+    },
+    {
+      "name": "spec",
+      "command": [
+        "node",
+        "tools/specgen/specgen.mjs",
+        "check"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:06:40.558384+00:00",
+      "duration_seconds": 2.585,
+      "timeout_seconds": 300,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 48,
+      "log_sha256": "8b9ba7ae8d9683b9b5fb588f2ab3c07b905c848a93a045c538eaf902ab6ea865"
+    },
+    {
+      "name": "deps",
+      "command": [
+        "node",
+        "tools/deps/deps.mjs"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:06:43.195224+00:00",
+      "duration_seconds": 1.154,
+      "timeout_seconds": 300,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 27,
+      "log_sha256": "18ccefde637fed45e661c7a82351c243d90de5057a27cb8012b80148037554ae"
+    },
+    {
+      "name": "registry",
+      "command": [
+        "node",
+        "packages/platform/scripts/gen-registry.mjs",
+        "--check",
+        "--strict"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:06:44.378861+00:00",
+      "duration_seconds": 2.703,
+      "timeout_seconds": 300,
+      "timed_out": false,
+      "exit_code": 0,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 174,
+      "log_sha256": "bae6ffa117fc88037b39e7176109499ec43e92a62dcb6ed7de1ddd8f11928971"
+    },
+    {
+      "name": "domain-1",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=forks",
+        "--maxWorkers=1",
+        "--fileParallelism=false",
+        "--reporter=json",
+        "--outputFile=/workspace/scratch/e0ea2385d962/classrup-validation/g12-final-round1/domain-1.json",
+        "--shard=1/8"
+      ],
+      "source": "d55bb48117c0f9e4579b01fd6c12030585601d68",
+      "tree": "7c2a8e3c341498f54e57489a31b2711c9034d3e5",
+      "started_at": "2026-11-20T16:06:47.113265+00:00",
+      "duration_seconds": 135.975,
+      "timeout_seconds": 900,
+      "timed_out": false,
+      "exit_code": 1,
+      "environment": {
+        "GOMAXPROCS": "1",
+        "GOMEMLIMIT": "384MiB",
+        "NODE_OPTIONS": "--max-old-space-size=1024"
+      },
+      "log_bytes": 106,
+      "log_sha256": "39b84a1edb3361976a60130ebd713af2e65ffceea246106ae63907ce6eb6d3e2"
+    }
+  ]
+}

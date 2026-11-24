@@ -343,21 +343,20 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
         // Observe the actual current destination row, not caller-provided data
         // or absence from the current manifest. Read-only: even a valid result
         // cannot authorize future mutation without transaction-local revalidation.
-        return storage.read(async tx => {
-          const row = tx.records.get(identity.principal, evidence.type, evidence.id);
-          if (!row || row.revision !== evidence.currentRevision) {
-            throw new Error('Attachment transition current record mismatch');
-          }
-          const data = codec.parse(structuredClone(row.data));
-          if (codec.recordId!(data) !== row.id) throw new Error('Attachment parent key mismatch');
-          const refs = codec.attachmentRefs!(structuredClone(data));
-          if (!Array.isArray(refs) || refs.length !== 0) throw new Error('Attachment transition requires zero current references');
-          await preflightRecords([{ ...row, data }], identity.principal, registeredRecordTypes, guard, true);
-          const dataCid = `sha256-${await sha256Hex(strictCanonicalJson(data))}`;
-          guard();
-          if (dataCid !== evidence.currentDataCid) throw new Error('Attachment transition current record mismatch');
-          return evidence;
-        });
+        const row = await storage.read(tx => tx.records.get(identity.principal, evidence.type, evidence.id));
+        guard();
+        if (!row || row.revision !== evidence.currentRevision) {
+          throw new Error('Attachment transition current record mismatch');
+        }
+        const data = codec.parse(structuredClone(row.data));
+        if (codec.recordId(data) !== row.id) throw new Error('Attachment parent key mismatch');
+        const refs = codec.attachmentRefs(structuredClone(data));
+        if (!Array.isArray(refs) || refs.length !== 0) throw new Error('Attachment transition requires zero current references');
+        await preflightRecords([{ ...row, data }], identity.principal, registeredRecordTypes, guard, true);
+        const dataCid = `sha256-${await sha256Hex(strictCanonicalJson(data))}`;
+        guard();
+        if (dataCid !== evidence.currentDataCid) throw new Error('Attachment transition current record mismatch');
+        return evidence;
       },
       async importPublicAttachmentBatch(sealed, passphrase, byteSet, retireOwner) {
         guard();

@@ -6,6 +6,8 @@ import { verifySealedAttachmentManifest } from './attachment-manifest.ts';
 export const ZERO_REF_TRANSITION_TYPE = 'classrup.vault.attachment_zero_ref_transition/v1';
 const CID = /^sha256-[0-9a-f]{64}$/;
 const decoder = new TextDecoder('utf-8', { fatal: true });
+const assertionFields = ['principal', 'type', 'id', 'ref', 'priorRevision', 'priorDataCid',
+  'currentRevision', 'currentDataCid'] as const;
 
 export interface AttachmentZeroRefTransition {
   readonly principal: string;
@@ -41,7 +43,8 @@ export async function verifySealedAttachmentZeroRefTransition(
     });
     const payload = envelope.payload;
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)
-      || Object.keys(payload).sort().join(',') !== 'currentDataCid,currentRevision,id,priorDataCid,priorRevision,principal,ref,type'
+      || Object.keys(payload).length !== assertionFields.length
+      || !assertionFields.every(field => Object.hasOwn(payload, field))
       || envelope.seq !== 1 || envelope.prev !== null || Object.keys(envelope.ext).length !== 0) {
       throw new Error('Invalid attachment transition structure');
     }

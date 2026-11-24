@@ -18,3 +18,11 @@ Source commits: 3947d680df804bd216d9c1d1c58dbe880e55a8d4 (parser/verifier), 771a
 - Defensive source review: inspect evidence-author binding, prior manifest scope, revision/digest binding, session checks, canonical codec and replay/incarnation limitations; define durable transaction-local consumption and prior-record continuity before any retirement. Do not resume interrupted reproduction follow-ups. Leave exact reviewed identities and unresolved risks.
 
 Wait for actual current-source Alpha/CLI and independent reviewer evidence, then qualify upstream ancestors (do not erase original cancelled results) and verify actual merge tree and main push qualification. No merge of incompatible #8, no release/deployment/force push/branch deletion/paid API, no unrelated automation changes.
+
+## Executed follow-up
+
+The original positive case failed at `153ecf33855a309dba808a8ebd437667d380dfed`. The verifier compared sorted keys to a literal in which `principal` followed `priorRevision`. It now requires the exact eight own fields without depending on their order. The destination read returns a detached record and releases the storage queue before invoking validators and hashing. Both typed barter fixtures implement the required verifier method.
+
+The corrected executable tree before this handoff edit was `3f0285ce8bbcf30c8da2916f3f556c3fa2cd6eba`. Nine cases passed locally on Node 24.22.3 using the pinned dependencies and original time limits. Each restores an independent destination from the same signed backup. Coverage includes valid repeat verification, foreign signing with the same passphrase, retained references at the correct revision and digest, stale and malformed assertions, preserved holder state, and validation outside the storage read. Repository TypeScript, specification, dependency, registry, money and build checks passed. Independent functional, code and defensive reviews contributed findings. Both source reviewers verified the corrected tree.
+
+The next vault work remains production issuance, durable record-incarnation and replay checks, and transaction-local retirement authorization. The stock PWA has no attachment-aware codec. Track hosted qualification on the updated PR head.

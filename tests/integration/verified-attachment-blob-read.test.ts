@@ -14,6 +14,35 @@ const adapters = [
 ];
 
 describe('verified content-addressed attachment reads', () => {
+  it('copies the intrinsic span of a stored byte view in each verification path', async () => {
+    const storage = createMemoryStorage();
+    try {
+      const backing = Uint8Array.of(90, 7, 8, 91);
+      const bytes = backing.subarray(1, 3);
+      const saved = await storage.transaction(tx => tx.blobs.put({
+        tenant: 'owner', bytes, contentType: 'image/png', privacy: 'P0', encrypted: false, now,
+      }));
+      if (!saved.ok) throw new Error('Could not save fixture blob');
+      const ref = saved.value.ref;
+      const stored = await storage.read(tx => tx.blobs.get('owner', ref));
+      if (!stored) throw new Error('Missing fixture blob');
+      Object.defineProperty(bytes, 'byteLength', { value: backing.byteLength });
+      const row = { ...stored, bytes };
+      const adapter: Storage = { ...storage, read: fn => storage.read(tx => fn({
+        ...tx, blobs: { ...tx.blobs, get: () => row },
+      })) };
+      const direct = await verifyStoredBlob(row);
+      const one = await readVerifiedBlob(adapter, 'owner', ref);
+      const [batch] = await readVerifiedBlobBatch(adapter, 'owner', [ref], 2);
+      for (const result of [direct, one, batch]) {
+        expect(result?.bytes).toEqual(Uint8Array.of(7, 8));
+        expect(result?.size).toBe(2);
+        expect(result?.bytes.buffer).not.toBe(backing.buffer);
+      }
+      expect(backing).toEqual(Uint8Array.of(90, 7, 8, 91));
+    } finally { await storage.close(); }
+  });
+
   it('rejects invalid captured metadata even when a later getter read looks valid', async () => {
     const bytes = Uint8Array.of(47, 13, 5);
     const blob: MediaBlob = {

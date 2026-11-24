@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createMemoryStorage } from '../../packages/kernel/src/storage/storage.ts';
+import { createMemoryStorage, type Storage } from '../../packages/kernel/src/storage/storage.ts';
 import { blobRefOf } from '../../packages/kernel/src/storage/tx.ts';
 import { readVerifiedBlob, readVerifiedBlobBatch, verifyStoredBlob } from '../../packages/kernel/src/storage/verified-blob.ts';
 
@@ -78,6 +78,32 @@ describe('verification scratch-byte cleanup', () => {
         expect(cleared.length).toBeGreaterThan(0);
         expect((await readVerifiedBlobBatch(storage, 'owner', [saved.value.ref]))[0]?.bytes)
           .toEqual(bytes);
+      } finally { wipe.mockRestore(); }
+    } finally { await storage.close(); }
+  });
+
+  it('wipes the single snapshot when storage rejects a completed read', async () => {
+    const storage = createMemoryStorage();
+    try {
+      const bytes = Uint8Array.of(41, 42, 43);
+      const saved = await storage.transaction(tx => tx.blobs.put({
+        tenant: 'owner', bytes, contentType, privacy: 'P0', encrypted: false, now,
+      }));
+      if (!saved.ok) throw new Error('Could not save fixture blob');
+      const failure = new Error('Read completion failed');
+      const interrupted: Storage = { ...storage, async read(fn) {
+        await storage.read(fn);
+        throw failure;
+      } };
+      const wipe = vi.spyOn(Uint8Array.prototype, 'fill');
+      try {
+        await expect(readVerifiedBlob(interrupted, 'owner', saved.value.ref)).rejects.toBe(failure);
+        const wiped = wipe.mock.instances.filter(view =>
+          view instanceof Uint8Array && view.byteLength === bytes.byteLength);
+        expect(wiped).toHaveLength(1);
+        expect(wiped[0]).toEqual(Uint8Array.of(0, 0, 0));
+        expect((await storage.read(tx => tx.blobs.get('owner', saved.value.ref)))?.bytes)
+          .toEqual(Uint8Array.of(41, 42, 43));
       } finally { wipe.mockRestore(); }
     } finally { await storage.close(); }
   });

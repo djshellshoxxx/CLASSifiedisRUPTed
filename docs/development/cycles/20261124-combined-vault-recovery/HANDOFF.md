@@ -32,3 +32,11 @@ and CLI runs before merging. After a merge, verify the actual main tree and its
 push checks. The feature backlog still includes production attachment-evidence
 issuance, durable record-incarnation and replay checks, and a PWA domain media
 workflow. The current verifier is read-only.
+
+## Attachment read cleanup follow-up
+
+Code and functional review covered head `3c051fec4082f071a6adb45c5fc934882e3fda43`. Its six final documentation edits preserved the executable tree reviewed earlier. Its hosted Alpha passed 1,020 domain assertions and 78 browser journeys across Chromium, Firefox and WebKit. CLI passed 46 tests on each of Node 22 and 24. Those figures describe the earlier head.
+
+Defensive review identified two issues in that tree. A read adapter could reject after the manifest exporter or single-blob reader had collected bytes, leaving temporary copies unwiped. The kernel also used the view's public byteLength property when validating the size of a copy. This follow-up holds owned copies through finalization of the read and shares the vault's existing fixed-size copy routine with the kernel. The adapter's original bytes and a successful caller's returned bytes remain intact.
+
+The synthetic late-read regression failed before the manifest repair and passed afterward, alongside the existing missing-parent-bytes case. Kernel regressions cover late read failure and byte views with an offset. Both failed before the repair. The focused kernel and attachment-copy run passed 27 tests in five files and the manifest cleanup file passed both cases. Full TypeScript checking passed. Use this PR's updated Alpha and CLI results for integration, then check the main-push workflows on the actual merge SHA. The later read-only transition issuer is tracked in the #159–#161 stack.

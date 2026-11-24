@@ -1,4 +1,4 @@
-import { blobRefOf, isBlobRef, MAX_BLOB_BYTES, MAX_VERIFIED_BLOB_BATCH_BYTES, MAX_VERIFIED_BLOB_BATCH_ITEMS } from '@classrup/kernel';
+import { blobRefOf, copyBoundedBlobBytes, isBlobRef, MAX_BLOB_BYTES, MAX_VERIFIED_BLOB_BATCH_BYTES, MAX_VERIFIED_BLOB_BATCH_ITEMS } from '@classrup/kernel';
 import { unseal } from '@classrup/identity';
 import { MAX_ENVELOPE_BYTES, verifyEnvelope } from '@classrup/federation';
 
@@ -142,26 +142,7 @@ export async function verifySealedAttachmentManifest(
   }
 }
 
-// Read the intrinsic view size rather than an own or subclass byteLength getter.
-const typedArrayByteLength = Object.getOwnPropertyDescriptor(
-  Object.getPrototypeOf(Uint8Array.prototype), 'byteLength',
-)!.get!;
-
-/** Internal bounded copy shared by admission and the destination write preparation. */
-export function copyAttachmentBatchMember(source: unknown, size: number, error: string): Uint8Array {
-  if (!Number.isSafeInteger(size) || size < 0 || size > MAX_BLOB_BYTES
-    || !(source instanceof Uint8Array) || typedArrayByteLength.call(source) !== size) {
-    throw new Error(error);
-  }
-  const copy = new Uint8Array(size);
-  try {
-    copy.set(source);
-    return copy;
-  } catch (cause) {
-    copy.fill(0);
-    throw cause;
-  }
-}
+export { copyBoundedBlobBytes as copyAttachmentBatchMember };
 
 /**
  * Authenticate a signed, encrypted manifest and verify a *complete* received
@@ -202,7 +183,7 @@ export async function verifySealedAttachmentBlobBatch(
       if (expected.size > MAX_VERIFIED_BLOB_BATCH_BYTES - total) {
         throw new Error('Attachment transport byte size mismatch');
       }
-      detached.push(copyAttachmentBatchMember(source, expected.size, 'Attachment transport byte size mismatch'));
+      detached.push(copyBoundedBlobBytes(source, expected.size, 'Attachment transport byte size mismatch'));
       total += expected.size;
     }
     if (total !== manifest.totalBytes) {

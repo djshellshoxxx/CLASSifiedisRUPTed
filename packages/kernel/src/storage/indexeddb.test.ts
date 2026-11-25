@@ -111,6 +111,12 @@ describe('IndexedDB vault adapter (PS-119)', () => {
       },
     };
     const storage = await openIndexedDbStorage({ name: 'vault-release-error', indexedDB: factory, locks, clock });
+    const first = storage.close();
+    const concurrent = storage.close();
+    await Promise.all([
+      expect(first).rejects.toBe(settlementError),
+      expect(concurrent).rejects.toBe(settlementError),
+    ]);
     await expect(storage.close()).rejects.toBe(settlementError);
   });
 

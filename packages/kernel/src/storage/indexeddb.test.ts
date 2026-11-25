@@ -6,7 +6,7 @@ import { AppErrorException } from '../errors/app-error.ts';
 import { ok } from '../errors/result.ts';
 import type { EventEnvelope } from '../events/envelope.ts';
 import { createDeterministicIds } from '../ids/uuidv7.ts';
-import { createIndexedDbDriver, openIndexedDbStorage, VAULT_DB_VERSION, type VaultLocks } from './indexeddb.ts';
+import { createIndexedDbDriver, openIndexedDbConnection, openIndexedDbStorage, VAULT_DB_VERSION, type VaultLocks } from './indexeddb.ts';
 import { defineRepo } from './repo.ts';
 import { writeScope } from './scope.ts';
 import { createStorage } from './storage.ts';
@@ -60,6 +60,147 @@ function rawOpen(factory: IDBFactory, name: string): Promise<IDBDatabase> {
 }
 
 describe('IndexedDB vault adapter (PS-119)', () => {
+  it('TEST-PS-119-09.T08 a rejected blocked open aborts its eventual upgrade and releases the lock for retry', async () => {
+    const factory = new IDBFactory();
+    const locks = fakeLocks();
+    const name = 'vault-blocked-upgrade';
+    const first = await openIndexedDbStorage({ name, indexedDB: factory, locks, clock });
+    await first.transaction((tx) => repo(tx).put('d1', { title: 'preserved' }, { expectedRevision: 0 }));
+    await first.close();
+    const blocker = await rawOpen(factory, name);
+    // Exercise the actual open entrypoint with a test-only version increment.
+    // Production VAULT_DB_VERSION is deliberately unchanged.
+    let settled!: Promise<string>;
+    const upgradeFactory = new Proxy(factory, {
+      get(target, prop) {
+        if (prop === 'open') return (dbName: string, version?: number) => {
+          const r = target.open(dbName, (version ?? VAULT_DB_VERSION) + 1);
+          settled = new Promise<string>((resolve) => {
+            r.addEventListener('error', () => resolve(r.error?.name ?? 'unknown'));
+            r.addEventListener('success', () => {
+              resolve('success');
+            });
+          });
+          return r;
+        };
+        return Reflect.get(target, prop, target) as unknown;
+      },
+    });
+    try {
+      await expect(openIndexedDbConnection({ name, indexedDB: upgradeFactory, locks })).rejects.toThrow('blocked');
+    } finally {
+      blocker.close();
+    }
+    expect(await settled).toBe('AbortError');
+    const unchanged = await openIndexedDbStorage({ name, indexedDB: factory, locks, clock });
+    expect(await unchanged.read((tx) => repo(tx).get('d1')?.data)).toEqual({ title: 'preserved' });
+    await unchanged.close();
+    const retry = await openIndexedDbConnection({ name, indexedDB: upgradeFactory, locks });
+    await retry.close();
+  });
+
+  it('TEST-PS-119-09.T08 closes a late success after a blocked open without claiming a writer', async () => {
+    const locks = fakeLocks();
+    const name = 'vault-late-success';
+    let closeCalls = 0;
+    let writerTransactions = 0;
+    const lateDb = {
+      close() { closeCalls++; },
+      transaction() { writerTransactions++; throw new Error('unexpected writer transaction'); },
+    };
+    const r = {
+      result: lateDb,
+      onblocked: null as (() => void) | null,
+      onsuccess: null as (() => void) | null,
+    };
+    const factory = {
+      open() {
+        queueMicrotask(() => r.onblocked?.());
+        return r;
+      },
+    } as unknown as IDBFactory;
+    await expect(openIndexedDbConnection({ name, indexedDB: factory, locks })).rejects.toThrow('blocked');
+    expect(r.onsuccess).toBeTypeOf('function');
+    r.onsuccess?.();
+    expect(closeCalls).toBe(1);
+    expect(writerTransactions).toBe(0);
+    // A subsequent ordinary open with the same lock name must not be blocked.
+    const retry = await openIndexedDbConnection({ name, indexedDB: new IDBFactory(), locks });
+    await retry.close();
+  });
+
+  it('TEST-PS-119-09.T08 waits for terminal abort and rolls back an entire partially scheduled write', async () => {
+    const rawFactory = new IDBFactory();
+    const name = 'vault-terminal-write';
+    let aborts = 0;
+    const factory = new Proxy(rawFactory, {
+      get(target, prop) {
+        if (prop === 'open') return (dbName: string, version?: number) => {
+          const r = target.open(dbName, version);
+          r.addEventListener('success', () => r.result.addEventListener('abort', () => { aborts++; }));
+          return r;
+        };
+        return Reflect.get(target, prop, target) as unknown;
+      },
+    });
+    const connection = await openIndexedDbConnection({ name, indexedDB: factory, locks: fakeLocks() });
+    try {
+      // The first put is queued normally, the second fails structured clone.
+      // Neither may survive, and rejection must follow the actual abort event.
+      await expect(connection.persist([
+        { table: 'meta', key: 'partial', row: { value: 1 } },
+        { table: 'meta', key: 'invalid', row: { value: () => 2 } },
+      ])).rejects.toMatchObject({ name: 'DataCloneError' });
+      expect(aborts).toBe(1);
+      expect((await connection.snapshot()).meta).toEqual([]);
+      await connection.persist([{ table: 'meta', key: 'kept', row: { value: 3 } }]);
+    } finally {
+      await connection.close();
+    }
+    const reopened = await openIndexedDbConnection({ name, indexedDB: rawFactory, locks: fakeLocks() });
+    try {
+      expect((await reopened.snapshot()).meta).toEqual([['kept', { value: 3 }]]);
+    } finally {
+      await reopened.close();
+    }
+  });
+
+  it('TEST-PS-119-09.T08 waits for a failed snapshot transaction to abort before rejecting', async () => {
+    const rawFactory = new IDBFactory();
+    let abortRead = true;
+    let aborts = 0;
+    const factory = new Proxy(rawFactory, {
+      get(target, prop) {
+        if (prop === 'open') return (dbName: string, version?: number) => {
+          const r = target.open(dbName, version);
+          r.addEventListener('success', () => {
+            const db = r.result;
+            db.addEventListener('abort', () => { aborts++; });
+            const transaction = db.transaction.bind(db);
+            db.transaction = (...args: Parameters<IDBDatabase['transaction']>) => {
+              const tx = transaction(...args);
+              if (abortRead && args[1] === 'readonly') {
+                abortRead = false;
+                queueMicrotask(() => tx.abort());
+              }
+              return tx;
+            };
+          });
+          return r;
+        };
+        return Reflect.get(target, prop, target) as unknown;
+      },
+    });
+    const connection = await openIndexedDbConnection({ name: 'vault-terminal-read', indexedDB: factory, locks: fakeLocks() });
+    try {
+      await expect(connection.snapshot()).rejects.toMatchObject({ name: 'AbortError' });
+      expect(aborts).toBe(1);
+      expect((await connection.snapshot()).meta).toEqual([]);
+    } finally {
+      await connection.close();
+    }
+  });
+
   it('TEST-PS-119-09.T08 storage close waits for the writer lease to settle before reopen', async () => {
     const factory = new IDBFactory();
     const held = new Set<string>();

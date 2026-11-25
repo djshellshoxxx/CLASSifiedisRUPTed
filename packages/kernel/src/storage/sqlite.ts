@@ -31,7 +31,7 @@ const n = (v: SQLInputValue | undefined): number => Number(v);
 const col = (slot: IndexSlot): string => `idx${slot}`;
 
 function toRecord(r: SqlRow): RecordRow {
-  return { tenant: s(r['tenant']), type: s(r['type']), id: s(r['id']), revision: n(r['revision']), data: s(r['data']), idx: [sn(r['idx1']), sn(r['idx2']), sn(r['idx3']), sn(r['idx4'])], createdAt: s(r['created_at']), updatedAt: s(r['updated_at']) };
+  return { tenant: s(r['tenant']), type: s(r['type']), id: s(r['id']), revision: n(r['revision']), data: s(r['data']), idx: [sn(r['idx1']), sn(r['idx2']), sn(r['idx3']), sn(r['idx4'])], createdAt: s(r['created_at']), updatedAt: s(r['updated_at']), ...(r['incarnation'] === null || r['incarnation'] === undefined ? {} : { incarnation: s(r['incarnation']) }) };
 }
 function toOutbox(r: SqlRow): OutboxRow {
   return { seq: n(r['seq']), eventId: s(r['event_id']), tenant: s(r['tenant']), type: s(r['type']), aggregateType: s(r['aggregate_type']), aggregateId: s(r['aggregate_id']), revision: n(r['revision']), occurredAt: s(r['occurred_at']), envelope: s(r['envelope']) };
@@ -98,7 +98,7 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
         const r = one('SELECT * FROM records WHERE tenant = ? AND type = ? AND id = ?', t, ty, id);
         return r ? toRecord(r) : undefined;
       },
-      upsert: (r) => void run('INSERT OR REPLACE INTO records (tenant, type, id, revision, data, idx1, idx2, idx3, idx4, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', r.tenant, r.type, r.id, r.revision, r.data, r.idx[0], r.idx[1], r.idx[2], r.idx[3], r.createdAt, r.updatedAt),
+      upsert: (r) => void run('INSERT OR REPLACE INTO records (tenant, type, id, revision, data, idx1, idx2, idx3, idx4, created_at, updated_at, incarnation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', r.tenant, r.type, r.id, r.revision, r.data, r.idx[0], r.idx[1], r.idx[2], r.idx[3], r.createdAt, r.updatedAt, r.incarnation ?? null),
       remove: (t, ty, id) => void run('DELETE FROM records WHERE tenant = ? AND type = ? AND id = ?', t, ty, id),
       query: (q) => {
         const { sql, params } = recordQuerySql(q);

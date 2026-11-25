@@ -342,7 +342,7 @@ export interface MemoryDriverOptions {
   /** Persists a committed change set; on rejection the working set is restored and the error rethrown. */
   readonly persist?: (changes: readonly Change[]) => Promise<void>;
   readonly kind?: 'memory' | 'indexeddb';
-  readonly onClose?: () => void;
+  readonly onClose?: () => void | Promise<void>;
 }
 
 function loadSnapshot(state: MemoryState, snapshot: Snapshot | undefined): void {

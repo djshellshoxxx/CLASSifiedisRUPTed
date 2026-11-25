@@ -60,6 +60,60 @@ function rawOpen(factory: IDBFactory, name: string): Promise<IDBDatabase> {
 }
 
 describe('IndexedDB vault adapter (PS-119)', () => {
+  it('TEST-PS-119-09.T08 storage close waits for the writer lease to settle before reopen', async () => {
+    const factory = new IDBFactory();
+    const held = new Set<string>();
+    let allowRelease!: () => void;
+    const releaseGate = new Promise<void>(resolve => { allowRelease = resolve; });
+    let callbackFinished!: () => void;
+    const releasing = new Promise<void>(resolve => { callbackFinished = resolve; });
+    const locks: VaultLocks = {
+      async request(name, _options, callback) {
+        if (held.has(name)) return callback(null);
+        held.add(name);
+        try {
+          await callback({ name });
+          callbackFinished();
+          await releaseGate;
+        } finally { held.delete(name); }
+      },
+    };
+    const opts = { name: 'vault-delayed-release', indexedDB: factory, locks, clock };
+    const first = await openIndexedDbStorage(opts);
+    await first.transaction(tx => repo(tx).put('d1', { title: 'kept' }, { expectedRevision: 0 }));
+    let closed = false;
+    const closing = first.close().then(() => { closed = true; });
+    try {
+      await releasing;
+      // Drain promise continuations without opening the controlled release gate.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      // The lease is deliberately held after the callback has completed.
+      expect(closed).toBe(false);
+      expect(held.size).toBe(1);
+    } finally {
+      allowRelease();
+      await closing;
+    }
+    expect(held.size).toBe(0);
+    const reopened = await openIndexedDbStorage(opts);
+    try {
+      expect(await reopened.read(tx => repo(tx).get('d1')?.data)).toEqual({ title: 'kept' });
+    } finally { await reopened.close(); }
+  });
+
+  it('TEST-PS-119-09.T08 storage close propagates a writer lease settlement error', async () => {
+    const factory = new IDBFactory();
+    const settlementError = new Error('lock manager settlement failed');
+    const locks: VaultLocks = {
+      async request(name, _options, callback) {
+        await callback({ name });
+        throw settlementError;
+      },
+    };
+    const storage = await openIndexedDbStorage({ name: 'vault-release-error', indexedDB: factory, locks, clock });
+    await expect(storage.close()).rejects.toBe(settlementError);
+  });
+
   it('TEST-PS-119-09.T08 commits persist across reopen; a failed IndexedDB commit restores the working set to the last commit', async () => {
     const factory = new IDBFactory();
     const s1 = await openIndexedDbStorage({ name: 'vault-a', indexedDB: factory, clock });

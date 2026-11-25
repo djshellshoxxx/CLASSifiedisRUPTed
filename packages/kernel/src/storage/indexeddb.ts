@@ -106,7 +106,7 @@ async function persist(db: IDBDatabase, changes: readonly Change[], writer: stri
 export interface IndexedDbDriverOptions {
   /** Writer token recorded by claimWriter; when set, every commit aborts unless it is still current. */
   readonly writer?: string;
-  readonly onClose?: () => void;
+  readonly onClose?: () => void | Promise<void>;
 }
 
 /** Driver over an open database and its loaded snapshot (exported for failure-injection tests). */
@@ -117,24 +117,25 @@ export function createIndexedDbDriver(db: IDBDatabase, snapshot: Snapshot, opts:
     persist: (changes) => persist(db, changes, opts.writer),
     onClose: () => {
       db.close();
-      opts.onClose?.();
+      return opts.onClose?.();
     },
   });
 }
 
 /** Resolves with a release function while the exclusive lock is held, or undefined when another holder has it. */
-function acquireLock(locks: VaultLocks, name: string): Promise<(() => void) | undefined> {
+function acquireLock(locks: VaultLocks, name: string): Promise<(() => Promise<void>) | undefined> {
   let release: () => void = () => undefined;
   const held = new Promise<void>((r) => {
     release = r;
   });
   return new Promise((resolve, reject) => {
-    locks
-      .request(name, { mode: 'exclusive', ifAvailable: true }, (lock) => {
-        resolve(lock ? release : undefined);
-        return lock ? held : Promise.resolve();
-      })
-      .catch(reject);
+    const request = locks.request(name, { mode: 'exclusive', ifAvailable: true }, (lock) => {
+      // Resolving the held callback starts release; the request promise
+      // settles only once the lock manager has finished releasing the lock.
+      resolve(lock ? () => { release(); return request.then(() => undefined); } : undefined);
+      return lock ? held : Promise.resolve();
+    });
+    void request.catch(reject);
   });
 }
 
@@ -156,7 +157,7 @@ export interface IndexedDbOptions {
 export interface IndexedDbConnection {
   snapshot(): Promise<Snapshot>;
   persist(changes: readonly Change[]): Promise<void>;
-  close(): void;
+  close(): Promise<void>;
 }
 
 /** Owns the writer fence while a higher layer authenticates and decodes its snapshot. */
@@ -164,7 +165,7 @@ export async function openIndexedDbConnection(opts: IndexedDbOptions): Promise<I
   const factory = opts.indexedDB ?? globalThis.indexedDB;
   if (!factory) throw new Error('IndexedDB is not available');
   const locks: VaultLocks | undefined = opts.locks ?? globalThis.navigator?.locks;
-  const release = locks ? await acquireLock(locks, `classrup-storage:${opts.name}`) : () => undefined;
+  const release = locks ? await acquireLock(locks, `classrup-storage:${opts.name}`) : async () => undefined;
   if (!release) throw vaultBusy('vault_locked');
   let db: IDBDatabase | undefined;
   try {
@@ -176,13 +177,25 @@ export async function openIndexedDbConnection(opts: IndexedDbOptions): Promise<I
     const writer = bytesToBase64url(token);
     await claimWriter(conn, writer);
     let closed = false;
+    let closeSettlement: Promise<void> | undefined;
     const check = (): void => { if (closed) throw new Error('Storage closed'); };
     return {
       async snapshot() { check(); return loadSnapshot(conn); },
       async persist(changes) { check(); await persist(conn, changes, writer); },
-      close() { if (closed) return; closed = true; conn.close(); release(); },
+      close() {
+        if (closeSettlement) return closeSettlement;
+        closed = true;
+        closeSettlement = (async () => {
+          try { conn.close(); } finally { await release(); }
+        })();
+        return closeSettlement;
+      },
     };
-  } catch (error) { db?.close(); release(); throw error; }
+  } catch (error) {
+    // Drain the acquired lease without replacing the original open failure.
+    try { try { db?.close(); } finally { await release(); } } catch { /* preserve open error */ }
+    throw error;
+  }
 }
 
 /** Opens an unencrypted working set and runs retention; user vaults add protection in @classrup/vault. */
@@ -198,7 +211,9 @@ export async function openIndexedDbStorage(opts: IndexedDbOptions): Promise<Stor
     if (!swept.ok) throw new AppErrorException(swept.error);
     return storage;
   } catch (error) {
-    if (storage) await storage.close(); else connection.close();
+    try {
+      if (storage) await storage.close(); else await connection.close();
+    } catch { /* preserve initialization error */ }
     throw error;
   }
 }

@@ -46,7 +46,10 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
     const initial = await connection.snapshot();
     // The protected signing identity is the only row readable before passphrase verification.
     current = createStorage(createMemoryDriver({ kind: 'indexeddb', snapshot: { records: (initial.records ?? []).filter(([id]) => id === IDENTITY) } }));
-  } catch (error) { connection.close(); throw error; }
+  } catch (error) {
+    try { await connection.close(); } catch { /* preserve snapshot error */ }
+    throw error;
+  }
 
   async function address(table: TableName, id: string): Promise<string> {
     if (!addressKey) throw new Error('Vault storage locked');
@@ -103,7 +106,12 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
       current = undefined;
       // Every caller observes the same drain and connection-release outcome.
       closeSettlement = (async () => {
-        try { await previous?.close(); } finally { connection.close(); }
+        try { await previous?.close(); }
+        catch (error) {
+          try { await connection.close(); } catch { /* preserve drain error */ }
+          throw error;
+        }
+        await connection.close();
       })();
       return closeSettlement;
     },

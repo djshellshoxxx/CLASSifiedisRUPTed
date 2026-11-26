@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import * as z from 'zod';
 import { createFakeClock } from '../clock/clock.ts';
 import { appError, AppErrorException } from '../errors/app-error.ts';
@@ -137,7 +137,21 @@ describe('SQLite relay adapter (PS-119)', () => {
         raw.prepare('INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (?, ?, ?)').run(m.id, createHash('sha256').update(m.sql).digest('hex'), now);
       }
       raw.prepare('INSERT INTO records (tenant, type, id, revision, data, idx1, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run('tenant-a', note.type, 'legacy', 2, JSON.stringify({ owner: 'o', text: 'old' }), 'o', now, now);
+      // Reject only the new migration receipt, after its ALTER TABLE has run.
+      raw.exec("CREATE TRIGGER reject_incarnation_receipt BEFORE INSERT ON schema_migrations WHEN NEW.id = 'kernel:0003_record_incarnation' BEGIN SELECT RAISE(ABORT, 'incarnation receipt rejected'); END");
     } finally { raw.close(); }
+    const close = vi.spyOn(DatabaseSync.prototype, 'close');
+    try {
+      expect(() => openSqliteStorage({ path })).toThrow('incarnation receipt rejected');
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally { close.mockRestore(); }
+    const afterFailure = new DatabaseSync(path);
+    try {
+      expect(afterFailure.prepare('PRAGMA table_info(records)').all().map(row => row['name'])).not.toContain('incarnation');
+      expect(afterFailure.prepare('SELECT id FROM schema_migrations ORDER BY id').all().map(row => row['id'])).toEqual(['kernel:0001_base', 'kernel:0002_media_blobs']);
+      expect(afterFailure.prepare('SELECT revision, data FROM records WHERE tenant = ? AND type = ? AND id = ?').get('tenant-a', note.type, 'legacy')).toMatchObject({ revision: 2, data: JSON.stringify({ owner: 'o', text: 'old' }) });
+      afterFailure.exec('DROP TRIGGER reject_incarnation_receipt');
+    } finally { afterFailure.close(); }
     const s = openSqliteStorage({ path });
     let marker: string | undefined;
     try {

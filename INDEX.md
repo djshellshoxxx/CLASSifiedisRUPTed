@@ -2,6 +2,15 @@
 
 Status: PLANNED; links below are directory contracts, not implementation claims.
 
+## [F19 BlindMatch private local discovery](19_BlindMatch/SPEC.md)
+
+Flagship development priority; experimental runtime defaults off.
+
+- [F19.S01 private intents](19_BlindMatch/01_intents/SPEC.md)
+  - [F19.S01.M01 local intents](19_BlindMatch/01_intents/mod_local/SPEC.md)
+- [F19.S02 local matching](19_BlindMatch/02_local_matching/SPEC.md)
+  - [F19.S02.M01 bounded matcher](19_BlindMatch/02_local_matching/mod_matcher/SPEC.md)
+
 ## [F01 LocalBazaar classifieds](01_LocalBazaar/SPEC.md)
 - [F01.S01 listings](01_LocalBazaar/01_listings/SPEC.md)
   - [F01.S01.M01 mod_create](01_LocalBazaar/01_listings/mod_create/SPEC.md)

@@ -4,11 +4,13 @@ import { retainedBackupCodec } from './retained-backup.ts';
 import { barterCodecs } from './barter-runtime.ts';
 import { localNotificationBackupCodecs } from '../../../packages/notify/src/index.ts';
 import { locationBackupCodecs } from '../../../packages/discovery/src/index.ts';
+import { privateIntentBackupCodecs } from '../../../packages/blindmatch/src/intents/local/index.ts';
 import { backupCodec, type BackupCodec } from '../../../packages/vault/src/index.ts';
 import { inventoryHoldRepo, listingRepo, listingRevisionId, listingRevisionRepo, validateListingRevision } from '../../../packages/bazaar/src/index.ts';
 
 /** Shared production PWA registry for create, unlock, restore and recovery acceptance. */
 export const productionBackupCodecs: readonly BackupCodec[] = [
+  ...privateIntentBackupCodecs(backupCodec),
   ...locationBackupCodecs(backupCodec),
   ...localNotificationBackupCodecs(backupCodec),
   ...barterCodecs,

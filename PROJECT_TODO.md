@@ -2,6 +2,15 @@
 
 Current evidence: [project status](docs/status/PROJECT_STATUS.md), [generated feature inventory](docs/status/FEATURE_STATUS.md), and [security/consolidation review](docs/status/SECURITY_REVIEW_20261116.md). Specifications describe intended behavior; their presence does not establish implemented features.
 
+## Current flagship work: BlindMatch
+
+- [x] Implement the experimental local foundation: private intent lifecycle, owner/session guards, exact local filtering, erasure without identifying deletion history, and inactive backup restore. See [scope and remaining gates](packages/blindmatch/README.md).
+- [ ] Complete and qualify the local editor/results UI and bounded authenticated discovery adapter before activating F19.
+- [ ] Complete cross-domain erasure, consent/disclosure and identity/recovery composition as independent milestones.
+- [ ] Select and independently qualify a confidential protocol before any cross-user confidential mode is available.
+
+## Existing alpha and platform work
+
 - [x] Specify all 148 modules and resolve current strict specification errors/warnings.
 - [x] Consolidate the reviewed runnable alpha and expose retained-listing search, local barter inbox, and draft/unpublished editing on PR #37.
 - [x] Qualify and merge consolidated alpha PR #37 after successful Alpha verification and six CLI platform jobs.

@@ -29,6 +29,7 @@ export const FEATURES = {
   F14: ['i18n', 'Accessibility and localization'], F15: ['platform', 'Platform operations'],
   F16: ['security', 'Security architecture'], F17: ['quality', 'Quality engineering'],
   F18: ['governance', 'Governance and compliance'],
+  F19: ['blindmatch', 'BlindMatch private local discovery'],
 };
 
 export const COMMON_ERRORS = new Set(['VALIDATION_FAILED', 'UNAUTHENTICATED', 'FORBIDDEN', 'NOT_FOUND',

@@ -13,6 +13,7 @@ Current evidence: [project status](docs/status/PROJECT_STATUS.md), [generated fe
 - [x] Implement encrypted coarse-location preferences, optional one-shot GPS snapping, and explicit listing/search copies.
 - [x] Move signed barter admission and matching to a cancellable background worker with offline asset packaging.
 - [x] Implement an opt-in currency registry with authenticated snapshot admission and immutable currency bindings.
+- [ ] **P1 — BlindMatch confidential economic discovery:** reconcile module ownership, implement private intent/consent/local matching first, then qualified bilateral and bounded confidential barter matching. See [spec](docs/blindmatch/SPEC.md), [diagrams](docs/blindmatch/DIAGRAMS.md), and [roadmap](docs/blindmatch/ROADMAP.md). Preserve existing P1 safety dependencies; no runtime activation without qualification.
 - [ ] Supply an authenticated release snapshot and canonical vault/usage adapters before enabling registry-backed commerce in the PWA.
 - [ ] Qualify money performance on its specified target; wire consent adapters, wording UI, backup validation and quarantine before enabling it in the PWA.
 - [ ] Complete remaining encrypted-storage load/rotation/recovery contracts after the implemented row-encryption and migration slice.

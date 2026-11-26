@@ -12,5 +12,8 @@ Feature flags isolate optional modules; versioned domain events and APIs; one ca
 ## User journeys and edge cases
 Publish/edit/expire/restore listings; buy/want/giveaway, negotiate, reject/counteroffer, trade two-person, propose/consent/execute 3/4/N-person cycles, revoke/dropout/recover, cross-currency value differences, no feasible cycle, duplicate item, stale inventory, concurrent acceptance, fraudulent proof, blocked participant, missing location permission, no network, relay outage, payment failure/reorg, delivery dispute, account recovery, export/portability, appeal and deletion.
 
+## BlindMatch — P1 confidential economic discovery
+BlindMatch is a high-priority optional feature family for LocalBazaar and LocalMutiny: owner-private inventory/wanted lists, scoped confidential bilateral matching, price overlap, progressive mutual disclosure and bounded multi-party barter. Preserve local-first architecture; no mandatory chain/provider/account, no plaintext fallback, no automatic trade or settlement. See [specification](docs/blindmatch/SPEC.md), [diagrams](docs/blindmatch/DIAGRAMS.md) and [acceptance roadmap](docs/blindmatch/ROADMAP.md). Planned, not runtime-enabled.
+
 ## Release gates
 Prompt 1 hierarchy and ownership audit; Prompt 2 process specification expansion; Prompt 3 completeness and security review; Prompt 4 implementation proceeds per dependency layer once that layer's specifications pass `pnpm spec:check` (see SPEC_COMPLETENESS_REPORT.md).

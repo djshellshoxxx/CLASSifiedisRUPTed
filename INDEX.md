@@ -2,6 +2,9 @@
 
 Status: PLANNED; links below are directory contracts, not implementation claims.
 
+## Cross-domain planned feature — BlindMatch (P1)
+- [Specification](docs/blindmatch/SPEC.md) · [Diagrams](docs/blindmatch/DIAGRAMS.md) · [Implementation/acceptance roadmap](docs/blindmatch/ROADMAP.md). Canonical module IDs and generated catalog changes follow BM-A ownership reconciliation; not yet runtime registered.
+
 ## [F01 LocalBazaar classifieds](01_LocalBazaar/SPEC.md)
 - [F01.S01 listings](01_LocalBazaar/01_listings/SPEC.md)
   - [F01.S01.M01 mod_create](01_LocalBazaar/01_listings/mod_create/SPEC.md)

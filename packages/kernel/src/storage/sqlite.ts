@@ -262,7 +262,8 @@ function applyKernelMigrations(db: DatabaseSync, list: readonly SqlMigration[]):
       db.prepare('INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (?, ?, ?)').run(m.id, sum, new Date().toISOString());
       db.exec('COMMIT');
     } catch (e) {
-      db.exec('ROLLBACK');
+      // SQLite may already have rolled back the entire transaction.
+      try { if (db.isTransaction) db.exec('ROLLBACK'); } catch { /* preserve migration error */ }
       throw e;
     }
   }

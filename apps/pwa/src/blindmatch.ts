@@ -48,6 +48,9 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
   type Row = StoredRecord<PrivateIntent>;
   type Operation = { readonly generation: number; readonly kind: 'load' | 'write' | 'match' };
   const clock = ports.clock ?? createSystemClock();
+  const ownerDocument = ports.container.ownerDocument;
+  const ownerWindow = ownerDocument.defaultView;
+  let pageSuspended = false;
   let alive = true, enabled = false, generation = 0, renderVersion = 0, dirty = false;
   let intents: LocalIntentStore | undefined, matching: LocalMatchSession | undefined;
   let editing: Row | undefined, operation: Operation | undefined;
@@ -102,7 +105,8 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
   ports.container.replaceChildren(title, help, enableLabel, content); ports.container.hidden = false;
 
   function current(at = generation): boolean {
-    try { return alive && enabled && at === generation && ports.isCurrent() === true; }
+    try { return alive && enabled && !pageSuspended && !ownerDocument.hidden
+      && at === generation && ports.isCurrent() === true; }
     catch { return false; }
   }
   const admitted = (ticket: Operation) => current(ticket.generation) && operation === ticket;
@@ -233,6 +237,14 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
     rowButtons.length = 0; clearForm(); rows.replaceChildren(); results.replaceChildren();
     status.textContent = ''; error.textContent = ''; content.hidden = true; enable.checked = false;
   }
+  // Conceal immediately on backgrounding/navigation; the vault's delayed lock
+  // does not protect this view. Returning to the page never restores opt-in.
+  const visibilityChanged = () => { if (ownerDocument.hidden) disable(); };
+  const pageHidden = () => { pageSuspended = true; disable(); };
+  const pageShown = () => { pageSuspended = false; };
+  ownerDocument.addEventListener('visibilitychange', visibilityChanged);
+  ownerWindow?.addEventListener('pagehide', pageHidden);
+  ownerWindow?.addEventListener('pageshow', pageShown);
   enable.addEventListener('change', () => {
     if (!alive) return;
     if (!enable.checked) { disable(); return; }
@@ -285,6 +297,13 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
   controls();
   return {
     invalidateResults,
-    destroy() { if (!alive) return; alive = false; disable(); ports.container.replaceChildren(); ports.container.hidden = true; },
+    destroy() {
+      if (!alive) return;
+      alive = false;
+      ownerDocument.removeEventListener('visibilitychange', visibilityChanged);
+      ownerWindow?.removeEventListener('pagehide', pageHidden);
+      ownerWindow?.removeEventListener('pageshow', pageShown);
+      disable(); ports.container.replaceChildren(); ports.container.hidden = true;
+    },
   };
 }

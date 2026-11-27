@@ -18,6 +18,7 @@ interface Fixture {
   replaceAccount(): Promise<void>;
   holdNextLoad(): void;
   loaderStarted(): Promise<void>;
+  heldLoadAborted(): boolean;
   releaseHeldLoad(): Promise<void>;
 }
 type FixtureWindow = Window & { __blindmatchUiTest: Fixture };
@@ -40,7 +41,7 @@ test.beforeAll(async () => {
       const passphrase = 'synthetic BlindMatch UI acceptance passphrase';
       const name = 'blindmatch-ui-acceptance';
       let activeVaultName = name;
-      let vault, current, controller, loaderCalls = 0, waiting, entered, release, completed;
+      let vault, current, controller, loaderCalls = 0, waiting, entered, release, completed, heldSignal;
       const candidates = [];
       function mount(session) {
         const load = createLocalCandidateLoader({ storage: session.storage, principal: session.principal,
@@ -51,7 +52,7 @@ test.beforeAll(async () => {
             loaderCalls++;
             const snapshot = await load(request);
             if (waiting) {
-              const pause = waiting; waiting = undefined; entered();
+              const pause = waiting; waiting = undefined; heldSignal = request.signal; entered();
               await pause;
               // The test port deliberately ignores late cancellation after verification.
               // The component must still discard results when its session is revoked.
@@ -127,11 +128,13 @@ test.beforeAll(async () => {
       }
       let startedPromise, completedPromise;
       export function holdNextLoad() {
+        heldSignal = undefined;
         waiting = new Promise(resolve => { release = resolve; });
         startedPromise = new Promise(resolve => { entered = resolve; });
         completedPromise = new Promise(resolve => { completed = resolve; });
       }
       export function loaderStarted() { return startedPromise; }
+      export function heldLoadAborted() { return heldSignal?.aborted === true; }
       export async function releaseHeldLoad() {
         release(); await completedPromise;
         await new Promise(resolve => requestAnimationFrame(() => resolve()));
@@ -307,5 +310,130 @@ for (const change of ['cancel', 'disable', 'lock', 'replace-account'] as const) 
       await expect(page.locator('#blindmatch-intents > article')).toHaveCount(0);
       expect((await snapshot(page)).intents).toEqual([]);
     }
+  });
+}
+
+type PageExit = 'visibility-hidden' | 'pagehide';
+
+async function leavePrivateView(page: Page, change: PageExit) {
+  // Deterministic lifecycle admission in a real browser, not an OS backgrounding
+  // or actual back/forward-cache qualification. Keep the two visibility APIs consistent.
+  const cleared = await page.evaluate(change => {
+    if (change === 'visibility-hidden') {
+      Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    } else {
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    }
+    const form = document.querySelector<HTMLFormElement>('#blindmatch-form')!;
+    // Capture immediately in the same task: delayed callbacks or an idle-lock
+    // timer must not be needed to conceal the private view.
+    return {
+      optedIn: document.querySelector<HTMLInputElement>('#blindmatch input[type="checkbox"]')!.checked,
+      hidden: form.parentElement!.hidden,
+      disabled: form.querySelector('fieldset')!.disabled,
+      clearedFields: [...form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select')]
+        .every(control => control.value === ''),
+      cards: document.querySelector('#blindmatch-intents')!.childElementCount,
+      results: document.querySelector('#blindmatch-results')!.textContent,
+      status: document.querySelector('#blindmatch-status')!.textContent,
+      error: document.querySelector('#blindmatch-error')!.textContent,
+      busy: form.parentElement!.getAttribute('aria-busy'),
+    };
+  }, change);
+  expect(cleared).toEqual({ optedIn: false, hidden: true, disabled: true, clearedFields: true,
+    cards: 0, results: '', status: '', error: '', busy: 'false' });
+}
+
+async function returnToPrivateView(page: Page, change: PageExit) {
+  await page.evaluate(change => {
+    if (change === 'visibility-hidden') {
+      Reflect.deleteProperty(document, 'hidden');
+      Reflect.deleteProperty(document, 'visibilityState');
+      document.dispatchEvent(new Event('visibilitychange'));
+    } else {
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    }
+  }, change);
+  await expect(page.getByRole('checkbox', { name: 'Enable local matching for this session', exact: true })).not.toBeChecked();
+  await expect(page.locator('#blindmatch-form')).toBeHidden();
+  await expect(page.locator('#blindmatch-intents')).toBeEmpty();
+  await expect(page.locator('#blindmatch-results')).toBeEmpty();
+}
+
+for (const change of ['visibility-hidden', 'pagehide'] as const) {
+  test(`synthetic ${change} immediately clears private content and requires fresh opt-in`, async ({ page }) => {
+    await openFixture(page);
+    const enabled = page.getByRole('checkbox', { name: 'Enable local matching for this session', exact: true });
+    await enabled.check();
+    await saveIntent(page);
+    const created = await snapshot(page);
+    await page.getByRole('button', { name: 'Run local match', exact: true }).click();
+    await expect(page.locator('#blindmatch-results')).toContainText(created.candidates[0]!.listingId);
+    const matched = await snapshot(page);
+    expect(matched.loaderCalls).toBe(1);
+    await leavePrivateView(page, change);
+
+    // An event from a hidden/suspended page cannot grant a fresh session.
+    const hiddenOptIn = await page.evaluate(() => {
+      const checkbox = document.querySelector<HTMLInputElement>('#blindmatch input[type="checkbox"]')!;
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+      return checkbox.checked;
+    });
+    expect(hiddenOptIn).toBe(false);
+    await returnToPrivateView(page, change);
+    const returned = await snapshot(page);
+    expect(returned.intents).toEqual(matched.intents);
+    expect(returned.loaderCalls).toBe(1);
+
+    await enabled.check();
+    await expect(page.locator('#blindmatch-intents > article')).toHaveCount(1);
+    await expect(page.locator('#blindmatch-results')).toBeEmpty();
+    expect((await snapshot(page)).loaderCalls).toBe(1);
+    await page.getByRole('button', { name: 'Edit private intent', exact: true }).click();
+    await expect(page.getByLabel('Private search text', { exact: true })).toHaveValue('bicycle');
+    await page.getByLabel('Private search text', { exact: true }).fill('unsaved-lifecycle-private-canary');
+    await page.locator('#blindmatch-form [name="min"]').fill('123456789012345678');
+    await leavePrivateView(page, change);
+    await returnToPrivateView(page, change);
+    expect((await snapshot(page)).intents).toEqual(matched.intents);
+    await enabled.check();
+    await expect(page.locator('#blindmatch-intents > article')).toHaveCount(1);
+    await expect(page.getByLabel('Private search text', { exact: true })).toHaveValue('');
+    expect((await snapshot(page)).loaderCalls).toBe(1);
+  });
+
+  test(`synthetic ${change} aborts a delayed match without overwriting a fresh session`, async ({ page }) => {
+    await openFixture(page);
+    const enabled = page.getByRole('checkbox', { name: 'Enable local matching for this session', exact: true });
+    await enabled.check();
+    await saveIntent(page);
+    const before = await snapshot(page);
+    await page.evaluate(() => (window as unknown as FixtureWindow).__blindmatchUiTest.holdNextLoad());
+    await page.getByRole('button', { name: 'Run local match', exact: true }).click();
+    await page.evaluate(() => (window as unknown as FixtureWindow).__blindmatchUiTest.loaderStarted());
+    await leavePrivateView(page, change);
+    expect(await page.evaluate(() => (window as unknown as FixtureWindow).__blindmatchUiTest.heldLoadAborted())).toBe(true);
+    await returnToPrivateView(page, change);
+    expect((await snapshot(page)).loaderCalls).toBe(1);
+
+    await enabled.check();
+    await expect(page.locator('#blindmatch-intents > article')).toHaveCount(1);
+    await expect(page.locator('#blindmatch-results')).toBeEmpty();
+    expect((await snapshot(page)).loaderCalls).toBe(1);
+    await page.getByRole('button', { name: 'Edit private intent', exact: true }).click();
+    await saveIntent(page, '900719925474099302');
+    await page.getByRole('button', { name: 'Run local match', exact: true }).click();
+    const results = page.locator('#blindmatch-results');
+    await expect(results).toContainText(before.candidates[1]!.listingId);
+    await expect(results).not.toContainText(before.candidates[0]!.listingId);
+    await page.evaluate(() => (window as unknown as FixtureWindow).__blindmatchUiTest.releaseHeldLoad());
+    await expect(enabled).toBeChecked();
+    await expect(results).toContainText(before.candidates[1]!.listingId);
+    await expect(results).not.toContainText(before.candidates[0]!.listingId);
+    await expect(page.locator('#blindmatch-error')).toBeEmpty();
+    expect((await snapshot(page)).loaderCalls).toBe(2);
   });
 }

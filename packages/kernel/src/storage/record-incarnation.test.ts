@@ -4,7 +4,9 @@ import { appError } from '../errors/app-error.ts';
 import { err } from '../errors/result.ts';
 import { openIndexedDbStorage } from './indexeddb.ts';
 import { openSqliteStorage } from './sqlite.ts';
-import { createMemoryStorage, type Storage } from './storage.ts';
+import { createMemoryDriver } from './memory-driver.ts';
+import type { RecordRow } from './driver.ts';
+import { createMemoryStorage, createStorage, type Storage } from './storage.ts';
 
 const adapters: Array<[string, () => Promise<Storage>]> = [
   ['memory', async () => createMemoryStorage()],
@@ -55,5 +57,38 @@ for (const [name, open] of adapters) describe(name + ' record incarnation', () =
       expect((await s.transaction(tx => tx.records.put({ ...input, expectedRevision: 1 }))).ok).toBe(true);
       expect(await marker()).toBeUndefined();
     } finally { await s.close(); }
+  });
+});
+
+// Local persistence fixtures: the marker is optional metadata, not authority.
+// Normal record inspection remains available; marker-dependent reads and CAS
+// updates must not silently normalize an invalid persisted marker.
+describe('stored record incarnation validation', () => {
+  it.each(['invalid', 'A'.repeat(21) + 'B'])('rejects invalid marker %s without persisting an update', async (incarnation) => {
+    const tenant = 'tenant-a', type = 'test.item', id = 'one';
+    const now = '2026-11-24T00:00:00.000Z';
+    const row: RecordRow = { tenant, type, id, revision: 1, incarnation,
+      data: JSON.stringify({ text: 'original' }), idx: [null, null, null, null], createdAt: now, updatedAt: now };
+    let writes = 0;
+    const driver = createMemoryDriver({
+      snapshot: { records: [[[tenant, type, id].join('\u0001'), row]] },
+      persist: async () => { writes++; },
+    });
+    const storage = createStorage(driver);
+    try {
+      const before = await storage.read(tx => tx.records.get(tenant, type, id));
+      expect(before).toMatchObject({ revision: 1, data: { text: 'original' } });
+      expect(before).not.toHaveProperty('incarnation');
+      await expect(storage.read(tx => tx.records.incarnation(tenant, type, id)))
+        .rejects.toThrow('Invalid stored record incarnation');
+      await expect(storage.transaction(tx => tx.records.put({ tenant, type, id,
+        data: { text: 'updated' }, idx: row.idx, now: Date.parse(now), expectedRevision: 1 })))
+        .rejects.toThrow('Invalid stored record incarnation');
+      expect(writes).toBe(0);
+      expect(await storage.read(tx => tx.records.get(tenant, type, id))).toEqual(before);
+      const read = driver.begin('read');
+      try { expect(read.records.get(tenant, type, id)).toEqual(row); }
+      finally { driver.rollback(); }
+    } finally { await storage.close(); }
   });
 });

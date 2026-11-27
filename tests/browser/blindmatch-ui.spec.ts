@@ -196,7 +196,8 @@ async function saveIntent(page: Page, amount = '900719925474099301') {
   await form.locator('[name="currency"]').fill('CAD');
   await form.locator('[name="min"]').fill(amount);
   await form.locator('[name="max"]').fill(amount);
-  await form.getByLabel('Expires at (UTC)', { exact: true }).fill('2026-11-28T12:00:00');
+  // Native datetime-local controls serialize zero seconds without the :00 suffix.
+  await form.getByLabel('Expires at (UTC)', { exact: true }).fill('2026-11-28T12:00');
   await form.getByRole('button', { name: /^Save (?:private intent|intent changes)$/ }).click();
   await expect(form.getByLabel('Private search text', { exact: true })).toHaveValue('');
   await expect(page.locator('#blindmatch-intents > article')).toHaveCount(1);
@@ -229,7 +230,8 @@ test('private local editor preserves exact filters, uses verified references and
   await saveIntent(page);
   const first = await snapshot(page);
   expect(first.intents).toHaveLength(1);
-  expect(first.intents[0]!.data).toMatchObject({ state: 'draft', criteria: { query: 'bicycle', kind: 'sell', condition: 'good', regionCell: 'c2b2',
+  expect(first.intents[0]!.data).toMatchObject({ state: 'draft', expiresAt: '2026-11-28T12:00:00.000Z',
+    criteria: { query: 'bicycle', kind: 'sell', condition: 'good', regionCell: 'c2b2',
     price: { currency: 'CAD', min: '900719925474099301', max: '900719925474099301' } } });
   expect(first.rawHasQuery).toBe(false);
   expect(first.rawHasIntentId).toBe(false);
@@ -256,6 +258,7 @@ test('private local editor preserves exact filters, uses verified references and
   await expect(page.locator('#blindmatch-intents')).toContainText('draft');
   const edited = await snapshot(page);
   expect(edited.intents[0]!.id).toBe(first.intents[0]!.id);
+  expect(edited.intents[0]!.data.expiresAt).toBe(first.intents[0]!.data.expiresAt);
   expect(edited.intents[0]!.data.criteria.price).toEqual({ currency: 'CAD', min: '900719925474099302', max: '900719925474099302' });
   await page.getByRole('button', { name: 'Run local match', exact: true }).click();
   await expect(results).toContainText(first.candidates[1]!.listingId);

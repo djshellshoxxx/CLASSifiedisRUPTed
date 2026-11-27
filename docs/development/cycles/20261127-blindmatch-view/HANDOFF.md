@@ -102,3 +102,19 @@ not additional assertions. The matcher also includes bounded independent-oracle
 property cases. Real mobile devices and manual accessibility were not executed.
 Actual hosted runs and merge identities belong to the integration PR after
 observation; a parent result cannot qualify a changed candidate.
+
+## Hosted browser diagnosis
+
+The first published candidate passed all 1,100 domain assertions and the six
+CLI platform jobs, but Alpha run `45983924162` was cancelled with ten UI failure
+markers before its final browser report. The job now prints each failure as it
+happens and allows 30 minutes for the expanded serial suite; per-test limits,
+zero retries, all three engines, assertions and CSP remain unchanged.
+
+Focused Linux diagnostic `45988430917` identified Playwright rejecting
+`2026-11-28T12:00:00` at the native `datetime-local` fill before save. The fixture
+now supplies the control's normalized minute representation and explicitly
+asserts the same canonical UTC expiry after save and edit. This repairs test
+input, not production parsing or the activation gate. The temporary PR diagnostic
+workflow is removed. Full final-source browser and main-push qualification still
+belong to the integration PR's observed receipts.

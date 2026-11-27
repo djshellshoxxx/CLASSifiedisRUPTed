@@ -1,12 +1,12 @@
 {
   "totals": {
-    "modules": 148,
-    "withRuntime": 35,
+    "modules": 150,
+    "withRuntime": 38,
     "withPassingTests": 21,
     "declared": 688,
     "implemented": 15,
-    "requirements": 4510,
-    "covered": 484
+    "requirements": 4570,
+    "covered": 487
   },
   "features": [
     {
@@ -79,7 +79,7 @@
       "declared": 18,
       "implemented": 3,
       "requirements": 240,
-      "covered": 90
+      "covered": 93
     },
     {
       "id": "F07",
@@ -182,7 +182,7 @@
       "slug": "platform",
       "title": "Platform operations",
       "modules": 12,
-      "withRuntime": 3,
+      "withRuntime": 4,
       "withPassingTests": 3,
       "declared": 40,
       "implemented": 0,
@@ -224,6 +224,18 @@
       "implemented": 0,
       "requirements": 150,
       "covered": 36
+    },
+    {
+      "id": "F19",
+      "slug": "blindmatch",
+      "title": "BlindMatch private local discovery",
+      "modules": 2,
+      "withRuntime": 2,
+      "withPassingTests": 0,
+      "declared": 0,
+      "implemented": 0,
+      "requirements": 60,
+      "covered": 0
     }
   ],
   "modules": [
@@ -1115,7 +1127,7 @@
       "implemented": 0,
       "missing": [],
       "requirements": 30,
-      "covered": 22,
+      "covered": 25,
       "sources": []
     },
     {
@@ -2411,7 +2423,7 @@
       "id": "F15.S04.M01",
       "title": "Feature registry",
       "scope": "MVP",
-      "runtime": "none",
+      "runtime": "partial",
       "declared": 4,
       "implemented": 0,
       "missing": [
@@ -2809,6 +2821,30 @@
         "governance.transparency.list_published",
         "governance.transparency.preview"
       ],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F19.S01.M01",
+      "title": "Private local intents",
+      "scope": "FUTURE",
+      "runtime": "present",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
+      "requirements": 30,
+      "covered": 0,
+      "sources": []
+    },
+    {
+      "id": "F19.S02.M01",
+      "title": "Bounded local matching",
+      "scope": "FUTURE",
+      "runtime": "present",
+      "declared": 0,
+      "implemented": 0,
+      "missing": [],
       "requirements": 30,
       "covered": 0,
       "sources": []

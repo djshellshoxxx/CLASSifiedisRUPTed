@@ -1,0 +1,217 @@
+id: F19.S01.M01
+scope: FUTURE
+deferral: Experimental headless foundation. Runtime remains off until UI, authenticated adapter, session
+  wiring and native/mobile acceptance are qualified.
+summary: Owner-private local intent lifecycle, encrypted-vault composition and erasure without identifying
+  deletion history.
+responsibilities:
+  - Own the current private intent and its local lifecycle.
+  - Validate owner, revision, expiry, bounds and inactive recovery.
+non_responsibilities:
+  - No remote computation, external disclosure, public publication, account-wide erasure or payment execution.
+depends_on:
+  - F15.S02.M03
+  - CTR-ERR-001
+  - CTR-PRV-001
+  - CTR-IOX-001
+  - CTR-TST-001
+user_stories:
+  - As an owner I keep my preferences local until an explicit action.
+  - As an owner I can stop matching and erase private intents without deletion history.
+edge_cases:
+  - A foreign principal receives no private record.
+  - Delayed work after lock or erasure cannot return current results.
+  - Old backups restore private content inactive.
+  - Malformed or excessive input fails without truncation or fallback.
+ux:
+  notes: Headless experimental API; local UI, help and accessibility remain separate activation gates.
+processes:
+  domain_schema:
+    requirements:
+      - Store one current PrivateIntent under the unlocked principal with a random UUIDv4 key and no
+        historical revision table.
+      - Keep owner, criteria, state and expiry inside existing encrypted vault storage without public
+        projection.
+      - Use StoredRecord revision and canonical intentId binding; the cancellation epoch is ephemeral only.
+    entities:
+      - name: PrivateIntent
+        schema: classrup.blindmatch.private_intent/v1
+        storage: device
+        privacy: P3
+        retention: RET-OWNER-LIVE
+        fields:
+          - "intentId: UUIDv4 — random local ID equal to stored key"
+          - "ownerId: DID — current unlocked principal"
+          - "criteria: PrivateIntentCriteria — closed local query and filters"
+          - "state: draft|active|paused — explicit activation only"
+          - "expiresAt: UTC timestamp — canonical expiry"
+          - "revision: safe integer — StoredRecord metadata only"
+        invariants:
+          - Tenant, owner and intent ID match the owning session and canonical key.
+          - Erasure leaves no row or identifying deletion history.
+    note: LocalMatchContext is an ephemeral value, not a persisted entity or backup record.
+  validation_rules:
+    requirements:
+      - Validate closed criteria, canonical UTC expiry and safe positive expected revisions before mutation.
+      - Bound query to 120 characters, canonical nonnegative amounts to 78 digits and live intents to 50.
+      - Reject unknown authority fields, identifier collisions and expired creation or activation without
+        partial writes.
+    rules:
+      - V01 | closed bounded criteria and canonical expiry | VALIDATION_FAILED
+      - V02 | expected revision equals current revision | CONFLICT_REVISION
+      - V03 | creation and activation precede expiry | EXPIRED
+  workflow_state_machine:
+    requirements:
+      - Create as draft; activation requires explicit owner action against the current revision and unexpired
+        content.
+      - Edits reset state to draft; pause stops matching and erase removes the row instead of storing erased
+        state.
+      - Invalidate the ephemeral epoch before mutations and permanently revoke the store instance after
+        session loss.
+    machines:
+      - entity: PrivateIntent
+        initial: draft
+        terminal:
+          - erased
+        transitions:
+          - draft -> active | explicit activation | current revision and unexpired content
+          - draft -> paused | owner pauses | current revision
+          - active -> paused | owner pauses | current revision
+          - paused -> active | explicit activation | current revision and unexpired content
+          - active -> draft | owner revises | new revision invalidates matching
+          - paused -> draft | owner revises | new revision invalidates matching
+          - draft -> erased | owner erases | remove row without retained state
+          - active -> erased | owner erases | invalidate epoch and remove row
+          - paused -> erased | owner erases | remove row without retained state
+    note: Erased means row absence, never a persisted deletion record.
+    timeouts:
+      - Expiry uses the injected clock; no background activity resumes automatically.
+  commands_queries_events:
+    requirements:
+      - Expose create, read, list, revise, setState and erase as an owner-bound library with structured Result
+        errors.
+      - Register no command-bus operation and emit no events, idempotency hashes, outbox records or audit
+        entries.
+      - Return detached validated rows without raw exception details or remote operations.
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors: []
+    note: Headless library; no HTTP or command-bus registration, emitted event or audit sink.
+    example: create({criteria:{query:"bicycle"},expiresAt}) returns a private draft; erase({id,expectedRevision})
+      removes its row.
+  authorization_capabilities:
+    requirements:
+      - Bind storage, principal and current-session guard at composition; operation bodies cannot choose the
+        owner.
+      - Require literal enabled true for creation, revision and activation while retaining inspection, pause
+        and erase cleanup.
+      - Check the session before admission, inside the transaction and after asynchronous settlement; ended
+        sessions receive no data.
+    capabilities: []
+    notes: Owner-bound local library only; no command-bus capability or audit sink is registered. F19 private
+      intent retention follows the RET-OWNER-LIVE exception in CTR-PRV-001.
+  failure_recovery_idempotency:
+    requirements:
+      - Use optimistic revisions and atomic storage transactions; a rejected storage transaction rolls back,
+        while session loss after commit can conceal a successful mutation behind FORBIDDEN.
+      - Retain no replay cache or deleted-object registry; repeated erasure reports absence without history.
+      - Conceal late results after session loss and require explicit fresh owner action after state inspection.
+    idempotency: No persistent request hash or replay response; current revisions control mutation and erase
+      leaves no history.
+    concurrency: Current revision and ephemeral epoch checks reject stale results; session rereads revision after loading.
+    retries: No automatic retry or recovered job; owner chooses a fresh action after state inspection.
+    offline: Local functions require no remote account, wallet, payment or network provider.
+    partial_failure: Roll back rejected storage transactions and suppress stale asynchronous results with fixed
+      errors. A late FORBIDDEN can follow a successful commit; inspect current state after unlocking before
+      retrying.
+  privacy_retention_abuse:
+    requirements:
+      - Keep private criteria, identifiers and amounts out of logs, network requests, URLs, notifications and
+        public projections.
+      - Erase the local intent immediately without retaining an identifying deletion event, hash or tombstone.
+      - Limit erasure to local intents and ephemeral results; independent backups, peer copies and physical
+        remnants remain outside scope.
+    data:
+      - P3 private criteria and current state; candidates were already intentionally public.
+    retention:
+      - Current intents live until owner erasure; results and context tokens are ephemeral with no identifying
+        deletion history.
+      - RET-OWNER-LIVE takes precedence over legacy tombstone, audit, evidence and legal-hold retention for
+        this local intent API; no identifying deletion history is created.
+    abuse_controls:
+      - Bound input/output and refuse nonlocal modes without any implicit disclosure authority.
+    threats:
+      - T01 | foreign owner or stale session reads private content | owner-scoped storage and session guards
+      - T02 | old backup silently resumes processing | restored intents are draft and jobs are never persisted
+      - T03 | private query reaches a loader or log | loader gets signal and limit only; logging is absent
+  observability_performance:
+    requirements:
+      - Logging, audit and metrics collection are absent from the local API and remain off by default.
+      - Reject capacity overflow explicitly without silently truncating live intents or hard criteria.
+      - Qualify encrypted storage and target-device resource behavior before activation; host tests are not
+        mobile evidence.
+    metrics:
+      - Disabled and absent; no implicit anonymous collection exception.
+    logs:
+      - Disabled and absent; no identifying audit or debug export.
+    budgets:
+      - 50 live intents, 120-character query, 78-digit canonical amount bounds.
+  contract_and_acceptance_tests:
+    requirements:
+      - Assert owner isolation, revisions, expiry, cancellation and rollback independently rather than
+        checking source presence.
+      - Exercise encrypted-vault codecs and signed public fixtures, with native browser qualification recorded
+        separately.
+      - Report actual outcomes and remaining activation gates without treating mocks or documents as
+        production readiness.
+    tests:
+      - T01 | integration | 01.R01,01.R02,01.R03 | Create an intent, inspect its detached owner-bound record
+        and encrypted raw vault rows | Random ID binds the row key; criteria, owner and ID remain inside the
+        encrypted record
+      - T02 | unit | 02.R01,02.R02,02.R03 | Try unknown authority fields, invalid times, 51 live intents and
+        noncanonical or reversed amount bounds | Reject malformed or excessive input without partial writes or
+        truncation
+      - T03 | unit | 03.R01,03.R02,03.R03 | Create, activate, edit, pause and erase with current and stale
+        revisions | Edits become draft; erase removes the row and invalidates pending matching
+      - T04 | integration | 04.R01,04.R02,04.R03 | Inspect intent storage, outbox and errors after lifecycle
+        operations | Only the current row exists; no bus event, idempotency record, input echo or deletion
+        history
+      - T05 | unit | 05.R01,05.R02,05.R03 | Use disabled, foreign, ended and queued sessions; then pause or
+        erase while disabled | Only literal true enables new work; current owner retains cleanup without stale
+        result release
+      - T06 | unit | 06.R01,06.R02,06.R03 | Inject transaction failure and session loss during persistence |
+        Rejected transactions roll back; post-commit session loss conceals results and requires state
+        inspection
+      - T07 | integration | 07.R01,07.R02,07.R03 | Erase while matching is pending, reopen the vault and
+        inspect storage/backup coverage | Intent is absent; no identifying deletion record is added;
+        independent copies are outside scope
+      - T08 | contract | 08.R01,08.R02,08.R03 | Exercise bounded capacity and spy on network/logging APIs;
+        separately qualify target devices | No truncation, network or logging; mobile resource acceptance
+        remains a release gate
+      - T09 | contract | 09.R01,09.R02,09.R03 | Run focused and regression suites with independently recorded
+        execution results | Report passing tests and unavailable browser/device evidence separately from
+        declared contracts
+      - T10 | integration | 10.R01,10.R02,10.R03 | Export an active intent, restore an older archive, and
+        import a legacy codec archive | Source stays active; restored content is draft; no automatic loader
+        call; legacy archives remain valid
+    acceptance:
+      - All process requirements have explicit test contracts; executed evidence is separately reported.
+      - Focused tests and existing regressions pass without weakening assertions or counting unavailable
+        browser execution.
+      - UI, authenticated discovery composition, mobile acceptance and confidential protocol release remain
+        gated.
+  import_export_backup_rollback:
+    requirements:
+      - Register the explicit codec and bind imported owner and stored key to validated content.
+      - Restore intents as draft, preserve the live source during export and require fresh action before
+        matching resumes.
+      - Keep legacy archives compatible and reject unknown or malformed records; old external backups restore
+        content only through explicit import.
+    export: Encrypted export includes the codec, validates owner/key binding and leaves the live source unchanged.
+    import: Validate closed content, owner and key, then restore every intent as draft.
+    backup: Legacy archives remain compatible; unknown/malformed records fail closed and recovered content never
+      resumes authority.
+    migration_rollback: Existing formats and storage drivers remain unchanged; disabled state preserves owner
+      inspection and erasure.

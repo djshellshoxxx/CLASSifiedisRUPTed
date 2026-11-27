@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryStorage, defineRepo, z, ok } from '@classrup/kernel';
 import { vaultFromStorage, backupCodec, openVault, type BackupCodec } from './vault.ts';
 import { IDBFactory } from 'fake-indexeddb';
+import { unseal } from '@classrup/identity';
+import { verifyEnvelope } from '@classrup/federation';
 import { VaultUnlockRateLimitError } from './session-policy.ts';
 
 const passphrase = 'a sufficiently long test passphrase';
@@ -118,6 +120,20 @@ describe('vault composition', () => {
     const backup = await session.exportBackup(passphrase);
     expect(JSON.stringify(backup)).not.toContain('private note');
     expect(JSON.stringify(backup)).not.toContain(marker!);
+    // Inspect authenticated archive plaintext, not just the outer ciphertext.
+    const plaintext = await unseal(backup, passphrase);
+    try {
+      const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plaintext));
+      const envelope = await verifyEnvelope(parsed, { expectedType: 'classrup.vault.alpha_backup/v1' });
+      expect(envelope.author).toBe(principal);
+      const payload = envelope.payload as { principal: string; records: Record<string, unknown>[] };
+      expect(payload.principal).toBe(principal);
+      expect(payload.records).toHaveLength(1);
+      const archived = payload.records[0]!;
+      expect(Object.keys(archived).sort()).toEqual(['createdAt', 'data', 'id', 'revision', 'tenantId', 'type', 'updatedAt']);
+      expect(archived).toMatchObject({ tenantId: principal, type: note.type, id: 'one', revision: 1, data: { text: 'private note' } });
+      expect(archived).not.toHaveProperty('incarnation');
+    } finally { plaintext.fill(0); }
     await session.lock();
     await expect(session.storage.read(() => undefined)).rejects.toThrow();
     await expect(session.identity.sign(new Uint8Array())).rejects.toThrow();

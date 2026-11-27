@@ -47,10 +47,13 @@ test('real catalog generates the checked-in immutable graph within the raw and g
   assert.equal(second.ok, true);
   assert.equal(first.value.text, second.value.text);
   assert.equal(first.value.text, io.readText(REGISTRY_OUTPUT_PATH));
-  assert.equal(first.value.summary.features, 18);
-  assert.equal(first.value.summary.modules, 148);
+  assert.equal(first.value.summary.features, 19);
+  assert.equal(first.value.summary.modules, 150);
   assert.equal(first.value.summary.specsMissing, 0);
-  assert.equal(new Set(first.value.registry.order).size, 148);
+  assert.equal(new Set(first.value.registry.order).size, 150);
+  const blindmatch = first.value.registry.modules.filter(module => module.id.startsWith('F19.'));
+  assert.equal(blindmatch.length, 2);
+  assert.ok(blindmatch.every(module => module.defaultState === 'off' && module.registered === false));
   assert.ok(first.value.summary.bytes < 512 * 1024);
   assert.ok(gzipSync(JSON.stringify(first.value.registry)).length < 64 * 1024);
   for (const module of first.value.registry.modules) {
@@ -226,7 +229,7 @@ test('generator CLI rejects unknown arguments and the documented build retains t
   assert.equal(result.status, 2);
   assert.match(result.stderr, /Usage:/);
   const output = execFileSync(process.execPath, [generator, '--check', '--strict'], { cwd: ROOT, encoding: 'utf8' });
-  assert.match(output, /18 features, 148 modules/);
+  assert.match(output, /19 features, 150 modules/);
   assert.match(output, /up to date/);
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
   assert.match(pkg.scripts.build, /gen-registry\.mjs --check --strict &&/);

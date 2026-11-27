@@ -262,7 +262,8 @@ function applyKernelMigrations(db: DatabaseSync, list: readonly SqlMigration[]):
       db.prepare('INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (?, ?, ?)').run(m.id, sum, new Date().toISOString());
       db.exec('COMMIT');
     } catch (e) {
-      db.exec('ROLLBACK');
+      // SQLite may already have rolled back the entire transaction.
+      try { if (db.isTransaction) db.exec('ROLLBACK'); } catch { /* preserve migration error */ }
       throw e;
     }
   }
@@ -317,19 +318,26 @@ function createSqliteDriver(db: DatabaseSync): StorageDriver {
 /** Opens the relay database, applies kernel migrations and returns a Storage. */
 export function openSqliteStorage(opts: SqliteOptions): SqliteStorage {
   const db = new DatabaseSync(opts.path);
-  const busy = opts.busyTimeoutMs ?? 5000;
-  db.exec(`PRAGMA busy_timeout = ${Math.trunc(busy)}`);
-  db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA synchronous = NORMAL');
-  db.exec('PRAGMA foreign_keys = ON');
-  applyKernelMigrations(db, [...KERNEL_SQL_MIGRATIONS, ...(opts.migrations ?? [])]);
-  const storage = createStorage(createSqliteDriver(db));
-  return {
-    ...storage,
-    pragmas: () => {
-      const jm = db.prepare('PRAGMA journal_mode').get() as SqlRow;
-      const bt = db.prepare('PRAGMA busy_timeout').get() as SqlRow;
-      return { journalMode: s(Object.values(jm)[0]), busyTimeoutMs: n(Object.values(bt)[0]) };
-    },
-  };
+  try {
+    const busy = opts.busyTimeoutMs ?? 5000;
+    db.exec(`PRAGMA busy_timeout = ${Math.trunc(busy)}`);
+    db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA synchronous = NORMAL');
+    db.exec('PRAGMA foreign_keys = ON');
+    applyKernelMigrations(db, [...KERNEL_SQL_MIGRATIONS, ...(opts.migrations ?? [])]);
+    const storage = createStorage(createSqliteDriver(db));
+    return {
+      ...storage,
+      pragmas: () => {
+        const jm = db.prepare('PRAGMA journal_mode').get() as SqlRow;
+        const bt = db.prepare('PRAGMA busy_timeout').get() as SqlRow;
+        return { journalMode: s(Object.values(jm)[0]), busyTimeoutMs: n(Object.values(bt)[0]) };
+      },
+    };
+  } catch (error) {
+    // Initialization never transfers ownership on failure. Close the native handle
+    // without replacing the original migration/setup error.
+    try { db.close(); } catch { /* preserve initialization error */ }
+    throw error;
+  }
 }

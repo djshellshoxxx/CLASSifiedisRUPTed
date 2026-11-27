@@ -7,6 +7,8 @@ export interface RecordRow {
   readonly type: string;
   readonly id: string;
   readonly revision: number;
+  /** Local creation marker, omitted from StoredRecord and portable backups. */
+  readonly incarnation?: string;
   /** JSON text; every adapter stores and returns identical text. */
   readonly data: string;
   readonly idx: IndexValues;

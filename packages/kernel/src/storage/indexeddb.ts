@@ -63,12 +63,28 @@ async function withTransaction<T>(tx: IDBTransaction, work: () => T | Promise<T>
 function openDb(factory: IDBFactory, name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const r = factory.open(name, VAULT_DB_VERSION);
+    // Rejecting the caller does not cancel an IndexedDB open request. Once
+    // abandoned it must neither upgrade the schema nor leak a late connection.
+    let abandoned = false;
     r.onupgradeneeded = () => {
+      if (abandoned) {
+        r.transaction?.abort();
+        return;
+      }
       for (const t of TABLES) if (!r.result.objectStoreNames.contains(t)) r.result.createObjectStore(t);
     };
-    r.onsuccess = () => resolve(r.result);
+    r.onsuccess = () => {
+      if (abandoned) {
+        r.result.close();
+        return;
+      }
+      resolve(r.result);
+    };
     r.onerror = () => reject(r.error ?? new Error('IndexedDB open failed'));
-    r.onblocked = () => reject(new Error('IndexedDB open blocked by another connection'));
+    r.onblocked = () => {
+      abandoned = true;
+      reject(new Error('IndexedDB open blocked by another connection'));
+    };
   });
 }
 

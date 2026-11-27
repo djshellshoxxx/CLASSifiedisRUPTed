@@ -129,6 +129,78 @@ describe('IndexedDB vault adapter (PS-119)', () => {
     retry.close();
   });
 
+  it('TEST-PS-119-09.T08 waits for terminal abort and rolls back an entire partially scheduled write', async () => {
+    const rawFactory = new IDBFactory();
+    const name = 'vault-terminal-write';
+    let aborts = 0;
+    const factory = new Proxy(rawFactory, {
+      get(target, prop) {
+        if (prop === 'open') return (dbName: string, version?: number) => {
+          const r = target.open(dbName, version);
+          r.addEventListener('success', () => r.result.addEventListener('abort', () => { aborts++; }));
+          return r;
+        };
+        return Reflect.get(target, prop, target) as unknown;
+      },
+    });
+    const connection = await openIndexedDbConnection({ name, indexedDB: factory, locks: fakeLocks() });
+    try {
+      // The first put is queued normally, the second fails structured clone.
+      // Neither may survive, and rejection must follow the actual abort event.
+      await expect(connection.persist([
+        { table: 'meta', key: 'partial', row: { value: 1 } },
+        { table: 'meta', key: 'invalid', row: { value: () => 2 } },
+      ])).rejects.toMatchObject({ name: 'DataCloneError' });
+      expect(aborts).toBe(1);
+      expect((await connection.snapshot()).meta).toEqual([]);
+      await connection.persist([{ table: 'meta', key: 'kept', row: { value: 3 } }]);
+    } finally {
+      connection.close();
+    }
+    const reopened = await openIndexedDbConnection({ name, indexedDB: rawFactory, locks: fakeLocks() });
+    try {
+      expect((await reopened.snapshot()).meta).toEqual([['kept', { value: 3 }]]);
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it('TEST-PS-119-09.T08 waits for a failed snapshot transaction to abort before rejecting', async () => {
+    const rawFactory = new IDBFactory();
+    let abortRead = true;
+    let aborts = 0;
+    const factory = new Proxy(rawFactory, {
+      get(target, prop) {
+        if (prop === 'open') return (dbName: string, version?: number) => {
+          const r = target.open(dbName, version);
+          r.addEventListener('success', () => {
+            const db = r.result;
+            db.addEventListener('abort', () => { aborts++; });
+            const transaction = db.transaction.bind(db);
+            db.transaction = (...args: Parameters<IDBDatabase['transaction']>) => {
+              const tx = transaction(...args);
+              if (abortRead && args[1] === 'readonly') {
+                abortRead = false;
+                queueMicrotask(() => tx.abort());
+              }
+              return tx;
+            };
+          });
+          return r;
+        };
+        return Reflect.get(target, prop, target) as unknown;
+      },
+    });
+    const connection = await openIndexedDbConnection({ name: 'vault-terminal-read', indexedDB: factory, locks: fakeLocks() });
+    try {
+      await expect(connection.snapshot()).rejects.toMatchObject({ name: 'AbortError' });
+      expect(aborts).toBe(1);
+      expect((await connection.snapshot()).meta).toEqual([]);
+    } finally {
+      connection.close();
+    }
+  });
+
   it('TEST-PS-119-09.T08 commits persist across reopen; a failed IndexedDB commit restores the working set to the last commit', async () => {
     const factory = new IDBFactory();
     const s1 = await openIndexedDbStorage({ name: 'vault-a', indexedDB: factory, clock });

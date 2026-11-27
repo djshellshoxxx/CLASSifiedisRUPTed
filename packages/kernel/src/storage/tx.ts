@@ -129,6 +129,16 @@ function checkIndexValues(idx: IndexValues): void {
   }
 }
 
+// Local metadata only. Legacy and portable v1 restores have unknown lineage.
+function storedIncarnation(row: RecordRow | undefined): string | undefined {
+  const value = row?.incarnation;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{21}[AQgw]$/.test(value)) {
+    throw new Error('Invalid stored record incarnation');
+  }
+  return value;
+}
+
 function recordStore(d: DriverTx) {
   return {
     listTypes(tenant: string, limit: number) {
@@ -138,6 +148,10 @@ function recordStore(d: DriverTx) {
     get<T = unknown>(tenant: string, type: string, id: string): StoredRecord<T> | undefined {
       const row = d.records.get(tenant, type, id);
       return row ? toStored<T>(row) : undefined;
+    },
+    /** Local creation marker only; absence grants no lineage authority. */
+    incarnation(tenant: string, type: string, id: string): string | undefined {
+      return storedIncarnation(d.records.get(tenant, type, id));
     },
     put<T = unknown>(input: PutRecordInput): Result<StoredRecord<T>, AppError> {
       checkRevision(input.expectedRevision);
@@ -151,11 +165,16 @@ function recordStore(d: DriverTx) {
         throw new RangeError('record revision would exceed the safe integer range');
       }
       const now = toIso(input.now);
+      // Assign only at normal creation, never backfill or infer history on update.
+      const incarnation = current
+        ? storedIncarnation(current)
+        : bytesToBase64url(globalThis.crypto.getRandomValues(new Uint8Array(16)));
       const row: RecordRow = {
         tenant: input.tenant,
         type: input.type,
         id: input.id,
         revision: cas.value + 1,
+        ...(incarnation === undefined ? {} : { incarnation }),
         data: jsonText(input.data, 'record data'),
         // Retained caller tuples must not mutate indexes outside a versioned write.
         idx: [input.idx[0], input.idx[1], input.idx[2], input.idx[3]],

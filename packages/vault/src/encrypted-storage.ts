@@ -38,6 +38,7 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
   let key: CryptoKey | undefined;
   let addressKey: CryptoKey | undefined;
   let closed = false;
+  let closeSettlement: Promise<void> | undefined;
   let preparedHeader: object | undefined;
   let inventory = new Map<string, string>();
   const check = (): void => { if (closed) throw new Error('Vault closed'); };
@@ -45,7 +46,10 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
     const initial = await connection.snapshot();
     // The protected signing identity is the only row readable before passphrase verification.
     current = createStorage(createMemoryDriver({ kind: 'indexeddb', snapshot: { records: (initial.records ?? []).filter(([id]) => id === IDENTITY) } }));
-  } catch (error) { connection.close(); throw error; }
+  } catch (error) {
+    try { await connection.close(); } catch { /* preserve snapshot error */ }
+    throw error;
+  }
 
   async function address(table: TableName, id: string): Promise<string> {
     if (!addressKey) throw new Error('Vault storage locked');
@@ -83,15 +87,16 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
     const manifest = await encrypt('meta', INVENTORY, INVENTORY, { entries: [...next].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0) });
     check();
     await connection.persist([...changes, { table: 'meta', key: INVENTORY, row: manifest }]);
-    inventory = next;
+    // Preserve the actual durable outcome, but do not restore closed in-memory state.
+    if (!closed) inventory = next;
   }
   const storage: Storage = {
     kind: 'indexeddb',
     transaction(fn, opts) { check(); if (!key) throw new Error('Vault storage locked'); return current!.transaction(fn, opts); },
     read(fn) { check(); return current!.read(fn); },
     ping() { check(); return current!.ping(); },
-    async close() {
-      if (closed) return;
+    close() {
+      if (closeSettlement) return closeSettlement;
       closed = true;
       key = undefined;
       addressKey = undefined;
@@ -99,7 +104,16 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
       inventory.clear();
       const previous = current;
       current = undefined;
-      try { await previous?.close(); } finally { connection.close(); }
+      // Every caller observes the same drain and connection-release outcome.
+      closeSettlement = (async () => {
+        try { await previous?.close(); }
+        catch (error) {
+          try { await connection.close(); } catch { /* preserve drain error */ }
+          throw error;
+        }
+        await connection.close();
+      })();
+      return closeSettlement;
     },
   };
   return {
@@ -145,16 +159,22 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
           const plaintext = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad(options.name, 'meta', INVENTORY) }, key!, decodeBase64url(storedManifest.ciphertext, MAX_ROW_BYTES + 16)));
           let entries: unknown;
           try { entries = (decodeRow('meta', plaintext).row as { entries?: unknown }).entries; } finally { plaintext.fill(0); }
+          check();
           if (!Array.isArray(entries) || entries.some(entry => !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || typeof entry[1] !== 'string')) throw new Error('Invalid encrypted storage inventory');
-          inventory = new Map(entries as Array<[string, string]>);
-          if (inventory.size !== entries.length) throw new Error('Invalid encrypted storage inventory');
+          // Keep the candidate private until every authenticated entry has been verified.
+          const candidateInventory = new Map(entries as Array<[string, string]>);
+          if (candidateInventory.size !== entries.length) throw new Error('Invalid encrypted storage inventory');
           let count = 0;
           for (const table of TABLES) for (const [id, row] of persisted[table] ?? []) {
             if (table === 'meta' && (id === HEADER || id === INVENTORY)) continue;
             count++;
-            if (inventory.get(inventoryId(table, id)) !== await digest(row)) throw new Error('Encrypted storage inventory mismatch');
+            const actual = await digest(row);
+            check();
+            if (candidateInventory.get(inventoryId(table, id)) !== actual) throw new Error('Encrypted storage inventory mismatch');
           }
-          if (count !== inventory.size) throw new Error('Encrypted storage inventory mismatch');
+          if (count !== candidateInventory.size) throw new Error('Encrypted storage inventory mismatch');
+          check();
+          inventory = candidateInventory;
         } else inventory = new Map();
         const snapshot: Snapshot = {};
         for (const table of TABLES) {

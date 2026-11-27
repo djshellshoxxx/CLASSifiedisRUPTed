@@ -88,6 +88,7 @@ async function runTx<T, E>(driver: StorageDriver, mode: TxMode, fn: (tx: Tx) => 
 export function createStorage(driver: StorageDriver): Storage {
   const lock = createLock();
   let closed = false;
+  let closeSettlement: Promise<void> | undefined;
   const guard = (): void => {
     if (closed) throw new Error('storage is closed');
   };
@@ -117,12 +118,15 @@ export function createStorage(driver: StorageDriver): Storage {
         return false;
       }
     },
-    close: () =>
-      lock(async () => {
-        if (closed) return;
+    close: () => {
+      // Keep the original queued drain and its outcome, including a rejection.
+      if (closeSettlement) return closeSettlement;
+      closeSettlement = lock(async () => {
         closed = true;
         await driver.close();
-      }),
+      });
+      return closeSettlement;
+    },
   };
   return storage;
 }

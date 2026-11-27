@@ -70,4 +70,8 @@ CREATE TABLE blob_refs (
   PRIMARY KEY (tenant, ref, holder)) WITHOUT ROWID;
 `,
   },
+  {
+    id: 'kernel:0003_record_incarnation',
+    sql: 'ALTER TABLE records ADD COLUMN incarnation TEXT;',
+  },
 ];

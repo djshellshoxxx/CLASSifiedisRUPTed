@@ -31,7 +31,7 @@ const n = (v: SQLInputValue | undefined): number => Number(v);
 const col = (slot: IndexSlot): string => `idx${slot}`;
 
 function toRecord(r: SqlRow): RecordRow {
-  return { tenant: s(r['tenant']), type: s(r['type']), id: s(r['id']), revision: n(r['revision']), data: s(r['data']), idx: [sn(r['idx1']), sn(r['idx2']), sn(r['idx3']), sn(r['idx4'])], createdAt: s(r['created_at']), updatedAt: s(r['updated_at']) };
+  return { tenant: s(r['tenant']), type: s(r['type']), id: s(r['id']), revision: n(r['revision']), data: s(r['data']), idx: [sn(r['idx1']), sn(r['idx2']), sn(r['idx3']), sn(r['idx4'])], createdAt: s(r['created_at']), updatedAt: s(r['updated_at']), ...(r['incarnation'] === null || r['incarnation'] === undefined ? {} : { incarnation: s(r['incarnation']) }) };
 }
 function toOutbox(r: SqlRow): OutboxRow {
   return { seq: n(r['seq']), eventId: s(r['event_id']), tenant: s(r['tenant']), type: s(r['type']), aggregateType: s(r['aggregate_type']), aggregateId: s(r['aggregate_id']), revision: n(r['revision']), occurredAt: s(r['occurred_at']), envelope: s(r['envelope']) };
@@ -98,7 +98,7 @@ function makeTx(stmt: (sql: string) => StatementSync, all: (sql: string, params:
         const r = one('SELECT * FROM records WHERE tenant = ? AND type = ? AND id = ?', t, ty, id);
         return r ? toRecord(r) : undefined;
       },
-      upsert: (r) => void run('INSERT OR REPLACE INTO records (tenant, type, id, revision, data, idx1, idx2, idx3, idx4, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', r.tenant, r.type, r.id, r.revision, r.data, r.idx[0], r.idx[1], r.idx[2], r.idx[3], r.createdAt, r.updatedAt),
+      upsert: (r) => void run('INSERT OR REPLACE INTO records (tenant, type, id, revision, data, idx1, idx2, idx3, idx4, created_at, updated_at, incarnation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', r.tenant, r.type, r.id, r.revision, r.data, r.idx[0], r.idx[1], r.idx[2], r.idx[3], r.createdAt, r.updatedAt, r.incarnation ?? null),
       remove: (t, ty, id) => void run('DELETE FROM records WHERE tenant = ? AND type = ? AND id = ?', t, ty, id),
       query: (q) => {
         const { sql, params } = recordQuerySql(q);
@@ -262,7 +262,8 @@ function applyKernelMigrations(db: DatabaseSync, list: readonly SqlMigration[]):
       db.prepare('INSERT INTO schema_migrations (id, checksum, applied_at) VALUES (?, ?, ?)').run(m.id, sum, new Date().toISOString());
       db.exec('COMMIT');
     } catch (e) {
-      db.exec('ROLLBACK');
+      // SQLite may already have rolled back the entire transaction.
+      try { if (db.isTransaction) db.exec('ROLLBACK'); } catch { /* preserve migration error */ }
       throw e;
     }
   }
@@ -317,19 +318,26 @@ function createSqliteDriver(db: DatabaseSync): StorageDriver {
 /** Opens the relay database, applies kernel migrations and returns a Storage. */
 export function openSqliteStorage(opts: SqliteOptions): SqliteStorage {
   const db = new DatabaseSync(opts.path);
-  const busy = opts.busyTimeoutMs ?? 5000;
-  db.exec(`PRAGMA busy_timeout = ${Math.trunc(busy)}`);
-  db.exec('PRAGMA journal_mode = WAL');
-  db.exec('PRAGMA synchronous = NORMAL');
-  db.exec('PRAGMA foreign_keys = ON');
-  applyKernelMigrations(db, [...KERNEL_SQL_MIGRATIONS, ...(opts.migrations ?? [])]);
-  const storage = createStorage(createSqliteDriver(db));
-  return {
-    ...storage,
-    pragmas: () => {
-      const jm = db.prepare('PRAGMA journal_mode').get() as SqlRow;
-      const bt = db.prepare('PRAGMA busy_timeout').get() as SqlRow;
-      return { journalMode: s(Object.values(jm)[0]), busyTimeoutMs: n(Object.values(bt)[0]) };
-    },
-  };
+  try {
+    const busy = opts.busyTimeoutMs ?? 5000;
+    db.exec(`PRAGMA busy_timeout = ${Math.trunc(busy)}`);
+    db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA synchronous = NORMAL');
+    db.exec('PRAGMA foreign_keys = ON');
+    applyKernelMigrations(db, [...KERNEL_SQL_MIGRATIONS, ...(opts.migrations ?? [])]);
+    const storage = createStorage(createSqliteDriver(db));
+    return {
+      ...storage,
+      pragmas: () => {
+        const jm = db.prepare('PRAGMA journal_mode').get() as SqlRow;
+        const bt = db.prepare('PRAGMA busy_timeout').get() as SqlRow;
+        return { journalMode: s(Object.values(jm)[0]), busyTimeoutMs: n(Object.values(bt)[0]) };
+      },
+    };
+  } catch (error) {
+    // Initialization never transfers ownership on failure. Close the native handle
+    // without replacing the original migration/setup error.
+    try { db.close(); } catch { /* preserve initialization error */ }
+    throw error;
+  }
 }

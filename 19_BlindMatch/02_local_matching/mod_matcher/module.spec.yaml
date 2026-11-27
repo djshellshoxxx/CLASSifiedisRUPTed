@@ -1,0 +1,181 @@
+id: F19.S02.M01
+scope: FUTURE
+deferral: Experimental headless foundation. Runtime remains off until UI, authenticated adapter, session
+  wiring and native/mobile acceptance are qualified.
+summary: Deterministic bounded local filtering of public records, with current-session admission and no
+  confidential provider.
+responsibilities:
+  - Apply all hard criteria to a bounded authenticated public snapshot.
+  - Return minimal references after final owner/session admission.
+non_responsibilities:
+  - No remote computation, external disclosure, public publication, account-wide erasure or payment execution.
+depends_on:
+  - F19.S01.M01
+  - F06.S01.M01
+  - CTR-ERR-001
+  - CTR-PRV-001
+  - CTR-TST-001
+user_stories:
+  - As an owner I keep my preferences local until an explicit action.
+  - As an owner I can stop matching and erase private intents without deletion history.
+edge_cases:
+  - A foreign principal receives no private record.
+  - Delayed work after lock or erasure cannot return current results.
+  - Old backups restore private content inactive.
+  - Malformed or excessive input fails without truncation or fallback.
+ux:
+  notes: Headless experimental API; local UI, help and accessibility remain separate activation gates.
+processes:
+  domain_schema:
+    requirements:
+      - Own no persistent entity; consume authenticated public-candidate snapshots and owner-private criteria.
+      - Return only ownerId, listingId, revision and cid references without criteria, private amounts, scores
+        or negative reasons.
+      - Revalidate closed metadata and projection identity bindings without claiming structural checks verify
+        signatures.
+    entities: []
+    note: Pure values and ephemeral controller state only, with no persistent schema.
+  validation_rules:
+    requirements:
+      - Accept at most 128 dense candidates with bounded fields and a valid safe clock; reject malformed or
+        oversized input.
+      - Apply every hard criterion and exact same-currency price bounds without FX or inferred negotiated
+        prices.
+      - Reject duplicate owner/listing identities and inconsistent evidence references instead of choosing an
+        input-order winner.
+    rules:
+      - V01 | snapshot is dense, bounded and valid | VALIDATION_FAILED
+      - V02 | candidate count does not exceed 128 | PAYLOAD_TOO_LARGE
+      - V03 | session and intent remain current | PRECONDITION_FAILED
+  workflow_state_machine:
+    requirements:
+      - Keep pure results deterministic and sorted independently of input candidate order.
+      - Permit one ephemeral job; newer calls supersede older calls and cancellation settles stalled reads or
+        loaders.
+      - Recheck owner, session, epoch, revision, active state, expiry and blocks after the final awaited read
+        before release.
+    machines: []
+    note: Pure matcher has no state machine; the session retains only one ephemeral abort controller.
+    timeouts:
+      - Expiry uses the injected clock; no background activity resumes automatically.
+  commands_queries_events:
+    requirements:
+      - Expose matchLocalCandidates and createLocalMatchSession as libraries without bus commands, events or
+        provider fallback.
+      - Pass only signal and limit to the authenticated local loader, never private criteria or intent
+        identifiers.
+      - Reject nonlocal modes before loading candidates and return fixed errors without input echoes.
+    commands: []
+    queries: []
+    events_produced: []
+    events_consumed: []
+    errors: []
+    note: Headless library; no HTTP or command-bus registration, emitted event or audit sink.
+    example: match({id,expectedRevision,mode:"local"}) returns minimal public references after current-session
+      admission.
+  authorization_capabilities:
+    requirements:
+      - Default matching to disabled and enable only for configuration that is literal true.
+      - Use the owning discovery adapter after signature admission, never another domain private tables or a
+        verified boolean.
+      - Exclude blocked, own, conflicted, withdrawn, unavailable and expired records without implying
+        disclosure or trade consent.
+    capabilities: []
+    notes: Owner-bound local library only; no command-bus capability or audit sink is registered. F19 private
+      intent retention follows the RET-OWNER-LIVE exception in CTR-PRV-001.
+  failure_recovery_idempotency:
+    requirements:
+      - Keep jobs and results ephemeral; late completion cannot revive cancelled or superseded operations.
+      - Read durable intent revision after loading to detect changes by another owner-bound controller.
+      - Handle loader errors without network fallback or automatic retry; reopening resumes no job.
+    idempotency: No persistent request hash or replay response; current revisions control mutation and erase
+      leaves no history.
+    concurrency: Current revision and ephemeral epoch checks reject stale results; session rereads revision after loading.
+    retries: No automatic retry or recovered job; owner chooses a fresh action after state inspection.
+    offline: Local functions require no remote account, wallet, payment or network provider.
+    partial_failure: The matcher performs no writes. Loader and policy errors return fixed failures; cancellation
+      and final admission suppress stale results.
+  privacy_retention_abuse:
+    requirements:
+      - Keep private criteria inside unlocked local computation and require a network-free candidate loader.
+      - Persist no results, query logs, negative explanations, deletion markers or private fingerprints.
+      - Describe public-record comparison as local filtering, not confidential cross-user computation or
+        anonymity.
+    data:
+      - P3 private criteria and current state; candidates were already intentionally public.
+    retention:
+      - Current intents live until owner erasure; results and context tokens are ephemeral with no identifying
+        deletion history.
+      - RET-OWNER-LIVE takes precedence over legacy tombstone, audit, evidence and legal-hold retention for
+        this local intent API; no identifying deletion history is created.
+    abuse_controls:
+      - Bound input/output and refuse nonlocal modes without any implicit disclosure authority.
+    threats:
+      - T01 | foreign owner or stale session reads private content | owner-scoped storage and session guards
+      - T02 | old backup silently resumes processing | restored intents are draft and jobs are never persisted
+      - T03 | private query reaches a loader or log | loader gets signal and limit only; logging is absent
+  observability_performance:
+    requirements:
+      - The matcher and session have no logging, telemetry, event sink or metrics dependency.
+      - Bound candidates and references to 128 with explicit overflow rejection and no constraint truncation.
+      - Keep real mobile, accessibility and native-browser qualification separate from host unit timing.
+    metrics:
+      - Disabled and absent; no implicit anonymous collection exception.
+    logs:
+      - Disabled and absent; no identifying audit or debug export.
+    budgets:
+      - 128 candidates and minimal references; each processed field and array is bounded.
+  contract_and_acceptance_tests:
+    requirements:
+      - Compare exact price boundaries and synthetic eligible sets against an independent deterministic oracle.
+      - Exercise malformed input, every asynchronous cancellation stage, late session changes and
+        minimal-output privacy.
+      - Preserve existing gates and report unavailable browser runs honestly; absent or skipped execution
+        establishes no acceptance.
+    tests:
+      - T01 | unit | 01.R01,01.R02,01.R03 | Inspect result keys and malformed retained metadata/evidence
+        bindings | Only public owner/listing/revision/CID references return; signature admission remains
+        upstream
+      - T02 | unit | 02.R01,02.R02,02.R03 | Use dense/sparse arrays, 129 candidates, conflicting identities
+        and exact currency boundaries | Bounded validation fails closed and every hard criterion applies
+        without FX
+      - T03 | integration | 03.R01,03.R02,03.R03 | Delay reads/loaders while cancelling, superseding,
+        expiring, blocking or editing the intent | Only the current live revision can return; cancellation
+        settles stalled operations
+      - T04 | unit | 04.R01,04.R02,04.R03 | Inspect candidate-loader arguments and request unavailable
+        confidential modes | Loader sees signal and limit only; nonlocal modes invoke no loader or fallback
+      - T05 | unit | 05.R01,05.R02,05.R03 | Use default/malformed enablement and own/blocked/unavailable
+        public records | Matching requires literal true and excludes ineligible records without consent
+        inference
+      - T06 | integration | 06.R01,06.R02,06.R03 | Change an intent through another store and reject or stall
+        the loader | Final durable revision and ephemeral epoch prevent stale results; no automatic retries or
+        jobs
+      - T07 | unit | 07.R01,07.R02,07.R03 | Spy on logging/network APIs and inspect outputs and persisted
+        tables | Criteria, amounts, negative explanations and identifying markers are absent from outputs and
+        side effects
+      - T08 | contract | 08.R01,08.R02,08.R03 | Compare deterministic permutations and 128/129 candidate
+        boundaries; separately measure target devices | Stable order, exact all-or-error bounds and separately
+        documented mobile qualification
+      - T09 | contract | 09.R01,09.R02,09.R03 | Run the independent interval oracle and controller race suites
+        | Actual executions support bounded local claims; native/mobile and protocol gates remain separate
+      - T10 | integration | 10.R01,10.R02,10.R03 | Erase/reopen and restore an active intent from backup
+        before requesting matching | Recovered intent is draft and no loader resumes automatically;
+        results/context are never restored
+    acceptance:
+      - All process requirements have explicit test contracts; executed evidence is separately reported.
+      - Focused tests and existing regressions pass without weakening assertions or counting unavailable
+        browser execution.
+      - UI, authenticated discovery composition, mobile acceptance and confidential protocol release remain
+        gated.
+  import_export_backup_rollback:
+    requirements:
+      - Export no matching job or result because this module owns no persistent row.
+      - Recovered intents are draft and require a new explicit match action after backup import.
+      - Preserve signed public formats and discovery provenance; remote confidential protocols require
+        independent qualification.
+    export: No job/result export exists; owning domains export their own records.
+    import: Discovery retains signature and provenance admission; private criteria never enter public imports.
+    backup: Legacy archives remain compatible; unknown/malformed records fail closed and recovered content never
+      resumes authority.
+    migration_rollback: Existing formats and storage drivers remain unchanged; disabled state preserves owner
+      inspection and erasure.

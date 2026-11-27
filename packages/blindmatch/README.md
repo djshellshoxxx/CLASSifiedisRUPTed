@@ -6,6 +6,14 @@ the backup codec for compatibility but does not activate a BlindMatch screen or
 matching workflow. No confidential provider, payment or automatic public
 disclosure is implemented.
 
+The continuation implements a reusable private editor/results view in
+`apps/pwa/src/blindmatch.ts` and an authenticated local discovery adapter in
+`apps/pwa/src/blindmatch-candidates.ts`. The main application's literal
+`ENABLE_LOCAL_BLINDMATCH_PREVIEW = false` keeps that composition unavailable in
+normal builds. A same-origin native test fixture mounts the actual view under
+the production CSP; that is component acceptance, not runtime activation.
+See the [continuation handoff](../../docs/development/cycles/20261127-blindmatch-view/HANDOFF.md).
+
 ## Ownership and composition
 
 `F19.S01.M01` owns `blindmatch.private_intent`. `F19.S02.M01` owns the pure local
@@ -72,9 +80,21 @@ existing fail-closed behavior.
 
 ## Remaining activation gates
 
-Complete the local editor/results UI, authenticated bounded discovery adapter,
-current-session lifecycle wiring, help, accessibility and actual mobile
-acceptance before user-facing activation. Confidential computation, external
-disclosure consent and remote erasure retain separate review gates. Focused
-unit/integration tests and the test-only native-browser harness qualify this
-foundation, not those future features.
+The editor, adapter and lifecycle wiring are implemented as a gated composition.
+Each mounted opt-in creates fresh current-session instances. Saving or editing
+produces a draft; matching, pausing and local erasure require explicit actions.
+Cancellation, policy/retained-listing refresh and view teardown discard results;
+disablement and vault lock also clear private forms and cards. No saved intent
+runs merely because a view or vault reopens.
+
+The adapter verifies canonical retained keys, real signatures and projection
+bindings, then rejects a changed second snapshot. More than 128 total retained
+rows, including withdrawn/conflicted rows, rejects the whole request. This cap
+bounds admission and signature work, not the vault adapter's full snapshot cost.
+Returned references describe an authenticated local snapshot, not continuing
+availability, consent or trade authority.
+
+Source-specific browser acceptance, actual mobile resource/latency checks,
+manual screen-reader/accessibility and activation review remain required before
+user-facing activation. Confidential computation, external disclosure consent
+and cross-domain erasure retain separate implementation and review gates.

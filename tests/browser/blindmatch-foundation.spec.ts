@@ -21,16 +21,42 @@ test.beforeAll(async () => {
       export { productionBackupCodecs } from './apps/pwa/src/backup-codecs.ts';`,
     loader: 'ts', resolveDir: fileURLToPath(new URL('../../', import.meta.url)) },
     bundle: true, platform: 'browser', target: 'es2022', format: 'iife', globalName: '__blindmatchFoundation', write: false,
+    footer: { js: "document.documentElement.dataset.blindmatchReady = 'true';" },
   });
   bundle = result.outputFiles[0]!.text;
 });
 
 test('BlindMatch foundation uses native encrypted storage, erases locally and restores old content inactive', async ({ page }) => {
-  // Test-only same-origin script; normal CSP, browser crypto and IndexedDB remain in force.
-  // No BlindMatch application control or production endpoint is introduced by this harness.
+  // A parser-loaded external script avoids addScriptTag's Firefox evaluation path.
+  // Preserve the actual preview server policy and do not load the PWA/service worker.
+  const production = await page.request.get('/');
+  expect(production.ok()).toBe(true);
+  const policy = production.headers()['content-security-policy'];
+  expect(policy).toContain("script-src 'self'");
+  expect(policy).not.toContain("'unsafe-eval'");
+  expect(policy).not.toContain("'unsafe-inline'");
+  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>BlindMatch foundation test</title>'
+    + '<script defer src="/__blindmatch_foundation_test.js"></script></head><body></body></html>';
+  await page.route('**/__blindmatch_foundation_test.html', route => route.fulfill({
+    status: 200,
+    headers: { ...production.headers(), 'content-type': 'text/html; charset=utf-8', 'content-length': String(Buffer.byteLength(html)) },
+    body: html,
+  }));
   await page.route('**/__blindmatch_foundation_test.js', route => route.fulfill({ contentType: 'application/javascript', body: bundle }));
-  await page.goto('/');
-  await page.addScriptTag({ url: '/__blindmatch_foundation_test.js' });
+  const fixture = await page.goto('/__blindmatch_foundation_test.html');
+  expect(fixture?.headers()['content-security-policy']).toBe(policy);
+  await expect(page.locator('html')).toHaveAttribute('data-blindmatch-ready', 'true');
+  expect(await page.evaluate(async () => ({
+    origin: location.origin,
+    secure: isSecureContext,
+    crypto: crypto.subtle instanceof SubtleCrypto,
+    storage: indexedDB instanceof IDBFactory,
+    controller: navigator.serviceWorker.controller,
+    registrations: (await navigator.serviceWorker.getRegistrations()).length,
+  }))).toEqual({
+    origin: new URL(production.url()).origin,
+    secure: true, crypto: true, storage: true, controller: null, registrations: 0,
+  });
   const result = await page.evaluate(async () => {
     const h = (window as unknown as HarnessWindow).__blindmatchFoundation;
     const clock = h.createFakeClock('2026-11-26T12:00:00.000Z');

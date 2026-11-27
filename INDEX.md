@@ -4,7 +4,11 @@ Status: PLANNED; links below are directory contracts, not implementation claims.
 
 ## [F19 BlindMatch private local discovery](19_BlindMatch/SPEC.md)
 
-Flagship development priority; experimental runtime defaults off.
+Flagship development priority; the experimental local foundation remains `FUTURE`
+and off. Canonical module ownership is defined below. Broader confidential modes
+remain future work: [public specification](docs/blindmatch/SPEC.md),
+[diagrams](docs/blindmatch/DIAGRAMS.md), and
+[implementation/acceptance roadmap](docs/blindmatch/ROADMAP.md).
 
 - [F19.S01 private intents](19_BlindMatch/01_intents/SPEC.md)
   - [F19.S01.M01 local intents](19_BlindMatch/01_intents/mod_local/SPEC.md)

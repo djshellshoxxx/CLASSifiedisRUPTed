@@ -1,9 +1,9 @@
 {
   "phase": "Prompt 2",
-  "status": "DRAFT",
-  "module_count": 148,
-  "process_spec_count": 1480,
-  "requirement_count": 4440,
+  "status": "MIXED",
+  "module_count": 150,
+  "process_spec_count": 1500,
+  "requirement_count": 4500,
   "requirements": [
     {
       "id": "PS-001-01.R01",
@@ -22204,6 +22204,426 @@
       "id": "PS-148-10.R03",
       "status": "DRAFT",
       "spec": "18_Governance/02_community/mod_transparency/import_export_backup_rollback.md"
+    },
+    {
+      "id": "PS-149-01.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/domain_schema.md",
+      "status": "SPECIFIED",
+      "text": "Store one current PrivateIntent under the unlocked principal with a random UUIDv4 key and no historical revision table."
+    },
+    {
+      "id": "PS-149-01.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/domain_schema.md",
+      "status": "SPECIFIED",
+      "text": "Keep owner, criteria, state and expiry inside existing encrypted vault storage without public projection."
+    },
+    {
+      "id": "PS-149-01.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/domain_schema.md",
+      "status": "SPECIFIED",
+      "text": "Use StoredRecord revision and canonical intentId binding; the cancellation epoch is ephemeral only."
+    },
+    {
+      "id": "PS-149-02.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/validation_rules.md",
+      "status": "SPECIFIED",
+      "text": "Validate closed criteria, canonical UTC expiry and safe positive expected revisions before mutation."
+    },
+    {
+      "id": "PS-149-02.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/validation_rules.md",
+      "status": "SPECIFIED",
+      "text": "Bound query to 120 characters, canonical nonnegative amounts to 78 digits and live intents to 50."
+    },
+    {
+      "id": "PS-149-02.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/validation_rules.md",
+      "status": "SPECIFIED",
+      "text": "Reject unknown authority fields, identifier collisions and expired creation or activation without partial writes."
+    },
+    {
+      "id": "PS-149-03.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/workflow_state_machine.md",
+      "status": "SPECIFIED",
+      "text": "Create as draft; activation requires explicit owner action against the current revision and unexpired content."
+    },
+    {
+      "id": "PS-149-03.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/workflow_state_machine.md",
+      "status": "SPECIFIED",
+      "text": "Edits reset state to draft; pause stops matching and erase removes the row instead of storing erased state."
+    },
+    {
+      "id": "PS-149-03.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/workflow_state_machine.md",
+      "status": "SPECIFIED",
+      "text": "Invalidate the ephemeral epoch before mutations and permanently revoke the store instance after session loss."
+    },
+    {
+      "id": "PS-149-04.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/commands_queries_events.md",
+      "status": "SPECIFIED",
+      "text": "Expose create, read, list, revise, setState and erase as an owner-bound library with structured Result errors."
+    },
+    {
+      "id": "PS-149-04.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/commands_queries_events.md",
+      "status": "SPECIFIED",
+      "text": "Register no command-bus operation and emit no events, idempotency hashes, outbox records or audit entries."
+    },
+    {
+      "id": "PS-149-04.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/commands_queries_events.md",
+      "status": "SPECIFIED",
+      "text": "Return detached validated rows without raw exception details or remote operations."
+    },
+    {
+      "id": "PS-149-05.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/authorization_capabilities.md",
+      "status": "SPECIFIED",
+      "text": "Bind storage, principal and current-session guard at composition; operation bodies cannot choose the owner."
+    },
+    {
+      "id": "PS-149-05.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/authorization_capabilities.md",
+      "status": "SPECIFIED",
+      "text": "Require literal enabled true for creation, revision and activation while retaining inspection, pause and erase cleanup."
+    },
+    {
+      "id": "PS-149-05.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/authorization_capabilities.md",
+      "status": "SPECIFIED",
+      "text": "Check the session before admission, inside the transaction and after asynchronous settlement; ended sessions receive no data."
+    },
+    {
+      "id": "PS-149-06.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/failure_recovery_idempotency.md",
+      "status": "SPECIFIED",
+      "text": "Use optimistic revisions and atomic storage transactions; a rejected storage transaction rolls back, while session loss after commit can conceal a successful mutation behind FORBIDDEN."
+    },
+    {
+      "id": "PS-149-06.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/failure_recovery_idempotency.md",
+      "status": "SPECIFIED",
+      "text": "Retain no replay cache or deleted-object registry; repeated erasure reports absence without history."
+    },
+    {
+      "id": "PS-149-06.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/failure_recovery_idempotency.md",
+      "status": "SPECIFIED",
+      "text": "Conceal late results after session loss and require explicit fresh owner action after state inspection."
+    },
+    {
+      "id": "PS-149-07.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/privacy_retention_abuse.md",
+      "status": "SPECIFIED",
+      "text": "Keep private criteria, identifiers and amounts out of logs, network requests, URLs, notifications and public projections."
+    },
+    {
+      "id": "PS-149-07.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/privacy_retention_abuse.md",
+      "status": "SPECIFIED",
+      "text": "Erase the local intent immediately without retaining an identifying deletion event, hash or tombstone."
+    },
+    {
+      "id": "PS-149-07.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/privacy_retention_abuse.md",
+      "status": "SPECIFIED",
+      "text": "Limit erasure to local intents and ephemeral results; independent backups, peer copies and physical remnants remain outside scope."
+    },
+    {
+      "id": "PS-149-08.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/observability_performance.md",
+      "status": "SPECIFIED",
+      "text": "Logging, audit and metrics collection are absent from the local API and remain off by default."
+    },
+    {
+      "id": "PS-149-08.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/observability_performance.md",
+      "status": "SPECIFIED",
+      "text": "Reject capacity overflow explicitly without silently truncating live intents or hard criteria."
+    },
+    {
+      "id": "PS-149-08.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/observability_performance.md",
+      "status": "SPECIFIED",
+      "text": "Qualify encrypted storage and target-device resource behavior before activation; host tests are not mobile evidence."
+    },
+    {
+      "id": "PS-149-09.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/contract_and_acceptance_tests.md",
+      "status": "SPECIFIED",
+      "text": "Assert owner isolation, revisions, expiry, cancellation and rollback independently rather than checking source presence."
+    },
+    {
+      "id": "PS-149-09.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/contract_and_acceptance_tests.md",
+      "status": "SPECIFIED",
+      "text": "Exercise encrypted-vault codecs and signed public fixtures, with native browser qualification recorded separately."
+    },
+    {
+      "id": "PS-149-09.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/contract_and_acceptance_tests.md",
+      "status": "SPECIFIED",
+      "text": "Report actual outcomes and remaining activation gates without treating mocks or documents as production readiness."
+    },
+    {
+      "id": "PS-149-10.R01",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/import_export_backup_rollback.md",
+      "status": "SPECIFIED",
+      "text": "Register the explicit codec and bind imported owner and stored key to validated content."
+    },
+    {
+      "id": "PS-149-10.R02",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/import_export_backup_rollback.md",
+      "status": "SPECIFIED",
+      "text": "Restore intents as draft, preserve the live source during export and require fresh action before matching resumes."
+    },
+    {
+      "id": "PS-149-10.R03",
+      "module": "F19.S01.M01",
+      "spec": "19_BlindMatch/01_intents/mod_local/import_export_backup_rollback.md",
+      "status": "SPECIFIED",
+      "text": "Keep legacy archives compatible and reject unknown or malformed records; old external backups restore content only through explicit import."
+    },
+    {
+      "id": "PS-150-01.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/domain_schema.md",
+      "status": "SPECIFIED",
+      "text": "Own no persistent entity; consume authenticated public-candidate snapshots and owner-private criteria."
+    },
+    {
+      "id": "PS-150-01.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/domain_schema.md",
+      "status": "SPECIFIED",
+      "text": "Return only ownerId, listingId, revision and cid references without criteria, private amounts, scores or negative reasons."
+    },
+    {
+      "id": "PS-150-01.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/domain_schema.md",
+      "status": "SPECIFIED",
+      "text": "Revalidate closed metadata and projection identity bindings without claiming structural checks verify signatures."
+    },
+    {
+      "id": "PS-150-02.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/validation_rules.md",
+      "status": "SPECIFIED",
+      "text": "Accept at most 128 dense candidates with bounded fields and a valid safe clock; reject malformed or oversized input."
+    },
+    {
+      "id": "PS-150-02.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/validation_rules.md",
+      "status": "SPECIFIED",
+      "text": "Apply every hard criterion and exact same-currency price bounds without FX or inferred negotiated prices."
+    },
+    {
+      "id": "PS-150-02.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/validation_rules.md",
+      "status": "SPECIFIED",
+      "text": "Reject duplicate owner/listing identities and inconsistent evidence references instead of choosing an input-order winner."
+    },
+    {
+      "id": "PS-150-03.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/workflow_state_machine.md",
+      "status": "SPECIFIED",
+      "text": "Keep pure results deterministic and sorted independently of input candidate order."
+    },
+    {
+      "id": "PS-150-03.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/workflow_state_machine.md",
+      "status": "SPECIFIED",
+      "text": "Permit one ephemeral job; newer calls supersede older calls and cancellation settles stalled reads or loaders."
+    },
+    {
+      "id": "PS-150-03.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/workflow_state_machine.md",
+      "status": "SPECIFIED",
+      "text": "Recheck owner, session, epoch, revision, active state, expiry and blocks after the final awaited read before release."
+    },
+    {
+      "id": "PS-150-04.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/commands_queries_events.md",
+      "status": "SPECIFIED",
+      "text": "Expose matchLocalCandidates and createLocalMatchSession as libraries without bus commands, events or provider fallback."
+    },
+    {
+      "id": "PS-150-04.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/commands_queries_events.md",
+      "status": "SPECIFIED",
+      "text": "Pass only signal and limit to the authenticated local loader, never private criteria or intent identifiers."
+    },
+    {
+      "id": "PS-150-04.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/commands_queries_events.md",
+      "status": "SPECIFIED",
+      "text": "Reject nonlocal modes before loading candidates and return fixed errors without input echoes."
+    },
+    {
+      "id": "PS-150-05.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/authorization_capabilities.md",
+      "status": "SPECIFIED",
+      "text": "Default matching to disabled and enable only for configuration that is literal true."
+    },
+    {
+      "id": "PS-150-05.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/authorization_capabilities.md",
+      "status": "SPECIFIED",
+      "text": "Use the owning discovery adapter after signature admission, never another domain private tables or a verified boolean."
+    },
+    {
+      "id": "PS-150-05.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/authorization_capabilities.md",
+      "status": "SPECIFIED",
+      "text": "Exclude blocked, own, conflicted, withdrawn, unavailable and expired records without implying disclosure or trade consent."
+    },
+    {
+      "id": "PS-150-06.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/failure_recovery_idempotency.md",
+      "status": "SPECIFIED",
+      "text": "Keep jobs and results ephemeral; late completion cannot revive cancelled or superseded operations."
+    },
+    {
+      "id": "PS-150-06.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/failure_recovery_idempotency.md",
+      "status": "SPECIFIED",
+      "text": "Read durable intent revision after loading to detect changes by another owner-bound controller."
+    },
+    {
+      "id": "PS-150-06.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/failure_recovery_idempotency.md",
+      "status": "SPECIFIED",
+      "text": "Handle loader errors without network fallback or automatic retry; reopening resumes no job."
+    },
+    {
+      "id": "PS-150-07.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/privacy_retention_abuse.md",
+      "status": "SPECIFIED",
+      "text": "Keep private criteria inside unlocked local computation and require a network-free candidate loader."
+    },
+    {
+      "id": "PS-150-07.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/privacy_retention_abuse.md",
+      "status": "SPECIFIED",
+      "text": "Persist no results, query logs, negative explanations, deletion markers or private fingerprints."
+    },
+    {
+      "id": "PS-150-07.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/privacy_retention_abuse.md",
+      "status": "SPECIFIED",
+      "text": "Describe public-record comparison as local filtering, not confidential cross-user computation or anonymity."
+    },
+    {
+      "id": "PS-150-08.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/observability_performance.md",
+      "status": "SPECIFIED",
+      "text": "The matcher and session have no logging, telemetry, event sink or metrics dependency."
+    },
+    {
+      "id": "PS-150-08.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/observability_performance.md",
+      "status": "SPECIFIED",
+      "text": "Bound candidates and references to 128 with explicit overflow rejection and no constraint truncation."
+    },
+    {
+      "id": "PS-150-08.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/observability_performance.md",
+      "status": "SPECIFIED",
+      "text": "Keep real mobile, accessibility and native-browser qualification separate from host unit timing."
+    },
+    {
+      "id": "PS-150-09.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/contract_and_acceptance_tests.md",
+      "status": "SPECIFIED",
+      "text": "Compare exact price boundaries and synthetic eligible sets against an independent deterministic oracle."
+    },
+    {
+      "id": "PS-150-09.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/contract_and_acceptance_tests.md",
+      "status": "SPECIFIED",
+      "text": "Exercise malformed input, every asynchronous cancellation stage, late session changes and minimal-output privacy."
+    },
+    {
+      "id": "PS-150-09.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/contract_and_acceptance_tests.md",
+      "status": "SPECIFIED",
+      "text": "Preserve existing gates and report unavailable browser runs honestly; absent or skipped execution establishes no acceptance."
+    },
+    {
+      "id": "PS-150-10.R01",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/import_export_backup_rollback.md",
+      "status": "SPECIFIED",
+      "text": "Export no matching job or result because this module owns no persistent row."
+    },
+    {
+      "id": "PS-150-10.R02",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/import_export_backup_rollback.md",
+      "status": "SPECIFIED",
+      "text": "Recovered intents are draft and require a new explicit match action after backup import."
+    },
+    {
+      "id": "PS-150-10.R03",
+      "module": "F19.S02.M01",
+      "spec": "19_BlindMatch/02_local_matching/mod_matcher/import_export_backup_rollback.md",
+      "status": "SPECIFIED",
+      "text": "Preserve signed public formats and discovery provenance; remote confidential protocols require independent qualification."
     }
   ]
 }

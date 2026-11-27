@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  collectingSink, createBus, createDeterministicIds, createFakeClock, createMemoryStorage, createOutboxDispatcher, createRegistry,
+  collectingSink, createBus, createDeterministicIds, createFakeClock, createMemoryStorage, createOutboxDispatcher, createRegistry, unwrap,
   type FakeClock, type IdGen, type Page, type SignedEnvelope, type StoredRecord,
 } from '../../packages/kernel/src/index.ts';
 import { didFromPublicKey, type UnlockedIdentity } from '../../packages/identity/src/index.ts';
@@ -15,6 +15,7 @@ import {
   type CoordinationState,
 } from '../../packages/mutiny/src/index.ts';
 import { inApp, localNotificationDefinitions, preferences } from '../../packages/notify/src/index.ts';
+import { createLocalIntentStore, privateIntentRepo, type PrivateIntent } from '../../packages/blindmatch/src/index.ts';
 import { openVault, type UnlockedVault, type Vault } from '../../packages/vault/src/index.ts';
 import { createBarterRuntime, type BarterInputs } from '../../apps/pwa/src/barter-runtime.ts';
 import { mountBarter } from '../../apps/pwa/src/barter.ts';
@@ -259,11 +260,18 @@ describe('production barter record recovery', () => {
       expect(lastChangedAt).toBe(clock.iso());
       // Location's import policy resets its local window; notification counters persist.
       const recoveredLocation = { ...beforeLocation!, data: { ...locationData, changeCount24h: 0, changeTimes: [] } };
+      // Populate the new codec through its real owner-bound API. Recovery must
+      // preserve its content while independently dropping active match authority.
+      const privateIntents = createLocalIntentStore({ storage: original.storage, principal, clock,
+        isCurrent: () => true, enabled: true });
+      const privateDraft = unwrap(await privateIntents.create({ criteria: { query: 'private recovery preference' },
+        expiresAt: new Date(clock.now() + 7 * DAY).toISOString() }));
+      unwrap(await privateIntents.setState({ id: privateDraft.id, expectedRevision: privateDraft.revision, state: 'active' }));
       const populatedTypes = [listingRepo.type, listingRevisionRepo.type, publicationRepo.type, inventoryHoldRepo.type,
         retainedListingRepo.type, wantRepo.type, coordinationRepo.type, archiveRecordRepo.type, locationSettingRepo.type,
         inApp.notificationRepo.type, inApp.seenRepo.type, inApp.dayRepo.type, inApp.diagRepo.type,
-        preferences.preferenceRepo.type, preferences.counterRepo.type].sort();
-      expect(populatedTypes).toHaveLength(15);
+        preferences.preferenceRepo.type, preferences.counterRepo.type, privateIntentRepo.type].sort();
+      expect(populatedTypes).toHaveLength(16);
       expect(productionBackupCodecs.map(item => item.type).sort()).toEqual(populatedTypes);
       expect((await original.backupCoverage()).recordTypes.map(row => row.type)).toEqual(populatedTypes);
       const coverage = await original.backupCoverage();
@@ -342,7 +350,8 @@ describe('production barter record recovery', () => {
         status: 'frozen', reason: 'restore_requires_review', committedLocallyAt: null, commitFeasibility: null } } };
       // Independent expected exceptions; do not derive the oracle by invoking a restore codec.
       const expectedRecords = beforeRecords.map(row => row.type === coordinationRepo.type
-        ? { ...row, data: expected.data } : row.type === locationSettingRepo.type ? recoveredLocation : row);
+        ? { ...row, data: expected.data } : row.type === locationSettingRepo.type ? recoveredLocation
+          : row.type === privateIntentRepo.type ? { ...row, data: { ...(row.data as PrivateIntent), state: 'draft' } } : row);
       const restored = await (await open('barter-recovery-destination')).restoreBackup(backup, passphrase);
       const restoredApp = runtime(restored, clock, ids, categoryId);
       expect(await coordination(restoredApp)).toEqual(expected);

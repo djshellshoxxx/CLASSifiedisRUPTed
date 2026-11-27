@@ -1,6 +1,6 @@
 # Process specification registry
 
-**Status:** DRAFT. 1480 planned process contracts across 148 modules. Every entry has a canonical owner and future test ID. Consuming modules are provisional cross-cutting dependencies; Prompt 3 must refine actual event subscribers.
+**Status:** MIXED. 1500 process contracts across 150 modules; the original 1480 rows retain their historical DRAFT snapshot, and 20 BlindMatch rows are SPECIFIED. Every entry has a canonical owner and future test ID. Consuming modules are provisional cross-cutting dependencies; Prompt 3 must refine actual event subscribers.
 
 | ID | Process specification | Owner | Status |
 |---|---|---|---|
@@ -1484,3 +1484,23 @@
 | PS-148-08 | [18_Governance/02_community/mod_transparency/observability_performance.md](../18_Governance/02_community/mod_transparency/observability_performance.md) | 18_Governance/02_community/mod_transparency | DRAFT |
 | PS-148-09 | [18_Governance/02_community/mod_transparency/contract_and_acceptance_tests.md](../18_Governance/02_community/mod_transparency/contract_and_acceptance_tests.md) | 18_Governance/02_community/mod_transparency | DRAFT |
 | PS-148-10 | [18_Governance/02_community/mod_transparency/import_export_backup_rollback.md](../18_Governance/02_community/mod_transparency/import_export_backup_rollback.md) | 18_Governance/02_community/mod_transparency | DRAFT |
+| PS-149-01 | [19_BlindMatch/01_intents/mod_local/domain_schema.md](../19_BlindMatch/01_intents/mod_local/domain_schema.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-02 | [19_BlindMatch/01_intents/mod_local/validation_rules.md](../19_BlindMatch/01_intents/mod_local/validation_rules.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-03 | [19_BlindMatch/01_intents/mod_local/workflow_state_machine.md](../19_BlindMatch/01_intents/mod_local/workflow_state_machine.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-04 | [19_BlindMatch/01_intents/mod_local/commands_queries_events.md](../19_BlindMatch/01_intents/mod_local/commands_queries_events.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-05 | [19_BlindMatch/01_intents/mod_local/authorization_capabilities.md](../19_BlindMatch/01_intents/mod_local/authorization_capabilities.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-06 | [19_BlindMatch/01_intents/mod_local/failure_recovery_idempotency.md](../19_BlindMatch/01_intents/mod_local/failure_recovery_idempotency.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-07 | [19_BlindMatch/01_intents/mod_local/privacy_retention_abuse.md](../19_BlindMatch/01_intents/mod_local/privacy_retention_abuse.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-08 | [19_BlindMatch/01_intents/mod_local/observability_performance.md](../19_BlindMatch/01_intents/mod_local/observability_performance.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-09 | [19_BlindMatch/01_intents/mod_local/contract_and_acceptance_tests.md](../19_BlindMatch/01_intents/mod_local/contract_and_acceptance_tests.md) | F19.S01.M01 | SPECIFIED |
+| PS-149-10 | [19_BlindMatch/01_intents/mod_local/import_export_backup_rollback.md](../19_BlindMatch/01_intents/mod_local/import_export_backup_rollback.md) | F19.S01.M01 | SPECIFIED |
+| PS-150-01 | [19_BlindMatch/02_local_matching/mod_matcher/domain_schema.md](../19_BlindMatch/02_local_matching/mod_matcher/domain_schema.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-02 | [19_BlindMatch/02_local_matching/mod_matcher/validation_rules.md](../19_BlindMatch/02_local_matching/mod_matcher/validation_rules.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-03 | [19_BlindMatch/02_local_matching/mod_matcher/workflow_state_machine.md](../19_BlindMatch/02_local_matching/mod_matcher/workflow_state_machine.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-04 | [19_BlindMatch/02_local_matching/mod_matcher/commands_queries_events.md](../19_BlindMatch/02_local_matching/mod_matcher/commands_queries_events.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-05 | [19_BlindMatch/02_local_matching/mod_matcher/authorization_capabilities.md](../19_BlindMatch/02_local_matching/mod_matcher/authorization_capabilities.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-06 | [19_BlindMatch/02_local_matching/mod_matcher/failure_recovery_idempotency.md](../19_BlindMatch/02_local_matching/mod_matcher/failure_recovery_idempotency.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-07 | [19_BlindMatch/02_local_matching/mod_matcher/privacy_retention_abuse.md](../19_BlindMatch/02_local_matching/mod_matcher/privacy_retention_abuse.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-08 | [19_BlindMatch/02_local_matching/mod_matcher/observability_performance.md](../19_BlindMatch/02_local_matching/mod_matcher/observability_performance.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-09 | [19_BlindMatch/02_local_matching/mod_matcher/contract_and_acceptance_tests.md](../19_BlindMatch/02_local_matching/mod_matcher/contract_and_acceptance_tests.md) | F19.S02.M01 | SPECIFIED |
+| PS-150-10 | [19_BlindMatch/02_local_matching/mod_matcher/import_export_backup_rollback.md](../19_BlindMatch/02_local_matching/mod_matcher/import_export_backup_rollback.md) | F19.S02.M01 | SPECIFIED |

@@ -12,6 +12,8 @@ import { listingClosure } from './listing-closure.ts';
 import { createListingMaintenance } from './listing-maintenance.ts';
 import { mountListingEditor } from './listing-editor.ts';
 import { mountLocationPreferences } from './location-preferences.ts';
+import { mountBlindMatch } from './blindmatch.ts';
+import { createLocalCandidateLoader } from './blindmatch-candidates.ts';
 import { localNotificationDefinitions } from '../../../packages/notify/src/index.ts';
 import { formatMoney, type MoneyValue } from '../../../packages/i18n/src/index.ts';
 import { createBus, createOutboxDispatcher, createRegistry, createSystemClock, createUuidV7Generator, z, type Bus, type OutboxDispatcher } from '../../../packages/kernel/src/index.ts';
@@ -22,6 +24,8 @@ import { discoveryDefinitions, locationDefinitions, type RetainedListing } from 
 
 
 const CATEGORY = '0195aaaa-0000-7000-8000-000000000001';
+// The composition is qualified separately; retain FUTURE/off until the documented activation gates pass.
+const ENABLE_LOCAL_BLINDMATCH_PREVIEW = false;
 const ids = createUuidV7Generator();
 let unlocked: UnlockedVault | undefined;
 let bus: Bus | undefined;
@@ -36,6 +40,7 @@ let notificationOutbox: OutboxDispatcher | undefined;
 let lastNotificationSweep = 0;
 let listingEditor: ReturnType<typeof mountListingEditor> | undefined;
 let locationPreferences: ReturnType<typeof mountLocationPreferences> | undefined;
+let blindMatch: ReturnType<typeof mountBlindMatch> | undefined;
 let sessionProtection: ReturnType<typeof protectVaultSession> | undefined;
 let closingSession: Promise<void> | undefined;
 let storageCloseFailed = false;
@@ -56,7 +61,9 @@ function action(fn: () => Promise<void>): Promise<void> {
   return queueAction(async () => {
     const startedSession = unlocked;
     element('error').hidden = true;
-    const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')].map(button => ({ button, disabled: button.disabled }));
+    // BlindMatch owns its independent cancellation and mutation controls.
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .filter(button => !button.closest('#blindmatch')).map(button => ({ button, disabled: button.disabled }));
     buttons.forEach(({ button }) => { button.disabled = true; });
     try { await fn(); } catch (error) {
       // An automatic lock may revoke an in-flight action. Keep its private result
@@ -213,6 +220,7 @@ async function refresh(): Promise<void> {
   await barter?.refresh();
 }
 async function refreshPeers(): Promise<void> {
+  blindMatch?.invalidateResults();
   const result = await query('discovery.listing.search', appliedPeerSearch);
   const data = z.object({ items: z.array(z.unknown()), staleOrExcluded: z.number() }).parse(result);
   const list = element('peers'); list.replaceChildren();
@@ -250,8 +258,21 @@ async function connect(session: UnlockedVault): Promise<void> {
   element('access').hidden = true; element('workspace').hidden = false; element('principal').textContent = session.principal;
   barter?.destroy();
   const sessionMessage = (text: string) => { if (unlocked === session) message(text); };
+  let blindMatchBlockedOwners: readonly string[] = [];
+  blindMatch?.destroy(); blindMatch = undefined;
+  if (ENABLE_LOCAL_BLINDMATCH_PREVIEW) {
+    const clock = createSystemClock();
+    const isCurrent = () => unlocked === session;
+    blindMatch = mountBlindMatch({ container: element('blindmatch'), session, clock, isCurrent,
+      loadCandidates: createLocalCandidateLoader({ storage: session.storage, principal: session.principal, clock, isCurrent }),
+      blockedOwners: () => blindMatchBlockedOwners });
+  }
   barter = mountBarter({ container: element('barter'), session, command, query, action: vaultAction, message: sessionMessage,
-    download: (name, content) => download(session, name, content), refreshListings: refresh, setMatchingPolicy: barterRuntime.setMatchingPolicy });
+    download: (name, content) => download(session, name, content), refreshListings: refresh, setMatchingPolicy(policy) {
+      barterRuntime.setMatchingPolicy(policy);
+      blindMatchBlockedOwners = [...policy.blockedOwners];
+      blindMatch?.invalidateResults();
+    } });
   notificationOutbox = createOutboxDispatcher({ registry, storage: session.storage, clock: createSystemClock(), ids, origin: `vault:${session.principal}` });
   lastNotificationSweep = 0;
   notifications?.destroy();
@@ -306,6 +327,7 @@ function clearLocalViews() {
   resetListingPage();
   listingEditor?.destroy(); listingEditor = undefined;
   locationPreferences?.destroy(); locationPreferences = undefined;
+  blindMatch?.destroy(); blindMatch = undefined;
   notifications?.destroy(); notifications = undefined; notificationOutbox = undefined; lastNotificationSweep = 0;
   element('notification-delivery-status').textContent = '';
 }

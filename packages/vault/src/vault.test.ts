@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryStorage, defineRepo, z, ok } from '@classrup/kernel';
 import { vaultFromStorage, backupCodec, openVault, type BackupCodec } from './vault.ts';
 import { IDBFactory } from 'fake-indexeddb';
+import { unseal } from '@classrup/identity';
+import { verifyEnvelope } from '@classrup/federation';
 import { VaultUnlockRateLimitError } from './session-policy.ts';
 
 const passphrase = 'a sufficiently long test passphrase';
@@ -112,8 +114,26 @@ describe('vault composition', () => {
     const principal = session.principal;
     const result = await session.storage.transaction(tx => tx.records.put({ tenant: principal, type: note.type, id: 'one', data: { text: 'private note' }, idx: ['private note', null, null, null], expectedRevision: 0, now: Date.now() }));
     expect(result.ok).toBe(true);
+    const marker = await session.storage.read(tx => tx.records.incarnation(principal, note.type, 'one'));
+    expect(marker).toMatch(/^[A-Za-z0-9_-]{21}[AQgw]$/);
+    if (result.ok) expect(result.value).not.toHaveProperty('incarnation');
     const backup = await session.exportBackup(passphrase);
     expect(JSON.stringify(backup)).not.toContain('private note');
+    expect(JSON.stringify(backup)).not.toContain(marker!);
+    // Inspect authenticated archive plaintext, not just the outer ciphertext.
+    const plaintext = await unseal(backup, passphrase);
+    try {
+      const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plaintext));
+      const envelope = await verifyEnvelope(parsed, { expectedType: 'classrup.vault.alpha_backup/v1' });
+      expect(envelope.author).toBe(principal);
+      const payload = envelope.payload as { principal: string; records: Record<string, unknown>[] };
+      expect(payload.principal).toBe(principal);
+      expect(payload.records).toHaveLength(1);
+      const archived = payload.records[0]!;
+      expect(Object.keys(archived).sort()).toEqual(['createdAt', 'data', 'id', 'revision', 'tenantId', 'type', 'updatedAt']);
+      expect(archived).toMatchObject({ tenantId: principal, type: note.type, id: 'one', revision: 1, data: { text: 'private note' } });
+      expect(archived).not.toHaveProperty('incarnation');
+    } finally { plaintext.fill(0); }
     await session.lock();
     await expect(session.storage.read(() => undefined)).rejects.toThrow();
     await expect(session.identity.sign(new Uint8Array())).rejects.toThrow();
@@ -121,11 +141,13 @@ describe('vault composition', () => {
     const unlocked = await reopened.unlock(passphrase);
     expect(unlocked.principal).toBe(principal);
     expect(await unlocked.storage.read(tx => tx.records.get(principal, note.type, 'one')?.data)).toEqual({ text: 'private note' });
+    expect(await unlocked.storage.read(tx => tx.records.incarnation(principal, note.type, 'one'))).toBe(marker);
     await unlocked.lock();
     const destination = vaultFromStorage(createMemoryStorage(), codecs);
     const restored = await destination.restoreBackup(backup, passphrase);
     expect(restored.principal).toBe(principal);
     expect(await restored.storage.read(tx => tx.records.get(principal, note.type, 'one')?.revision)).toBe(1);
+    expect(await restored.storage.read(tx => tx.records.incarnation(principal, note.type, 'one'))).toBeUndefined();
     await expect(destination.restoreBackup(backup, passphrase)).rejects.toThrow();
     await restored.lock();
   }, 30000);

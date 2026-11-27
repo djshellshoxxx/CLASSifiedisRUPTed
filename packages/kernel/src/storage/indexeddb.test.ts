@@ -60,6 +60,66 @@ function rawOpen(factory: IDBFactory, name: string): Promise<IDBDatabase> {
 }
 
 describe('IndexedDB vault adapter (PS-119)', () => {
+  it('TEST-PS-119-09.T08 storage close waits for the writer lease to settle before reopen', async () => {
+    const factory = new IDBFactory();
+    const held = new Set<string>();
+    let allowRelease!: () => void;
+    const releaseGate = new Promise<void>(resolve => { allowRelease = resolve; });
+    let callbackFinished!: () => void;
+    const releasing = new Promise<void>(resolve => { callbackFinished = resolve; });
+    const locks: VaultLocks = {
+      async request(name, _options, callback) {
+        if (held.has(name)) return callback(null);
+        held.add(name);
+        try {
+          await callback({ name });
+          callbackFinished();
+          await releaseGate;
+        } finally { held.delete(name); }
+      },
+    };
+    const opts = { name: 'vault-delayed-release', indexedDB: factory, locks, clock };
+    const first = await openIndexedDbStorage(opts);
+    await first.transaction(tx => repo(tx).put('d1', { title: 'kept' }, { expectedRevision: 0 }));
+    let closed = false;
+    const closing = first.close().then(() => { closed = true; });
+    try {
+      await releasing;
+      // Drain promise continuations without opening the controlled release gate.
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      // The lease is deliberately held after the callback has completed.
+      expect(closed).toBe(false);
+      expect(held.size).toBe(1);
+    } finally {
+      allowRelease();
+      await closing;
+    }
+    expect(held.size).toBe(0);
+    const reopened = await openIndexedDbStorage(opts);
+    try {
+      expect(await reopened.read(tx => repo(tx).get('d1')?.data)).toEqual({ title: 'kept' });
+    } finally { await reopened.close(); }
+  });
+
+  it('TEST-PS-119-09.T08 storage close propagates a writer lease settlement error', async () => {
+    const factory = new IDBFactory();
+    const settlementError = new Error('lock manager settlement failed');
+    const locks: VaultLocks = {
+      async request(name, _options, callback) {
+        await callback({ name });
+        throw settlementError;
+      },
+    };
+    const storage = await openIndexedDbStorage({ name: 'vault-release-error', indexedDB: factory, locks, clock });
+    const first = storage.close();
+    const concurrent = storage.close();
+    await Promise.all([
+      expect(first).rejects.toBe(settlementError),
+      expect(concurrent).rejects.toBe(settlementError),
+    ]);
+    await expect(storage.close()).rejects.toBe(settlementError);
+  });
+
   it('TEST-PS-119-09.T08 a rejected blocked open aborts its eventual upgrade and releases the lock for retry', async () => {
     const factory = new IDBFactory();
     const locks = fakeLocks();
@@ -96,7 +156,7 @@ describe('IndexedDB vault adapter (PS-119)', () => {
     expect(await unchanged.read((tx) => repo(tx).get('d1')?.data)).toEqual({ title: 'preserved' });
     await unchanged.close();
     const retry = await openIndexedDbConnection({ name, indexedDB: upgradeFactory, locks });
-    retry.close();
+    await retry.close();
   });
 
   it('TEST-PS-119-09.T08 closes a late success after a blocked open without claiming a writer', async () => {
@@ -126,7 +186,7 @@ describe('IndexedDB vault adapter (PS-119)', () => {
     expect(writerTransactions).toBe(0);
     // A subsequent ordinary open with the same lock name must not be blocked.
     const retry = await openIndexedDbConnection({ name, indexedDB: new IDBFactory(), locks });
-    retry.close();
+    await retry.close();
   });
 
   it('TEST-PS-119-09.T08 waits for terminal abort and rolls back an entire partially scheduled write', async () => {
@@ -155,13 +215,13 @@ describe('IndexedDB vault adapter (PS-119)', () => {
       expect((await connection.snapshot()).meta).toEqual([]);
       await connection.persist([{ table: 'meta', key: 'kept', row: { value: 3 } }]);
     } finally {
-      connection.close();
+      await connection.close();
     }
     const reopened = await openIndexedDbConnection({ name, indexedDB: rawFactory, locks: fakeLocks() });
     try {
       expect((await reopened.snapshot()).meta).toEqual([['kept', { value: 3 }]]);
     } finally {
-      reopened.close();
+      await reopened.close();
     }
   });
 
@@ -197,7 +257,7 @@ describe('IndexedDB vault adapter (PS-119)', () => {
       expect(aborts).toBe(1);
       expect((await connection.snapshot()).meta).toEqual([]);
     } finally {
-      connection.close();
+      await connection.close();
     }
   });
 

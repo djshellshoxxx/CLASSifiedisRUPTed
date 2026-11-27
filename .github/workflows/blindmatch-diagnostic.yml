@@ -1,10 +1,7 @@
 name: BlindMatch diagnostic
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/blindmatch-diagnostic.yml'
-      - 'tests/browser/blindmatch-ui.spec.ts'
-      - 'apps/pwa/src/blindmatch*.ts'
+  push:
+    branches: ['codex/blindmatch-macos-diagnostic-20261127']
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
@@ -12,7 +9,7 @@ permissions:
   contents: read
 jobs:
   editor-diagnostic:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

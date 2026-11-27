@@ -34,7 +34,10 @@
 | RET-EVIDENCE | 2 years after last related activity, configurable per jurisdiction (F18.S01.M01) | proposals, consents, payment claims, receipts, moderation decisions |
 | RET-AUDIT | 1 year | authorization audit, operator actions |
 | RET-LEGAL-HOLD | until hold released | overrides all deletion; requires admin + second approver |
-Deletion = tombstone (ID, type, deletedAt) kept for federation propagation for 180 days; content purged; encrypted blobs crypto-shredded by deleting their per-object key.
+| RET-OWNER-LIVE | until owner erasure | BlindMatch private intents only; remove the current row immediately with no identifying deletion event, hash, tombstone or completion history |
+For the existing record classes, deletion = tombstone (ID, type, deletedAt) kept for federation propagation for 180 days; content purged; encrypted blobs crypto-shredded by deleting their per-object key. This rule does not apply to `RET-OWNER-LIVE` private intents, which are never published or federated.
+
+The BlindMatch `RET-OWNER-LIVE` policy is a specific local retention contract and takes precedence over legacy deletion, audit, evidence and legal-hold retention: none of those records is created by the intent API. Successful erasure removes the current intent row controlled by the active vault and invalidates pending local matching. It cannot remove independently held backups, peer copies or physical storage remnants. An intentional old-backup restore may recover content, but intent state must return as `draft` and cannot authorize automatic matching. Account-wide and cross-domain erasure remain separate implementation work.
 
 ## ADR-0016 amendment (local-first)
 - **PRV-5** P2 data travels only as end-to-end encrypted envelopes addressed to the listed participants; relays see ciphertext plus minimal routing metadata (recipient mailbox ID, size, time). P3/P4 never leave the vault except in the user's own export.

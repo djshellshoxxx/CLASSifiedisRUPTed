@@ -7,7 +7,8 @@ summary: >-
   approves the exact submission by signing its cid or requests changes. Approval opens one Deal in F09.S01.M01 per milestone
   (contextRef {type: service_milestone, id: milestoneId}, contextCid = approvalCid) in the same vault transaction; payment is a
   claim recorded through F09 (CTR-COM-001), never a platform transfer, and claim events are matched through the milestone's
-  dealId. A milestone is settled only when the payee acknowledged the claim or a chain verifier reports finality; reorgs and
+  dealId. A milestone is settled only on the provider-signed payment_ack (N30: verification source counterparty for cash or external,
+  chain for crypto); the client's own verifier reaching final only labels the proof and never settles; reorgs and
   failures lower the proof shown. When every non-cancelled milestone is settled, both parties sign a booking completion statement
   and only then does the booking complete.
 responsibilities:
@@ -88,7 +89,7 @@ processes:
           - "revision: int — CTR-ID-001 ID-4"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
-          - status settled implies payment.proof is acknowledged (cash or external) or final (chain) per CTR-COM-001 COM-4.
+          - status settled implies the provider-signed payment_ack for the milestone's Deal was received (verification source counterparty, or chain for crypto) per CTR-COM-001 COM-8 and N30; proof final per the local verifier alone never implies settled.
           - approvalCid refers to the latest submission cid of this milestone.
           - Sum of amounts over the non-cancelled milestones of a booking equals the booking total.
           - dealId is set if and only if the milestone was approved; payment events are matched only through dealId.
@@ -119,7 +120,7 @@ processes:
     requirements:
       - Milestones follow pending, submitted, approved, settled with a change loop; cancelled and settled are terminal.
       - Approval requires the exact current submission cid; payment never changes approval and approval never implies payment.
-      - Settlement requires payee acknowledgement or chain finality; a claim alone never completes a milestone or the booking.
+      - Settlement requires the payee-signed payment_ack (verification source counterparty or chain, N30); the local verifier's final and a claim alone never complete a milestone or the booking.
       - Approval opens the milestone's Deal through commerce.deal.open in the same vault transaction; if the Deal cannot be opened, approval is not signed and the milestone stays submitted.
       - Disputes freeze submitted and approved milestones as disputed with their pre-dispute status stored and only set an overlay on other states; the matching commerce.dispute.resolved or commerce.dispute.withdrawn restores the pre-dispute status per the F03.S02.M03 mapping, and an obligation is released only by a mutually signed Deal cancellation.
       - A reorg or failure reported by F09.S01.M03 lowers the proof level shown and never leaves a milestone showing a stronger state than the claim reached (COM-4, FLOW-11).
@@ -132,12 +133,12 @@ processes:
           - "changes_requested -> submitted | services.milestone.submit by provider | new submission supersedes previous; emits services.milestone.submitted"
           - "submitted -> changes_requested | services.milestone.request_changes by client | changeRounds below 3; emits services.milestone.changes_requested"
           - "submitted -> approved | services.milestone.approve by client | approval names the latest submission cid; commerce.deal.open {contextRef {type: service_milestone, id: milestoneId}, contextCid: approvalCid, parties [client as payer, provider as payee], obligations [client pays provider amount, purpose service], expiresInDays 90} in the same transaction; dealId stored; emits services.milestone.approved"
-          - "approved -> settled | commerce.payment.acknowledged or commerce.payment.finalized consumed for milestone.dealId | proof acknowledged or final; emits services.milestone.settled"
+          - "approved -> settled | commerce.payment.acknowledged consumed for milestone.dealId with verificationSource counterparty or chain (the provider-signed payment_ack, N30) | proof acknowledged, or final confirmed by the payee; emits services.milestone.settled; commerce.payment.finalized alone never triggers this transition"
           - "approved -> cancelled | commerce.deal.cancelled consumed for milestone.dealId with reason mutual | obligation released only because both parties signed deal_cancel"
           - "submitted -> disputed | services.dispute.opened consumed with this milestone in scope | preDisputeStatus submitted and disputeCaseId stored; approval frozen"
           - "approved -> disputed | services.dispute.opened consumed with this milestone in scope | preDisputeStatus approved and disputeCaseId stored; payment proof kept and still updated"
           - "disputed -> submitted | commerce.dispute.resolved or commerce.dispute.withdrawn for disputeCaseId with preDisputeStatus submitted | freeze lifted per the F03.S02.M03 mapping"
-          - "disputed -> approved | commerce.dispute.resolved or commerce.dispute.withdrawn for disputeCaseId with preDisputeStatus approved | freeze lifted; Deal unchanged; settles at once when proof is already acknowledged or final"
+          - "disputed -> approved | commerce.dispute.resolved or commerce.dispute.withdrawn for disputeCaseId with preDisputeStatus approved | freeze lifted; Deal unchanged; settles at once when the payee's payment_ack was already received"
           - "disputed -> cancelled | services.booking.cancelled consumed with reason mutual and preDisputeStatus submitted | no obligation existed"
           - "pending -> cancelled | services.booking.cancelled consumed | no obligation"
           - "submitted -> cancelled | services.booking.cancelled consumed | no obligation unless already approved"
@@ -209,10 +210,10 @@ processes:
       - {type: services.booking.confirmed, effect: "create the Milestone records from the plan of the client-signed quote identified by quoteCid (one implicit milestone with seq 1 for the full total when the plan is empty), with ids uuid(sha256(bookingId + ':' + seq)); a plan in the event that differs is refused and no milestone is created"}
       - {type: services.booking.cancelled, effect: "cancel pending, submitted and changes_requested milestones (and disputed ones whose preDisputeStatus is submitted when the reason is mutual); approved ones keep their Deal and payment obligation"}
       - {type: commerce.payment.claimed, effect: "for the milestone whose dealId matches, add claimId and set proof claimed (unverified)"}
-      - {type: commerce.payment.acknowledged, effect: "for the milestone whose dealId matches, set proof acknowledged and settle the milestone"}
+      - {type: commerce.payment.acknowledged, effect: "for the milestone whose dealId matches and whose verificationSource is counterparty or chain (the provider-signed payment_ack), set proof acknowledged and settle the milestone"}
       - {type: commerce.payment.confirming, effect: "for the milestone whose dealId matches, set proof confirming with confirmations N of M"}
       - {type: commerce.payment.confirmed, effect: "for the milestone whose dealId matches, set proof confirmed with the confirmation count; the milestone stays approved until final"}
-      - {type: commerce.payment.finalized, effect: "for the milestone whose dealId matches, set proof final and settle the milestone"}
+      - {type: commerce.payment.finalized, effect: "for the milestone whose dealId matches, set proof final as a label only (final per your verifier; payee has not confirmed) without settling; settlement waits for the payee-signed payment_ack"}
       - {type: commerce.payment.reorged, effect: "for the milestone whose dealId matches, set proof reorged (shown as back to waiting, below confirming); the milestone stays approved"}
       - {type: commerce.payment.failed, effect: "for the milestone whose dealId matches, set proof failed; the milestone stays approved and the client is prompted to claim again"}
       - {type: commerce.payment.disputed, effect: "for the milestone whose dealId matches, set proof disputed and prompt the dispute flow"}
@@ -277,7 +278,7 @@ processes:
       - "T03 | Provider alters a file after submission | the signed submission carries SHA-256; a mismatch is shown as hash differs and approval is disabled for that file"
       - "T04 | Replay of an old approval onto a new submission | approval names the exact submission cid; mismatch returns SERVICES_SUBMISSION_STALE"
       - "T05 | Relay tampers with or reorders statements | signatures cover JCS bytes; reordering is harmless because each statement names its predecessor cid"
-      - "T06 | Proof shown stronger than reality after a reorg | commerce.payment.reorged and commerce.payment.failed lower the proof level; settlement only at acknowledged or final"
+      - "T06 | Proof shown stronger than reality after a reorg | commerce.payment.reorged and commerce.payment.failed lower the proof level; settlement only on the payee-signed payment_ack"
       - "T07 | Provider changes amounts or titles after acceptance | milestones come only from the client-signed quote plan; ids are derived, never assigned"
     abuse_controls:
       - "Local quarantine and per-sender quota of 100 inbound milestone statements per day per booking counterparty."
@@ -307,7 +308,7 @@ processes:
       - "T02 | unit | 01.R03,02.R02,02.R03 | each rule V01–V10 violated in turn | documented code returned and nothing stored, bad statements quarantined"
       - "T03 | property | 03.R01 | random statement and event sequences on one milestone | only declared transitions succeed; settled and cancelled never change"
       - "T04 | integration | 03.R02 | approval naming an older submission cid, then the latest | first SERVICES_SUBMISSION_STALE; second approved"
-      - "T05 | integration | 03.R03,03.R06,04.R03 | payment claimed, confirming, confirmed, reorged, confirming, finalized; then claimed, failed; then claimed, expired; then acknowledged | proof labels follow COM-4; after the reorg proof is reorged and the milestone stays approved; settled only at acknowledged or final; booking completes only after both completion statements"
+      - "T05 | integration | 03.R03,03.R06,04.R03 | payment claimed, confirming, confirmed, reorged, confirming, finalized; then claimed, failed; then claimed, expired; then acknowledged | proof labels follow COM-4; after the reorg proof is reorged and the milestone stays approved; settled only on the payee-signed payment_ack; booking completes only after both completion statements"
       - "T06 | contract | 04.R01,04.R02,09.R02 | each command, statement and event, and the commerce.deal.open call | payloads, signatures and the Deal request (contextRef service_milestone, contextCid approvalCid, parties, obligation) validate against the registry and F09 schemas"
       - "T07 | abuse | 05.R01,05.R02,05.R03 | approval signed by provider key; submission signed by client; payment event with the dealId of another context | all quarantined or ignored; no state change"
       - "T08 | integration | 06.R01,06.R02,09.R03 | relay duplicates, drops and reorders; two forked provider devices sign different submissions | duplicates skipped; fork freezes the milestone for renegotiation"
@@ -324,8 +325,9 @@ processes:
       - "T19 | abuse | 07.R04,02.R02 | submission with a 6 MiB image, a PDF as attachment, and a PDF as external_hash | first two VALIDATION_FAILED; external hash accepted and verified locally"
       - "T20 | abuse | 01.R04 | booking.confirmed whose plan changes one amount relative to the client-signed quote | no milestone created from the altered plan; mismatch logged and the upstream confirmation quarantined"
       - "T21 | integration | 07.R05 | statements from a blocked DID; privacy.deletion.completed for the counterparty; export | dropped silently; counterparty pseudonymized; export section services.milestones present"
+      - "T22 | integration | 03.R03,03.R06,04.R03 | the client verifier reaches final for an approved milestone while no payee payment_ack has arrived; then the provider-signed payment_ack with verification source chain arrives | the milestone stays approved with the label final per your verifier; payee has not confirmed, no services.milestone.settled and no completion; after the ack it settles in both vaults"
     acceptance:
-      - All tests T01–T21 pass in CI.
+      - All tests T01–T22 pass in CI.
       - A milestone is never shown settled on a claim alone, never shows a stronger proof than the claim reached, and the proof level is always displayed.
       - Duplicated, reordered or replayed statements never advance a milestone twice, and a booking completes only with both completion signatures.
   import_export_backup_rollback:

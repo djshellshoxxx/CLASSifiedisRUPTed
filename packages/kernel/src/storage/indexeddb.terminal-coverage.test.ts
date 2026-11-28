@@ -11,6 +11,20 @@ function rawOpen(factory: IDBFactory, name: string): Promise<IDBDatabase> {
   });
 }
 
+// Snapshot the internal fence before any retry can replace it. This is
+// deliberately a raw test-only read: the production snapshot hides the fence.
+async function readWriterClaim(factory: IDBFactory, name: string): Promise<unknown> {
+  const db = await rawOpen(factory, name);
+  try {
+    return await new Promise<unknown>((resolve, reject) => {
+      const tx = db.transaction('meta', 'readonly');
+      const request = tx.objectStore('meta').get('writer');
+      tx.oncomplete = () => resolve(request.result);
+      tx.onabort = () => reject(tx.error ?? new Error('fixture writer read aborted'));
+    });
+  } finally { db.close(); }
+}
+
 const row = (id: string, title: string, revision = 1): RecordRow => ({
   tenant: 'owner', type: 'test.note', id, revision, data: JSON.stringify({ title }),
   idx: [title, null, null, null], createdAt: '2026-11-27T00:00:00.000Z',
@@ -116,10 +130,14 @@ describe('IndexedDB terminal settlement follow-on coverage (PS-119)', () => {
         finally { events.push('lease-release'); held = false; }
       },
     };
-    const seed = await openIndexedDbConnection({ name, indexedDB: factory, locks });
+    const seed = await openIndexedDbConnection({
+      name, indexedDB: factory, locks, random: bytes => { bytes.fill(1); },
+    });
     try { await seed.persist([{ table: 'meta', key: 'saved', row: { value: 17 } }]); }
     finally { await seed.close(); }
     events.length = 0;
+    const originalClaim = await readWriterClaim(factory, name);
+    expect(originalClaim).toEqual({ token: 'AQEBAQEBAQEBAQEBAQEBAQ' });
     const failure = new Error('fixture writer claim scheduling failure');
     const failing = observeOpen(factory, db => {
       const transaction = db.transaction.bind(db);
@@ -142,12 +160,20 @@ describe('IndexedDB terminal settlement follow-on coverage (PS-119)', () => {
         return tx;
       };
     });
-    await expect(openIndexedDbConnection({ name, indexedDB: failing, locks })).rejects.toBe(failure);
+    await expect(openIndexedDbConnection({
+      name, indexedDB: failing, locks, random: bytes => { bytes.fill(2); },
+    })).rejects.toBe(failure);
     expect(events).toEqual(['claim-put-queued', 'abort', 'lease-release']);
     expect(held).toBe(false);
+    // The rejected claim must not supersede the old fence; checking only
+    // saved records after a new claim would conceal a partial fence update.
+    expect(await readWriterClaim(factory, name)).toEqual(originalClaim);
 
-    const retry = await openIndexedDbConnection({ name, indexedDB: factory, locks });
+    const retry = await openIndexedDbConnection({
+      name, indexedDB: factory, locks, random: bytes => { bytes.fill(3); },
+    });
     try {
+      expect(await readWriterClaim(factory, name)).toEqual({ token: 'AwMDAwMDAwMDAwMDAwMDAw' });
       expect((await retry.snapshot()).meta).toEqual([['saved', { value: 17 }]]);
       await retry.persist([{ table: 'meta', key: 'saved', row: { value: 18 } }]);
     } finally { await retry.close(); }

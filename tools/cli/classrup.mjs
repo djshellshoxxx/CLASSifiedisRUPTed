@@ -13,6 +13,7 @@ const HELP = `ClassRup local PWA tools
 Usage: pnpm run setup [--host HOST] [--port PORT] [--base /path/] [--non-interactive]
        pnpm run configure [--host HOST] [--port PORT] [--base /path/]
        pnpm run doctor | pnpm dev | pnpm build | pnpm preview
+       node tools/cli/classrup.mjs --version [--json]
        node tools/cli/classrup.mjs record verify --file FILE [--json]
        node tools/cli/classrup.mjs listing list --file FILE [--file FILE ...] [--limit N] [--offset N] [--snapshot HASH] [--include-unavailable] [--json]
        node tools/cli/classrup.mjs listing show --file FILE [--file FILE ...] --owner DID --id UUID [--json]
@@ -23,6 +24,8 @@ Setup preserves existing configuration. Defaults: localhost, port 4173, base /.
 LAN binding requires explicit --host; HTTP on LAN is not a secure browser context.
 No relay, server account, secret or browser key is created. Dependencies must be
 installed explicitly: corepack pnpm install --frozen-lockfile.
+Version reports the tracked unreleased checkout version without setup or installed
+dependencies. It does not identify a released or standalone executable.
 Record verification accepts signed listing/withdrawal files up to 1 MiB, without
 setup, private keys, persistence or network requests. Chain history and revocation
 are unchecked. Domain exits: 0 verified, 2 invalid input, 3 infrastructure failure.
@@ -251,9 +254,40 @@ export async function serve(root = ROOT) {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen({ host: config.host, port: config.port, exclusive: true }, resolve); });
   return { server, config };
 }
+async function printVersion(args) {
+  const json = args.includes('--json');
+  const fail = (code, exitCode, message) => {
+    if (json) console.log(JSON.stringify({ schemaVersion: 1, command: 'version', ok: false, error: { code, message } }));
+    else console.error(`ClassRup: ${code}: ${message}`);
+    process.exitCode = exitCode;
+  };
+  if (args.length > 1 || (args.length === 1 && args[0] !== '--json')) {
+    fail('USAGE', 2, 'Use --version [--json]. See --help.');
+    return;
+  }
+  try {
+    // Resolve tracked metadata from this entry point, never the caller's cwd.
+    // This path needs only Node built-ins, even before dependencies are installed.
+    const filename = path.join(ROOT, 'package.json');
+    const stat = await fs.lstat(filename);
+    if (!stat.isFile() || stat.size > 64 * 1024) throw new Error('Invalid checkout metadata');
+    const manifest = JSON.parse(await fs.readFile(filename, 'utf8'));
+    const version = manifest?.version;
+    if (manifest?.name !== 'classrup' || typeof version !== 'string' || version.length > 64
+      || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/.test(version)) {
+      throw new Error('Invalid checkout version');
+    }
+    console.log(json ? JSON.stringify({ schemaVersion: 1, command: 'version', ok: true,
+      name: 'classrup', version, releaseStatus: 'unreleased' }) : `ClassRup ${version} (unreleased checkout)`);
+    process.exitCode = 0;
+  } catch {
+    fail('INFRASTRUCTURE_FAILURE', 3, 'Checkout version is unavailable. Restore the tracked package.json.');
+  }
+}
 export async function main(args = process.argv.slice(2)) {
   const [command, ...rest] = args;
   if (rest.includes('--help') || command === '--help') { console.log(HELP); return; }
+  if (command === '--version') { await printVersion(rest); return; }
   if (command === 'listing' || command === 'search') {
     const json = rest.includes('--json');
     try {

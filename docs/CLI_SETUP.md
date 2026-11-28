@@ -6,6 +6,46 @@ Required toolchain: Node **22.18.0 or newer**, pinned **pnpm 10.28.0**, and Git.
 
 **Use `pnpm run setup` and `pnpm run doctor`.** Bare `pnpm setup` and `pnpm doctor` are pnpm's built-in toolchain commands. Package scripts cannot safely override them. The project exposes its setup and diagnostic scripts through the explicit `run` interface.
 
+## Check the checkout version
+
+With Node available, these commands work before dependency installation or setup:
+
+```text
+node tools/cli/classrup.mjs --version
+node tools/cli/classrup.mjs --version --json
+```
+
+The tracked root `package.json` is the single version source. The current value,
+`0.0.0-development`, describes an **unreleased checkout**. This development value
+can span several commits; record the exact Git SHA separately when reporting a
+source-specific problem. Standalone executable packaging remains planned.
+
+Human output is one line on stdout:
+
+```text
+ClassRup 0.0.0-development (unreleased checkout)
+```
+
+JSON output is one schema-version-1 object on stdout:
+
+```json
+{"schemaVersion":1,"command":"version","ok":true,"name":"classrup","version":"0.0.0-development","releaseStatus":"unreleased"}
+```
+
+Both forms exit `0` and leave stderr empty. `--json` may occur once after
+`--version`; other arguments in that position exit `2` with `USAGE`. Missing or
+invalid checkout metadata exits `3` with `INFRASTRUCTURE_FAILURE`. JSON failures
+retain `schemaVersion: 1`, `command: "version"`, `ok: false` and an
+`error: {code, message}` object on stdout; human failures use stderr. Errors are
+fixed messages and do not echo argument values, metadata contents or paths.
+
+The existing help precedence is preserved: `--version --help` displays help and
+exits `0`, even without the version metadata. Version and help need no installed
+dependencies, package-manager selection or local configuration. The script finds
+its checkout metadata from its own location, so an absolute script path also
+works from another working directory, including paths containing spaces. Version
+reporting performs no network, child-process, key or persistent-write operations.
+
 ## Prerequisites without system-wide application installation
 
 These optional bootstrap commands install Node 22.18.0 under your user directory. Existing supported Node installations can skip this section. Download sources are the official Node distribution service. Git must already be available (`git --version`); install Git through your operating system's usual software manager if absent.

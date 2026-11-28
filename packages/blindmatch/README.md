@@ -78,6 +78,15 @@ An intentional old-backup import can restore old content but cannot restore
 active matching authority. Unknown/malformed records retain the vault's
 existing fail-closed behavior.
 
+## Editor language
+
+The gated editor follows the browser's preferred language and offers English,
+German, French and Spanish. Its language menu applies to the open view. Reopening
+the vault returns to the browser preference. Changing language preserves focus,
+unsaved fields and exact price inputs. Labels, errors and the erase prompt are
+translated locally. Listing identifiers and user-entered search text keep their
+original values.
+
 ## Remaining activation gates
 
 The editor, adapter and lifecycle wiring are implemented as a gated composition.

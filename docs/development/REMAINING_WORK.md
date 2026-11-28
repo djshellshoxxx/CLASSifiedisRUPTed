@@ -4,7 +4,25 @@ This register accompanies the [comprehensive branch consolidation](BRANCH_CONSOL
 It is based on the current runtime, retained unique branch changes, actual test
 coverage and existing contracts. Specifications and generated source-path counts
 do not establish completion. The owner has authorized continued incomplete-
-feature work and successive independent audits. See the [current handoff](cycles/20261124-combined-vault-recovery/HANDOFF.md).
+feature work and successive independent audits. See the [current continuation
+checkpoint](cycles/20261127-feature-continuation/CHECKPOINT.md).
+
+## Current continuation — November 27, 2026
+
+The current inspected main is `39cb2c7e35778ea74d8c30935f9a07b41a483262`,
+after normal integration of record-incarnation #162 and blocked-open #163.
+The [current PR census](cycles/20261127-feature-continuation/CURRENT_PR_CENSUS.json)
+finds 97 open PRs: 89 exact heads already in main, six qualification candidates,
+one paused reference (#8), and one rehearsal (#167). Historical pending-gate
+statements below are dated evidence, not the current integration queue.
+
+The active sequence is main-push verification of #163, synchronized BlindMatch
+page lifecycle #171, terminal transaction settlement #164, shared close #165,
+writer-lease release #166, failed-unlock/native invalidation #172, and checkout
+version reporting #173. Each candidate preserves its own reviewed source and
+test history. Continue normal integration only after the relevant current-source
+checks and the preceding actual main checks pass. The remaining-work tables
+describe broader product work; this sequence does not complete every feature.
 
 ## Completed slices to preserve
 
@@ -94,7 +112,7 @@ Effort is an engineering estimate, not measured duration or a commitment: S = a 
 | P2 | Currency registry PWA composition (`commerce/valuation`, PWA, vault) | Provide authentic signed release snapshot with documented authority, production vault/usage adapters, migration/preflight and immutable binding tests. Do not invent the missing authenticated snapshot. | M after snapshot is available |
 | P2 | Money and matching target-device qualification (`commerce/precision`, matching worker) | Run the specified performance workloads on the actual target hardware, profile memory/latency at full caps, preserve existing limits and cancellation assertions. Pure arithmetic/vector and host tests do not establish mobile budgets. | M plus device availability |
 | P2 | Listings, inventory and publication completion (`packages/bazaar`, PWA) | Owner history and explicit local value removal are implemented. Add published editing and material-change reconsent, quantity/variants, kind-specific terms, media admission, renewal/conflict recovery and real signed reservation release as distinct tested slices. | L/XL; consent/attachment boundaries needed |
-| P2 | Broader public CLI distribution and retained-cache access (`tools/cli`, retained public discovery) | F1a verification and F1b explicit-file listing/show/search are implemented. A packaged executable/version interface and a supported persisted retained-cache adapter remain separate; do not read browser IndexedDB implicitly. Private phases remain below. | M |
+| P2 | Broader public CLI distribution and retained-cache access (`tools/cli`, retained public discovery) | F1a verification, F1b explicit-file listing/show/search and unreleased checkout version reporting are implemented. A packaged executable and a supported persisted retained-cache adapter remain separate; do not read browser IndexedDB implicitly. Private phases remain below. | M |
 | P2 | Feature settings/activation (`platform/configuration`, PWA) | Use recovered immutable registry but keep runtime availability separate; implement real per-user flags, dependency closure, disabled path checks and backup unknown-module diagnostics. | M |
 | P2 | Public-ID privacy migration (PR #8 helpers, kernel, public records) | Define new-public-record boundary and compatibility for prior signatures/references. Then integrate tested hour precision without using public IDs as private order. | M; contract/migration decision first |
 | P2 | Hosted module wiring (`governance`, moderation, notifications) | Implement production enforcement at actual callers, notification consent/reconfirmation UI, report-from-notification, mirror purge scheduler, policy selection and import/export support. A collection of helpers is not end-to-end completion. | L; optional relay items depend on real relay composition |
@@ -125,7 +143,10 @@ separately from the 51 open historical planning/security-readiness findings;
 those findings require evidence reconciliation and are not 51 newly confirmed
 runtime vulnerabilities. No release or deployment was performed.
 
-## Recommended next bounded milestone
+## Historical recommendation — November 20, 2026
+
+The following recommendations are retained for provenance. Use the current
+continuation above and the source-specific census for today's integration queue.
 
 The current continuation is [draft PR #72](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/72), combining PR #70's explicit PWA attachment diagnostic and PR #71's
 persisted restore-rejection proof. Both histories and their contributed source

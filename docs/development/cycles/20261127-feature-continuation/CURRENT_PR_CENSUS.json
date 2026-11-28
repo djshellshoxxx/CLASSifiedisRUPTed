@@ -1,0 +1,982 @@
+{
+  "main": "39cb2c7e35778ea74d8c30935f9a07b41a483262",
+  "pulls": [
+    {
+      "number": 173,
+      "title": "feat(cli): report the unreleased checkout version",
+      "head": "7431d06f13872fb82ef4243c79222f49df136ee4",
+      "branch": "codex/cli-checkout-version-20261127",
+      "base": "codex/storage-lifecycle-completion-20261127",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/173",
+      "disposition": "QUALIFICATION_PENDING"
+    },
+    {
+      "number": 172,
+      "title": "fix(storage): complete failed-unlock and native invalidation lifecycle",
+      "head": "054e604aac092dd34f2e1fd57fc41fb011f91e6f",
+      "branch": "codex/storage-lifecycle-completion-20261127",
+      "base": "codex/classrup-writer-lease-settlement-20261125",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/172",
+      "disposition": "QUALIFICATION_PENDING"
+    },
+    {
+      "number": 171,
+      "title": "Complete BlindMatch private-view page lifecycle",
+      "head": "66324330f7330727a8db27706e3ea26b329b5551",
+      "branch": "codex/blindmatch-private-lifecycle-20261127",
+      "base": "main",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/171",
+      "disposition": "QUALIFICATION_PENDING"
+    },
+    {
+      "number": 167,
+      "title": "Draft qualification only: combined storage lifecycle rehearsal (#162\u2013#166)",
+      "head": "77cb75a9bc1fc6922f034f0a79e3536651558ce1",
+      "branch": "codex/classrup-storage-lifecycle-rehearsal-20261125",
+      "base": "main",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/167",
+      "disposition": "REHEARSAL_ONLY"
+    },
+    {
+      "number": 166,
+      "title": "fix(storage): await writer lease settlement before reopen",
+      "head": "9a05e3f211b1a31c1eaa147877b01032a1c0a747",
+      "branch": "codex/classrup-writer-lease-settlement-20261125",
+      "base": "codex/classrup-vault-close-settlement-20261125",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/166",
+      "disposition": "QUALIFICATION_PENDING"
+    },
+    {
+      "number": 165,
+      "title": "fix(vault): share close settlement and guard inventory publication",
+      "head": "3b676dd1085370ecf9bf2fba20890ddc57d41f0d",
+      "branch": "codex/classrup-vault-close-settlement-20261125",
+      "base": "main",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/165",
+      "disposition": "QUALIFICATION_PENDING"
+    },
+    {
+      "number": 164,
+      "title": "fix(storage): drain terminal IndexedDB transaction settlement",
+      "head": "d6b922e1a658137d8df8fe362ec2f379ecfba8f9",
+      "branch": "codex/classrup-transaction-settlement-20261124",
+      "base": "main",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/164",
+      "disposition": "QUALIFICATION_PENDING"
+    },
+    {
+      "number": 160,
+      "title": "test(vault): qualify transition issuance identity and passphrase boundaries",
+      "head": "9f68cf10b9444860e05d3b93feb96d7f6d445cc9",
+      "branch": "codex/classrup-transition-issuance-acceptance-20261124",
+      "base": "codex/classrup-zero-ref-issuance-20261124",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/160",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 159,
+      "title": "feat(vault): issue authenticated zero-reference snapshot evidence",
+      "head": "8400f48d046599cd71ed7a3cc152824910e0a3f1",
+      "branch": "codex/classrup-zero-ref-issuance-20261124",
+      "base": "integration/classrup-vault-recovery-20261124",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/159",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 157,
+      "title": "feat(vault): authenticate zero-reference transition evidence without retirement",
+      "head": "fdb1def1bd84733d7aecf18a01c0fed5d8ac06a3",
+      "branch": "codex/classrup-zero-ref-transition-evidence-20261124",
+      "base": "codex/classrup-attachment-rollback-consolidated-20261124",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/157",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 156,
+      "title": "Consolidate IndexedDB abort acceptance and bound manifest export snapshots",
+      "head": "bb134b773c4d8d05c4f289b44efef6cc50bcbe18",
+      "branch": "codex/classrup-attachment-rollback-consolidated-20261124",
+      "base": "codex/classrup-retirement-absence-boundary-20261123",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/156",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 155,
+      "title": "test(vault): retain attachments when current manifest lacks retirement authority",
+      "head": "76b2ed3aff706cc457996379369911d130f7d8e1",
+      "branch": "codex/classrup-retirement-absence-boundary-20261123",
+      "base": "codex/classrup-owner-retirement-idb-abort-20261123-t36",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/155",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 154,
+      "title": "test(vault): preserve attachment owner state through IndexedDB abort and encrypted reopen",
+      "head": "d9e99ca3d91ebe22033b1162a1374ae942d4c149",
+      "branch": "codex/classrup-owner-retirement-idb-abort-20261123-t36",
+      "base": "codex/classrup-owner-retirement-persist-rollback-20261123-t35",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/154",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 153,
+      "title": "test(storage): verify native IndexedDB abort rollback and reopened attachment holders",
+      "head": "07e3aa28e6bf66b2760950038f6746fa85079d7e",
+      "branch": "codex/classrup-idb-native-abort-acceptance-20261123",
+      "base": "codex/classrup-owner-retirement-persist-rollback-20261123-t35",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/153",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 152,
+      "title": "test(vault): roll back non-final owner retirement on late persistence rejection",
+      "head": "1136069ba8c8cf8f4eb708c53afb518c679befb0",
+      "branch": "codex/classrup-owner-retirement-persist-rollback-20261123-t35",
+      "base": "codex/classrup-owner-retirement-reopen-20261123-t34",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/152",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 151,
+      "title": "test(vault): preserve non-final attachment owner retirement through encrypted reopen",
+      "head": "9d4eec5a6653195bf709bff8d1863d074550ee3a",
+      "branch": "codex/classrup-owner-retirement-reopen-20261123-t34",
+      "base": "codex/classrup-nonfinal-owner-retirement-20261123-t33",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/151",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 150,
+      "title": "feat(vault): retire a stale managed public attachment holder without final purge",
+      "head": "4432d67a683c0fe18c4baca372524c7e03ae27d3",
+      "branch": "codex/classrup-nonfinal-owner-retirement-20261123-t33",
+      "base": "codex/classrup-bounded-attachment-copy-20261123-t32",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/150",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 149,
+      "title": "Bound attachment byte copies and qualify shared canonical owners",
+      "head": "4bf7ef957a86e99c71fd05b145ca4ef49fa6e539",
+      "branch": "codex/classrup-bounded-attachment-copy-20261123-t32",
+      "base": "codex/classrup-existing-blob-integrity-20261123-t31",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/149",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 148,
+      "title": "fix(vault): verify existing public attachment bytes before deduplicated import",
+      "head": "2a8e9186750da79d14eb77b14015c46df47cb2a8",
+      "branch": "codex/classrup-existing-blob-integrity-20261123-t31",
+      "base": "codex/classrup-public-attachment-import-20261123-t30",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/148",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 147,
+      "title": "feat(vault): atomically import bounded public attachment bytes after canonical owner revalidation",
+      "head": "b69aabe23acd25064c4859c421cfce8ae11c7f88",
+      "branch": "codex/classrup-public-attachment-import-20261123-t30",
+      "base": "codex/classrup-manifest-failed-snapshot-cleanup-20261123-t29",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/147",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 146,
+      "title": "fix(vault): wipe attachment manifest copies on failed snapshot reads",
+      "head": "db2c038d5a33ab9437fd88f5cb57c4c896d60df7",
+      "branch": "codex/classrup-manifest-failed-snapshot-cleanup-20261123-t29",
+      "base": "codex/classrup-verified-blob-cleanup-20261123-t28",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/146",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 145,
+      "title": "fix(storage): clear failed and intermediate verified blob byte snapshots",
+      "head": "fba9f1883cec03ddc2ccabe797ebfaa9d41b3e38",
+      "branch": "codex/classrup-verified-blob-cleanup-20261123-t28",
+      "base": "codex/classrup-verified-attachment-bytes-20261123-t27",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/145",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 144,
+      "title": "feat(vault): verify complete signed attachment byte batches without importing",
+      "head": "5ba6edc83c441cd7cb9a826b9e6e7d4ec6f5cc9a",
+      "branch": "codex/classrup-verified-attachment-bytes-20261123-t27",
+      "base": "codex/classrup-owner-scope-negatives-20261123-t26",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/144",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 143,
+      "title": "test(vault): fail closed for changed attachment owner scope after restore",
+      "head": "c42e12531569e17eb4f55ec26734b8787ab0aa16",
+      "branch": "codex/classrup-owner-scope-negatives-20261123-t26",
+      "base": "codex/classrup-reconcile-signed-manifest-owners-20261123-t25",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/143",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 142,
+      "title": "feat(vault): reconcile signed attachment manifests with restored canonical records",
+      "head": "37e9b2931d60c9ab7252e0e279b6fbd4a648cedc",
+      "branch": "codex/classrup-reconcile-signed-manifest-owners-20261123-t25",
+      "base": "codex/classrup-attachment-manifest-verifier-20261123-t24",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/142",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 141,
+      "title": "feat(vault): verify owner-signed bounded attachment manifest metadata",
+      "head": "e26f9fec9d7883e73e2a71ce6a771a2f07e0e671",
+      "branch": "codex/classrup-attachment-manifest-verifier-20261123-t24",
+      "base": "codex/classrup-authenticated-attachment-manifest-20261123-t23",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/141",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 140,
+      "title": "feat(vault): sign bounded owner-derived attachment manifests",
+      "head": "83230ec04af2de74901d936ff70dabb050564abf",
+      "branch": "codex/classrup-authenticated-attachment-manifest-20261123-t23",
+      "base": "codex/classrup-batch-length-snapshot-20261123-t22",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/140",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 139,
+      "title": "fix(storage): snapshot the verified batch Array length exactly once",
+      "head": "eeed9582261ecf53e0123e555809645169fd9491",
+      "branch": "codex/classrup-batch-length-snapshot-20261123-t22",
+      "base": "codex/classrup-batch-array-bounds-20261123-t21",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/139",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 138,
+      "title": "fix(storage): bound verified blob batch to declared array indices",
+      "head": "7c1055822f97345eb448a80779ce91535bff3d4e",
+      "branch": "codex/classrup-batch-array-bounds-20261123-t21",
+      "base": "codex/classrup-sqlite-verified-metadata-20261123-t20",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/138",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 137,
+      "title": "fix(storage): reject private plaintext in verified SQLite attachment reads",
+      "head": "a3b7bbe5ea3ce8f628594a44367c2411f0981c40",
+      "branch": "codex/classrup-sqlite-verified-metadata-20261123-t20",
+      "base": "codex/classrup-verified-metadata-capture-20261123-t19",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/137",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 136,
+      "title": "fix(storage): admit one captured snapshot of verified blob metadata",
+      "head": "ddccbd998db19f1f8aaa8a560593ea855705e458",
+      "branch": "codex/classrup-verified-metadata-capture-20261123-t19",
+      "base": "codex/classrup-verified-blob-metadata-20261123-t18",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/136",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 135,
+      "title": "fix(storage): reject malformed metadata from verified attachment reads",
+      "head": "a26339a1c611a04a9db60fa4f3889347e9af323d",
+      "branch": "codex/classrup-verified-blob-metadata-20261123-t18",
+      "base": "codex/classrup-verified-single-read-snapshot-20261123-t17",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/135",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 134,
+      "title": "fix(storage): detach single verified blob before read transaction settles",
+      "head": "2e503d9b81286cc72cc8c9984c703273407aa57b",
+      "branch": "codex/classrup-verified-single-read-snapshot-20261123-t17",
+      "base": "codex/classrup-verified-attachment-batch-20261123-t16",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/134",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 133,
+      "title": "feat(storage): bound and verify tenant attachment batches",
+      "head": "f74564a12376efa44ad23fb348ad6c7dea0744c7",
+      "branch": "codex/classrup-verified-attachment-batch-20261123-t16",
+      "base": "codex/classrup-verified-blob-snapshot-20261123-t15",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/133",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 132,
+      "title": "fix(storage): snapshot verified blob metadata before async hashing",
+      "head": "004e9bc440b1d99380d5f87c0c3595a37ba3deb6",
+      "branch": "codex/classrup-verified-blob-snapshot-20261123-t15",
+      "base": "codex/classrup-verified-attachment-read-20261123-t14",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/132",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 131,
+      "title": "feat(storage): verify content-addressed blob reads before attachment recovery",
+      "head": "f65a119c2ea53d1c3adf28119f74e8978ad6d856",
+      "branch": "codex/classrup-verified-attachment-read-20261123-t14",
+      "base": "codex/classrup-canonical-blobrefs-20261123-t13",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/131",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 130,
+      "title": "fix(storage): require canonical SHA-256 attachment references",
+      "head": "1136240328913e5cdd8e2325df53cd02e70bf2de",
+      "branch": "codex/classrup-canonical-blobrefs-20261123-t13",
+      "base": "codex/classrup-missing-attachment-20261123-t12",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/130",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 129,
+      "title": "test(vault): retain missing attachment warning across encrypted reopen",
+      "head": "6da3dd18e77c02c565f5368d6042199b77e2b79f",
+      "branch": "codex/classrup-missing-attachment-20261123-t12",
+      "base": "codex/classrup-encrypted-attachment-scope-20261122-t11",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/129",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 128,
+      "title": "test(vault): prove encrypted attachment scope across reopen and v1 restore",
+      "head": "30c541d8f1248efc8f49ed9c592fb6f313c1f211",
+      "branch": "codex/classrup-encrypted-attachment-scope-20261122-t11",
+      "base": "codex/classrup-backup-snapshot-repo-type-fixture-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/128",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 127,
+      "title": "test(vault): fix atomic backup snapshot repo-type fixture",
+      "head": "7a003dc6cb84555ac149018a19dddacc2f9661df",
+      "branch": "codex/classrup-backup-snapshot-repo-type-fixture-20261122",
+      "base": "codex/classrup-atomic-backup-snapshot-regression-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/127",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 126,
+      "title": "test(vault): qualify atomic backup inspection under interleaved writes",
+      "head": "9ea4fad90c947f9bd0136b307f8f3a1f7983c0a7",
+      "branch": "codex/classrup-atomic-backup-snapshot-regression-20261122",
+      "base": "codex/classrup-backup-atomic-inspection-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/126",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 125,
+      "title": "feat(vault): use one storage snapshot for backup inspection diagnostics",
+      "head": "9c348f88ec6ea9886b016135827e0a5667f50a51",
+      "branch": "codex/classrup-backup-atomic-inspection-20261122",
+      "base": "codex/classrup-pwa-attachment-diagnostic-consolidation-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/125",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 124,
+      "title": "feat(pwa): consolidate resilient attachment backup diagnostics",
+      "head": "addf51f30f1608639eb8c52d483b618ecdd4f348",
+      "branch": "codex/classrup-pwa-attachment-diagnostic-consolidation-20261122",
+      "base": "codex/classrup-notify-fault-hook-determinism-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/124",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 123,
+      "title": "test(browser): hold notification fault until pending delivery is observed",
+      "head": "e35d434cff9a670d95dba49ed02897347944e001",
+      "branch": "codex/classrup-notify-fault-hook-determinism-20261122",
+      "base": "codex/classrup-sync-list-filter-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/123",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 122,
+      "title": "fix(storage): validate sync-list raw selectors across adapters",
+      "head": "fd7afa541d09e3a35e261b88a9abc3afd1464433",
+      "branch": "codex/classrup-sync-list-filter-admission-20261122",
+      "base": "codex/classrup-indexed-null-cursor-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/122",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 121,
+      "title": "fix(storage): reject null indexed query cursors before adapter reads",
+      "head": "c32c926e10e8eef3164abf78d12107df658ca4a5",
+      "branch": "codex/classrup-indexed-null-cursor-admission-20261122",
+      "base": "codex/classrup-record-query-selector-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/121",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 120,
+      "title": "fix(storage): validate raw record query selectors before driver reads",
+      "head": "9e25673e9d3ffff8ba0d4febb131d2eef727d90c",
+      "branch": "codex/classrup-record-query-selector-admission-20261122",
+      "base": "codex/classrup-record-query-limit-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/120",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 119,
+      "title": "fix(storage): validate raw record query limits before driver reads",
+      "head": "6c450f267fd3d27af8ebbbb2e86c1b91995a2485",
+      "branch": "codex/classrup-record-query-limit-admission-20261122",
+      "base": "codex/classrup-outbox-event-id-guard-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/119",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 118,
+      "title": "fix(storage): reject duplicate outbox event IDs before replacing events",
+      "head": "83b39ae55a1a668bae912352f98e0c1e62bdc9a3",
+      "branch": "codex/classrup-outbox-event-id-guard-20261122",
+      "base": "codex/classrup-currency-concurrent-test-race-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/118",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 117,
+      "title": "test(currency): honor either winner in concurrent registration",
+      "head": "3a58d5355a85807afe7ba4d87a91e98310a34450",
+      "branch": "codex/classrup-currency-concurrent-test-race-20261122",
+      "base": "codex/classrup-deadletter-preflight-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/117",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 116,
+      "title": "fix(storage): prevalidate dead-letter mutations before durable writes",
+      "head": "cfc7c04549172048c373af715e6da14f5d9654f6",
+      "branch": "codex/classrup-deadletter-preflight-20261122",
+      "base": "codex/classrup-inbox-error-code-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/116",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 115,
+      "title": "fix(storage): validate inbox retry and dead-letter error codes",
+      "head": "36d9e60c423b869f18778668c92ec78cad164e5b",
+      "branch": "codex/classrup-inbox-error-code-admission-20261122",
+      "base": "codex/classrup-inbox-attempt-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/115",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 114,
+      "title": "fix(storage): validate inbox retry attempts before durable marks",
+      "head": "e20a7a03929f3df3355f8c8c44731d24f1c453db",
+      "branch": "codex/classrup-inbox-attempt-admission-20261122",
+      "base": "codex/classrup-sync-enqueue-unique-id-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/114",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 113,
+      "title": "fix(storage): preserve acknowledged sync rows on duplicate enqueue IDs",
+      "head": "2e36d4eda0eb12a9aa0ba3cf8e12bec2acd913fe",
+      "branch": "codex/classrup-sync-enqueue-unique-id-20261122",
+      "base": "codex/classrup-sync-error-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/113",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 112,
+      "title": "fix(storage): reject malformed sync retry error metadata",
+      "head": "5702de45e2391ec3af755834f03aca54b37c0747",
+      "branch": "codex/classrup-sync-error-admission-20261122",
+      "base": "codex/classrup-sync-due-time-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/112",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 111,
+      "title": "fix(storage): reject malformed sync retry due timestamps",
+      "head": "fd8b7509d134a58453a1bd7f93a511c0038102a0",
+      "branch": "codex/classrup-sync-due-time-admission-20261122",
+      "base": "codex/classrup-sync-attempt-admission-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/111",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 110,
+      "title": "fix(storage): reject malformed sync retry attempt counters",
+      "head": "d6fe014efb7d11b331206e37ca1c03e566f5f4bc",
+      "branch": "codex/classrup-sync-attempt-admission-20261122",
+      "base": "codex/classrup-record-put-index-shape-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/110",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 109,
+      "title": "fix(storage): reject malformed index tuples on record put",
+      "head": "a94694cb79964762403d99c4b81290589605762f",
+      "branch": "codex/classrup-record-put-index-shape-20261122",
+      "base": "codex/classrup-restore-index-shape-validation-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/109",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 108,
+      "title": "fix(storage): validate recovered index tuple shapes before restore",
+      "head": "002317d7efbcb360f3aad4e14e0489369a064e28",
+      "branch": "codex/classrup-restore-index-shape-validation-20261122",
+      "base": "codex/classrup-restore-idempotence-metadata-20261122",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/108",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 107,
+      "title": "fix(storage): reject false-identical restore metadata in encrypted recovery",
+      "head": "fff9e11b0cf70127a495c68569a3a6f029a5b0a8",
+      "branch": "codex/classrup-restore-idempotence-metadata-20261122",
+      "base": "codex/classrup-restore-revision-validation-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/107",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 106,
+      "title": "fix(storage): reject malformed record revisions during restore",
+      "head": "cca614ee3e79379f616ebc4d8f48a04ac08c93e4",
+      "branch": "codex/classrup-restore-revision-validation-20261121",
+      "base": "codex/classrup-record-revision-overflow-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/106",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 105,
+      "title": "fix(storage): reject CAS revision increment above safe integer ceiling",
+      "head": "a39152e1ae2e2583a2b66813528dbbc298517634",
+      "branch": "codex/classrup-record-revision-overflow-20261121",
+      "base": "codex/classrup-record-revision-safeint-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/105",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 104,
+      "title": "fix(storage): reject unsafe record CAS revision integers",
+      "head": "31ec52aaa52536801051252aa4f6a08673fafc0e",
+      "branch": "codex/classrup-record-revision-safeint-20261121",
+      "base": "codex/classrup-blob-contenttype-dedupe-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/104",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 103,
+      "title": "fix(storage): reject content-type mismatches during blob deduplication",
+      "head": "3fb99e65287437446c7bb4482645509512c03083",
+      "branch": "codex/classrup-blob-contenttype-dedupe-20261121",
+      "base": "codex/classrup-blob-encryption-dedupe-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/103",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 102,
+      "title": "fix(storage): reject encrypted/plaintext blob dedupe mismatches",
+      "head": "118648001f7b111e3cf0429bde15a1ee5fada39c",
+      "branch": "codex/classrup-blob-encryption-dedupe-20261121",
+      "base": "codex/classrup-sync-limit-parity-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/102",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 101,
+      "title": "fix(storage): reject malformed sync list and head limits",
+      "head": "98f801b3bb7a1e60bad9a051a9955932c2bccaeb",
+      "branch": "codex/classrup-sync-limit-parity-20261121",
+      "base": "codex/classrup-deadletter-list-limit-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/101",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 100,
+      "title": "fix(storage): reject invalid dead-letter listing limits before driver reads",
+      "head": "59d07748b3468a9013f19d9391abf803e1569a1a",
+      "branch": "codex/classrup-deadletter-list-limit-20261121",
+      "base": "codex/classrup-outbox-pending-limit-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/100",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 99,
+      "title": "fix(storage): reject malformed pending outbox limits before adapter queries",
+      "head": "722d80f7bff801f5f8e7044ad3a27907f8eb8c7f",
+      "branch": "codex/classrup-outbox-pending-limit-20261121",
+      "base": "codex/classrup-inbox-read-isolation-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/99",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 98,
+      "title": "fix(storage): isolate inbox read results from live delivery state",
+      "head": "1d74c955527b2f46880f2b7979fb54157d34dc00",
+      "branch": "codex/classrup-inbox-read-isolation-20261121",
+      "base": "codex/classrup-shred-report-isolation-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/98",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 97,
+      "title": "fix(storage): isolate pending encrypted-key shred reports",
+      "head": "2a2813d83d808aaa2418679beb2782d1851324c5",
+      "branch": "codex/classrup-shred-report-isolation-20261121",
+      "base": "codex/classrup-encrypted-shred-final-type-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/97",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 96,
+      "title": "fix(storage): retain obsolete encrypted-key shred on plaintext replacement",
+      "head": "acbe6b7d9f7411ec361710652bd6612e55a05432",
+      "branch": "codex/classrup-encrypted-shred-final-type-20261121",
+      "base": "codex/classrup-shred-final-state-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/96",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 95,
+      "title": "fix(storage): cancel stale key shredding when encrypted blob is reinserted",
+      "head": "bb0595e02c32add7dc36f5d5fc3dab87efeb5427",
+      "branch": "codex/classrup-shred-final-state-20261121",
+      "base": "codex/classrup-orphan-parity-contract-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/95",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 94,
+      "title": "test(storage): qualify bounded orphan sweep and rollback across memory, SQLite and IndexedDB",
+      "head": "b53856c61ebf258d25ae9b3a340aa98d0341696d",
+      "branch": "codex/classrup-orphan-parity-contract-20261121",
+      "base": "codex/classrup-orphan-sweep-limit-admission-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/94",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 93,
+      "title": "fix(storage): reject invalid orphan sweep limits before blob purge",
+      "head": "3d8f0b08d5e25eb8288efa778991ca8f86575cc5",
+      "branch": "codex/classrup-orphan-sweep-limit-admission-20261121",
+      "base": "codex/classrup-blob-detach-noop-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/93",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 92,
+      "title": "fix(storage): preserve unattached blob on nonexistent-holder detach",
+      "head": "19d5de5eb8e9b2ed8e65a64ef0b54ee27e023c2d",
+      "branch": "codex/classrup-blob-detach-noop-20261121",
+      "base": "codex/classrup-persist-change-isolation-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/92",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 91,
+      "title": "fix(storage): isolate persistence change rows from live memory indexes",
+      "head": "8f1a364314411cd6d2a9c3062c4a58a1c66a0cc2",
+      "branch": "codex/classrup-persist-change-isolation-20261121",
+      "base": "codex/classrup-snapshot-index-isolation-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/91",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 90,
+      "title": "fix(storage): detach loaded snapshot rows before rebuilding memory indexes",
+      "head": "1aba595a42136860cecb2b87fcf52476a88b9f06",
+      "branch": "codex/classrup-snapshot-index-isolation-20261121",
+      "base": "codex/classrup-memory-group-compaction-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/90",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 89,
+      "title": "fix(storage): reclaim empty memory group buckets after final detach",
+      "head": "db300c9d7a5a7151eb7d86cdaaf0cdb22d6be87d",
+      "branch": "codex/classrup-memory-group-compaction-20261121",
+      "base": "codex/classrup-reference-delete-persist-rollback-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/89",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 88,
+      "title": "test(storage): preserve attachment bytes and holders after failed final-detach persistence",
+      "head": "ae8d1a17be37a12300aec34b973a008f947a267a",
+      "branch": "codex/classrup-reference-delete-persist-rollback-20261121",
+      "base": "codex/classrup-reference-persist-rollback-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/88",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 87,
+      "title": "test(storage): verify attachment-reference index rollback after failed persistence",
+      "head": "b3b2f676a617a4795351948695922fe6a3ed28e9",
+      "branch": "codex/classrup-reference-persist-rollback-20261121",
+      "base": "codex/classrup-attachment-reference-coverage-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/87",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 86,
+      "title": "fix(vault): reject species-masked and sparse codec arrays before IndexedDB writer claim",
+      "head": "85d6067b171e238d5a464d397eeaf5021e5c9cc5",
+      "branch": "codex/classrup-codec-species-harden-20261121",
+      "base": "codex/classrup-codec-array-map-guard-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/86",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 85,
+      "title": "fix(vault): reject codec-array map overrides before IndexedDB writer claim",
+      "head": "796a80293881bd57716d353d9192a64d97e60a16",
+      "branch": "codex/classrup-codec-array-map-guard-20261121",
+      "base": "codex/classrup-vault-codec-shape-preflight-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/85",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 84,
+      "title": "fix(vault): fail closed for malformed backup codec callbacks before writer acquisition",
+      "head": "ef218a1e06b7290f66fd084a41a498ad13eb4fd5",
+      "branch": "codex/classrup-vault-codec-shape-preflight-20261121",
+      "base": "codex/classrup-vault-early-codec-admission-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/84",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 83,
+      "title": "docs(classrup): PR #82 qualification and next independent review handoff",
+      "head": "518ad6bc188afa3c283bcfef8b2d1aca63b7d57e",
+      "branch": "docs/classrup-pr82-qualification-review-20261121",
+      "base": "codex/classrup-vault-early-codec-admission-20261121",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/83",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 82,
+      "title": "fix(vault): prevalidate codecs before claiming IndexedDB writer token",
+      "head": "ba13461483382d8dbeb053ae41fcd7ec9c4ee060",
+      "branch": "codex/classrup-vault-early-codec-admission-20261121",
+      "base": "codex/classrup-openvault-init-disposal-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/82",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 81,
+      "title": "fix(vault): dispose encrypted storage when codec registration fails",
+      "head": "9ed978b4f4dd4323eddf287fd1feff5cdbfa2d9d",
+      "branch": "codex/classrup-openvault-init-disposal-20261120",
+      "base": "codex/classrup-codec-type-admission-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/81",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 80,
+      "title": "fix(vault): reject empty and malformed registered backup codec names",
+      "head": "8919d4e66ceecf8f6ac32e5f29e38a0c5e260dc2",
+      "branch": "codex/classrup-codec-type-admission-20261120",
+      "base": "codex/classrup-backup-coverage-overflow-fixture-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/80",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 79,
+      "title": "fix(pwa): align record-coverage fixture and reject impossible category overflow",
+      "head": "44e3cfdfb60e657c1b62592fac104fc45eb804ff",
+      "branch": "codex/classrup-backup-coverage-overflow-fixture-20261120",
+      "base": "codex/classrup-backup-inspection-record-validation-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/79",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 78,
+      "title": "fix(pwa): validate required record coverage before displaying backup inspection",
+      "head": "ad1e56f9bf9f9f9081391ab678f48dc161860ae4",
+      "branch": "codex/classrup-backup-inspection-record-validation-20261120",
+      "base": "codex/classrup-backup-inspection-count-validation-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/78",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 77,
+      "title": "fix(pwa): reject inconsistent optional attachment coverage reports",
+      "head": "b0ca779dce845dddcb1a799d418a1f12d61e5069",
+      "branch": "codex/classrup-backup-inspection-count-validation-20261120",
+      "base": "codex/classrup-backup-inspection-error-boundary-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/77",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 76,
+      "title": "fix(pwa): contain required backup inspection errors at the UI boundary",
+      "head": "0c68777462a6a1a910ade94bf5dd5a0bc0332df6",
+      "branch": "codex/classrup-backup-inspection-error-boundary-20261120",
+      "base": "codex/classrup-backup-inspection-round2-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/76",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 75,
+      "title": "fix(pwa): precise attachment count labels and guarded fallback regression",
+      "head": "8132a9c67315bdd07016291817d53360d11ce1cf",
+      "branch": "codex/classrup-backup-inspection-round2-20261120",
+      "base": "codex/classrup-backup-diagnostic-resilience-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/75",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 74,
+      "title": "fix(pwa): retain record backup coverage if attachment inspection fails",
+      "head": "2742e1a579e83cf1be5bcc81c7169aac94e46334",
+      "branch": "codex/classrup-backup-diagnostic-resilience-20261120",
+      "base": "codex/classrup-pwa-recovery-consolidation-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/74",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 73,
+      "title": "Clarify backup diagnostics and preserve the consolidation publication record",
+      "head": "f919a0042ba46ba992b06c7324a1a70899441948",
+      "branch": "codex/classrup-backup-guidance-20261120",
+      "base": "codex/classrup-pwa-recovery-consolidation-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/73",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 70,
+      "title": "feat(pwa): expose attachment exclusions in backup coverage inspection",
+      "head": "eb9577bf9403741c53c2a53f6d5a67fd4e0825a9",
+      "branch": "codex/classrup-pwa-attachment-diagnostic-20261120",
+      "base": "codex/classrup-recovery-consolidation-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/70",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 60,
+      "title": "Draft: preserve local barter freeze reasons through repeated replay",
+      "head": "8d8d64d1fafe52977a124ce1c49c9c8ac372ef1e",
+      "branch": "codex/classrup-freeze-reasons-20261120",
+      "base": "codex/classrup-recovery-next-20261120",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/60",
+      "disposition": "ALREADY_IN_MAIN"
+    },
+    {
+      "number": 8,
+      "title": "Draft: reconcile remaining Stage 3/4 foundation work after alpha consolidation",
+      "head": "569fc61e1a61839578b9c34e06aed039a74ccf40",
+      "branch": "claude/bold-mccarthy-qklhl6",
+      "base": "main",
+      "draft": true,
+      "url": "https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/8",
+      "disposition": "REFERENCE_ONLY"
+    }
+  ],
+  "counts": {
+    "QUALIFICATION_PENDING": 6,
+    "REHEARSAL_ONLY": 1,
+    "ALREADY_IN_MAIN": 89,
+    "REFERENCE_ONLY": 1
+  },
+  "generatedAt": "2026-11-28T00:09:27Z"
+}

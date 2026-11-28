@@ -1,6 +1,6 @@
 # Future specification: client-owned ClassRup domain CLI
 
-**Status: F1a verification and files-only F1b public listing/search implemented; private CLI workflows planned.** The supported `node tools/cli/classrup.mjs record verify --file FILE [--json]` command verifies existing signed listing and alpha withdrawal files. `listing list`, `listing show` and `search` evaluate explicitly selected public files through shared PWA retention/search handlers in temporary memory. These commands do not access a vault, persist records or change any storage/signature format. The broader command families below remain a delivery plan.
+**Status: checkout version reporting, F1a verification and files-only F1b public listing/search implemented; private CLI workflows planned.** The supported `node tools/cli/classrup.mjs record verify --file FILE [--json]` command verifies existing signed listing and alpha withdrawal files. `listing list`, `listing show` and `search` evaluate explicitly selected public files through shared PWA retention/search handlers in temporary memory. These commands do not access a vault, persist records or change any storage/signature format. The broader command families below remain a delivery plan.
 
 ## Source and architectural reconciliation
 
@@ -12,9 +12,17 @@ The existing [setup CLI](CLI_SETUP.md), [kernel](../packages/kernel/src/index.ts
 
 The supported setup commands are `pnpm run setup`, `pnpm run configure`, `pnpm run doctor`, `pnpm dev`, `pnpm build` and `pnpm preview`. `node tools/cli/classrup.mjs --help` describes their current interface. They configure, build and serve public PWA assets. The F1a `record verify` command additionally checks an explicitly selected, bounded public listing/withdrawal file using shared envelope and PWA payload validation. It provides schema-version-1 JSON and exits 0/2/3, with fixed redacted errors. Its output explicitly leaves prior history, chain continuity, revocation, current ownership and trust unestablished, and performs no vault admission. See the [CLI guide](CLI_SETUP.md#verify-a-public-signed-file) for the implemented contract. No current terminal command creates or unlocks browser vaults, holds user keys, or executes private listing/barter mutations.
 
+`node tools/cli/classrup.mjs --version [--json]` reports the root manifest's
+`0.0.0-development` unreleased checkout version without setup, installed
+dependencies, network, child processes, keys or persistent writes. The documented
+human and schema-version-1 JSON outputs share exits 0/2/3 and fixed errors. Existing
+help precedence remains unchanged. This version can span multiple source commits;
+source-specific qualification still requires an exact Git SHA. See the
+[version contract](CLI_SETUP.md#check-the-checkout-version).
+
 F1b additionally provides `node tools/cli/classrup.mjs listing list/show` and `node tools/cli/classrup.mjs search` with repeated explicit `--file` selection. It uses bounded file input, owner-qualified show selectors, shared filters, deterministic revision handling, fail-closed conflicting histories, terminal-safe public output and snapshot-bound offset pagination. Every selected file must pass current admission, including expiry. List/search returns 0 for an empty successful collection; show returns 4 when no matching selected publication remains. See the [public listing guide](CLI_SETUP.md#list-show-and-search-public-listing-files) for its exact grammar, JSON contract, limits and evidence boundaries. It does not read a persisted retained cache or browser vault.
 
-The `classrup …` examples below describe a proposed future executable and command grammar. Only the documented `node tools/cli/classrup.mjs` forms for verification and files-only listing/search are implemented from the domain families. Bare `pnpm setup` and `pnpm doctor` remain pnpm's own commands; the supported project scripts use `pnpm run`.
+The `classrup …` examples below describe a proposed future executable and command grammar. Only the documented `node tools/cli/classrup.mjs` forms for help/version, verification and files-only listing/search are implemented from the proposed families. Bare `pnpm setup` and `pnpm doctor` remain pnpm's own commands; the supported project scripts use `pnpm run`.
 
 ## Goal and authority
 
@@ -90,6 +98,6 @@ Recovery and deletion require explicit scope. Local deletion, encrypted-backup r
 
 F1a delivers the public-record verification subset of F1. It accepts only listing and alpha tombstone records. Its subprocess tests cover independently signed Ed25519 fixtures, malformed/tampered/unsupported records, PWA payload-validation parity, expiry, ownership binding, bounded file reads, fixed error disclosure, file-type refusal and network-free execution.
 
-F1b delivers files-only public listing/show/search with the same supported signed formats. Its tests cover independent signatures, shared PWA query equivalence, duplicate files/CIDs, per-owner revisions, signed withdrawals, conflict refusal, deterministic pagination, snapshot changes, current expiry, exact currency filters, bounded inputs, redacted failures, terminal-control escaping and guards against network/key-generation/signing/persistent-write side effects. A standalone executable, `--version`, persisted-cache/file-vault access and private workflows remain unfinished. Platform qualification must be tied to the actual candidate's CI results, not inferred from these test definitions.
+F1b delivers files-only public listing/show/search with the same supported signed formats. Its tests cover independent signatures, shared PWA query equivalence, duplicate files/CIDs, per-owner revisions, signed withdrawals, conflict refusal, deterministic pagination, snapshot changes, current expiry, exact currency filters, bounded inputs, redacted failures, terminal-control escaping and guards against network/key-generation/signing/persistent-write side effects. Checkout version reporting is also implemented through the documented Node entry point. A standalone executable, persisted-cache/file-vault access and private workflows remain unfinished. Platform qualification must be tied to the actual candidate's CI results, not inferred from these test definitions.
 
 Implementation should proceed through small verified contributions. This specification preserves a useful orphan proposal; it does not mark domain CLI parity, messaging, relay operation or any other future feature complete.

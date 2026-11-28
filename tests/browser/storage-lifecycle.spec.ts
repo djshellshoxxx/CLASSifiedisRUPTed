@@ -267,7 +267,9 @@ test('production native versionchange clears private views and recovers only sav
   await form.getByLabel('Declared value').fill('777');
   await form.getByLabel('Coarse area').fill('u4pru');
   await form.getByLabel('Listing type').selectOption('wanted');
-  await form.getByLabel('Condition', { exact: true }).selectOption('fair');
+  // Nested select options contribute to label text; use the combobox accessible name.
+  await form.getByRole('combobox', { name: 'Condition', exact: true }).selectOption('fair');
+  await expect(form.locator('select[name="condition"]')).toHaveValue('fair');
   await form.getByLabel('Allow this listing').check();
   await page.getByLabel('Search retained listings').fill(canaries.search);
   await page.getByLabel('Search coarse area').fill('u4pru');
@@ -345,7 +347,8 @@ test('production native versionchange clears private views and recovers only sav
   await expect(form.getByLabel('Declared value')).toHaveValue('0');
   await expect(form.getByLabel('Coarse area')).toHaveValue('c2b2');
   await expect(form.getByLabel('Listing type')).toHaveValue('sell');
-  await expect(form.getByLabel('Condition', { exact: true })).toHaveValue('good');
+  // The workspace is hidden after invalidation; inspect the same scoped control.
+  await expect(form.locator('select[name="condition"]')).toHaveValue('good');
   await expect(form.getByLabel('Allow this listing')).not.toBeChecked();
   await expect(page.getByLabel('Search retained listings')).toHaveValue('');
   await expect(page.getByLabel('Search coarse area')).toHaveValue('');

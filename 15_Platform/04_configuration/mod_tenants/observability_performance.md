@@ -1,6 +1,6 @@
 # PS-125-08 — Observability and performance: Tenants
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F15.S04.M03 Tenants](SPEC.md) · **Scope:** MVP · **Code:** `packages/platform/src/configuration/tenants` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F15.S04.M03 Tenants](SPEC.md) · **Scope:** MVP · **Code:** `packages/platform/src/configuration/tenants` · **Contracts:** [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-MNY-001](../../../planning/contracts/CTR-MNY-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-SCH-001](../../../planning/contracts/CTR-SCH-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -13,16 +13,17 @@
 ## Specification
 
 **Metrics**
-- classrup_platform_tenant_changes_total{outcome=ok|conflict|invalid}
+- classrup_platform_tenant_changes_total{outcome=ok|conflict|invalid|forbidden}
 - classrup_platform_tenant_config_read_duration_ms (relay histogram)
 - classrup_platform_tenant_count{status=active|suspended|archived}
+- classrup_platform_tenant_writes_refused_total{code=PLATFORM_TENANT_SUSPENDED}
 
 **Logs**
-- info tenant.configured {tenantHash, changed[]}; info tenant.status_changed {tenantHash, from, to} — no display names, no operator keys.
+- info tenant.configured {tenantHash, changed[], revision}; info tenant.status_changed {tenantHash, from, to} — no display names, no operator keys.
 
 **Budgets**
-- platform.tenant.get p95 ≤ 20 ms cached and ≤ 150 ms cold (OBS-4); configure p95 ≤ 300 ms.
-- Cache TTL 30 s; consumers apply platform.tenant.configured within 2 s p95 under the dispatcher budget.
+- platform.tenant.get p95 ≤ 20 ms cached and ≤ 150 ms cold (OBS-4); configure p95 ≤ 300 ms including signing.
+- Cache TTL 30 s; consumers apply platform.tenant.configured within 2 s p95 under the dispatcher budget; the TenantPort stage adds ≤ 1 ms p95 to a command.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -35,4 +36,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F15.S02.M03, F15.S04.M01, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-IOX-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F15.S02.M03, F15.S02.M01, F15.S04.M01, F16.S01.M01, F10.S02.M02, CTR-ID-001, CTR-IDM-001, CTR-ERR-001, CTR-EVT-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-IOX-001, CTR-OBS-001, CTR-SCH-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

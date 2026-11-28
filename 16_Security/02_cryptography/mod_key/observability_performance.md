@@ -13,13 +13,13 @@
 ## Specification
 
 **Metrics**
-- Local diagnostic counters: unlock_ms, unlock_failures, auto_locks, rotations (vault-local, exportable).
+- Local diagnostic counters: unlock_ms, unlock_failures, auto_locks, device_rotations (vault-local, exportable).
 
 **Logs**
 - local vault log key.unlocked {durationMs} and key.locked {reason}; never passphrases, keys or blobs.
 
 **Budgets**
-- unlock p95 ≤ 3 s (desktop) and ≤ 8 s (Moto G profile); sign p95 ≤ 5 ms and ≤ 25 ms; library bundle ≤ 40 KiB gzip.
+- unlock p95 ≤ 3 s (desktop) and ≤ 8 s (Moto G profile); sign and agree p95 ≤ 5 ms and ≤ 25 ms; library bundle ≤ 40 KiB gzip.
 - Main-thread blocking during unlock ≤ 50 ms per task.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -28,9 +28,9 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-128-09.T13 | load | PS-128-08.R02, PS-128-08.R03 | unlock under Moto G throttling; 1 000 signs | unlock p95 ≤ 8 s with main-thread tasks ≤ 50 ms; sign p95 ≤ 25 ms |
-| TEST-PS-128-09.T14 | unit | PS-128-08.R01, PS-128-09.R01, PS-128-09.R03 | traceability tool run; telemetry scan of network calls | every PS-128 requirement maps to a passing test; zero network calls from the library |
+| TEST-PS-128-09.T13 | load | PS-128-08.R02, PS-128-08.R03 | unlock under Moto G throttling; 1 000 signs and 1 000 agrees | unlock p95 ≤ 8 s with main-thread tasks ≤ 50 ms; sign and agree p95 ≤ 25 ms |
+| TEST-PS-128-09.T14 | unit | PS-128-08.R01, PS-128-09.R01 | traceability tool run; telemetry scan of network calls | every PS-128 requirement maps to a passing test; zero network calls from the library |
 
 ## Dependencies
 
-Module depends on: CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F16.S02.M02, F16.S02.M03, F15.S01.M01, F07.S01.M01, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

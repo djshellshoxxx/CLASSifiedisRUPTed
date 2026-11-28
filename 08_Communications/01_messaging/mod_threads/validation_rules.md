@@ -1,36 +1,46 @@
 # PS-061-02 — Validation rules: Conversation threads
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F08.S01.M02 Conversation threads](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/messaging/threads` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F08.S01.M02 Conversation threads](SPEC.md) · **Scope:** MVP · **Code:** `packages/comms/src/messaging/threads` · **Contracts:** [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md), [CTR-ID-001](../../../planning/contracts/CTR-ID-001.md), [CTR-EVT-001](../../../planning/contracts/CTR-EVT-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-UX-001](../../../planning/contracts/CTR-UX-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
 ## Requirements
 
-- **PS-061-02.R01** Thread creation and inbound thread-open statements are validated against the context record, the signer's entitlement and the local block list before persistence.
+- **PS-061-02.R01** Thread creation and inbound thread-open statements are validated against the context record through the context owner's ThreadContextPort, the per-context entitlement table and the local principal's own block list before persistence.
 - **PS-061-02.R02** Roster changes are validated against the participant cap and the owning context's own membership.
 - **PS-061-02.R03** Every violation maps to one stable error code.
+- **PS-061-02.R04** Limits enforced only in the creator's vault are UX guards; receiving vaults enforce their own caps on pending message requests (5 per unknown DID, 100 in total), so a modified client cannot flood an inbox.
+- **PS-061-02.R05** Reply mailboxes are validated on create, on thread-open intake and on refresh; a statement whose creator entry lacks valid replyMailboxes is rejected, and only the author of a verified statement may change its own stored mailboxes.
 
 ## Specification
 
 | Rule | Check | Error |
 |---|---|---|
-| V01 | contextType is one of the enum values and contextId exists, is visible to the creator and is not closed (checked through the context port of the owning module) | VALIDATION_FAILED |
-| V02 | creator is not blocked by and does not block any other participant (F07.S02.M02) | BLOCKED_PARTY |
+| V01 | contextType is one of the enum values and contextId exists, is visible to the creator and is not closed, checked through the ThreadContextPort of the owning module | VALIDATION_FAILED |
+| V02 | the creator has not blocked any other participant in its own block list (F07.S02.M02 isBlockedEither over local data); BLOCKED_PARTY is returned only when the actor blocked the other party, and whether the creator is blocked by someone else is unknown to its vault and never checked | BLOCKED_PARTY |
 | V03 | participants count between 2 and 12 | COMMS_THREAD_PARTICIPANT_LIMIT |
-| V04 | no active thread with the same context and pair exists; if it does its ID is returned instead of creating | COMMS_THREAD_EXISTS |
+| V04 | no non-archived thread with the derived threadId of (key, generation) exists; if it does its ID is returned with existing true instead of creating | COMMS_THREAD_EXISTS |
 | V05 | mute duration is one of 1 h, 8 h, 24 h or until unmuted, and the actor is a current participant | VALIDATION_FAILED |
-| V06 | direct threads require both parties to have at least one known device key | VALIDATION_FAILED |
-| V08 | inbound thread-open statement carries a valid Ed25519 signature by a key of createdBy and createdBy is entitled for the context (listing author, counterparty of the offer or proposal party); otherwise it is quarantined | COMMS_THREAD_OPEN_REJECTED |
-| V07 | a member creates at most 30 new threads per day | RATE_LIMITED |
+| V06 | direct threads require both parties to have at least one known device key (F16.S02.M02) | VALIDATION_FAILED |
+| V08 | inbound thread-open statement carries a valid Ed25519 signature by an active device key of createdBy (F16.S02.M02) and createdBy is entitled per context type - listing: any signer, provided the listing author is a participant and this vault owns the listing or holds its verified projection; proposal: a party of the record (ThreadContextPort.isParty); cycle, booking, rental: createdBy and every listed participant are on the context roster; direct: any signer; entitled but unknown senders go to status request, others are quarantined | COMMS_THREAD_OPEN_REJECTED |
+| V07 | UX guard in the creator vault: at most 30 new threads per day (a modified client can skip it; receivers enforce V10) | RATE_LIMITED |
+| V09 | inbound thread-open: the statement's threadId equals the derivation of its own contextTenantId, contextType, contextId, participants and generation | COMMS_THREAD_OPEN_REJECTED |
+| V10 | receiving vault cap: at most 5 pending requests per unknown DID and 100 in total; excess statements are dropped silently | RATE_LIMITED |
+| V11 | accept_request and decline_request target a thread in status request | CONFLICT_STATE |
+| V12 | an inbound classrup.privacy.deletion_notice/v1 is applied only when its payload holds exactly the F10.S01.M04 allowlist of its kind (departure - requestId, signedAt, kind, effectiveAt, recourse none) with no DID or thread ID, and ext.signerKey is a device key of the envelope author that F16.S02.M02 reports active at receipt or revoked with reason account_deleted with the notice cid in finalCids (finalListed true); the departing DID is always the envelope author (CTR-FED-001 FED-7) | VALIDATION_FAILED |
+| V13 | thread_open replyMailboxes: the entry of createdBy holds 1..3 items with distinct canonical relayId and a 128-bit base64url mailboxId, other entries hold none or valid ones; create has at least one mailbox for every other participant | COMMS_THREAD_OPEN_REJECTED |
+| V14 | refresh_reply_mailboxes: the author did is a current participant of the thread and the statement that carried the mailboxes was verified | FORBIDDEN |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-061-09.T01 | unit | PS-061-01.R01, PS-061-01.R02, PS-061-01.R03, PS-061-02.R01 | create a listing thread between B and A | Thread stored with contextType listing, participants 2, origin local, thread-open statement signed |
-| TEST-PS-061-09.T02 | unit | PS-061-02.R02, PS-061-02.R03 | each rule V02 to V07 violated in turn | the documented error code returned and nothing stored |
-| TEST-PS-061-09.T12 | abuse | PS-061-07.R03, PS-061-02.R01 | 31st thread creation in a day; thread-open statement signed by a stranger for a listing they do not own | RATE_LIMITED; COMMS_THREAD_OPEN_REJECTED and message-request quarantine |
+| TEST-PS-061-09.T01 | unit | PS-061-01.R01, PS-061-01.R02, PS-061-01.R03, PS-061-02.R01 | create a listing thread between B and A | Thread stored with contextType listing, participants 2, origin local, derived threadId, thread-open statement signed |
+| TEST-PS-061-09.T02 | unit | PS-061-02.R02, PS-061-02.R03 | each rule V01 to V14 violated in turn | the documented error code returned and nothing stored |
+| TEST-PS-061-09.T12 | abuse | PS-061-07.R03, PS-061-02.R01 | 31st thread creation in a day; buyer B (not the listing author) opens a thread about A's listing; D (outside the cycle roster) opens a cycle thread | RATE_LIMITED as UX guard; B's thread is accepted in A's vault (request while B is unknown, active after accept); COMMS_THREAD_OPEN_REJECTED and quarantine for D |
+| TEST-PS-061-09.T19 | abuse | PS-061-02.R04, PS-061-07.R04 | 50 unknown DIDs send 6 thread-open statements each to A | 5 per DID kept until the total of 100 pending requests, the rest dropped silently; no reply sent |
+| TEST-PS-061-09.T22 | integration | PS-061-01.R06, PS-061-04.R06, PS-061-04.R07, PS-061-02.R05 | buyer B opens a thread from seller A's listing with no projection of B in A's vault; A's vault receives it through federation.record.receive; A replies; B then rotates its mailbox and sends a message | the thread_open is published with ext.recipients from the listing mailboxHints and stream thr:<threadId>; A's vault creates a request thread through comms.thread.receive_open, stores B's replyMailboxes, comms.thread.recipients returns B's mailbox, the reply is addressed to it, and the rotated mailbox replaces the stored one only from B's verified message; a thread_open whose creator entry has no replyMailboxes is rejected with COMMS_THREAD_OPEN_REJECTED |
 
 ## Dependencies
 
-Module depends on: F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M02, F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

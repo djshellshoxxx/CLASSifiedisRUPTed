@@ -7,15 +7,15 @@
 ## Requirements
 
 - **PS-109-10.R01** The module stores no user data, so a user export contains nothing from it.
-- **PS-109-10.R02** User preferences that affect keyboard behaviour (for example shortcuts off, reduced motion override) live in vault settings and travel with the vault export of F10.
+- **PS-109-10.R02** The only user preference that affects these primitives, the reduced-motion override, lives in F15.S04.M03 LocalSettings (optional field a11yMotion system | reduced) and travels with that module's vault export; the PWA shell reads LocalSettings and passes the value to the primitives as a parameter, so 05.R02 holds.
 - **PS-109-10.R03** Token and primitive changes are versioned and rollback restores the previous release without migration.
 
 ## Specification
 
-- **export:** No module data is exported; the settings keys a11y.shortcuts and a11y.motion are part of the vault settings export owned by F10.
-- **import:** Imported settings are validated against the allowed values (shortcuts on or off, motion system or reduced); unknown keys are ignored.
+- **export:** No module data is exported; a11yMotion is part of the F15.S04.M03 LocalSettings vault export. MVP has no single-character shortcuts, so there is no shortcut setting.
+- **import:** F15.S04.M03 validates an imported a11yMotion against system or reduced and falls back to system for any other value; the primitives only ever receive the validated value from the PWA shell.
 - **backup:** Nothing to back up; tokens and primitives ship with the app bundle.
-- **migration rollback:** Tokens are additive; rollback to the previous release restores previous tokens and primitives without data migration.
+- **migration rollback:** Tokens are additive; rollback to the previous release restores previous tokens and primitives without data migration; an a11yMotion value unknown to an older release is ignored and prefers-reduced-motion applies.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-109-09.T14 | manual | PS-109-09.R02, PS-109-10.R01 | 20-minute keyboard and screen reader session on a physical Pixel 7 and iPhone 14 | checklist 2.4.11, 2.5.7, 2.5.8 completed with no blockers |
-| TEST-PS-109-09.T15 | unit | PS-109-10.R02, PS-109-10.R03 | upgrade token file from v1 to v1.1 and roll back | components render with defaults; no consumer breaks |
+| TEST-PS-109-09.T15 | unit | PS-109-10.R03 | upgrade token file from v1 to v1.1 and roll back | components render with defaults; no consumer breaks |
+| TEST-PS-109-09.T20 | integration | PS-109-10.R01, PS-109-10.R02 | vault export and import round trip through F15.S04.M03 with a11yMotion reduced, then with an invalid value | export holds nothing from this module; reduced survives and the shell passes it to setMotionPreference; invalid value falls back to system |
 
 ## Dependencies
 

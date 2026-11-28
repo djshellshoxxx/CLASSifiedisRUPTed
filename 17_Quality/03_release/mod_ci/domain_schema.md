@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-141-01.R01** The module owns no persisted entities; its files are workflow YAML under .github/workflows and a lint script tools/ci-lint.
-- **PS-141-01.R02** Workflow artifacts are named pwa-dist, reports-fast and reports-nightly with defined retention: 7, 14 and 30 days.
+- **PS-141-01.R02** Workflow artifacts are named pwa-dist, reports-fast, reports-nightly, reports-weekly and reports-release with defined retention: 7, 14, 30, 30 days and, for reports-release, attached to the release and kept 1 year.
 - **PS-141-01.R03** Environment pins are declared once as env at workflow level: NODE_VERSION 22, PNPM_VERSION 10.28.0, with actions pinned to a full commit SHA or an exact major tag.
 
 ## Specification
@@ -22,4 +22,4 @@
 
 ## Dependencies
 
-Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S03.M02, F16.S01.M02. Predecessor: [module SPEC](SPEC.md).
+Module depends on: CTR-TST-001, CTR-OBS-001, F17.S01.M01, F17.S01.M02, F17.S01.M03, F17.S01.M04, F17.S02.M01, F17.S02.M02, F17.S02.M03, F17.S03.M02, F17.S03.M03, F16.S01.M02. Predecessor: [module SPEC](SPEC.md).

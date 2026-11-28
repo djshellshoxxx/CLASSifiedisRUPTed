@@ -9,6 +9,7 @@
 - **PS-012-07.R01** Revisions are P2, end-to-end encrypted in transit and never published, federated or sent to push in plaintext.
 - **PS-012-07.R02** Evidence retention is RET-EVIDENCE (2 years after last related activity) and revisions are pseudonymized, not deleted, if a party deletes their identity locally, because the counterparties' signed copies stay valid.
 - **PS-012-07.R03** Spam by revision flooding is bounded by the 20-revision cap and local rate limits.
+- **PS-012-07.R04** The module registers ExportSectionPort (section mutiny.revisions), DeletionPort and RetentionPurgePort with F10 (N6), annotates every ProposalRevision field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes local metadata while signed snapshots remain verifiable evidence.
 
 ## Specification
 
@@ -40,10 +41,10 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-012-09.T07 | abuse | PS-012-05.R01, PS-012-05.R02, PS-012-05.R03, PS-012-07.R03 | forged signature, non-party author, wrong-turn author, other principal reads | quarantine or FORBIDDEN or NOT_FOUND |
-| TEST-PS-012-09.T10 | abuse | PS-012-07.R01, PS-012-07.R02, PS-012-07.R03 | tampered snapshot with unchanged hash; replayed older revision; swapped participant in cycle revision | MUTINY_REVISION_HASH_MISMATCH, duplicate or fork, MUTINY_REVISION_MATERIAL_FORBIDDEN |
-| TEST-PS-012-09.T11 | abuse | PS-012-07.R03 | createdAtClaim 6 minutes in the future and backdated | first quarantined, second accepted but not used for ordering or deadline |
+| TEST-PS-012-09.T09 | integration | PS-012-06.R03, PS-012-01.R04, PS-012-07.R01 | offline create then reconnect | syncState prepared then transport_acknowledged; relay fixture sees only ciphertext with mailbox id, size and time |
+| TEST-PS-012-09.T20 | abuse | PS-012-07.R03 | 11 revision creates on one subject within an hour, then a 21st revision | RATE_LIMITED for the 11th; MUTINY_REVISION_LIMIT for the 21st |
+| TEST-PS-012-09.T21 | integration | PS-012-07.R02, PS-012-07.R04 | F10 export, deletion of a party and retention sweep | section mutiny.revisions exported with sig; erased DID pseudonymized in local metadata; signatures still verify; quarantined statements purged after 30 days |
 
 ## Dependencies
 
-Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S01.M02, F02.S01.M03, F02.S02.M05, F02.S04.M01, F02.S04.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

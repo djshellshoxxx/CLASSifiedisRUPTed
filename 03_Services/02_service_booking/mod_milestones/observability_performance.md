@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-031-08.R01** The PWA sends no telemetry (OBS-7); counters and diagnostics stay in the vault.
-- **PS-031-08.R02** Milestone commands meet p95 ≤ 150 ms excluding attachment hashing, and hashing of 25 MB runs in a worker without blocking the UI longer than 50 ms per slice.
+- **PS-031-08.R02** Milestone commands meet p95 ≤ 150 ms excluding attachment hashing, and hashing of a 5 MiB attachment or a streamed external file runs in a worker without blocking the UI longer than 50 ms per slice.
 - **PS-031-08.R03** Payment event handling meets p95 ≤ 50 ms per event.
 
 ## Specification
@@ -15,13 +15,14 @@
 **Metrics**
 - classrup_services_milestones_total{outcome=submitted|approved|changes_requested|settled|cancelled} (local counter)
 - classrup_services_milestone_hash_mismatch_total (local counter)
+- classrup_services_milestone_proof_downgrades_total{to=reorged|failed|expired} (local counter)
 
 **Logs**
 - info milestone.approved {milestoneId, correlationId} in the local diagnostics log - no file names, notes or amounts.
 
 **Budgets**
 - vault command p95 ≤ 150 ms; payment event p95 ≤ 50 ms; list_for_booking p95 ≤ 80 ms for 10 milestones.
-- SHA-256 of 25 MB in a Web Worker ≤ 600 ms on a mid-range phone.
+- SHA-256 of a 5 MiB attachment in a Web Worker ≤ 150 ms on a mid-range phone; external files are hashed as a stream in 1 MiB slices.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -29,8 +30,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-031-09.T11 | load | PS-031-08.R01, PS-031-08.R02, PS-031-08.R03 | hash 25 MB file and run 100 mixed commands on throttled mobile profile | hashing ≤ 600 ms in worker, command p95 ≤ 150 ms, no telemetry request |
+| TEST-PS-031-09.T11 | load | PS-031-08.R01, PS-031-08.R02, PS-031-08.R03 | hash a 5 MiB attachment and stream a 100 MiB external file, run 100 mixed commands on throttled mobile profile | attachment hashing ≤ 150 ms in worker, no UI slice over 50 ms, command p95 ≤ 150 ms, no telemetry request |
 
 ## Dependencies
 
-Module depends on: F03.S02.M01, F09.S01.M01, F08.S01.M03, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F03.S02.M01, F09.S01.M01, F09.S01.M03, F08.S01.M03, F07.S01.M01, F07.S02.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

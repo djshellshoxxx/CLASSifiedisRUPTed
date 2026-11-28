@@ -7,15 +7,15 @@
 ## Requirements
 
 - **PS-127-10.R01** Operator configuration exports contain secret names, sources and rotation dates but never values, and backups never contain secret files.
-- **PS-127-10.R02** Restoring a relay from backup requires the operator to provide secrets again, and the relay refuses to start without them.
+- **PS-127-10.R02** Restoring a relay from backup requires the operator to provide secrets again, including every data-key version that still wraps restored objects, and the relay refuses to start without them.
 - **PS-127-10.R03** Scanner rules and the secret manifest are versioned; rule changes keep the previous rule set available for 180 days for comparison.
 
 ## Specification
 
-- **export:** Relay configuration export lists the secret manifest (name, purpose, minimum size, source kind, last rotation date); values are never included.
+- **export:** Relay configuration export lists the secret manifest (name, purpose, kind, minimum size, source kind, last rotation date, objects per data-key version); values are never included.
 - **import:** Manifest import validates names and minimums; unknown or malformed entries are rejected with VALIDATION_FAILED at configuration load.
-- **backup:** Secrets are excluded from relay backups by design (CTR-IOX-001 IOX-3 covers data, not credentials); operators back up secrets in their own secret store.
-- **migration rollback:** Manifest changes are additive; rollback to the previous release ignores new optional secrets; removing a secret requires a documented deprecation of one release.
+- **backup:** Secrets are excluded from relay backups by design (CTR-IOX-001 IOX-3 covers data, not credentials); operators back up secrets, including old data-key versions until verify-rewrap reports zero, in their own secret store.
+- **migration rollback:** Manifest changes are additive; rollback to the previous release ignores new optional secrets; removing a secret requires a documented deprecation of one release; the variable prefix is RELAY_SECRET_ to match the RELAY_* configuration of F15.S02.M01.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

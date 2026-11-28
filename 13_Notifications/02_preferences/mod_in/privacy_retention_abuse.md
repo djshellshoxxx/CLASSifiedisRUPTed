@@ -6,30 +6,32 @@
 
 ## Requirements
 
-- **PS-106-07.R01** The in-app column and the existence of preferences for categories never leave the device; relays learn only seven booleans per channel for users who consented to that channel.
+- **PS-106-07.R01** The in-app column and the other bucket never leave the device, and a relay learns only the eight booleans of each channel consented there, for users who consented to that channel.
 - **PS-106-07.R02** Mirror statements are signed and contain no content, no thread or listing identifiers and no schedule.
-- **PS-106-07.R03** Preferences are deleted from the relay 30 days after the channel consent ends and on vault wipe requests.
+- **PS-106-07.R03** Preferences are deleted from the relay as soon as the last consent for that channel at that relay ends, including when the deletion sign-step withdrawals are registered.
 
 ## Specification
 
 **Data classification**
-- NotificationPreference: P2; in-app flags device only; push and email flags mirrored to consented relays.
+- NotificationPreference vault record: P2; in-app flags device only.
+- Relay copy: P2 for the consented relay only; one channel column of 8 booleans per device chain.
 
 **Retention**
 - Vault records: RET-STANDARD until the user deletes the vault.
-- Relay mirror: deleted 30 days after the corresponding channel consent ends.
+- Relay copy: deleted at once when the last consent for that channel at that relay ends.
 
 **Threats and controls**
 
 | ID | Threat | Control |
 |---|---|---|
-| T01 | Relay learns usage patterns from the matrix | only seven booleans per channel are mirrored and only to relays with consent; the UI states this |
-| T02 | Attacker disables a victim's security alerts | edits require the vault; mirror requires a device-key signature; in-app security cannot be turned off; push security can be disabled only by the owner and the UI warns |
-| T03 | Replay of an old mirror to re-enable categories | strictly increasing seq per user at the relay |
+| T01 | Relay learns usage patterns from the matrix | only the consented channel's eight booleans are mirrored and only to relays with that consent; the UI states this |
+| T02 | Attacker disables a victim's security alerts | edits require the vault; mirror requires an active device-key signature; in-app security cannot be turned off; push security can be disabled only by the owner and the UI warns |
+| T03 | Replay of an old mirror or a forked chain to re-enable categories | seq and prev chain per device key; stale replays ignored, forks refused |
 | T04 | Dark patterns re-enabling categories after updates | defaults apply only to new vaults and to categories added later; existing user choices are never reset by app updates |
+| T05 | A stolen device key mirrors a matrix that silences security push | revoked keys are refused and their rows stop being effective |
 
 **Abuse controls**
-- Rate limit 60 edits per hour per vault and 30 mirror calls per hour per user at the relay.
+- Rate limit 60 edits per hour per vault and 30 mirror calls per hour per user at the relay through RateLimitPort (F12.S03.M03).
 - Relay can refuse mirror from blocked device keys under its hosting policy.
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
@@ -38,9 +40,9 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-106-09.T09 | abuse | PS-106-07.R01, PS-106-07.R02, PS-106-07.R03 | inspect mirror statement and relay storage; app update with a new category | only 7 booleans per channel present; user choices preserved |
-| TEST-PS-106-09.T10 | abuse | PS-106-07.R03, PS-106-02.R03 | 61st edit in an hour | RATE_LIMITED |
+| TEST-PS-106-09.T09 | abuse | PS-106-07.R01, PS-106-07.R02, PS-106-05.R02 | inspect mirror statements and relay storage at R (push only) and R2; app update with a new category | R holds only push booleans and no email flags; R2 one column per channel; no in-app column or other bucket anywhere; user choices preserved |
+| TEST-PS-106-09.T10 | abuse | PS-106-07.R03, PS-106-02.R03 | relay-local opted_out for the last push consent at R; fake clock advanced 24 h; 61st edit in an hour | R's push rows deleted at once and absent after 24 h; RATE_LIMITED |
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F11.S01.M01, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -13,14 +13,15 @@
 ## Specification
 
 **Metrics**
-- classrup_services_slot_holds_total{outcome=held|committed|released|expired} (local counter)
+- classrup_services_slot_holds_total{outcome=held|extended|reheld|committed|released|expired} (local counter)
 - classrup_services_slot_conflicts_total (local counter)
+- classrup_services_slot_reconfirmations_pending (local gauge)
 
 **Logs**
 - info slot.held {holdId, calendarId, correlationId} in the local diagnostics log - no client identity.
 
 **Budgets**
-- list_slots for 31 days p95 ≤ 50 ms; hold/commit p95 ≤ 100 ms; set_rules p95 ≤ 150 ms.
+- list_slots for 31 days p95 ≤ 50 ms; hold, extend and commit p95 ≤ 100 ms; set_rules p95 ≤ 150 ms.
 - Expiry sweep over 5 000 holds ≤ 100 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -33,4 +34,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F03.S01.M01, F07.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F08.S01.M01, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,32 +1,40 @@
-# F10.S01 — data_controls
+# F10.S01 — 01_data_controls
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F10.
+**Status:** SPECIFIED. **Parent:** [F10](../SPEC.md).
 
-## Purpose and business behavior
-Provide data_controls as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_consent
-- mod_retention
-- mod_export
-- mod_delete
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F10.S01.M01 | [Privacy consent](mod_consent/SPEC.md) | SPECIFIED | Purpose-based consents (federation, notifications email/push, analytics none-by-default, precise location sharing) with versioned policy text hash. |
+| F10.S01.M02 | [Retention and legal hold](mod_retention/SPEC.md) | SPECIFIED | Retention class enforcement sweeps, jurisdiction overrides, legal hold with two-person approval. |
+| F10.S01.M03 | [Data export](mod_export/SPEC.md) | SPECIFIED | Orchestrate per-module export sections into classrup-export/v1 bundle (CTR-IOX-001), signed, expiring download (7 days). |
+| F10.S01.M04 | [Account and data deletion](mod_delete/SPEC.md) | SPECIFIED | Deletion with 14-day grace, tombstones, crypto-shred, federation tombstone propagation, evidence retained per RET-EVIDENCE pseudonymized. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/privacy` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| notify.channel.opted_out | F13.S02.M03 | F10.S01.M01 | external |
+| security.role.revoked | F16.S01.M01 | F10.S01.M02 | external |
+| platform.tenant.configured | F15.S04.M03 | F10.S01.M02 | external |
+| governance.jurisdiction_profile.activated | F18.S01.M01 | F10.S01.M02 | external |
+| federation.tombstone.applied | F11.S01.M02 | F10.S01.M02 | external |
+| privacy.deletion.requested | F10.S01.M04 | F10.S01.M03 | internal |
+| privacy.deletion.completed | F10.S01.M04 | F10.S01.M03 | internal |
+| identity.device_key.revoked | F07.S01.M01 | F10.S01.M03 | external |
+| mutiny.cycle.completed | F02.S03.M04 | F10.S01.M04 | external |
+| mutiny.cycle.cancelled | F02.S03.M03 | F10.S01.M04 | external |
+| commerce.deal.completed | F09.S01.M01 | F10.S01.M04 | external |
+| commerce.deal.cancelled | F09.S01.M01 | F10.S01.M04 | external |
+| commerce.dispute.resolved | F09.S02.M02 | F10.S01.M04 | external |
+| rentals.rental.closed | F05.S02.M02 | F10.S01.M04 | external |
+| rentals.reservation.cancelled | F05.S01.M01 | F10.S01.M04 | external |
+| services.booking.completed | F03.S02.M02 | F10.S01.M04 | external |
+| services.booking.cancelled | F03.S02.M01 | F10.S01.M04 | external |

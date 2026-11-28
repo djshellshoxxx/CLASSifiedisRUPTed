@@ -9,11 +9,12 @@
 - **PS-014-07.R01** No roster field, event or error reveals that a block exists or who holds it; the principal's own block list never leaves the vault.
 - **PS-014-07.R02** The roster holds pseudonym DIDs and relay ids only and is retained as evidence for 2 years with its subject.
 - **PS-014-07.R03** Subject spam against a person is limited by the principal-side limit of 5 open subjects and by recipients' local filtering.
+- **PS-014-07.R04** The module registers ExportSectionPort (section mutiny.parties), DeletionPort and RetentionPurgePort with F10 (N6), annotates every ProposalParty field with its F10.S02.M02 class, and on privacy.deletion.completed replaces the erased DID with the deletion pseudonym in retained rosters.
 
 ## Specification
 
 **Data classification**
-- ProposalParty: P2; DIDs and relay routing hints only.
+- ProposalParty: P2; DIDs and relay routing hints only; field classes annotated per F10.S02.M02.
 
 **Retention**
 - RET-EVIDENCE with the subject (2 years after last related activity).
@@ -39,7 +40,8 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 |---|---|---|---|---|
 | TEST-PS-014-09.T03 | contract | PS-014-02.R02, PS-014-07.R01 | roster containing a locally blocked DID | BLOCKED_PARTY with params that do not include any DID |
 | TEST-PS-014-09.T10 | abuse | PS-014-07.R02, PS-014-07.R03 | 11 proposals from one DID in 24 h; 6th open subject by one proposer | quarantine and MUTINY_PARTY_LIMIT |
+| TEST-PS-014-09.T15 | integration | PS-014-07.R04, PS-014-07.R02 | F10 export, deletion of a party and retention sweep | section mutiny.parties exported; erased DID pseudonymized and mailbox hints dropped; rows purged only after RET-EVIDENCE |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

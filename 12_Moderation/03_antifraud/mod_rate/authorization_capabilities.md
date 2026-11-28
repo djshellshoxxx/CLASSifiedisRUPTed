@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-099-05.R01** Relay policy: only relay operators change policy and reset buckets; any caller can read the status of their own bucket.
-- **PS-099-05.R02** Vault policy: only the local principal changes local UX throttles, and local throttles never apply to or report on other parties.
+- **PS-099-05.R02** Vault policy: only the local principal changes local UX guards, and local guards never apply to or report on other parties.
 - **PS-099-05.R03** The consume port runs for every request including anonymous ones, keyed by IP prefix only for anonymous requests.
 
 ## Specification
@@ -19,7 +19,7 @@
 | moderation.ratepolicy.read | operator, local principal | relay role operator, or vault unlocked |
 | moderation.ratebucket.read_own | member, anonymous | caller's own key hash or IP prefix hash only |
 
-Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
+Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Verification
 

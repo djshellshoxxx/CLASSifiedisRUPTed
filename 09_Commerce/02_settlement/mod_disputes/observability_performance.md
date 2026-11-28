@@ -15,13 +15,14 @@
 **Metrics**
 - Local diagnostics: classrup_commerce_disputes_total{status}
 - Local diagnostics: classrup_commerce_dispute_deadline_overdue (gauge)
+- Local diagnostics: classrup_commerce_dispute_statements_total{outcome=applied|stored_blocked|quarantined|dropped}
 - Relay only: classrup_commerce_mediator_directory_requests_total
 
 **Logs**
 - info dispute.status {caseId, from, to, correlationId} — no descriptions, notes or evidence content.
 
 **Budgets**
-- open, propose, accept p95 ≤ 120 ms local commit; evidence statement commit p95 ≤ 100 ms excluding blob upload.
+- open, propose, accept p95 ≤ 120 ms local commit; evidence statement commit p95 ≤ 100 ms excluding metadata stripping and blob upload.
 - Case timeline render for 200 statements ≤ 200 ms; sweep over 1 000 cases ≤ 500 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
@@ -34,4 +35,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F09.S01.M01, F09.S02.M01, F09.S03.M03, F07.S01.M01, F07.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S01.M01, F09.S02.M01, F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F16.S02.M03, F15.S02.M03, F10.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

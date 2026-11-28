@@ -1,31 +1,31 @@
-# F07.S01 — accounts
+# F07.S01 — 01_accounts
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F07.
+**Status:** SPECIFIED. **Parent:** [F07](../SPEC.md).
 
-## Purpose and business behavior
-Provide accounts as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_pseudonyms
-- mod_sessions
-- mod_recovery
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F07.S01.M01 | [Pseudonymous accounts](mod_pseudonyms/SPEC.md) | SPECIFIED | Account creation with user-chosen pseudonym (unique per tenant, 3..32 chars, confusable check), device key registration, pseudonym change cooldown 30 days. |
+| F07.S01.M02 | [Sessions](mod_sessions/SPEC.md) | SPECIFIED | Challenge-response login, opaque tokens hashed at rest, idle/absolute expiry, list and revoke sessions (CTR-CAP-001). |
+| F07.S01.M03 | [Account recovery](mod_recovery/SPEC.md) | SPECIFIED | Recovery kit: encrypted recovery key blob + verifier; recovery adds a new device key and revokes others on request; rate limited; 72 h notification delay to existing devices. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/identity` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| privacy.deletion.completed | F10.S01.M04 | F07.S01.M01 | external |
+| identity.device_key.revoked | F07.S01.M01 | F07.S01.M02 | internal |
+| identity.recovery.completed | F07.S01.M03 | F07.S01.M02 | internal |
+| identity.portable_doc.published | F07.S02.M01 | F07.S01.M02 | external |
+| security.role.assigned | F16.S01.M01 | F07.S01.M02 | external |
+| security.role.revoked | F16.S01.M01 | F07.S01.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F07.S01.M02 | external |
+| identity.portable_doc.published | F07.S02.M01 | F07.S01.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F07.S01.M03 | external |

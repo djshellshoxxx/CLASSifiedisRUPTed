@@ -1,31 +1,40 @@
 # F16 — Security architecture
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** PROJECT.
+**Status:** SPECIFIED. **Parent:** [ClassRup](../PROJECT_SPEC.md). **Package slug:** `security`.
 
-## Purpose and business behavior
-Provide security architecture as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Subfeatures
 
-## Scope
-- 01_authz
-- 02_cryptography
-- 03_assurance
+- [F16.S01 01_authz](01_authz/SPEC.md) — 2 modules
+- [F16.S02 02_cryptography](02_cryptography/SPEC.md) — 3 modules
+- [F16.S03 03_assurance](03_assurance/SPEC.md) — 3 modules
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+The feature is enabled by flag `F16` (CTR-FLG-001); each module can be disabled independently when no enabled module depends on it. Upstream features: F07, F08, F10, F11, F12, F15, F18.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Cross-subfeature and external events
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| identity.session.revoked | F07.S01.M02 | F16.S01.M01 | external |
+| identity.portable_doc.published | F07.S02.M01 | F16.S01.M01 | external |
+| moderation.action.applied | F12.S02.M01 | F16.S01.M01 | external |
+| moderation.action.reverted | F12.S02.M01 | F16.S01.M01 | external |
+| privacy.legal_hold.placed | F10.S01.M02 | F16.S01.M01 | external |
+| privacy.legal_hold.released | F10.S01.M02 | F16.S01.M01 | external |
+| identity.device_key.added | F07.S01.M01 | F16.S02.M02 | external |
+| identity.device_key.revoked | F07.S01.M01 | F16.S02.M02 | external |
+| identity.portable_doc.published | F07.S02.M01 | F16.S02.M02 | external |
+| federation.peer.added | F11.S03.M01 | F16.S02.M02 | external |
+| federation.peer.removed | F11.S03.M01 | F16.S02.M02 | external |
+| platform.relay_identity.rotated | F15.S02.M01 | F16.S02.M02 | external |
+| platform.relay_identity.rotated | F15.S02.M01 | F16.S03.M02 | external |
+| security.key.revoked | F16.S02.M02 | F16.S03.M02 | internal |
+| moderation.rate.exceeded | F12.S03.M03 | F16.S03.M02 | external |
+| federation.record.rejected | F11.S01.M02 | F16.S03.M02 | external |
+| federation.peer.suspended | F11.S03.M01 | F16.S03.M02 | external |
+| identity.session.revoked | F07.S01.M02 | F16.S03.M02 | external |
+| security.role.assigned | F16.S01.M01 | F16.S03.M02 | internal |
+| security.role.revoked | F16.S01.M01 | F16.S03.M02 | internal |

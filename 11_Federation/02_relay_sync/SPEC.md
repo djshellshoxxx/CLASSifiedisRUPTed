@@ -1,31 +1,36 @@
-# F11.S02 — relay_sync
+# F11.S02 — 02_relay_sync
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F11.
+**Status:** SPECIFIED. **Parent:** [F11](../SPEC.md).
 
-## Purpose and business behavior
-Provide relay_sync as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_delivery
-- mod_dedup
-- mod_conflicts
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F11.S02.M01 | [Relay delivery](mod_delivery/SPEC.md) | SPECIFIED | Push batches to peers with retries/backoff, per-peer quotas, pull catch-up by cursor. |
+| F11.S02.M02 | [Federated dedup](mod_dedup/SPEC.md) | SPECIFIED | cid dedup, seq/prev chain ordering, gap buffering 24 h. |
+| F11.S02.M03 | [Federated conflicts](mod_conflicts/SPEC.md) | SPECIFIED | Fork detection (two envelopes same author/seq), origin-wins policy, quarantine and operator review. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/federation` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| federation.record.accepted | F11.S01.M02 | F11.S02.M01 | external |
+| federation.tombstone.applied | F11.S01.M02 | F11.S02.M01 | external |
+| federation.peer.added | F11.S03.M01 | F11.S02.M01 | external |
+| federation.peer.suspended | F11.S03.M01 | F11.S02.M01 | external |
+| federation.peer.reinstated | F11.S03.M01 | F11.S02.M01 | external |
+| federation.peer.removed | F11.S03.M01 | F11.S02.M01 | external |
+| federation.account.moved | F11.S03.M03 | F11.S02.M01 | external |
+| identity.portable_doc.published | F07.S02.M01 | F11.S02.M01 | external |
+| privacy.consent.withdrawn | F10.S01.M01 | F11.S02.M01 | external |
+| platform.flag.changed | F15.S04.M02 | F11.S02.M01 | external |
+| federation.account.moved | F11.S03.M03 | F11.S02.M03 | external |
+| identity.portable_doc.published | F07.S02.M01 | F11.S02.M03 | external |
+| federation.peer.suspended | F11.S03.M01 | F11.S02.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F11.S02.M03 | external |

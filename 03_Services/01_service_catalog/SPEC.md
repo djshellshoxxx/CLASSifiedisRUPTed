@@ -1,30 +1,31 @@
-# F03.S01 — service_catalog
+# F03.S01 — 01_service_catalog
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F03.
+**Status:** SPECIFIED. **Parent:** [F03](../SPEC.md).
 
-## Purpose and business behavior
-Provide service_catalog as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_skills
-- mod_availability
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F03.S01.M01 | [Service skills catalog](mod_skills/SPEC.md) | SPECIFIED | Service offerings: skill taxonomy, rate (hourly/fixed Money), service area as L1/L2 region, credentials as self-attested claims. |
+| F03.S01.M02 | [Service availability](mod_availability/SPEC.md) | SPECIFIED | Weekly recurring slots + exceptions in provider time zone; slot holds during quote acceptance. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/services` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| bazaar.listing.unpublished | F01.S01.M03 | F03.S01.M01 | external |
+| bazaar.listing.expired | F01.S01.M04 | F03.S01.M01 | external |
+| identity.device_key.revoked | F07.S01.M01 | F03.S01.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S01.M01 | external |
+| services.quote.declined | F03.S02.M01 | F03.S01.M02 | external |
+| services.quote.expired | F03.S02.M01 | F03.S01.M02 | external |
+| services.booking.cancelled | F03.S02.M01 | F03.S01.M02 | external |
+| identity.block.added | F07.S02.M02 | F03.S01.M02 | external |
+| identity.device_key.revoked | F07.S01.M01 | F03.S01.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S01.M02 | external |

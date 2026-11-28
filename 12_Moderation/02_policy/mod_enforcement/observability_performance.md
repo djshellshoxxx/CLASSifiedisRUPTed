@@ -13,8 +13,8 @@
 ## Specification
 
 **Metrics**
-- classrup_moderation_cases_total{outcome=opened|actioned|no_action|duplicate}
-- classrup_moderation_actions_total{kind,outcome=applied|reverted|expired}
+- classrup_moderation_cases_total{source,outcome=opened|actioned|no_action|duplicate}
+- classrup_moderation_actions_total{kind,outcome=applied|reverted|expired|replaced}
 - classrup_moderation_case_queue_age_ms (gauge: oldest open case)
 - classrup_moderation_pending_notice (gauge)
 
@@ -35,4 +35,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F12.S02.M03, F12.S01.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S02.M03, F12.S01.M01, F12.S01.M02, F12.S03.M03, F06.S01.M01, F08.S01.M01, F07.S02.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

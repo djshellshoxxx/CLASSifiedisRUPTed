@@ -8,7 +8,7 @@
 
 - **PS-047-06.R01** All functions are pure, so repeated calls and retries give identical results.
 - **PS-047-06.R02** Invalid input returns an error and never a clamped or approximate value.
-- **PS-047-06.R03** No function allocates more than 512 cells or 4 KiB of working memory per call.
+- **PS-047-06.R03** No function returns more than 512 cells, and the work of cellsForRadius is bounded linearly by the size of its result.
 
 ## Specification
 
@@ -24,8 +24,9 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
+| TEST-PS-047-09.T04 | unit | PS-047-02.R01, PS-047-02.R03, PS-047-06.R02 | NaN, 91, -181, uppercase or invalid-letter cells, precision 7 | the documented error code each time and no clamped, rounded or partial result |
+| TEST-PS-047-09.T08 | unit | PS-047-03.R03, PS-047-06.R03 | cellsForRadius for every allowed radius at the antimeridian, near a pole and at the equator, with 4- and 5-character centers | sorted unique cells, wrap handled, count at most 512, operation count grows linearly with result length |
 | TEST-PS-047-09.T10 | property | PS-047-05.R01, PS-047-05.R03, PS-047-06.R01 | 200 runs of the same call sequence | byte-identical results, no I/O performed |
-| TEST-PS-047-09.T13 | unit | PS-047-09.R01, PS-047-09.R02, PS-047-09.R03, PS-047-06.R02, PS-047-06.R03 | traceability run over PS-047 | every requirement maps to a passing test; vectors file unchanged |
 
 ## Dependencies
 

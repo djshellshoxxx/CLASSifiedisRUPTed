@@ -16,7 +16,7 @@ _None._
 
 Vault policy: only the local principal's commands write the vault. Relay policy: relay commands are authorized by the bus before storage is touched; relay tenants isolate hosted data per relay tenant.
 
-Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
+Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Verification
 

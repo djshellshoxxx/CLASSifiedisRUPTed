@@ -20,6 +20,7 @@
 | V04 | decimal-string parse has at most the currency decimals fractional digits unless an explicit rounding mode is given | COMMERCE_MONEY_PRECISION_LOSS |
 | V05 | result magnitude is at most 38 digits | COMMERCE_MONEY_OVERFLOW |
 | V06 | rounding mode is HALF_EVEN, or FLOOR only for fee-cap operations | COMMERCE_MONEY_INVALID |
+| V07 | maxAmount receives a currencyDef whose code is a non-empty registry code and whose decimals is an integer from 0 to 36 (the F09.S03.M01 range) | COMMERCE_MONEY_INVALID |
 
 ## Verification
 
@@ -27,6 +28,7 @@
 |---|---|---|---|---|
 | TEST-PS-074-09.T01 | unit | PS-074-01.R01, PS-074-01.R02, PS-074-02.R01 | parse valid and invalid strings including '+1', '01', '1.0', '1e3', '-0' and a 39-digit value | valid values round-trip; each invalid input returns COMMERCE_MONEY_INVALID or COMMERCE_MONEY_OVERFLOW |
 | TEST-PS-074-09.T02 | unit | PS-074-02.R02, PS-074-02.R03, PS-074-01.R03 | invalid rate, empty weights, all-zero weights, mixed currencies | documented error returned or programmer error thrown |
+| TEST-PS-074-09.T16 | property | PS-074-01.R04, PS-074-02.R01 | maxAmount for decimals 0 to 36 including EUR 2, JPY 0, BTC 8, ETH 18, USDC 6 and a 36-decimal asset, plus decimals -1, 37 and 2.5 | 10^(10 + decimals) for decimals up to 27 and 10^38 - 1 above, always a canonical amount of at most 38 digits that parseMinor accepts; out-of-range decimals return COMMERCE_MONEY_INVALID; identical results in the shared JSON vectors |
 
 ## Dependencies
 

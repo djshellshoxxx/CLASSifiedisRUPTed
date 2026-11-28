@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section commerce.currencies in the vault export classrup-export/v1; one line per CurrencyDef (schema classrup.commerce.currency_def/v1).
-- **import:** Rows with a code already present must match decimals, kind and chain binding exactly; otherwise the import fails with COMMERCE_CURRENCY_IMMUTABLE.
+- **export:** ExportSectionPort section commerce.currencies in the vault export classrup-export/v1; one line per CurrencyDef (schema classrup.commerce.currency_def/v1) including descriptorDigest and origin.
+- **import:** Rows with a code already present must match decimals, kind and chain binding exactly; otherwise the import fails with COMMERCE_CURRENCY_IMMUTABLE. descriptorDigest is recomputed on import and must equal the exported value.
 - **backup:** The vault export is the primary backup (IOX-6); relays keep no per-user registry.
-- **migration rollback:** ISO snapshot updates add rows or mark them retired only; no decimals change. Rollback to the previous release is safe because the older snapshot rows remain valid.
+- **migration rollback:** ISO snapshot updates add rows or mark them retired only; no decimals change. descriptorDigest is an additive field backfilled from existing rows; rollback to the previous release is safe because the older snapshot rows remain valid and older readers ignore the new field.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 

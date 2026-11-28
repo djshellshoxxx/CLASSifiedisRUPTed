@@ -21,7 +21,7 @@
 
 Vault policy: only the unlocked local principal dispatches vault commands; incoming signed statements are verified by their owning modules before any consumer runs. Relay policy: relay roles (member, moderator, operator, admin) exist per relay only (CAP-9) and are re-read on every request (CAP-6).
 
-Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
+Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Verification
 

@@ -14,13 +14,14 @@
 
 **Metrics**
 - Local diagnostics: classrup_commerce_currency_lookups_total{result=hit|miss|unknown}
-- classrup_commerce_currency_cache_age_ms (gauge)
+- Local diagnostics: classrup_commerce_currency_cache_age_ms (gauge)
+- Local diagnostics: classrup_commerce_currency_descriptor_checks_total{result=match|mismatch|unknown}
 
 **Logs**
 - info currency.status_changed {currencyId, code, from, to, correlationId}
 
 **Budgets**
-- get/list p95 ≤ 20 ms on IndexedDB; in-process cached resolve p99 ≤ 0.1 ms.
+- get/list p95 ≤ 20 ms on IndexedDB; in-process cached resolve and descriptor check p99 ≤ 0.1 ms.
 - Vault seed of 190 rows completes within 500 ms.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).

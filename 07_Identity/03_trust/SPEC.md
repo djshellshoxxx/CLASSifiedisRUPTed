@@ -1,30 +1,44 @@
-# F07.S03 — trust
+# F07.S03 — 03_trust
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F07.
+**Status:** SPECIFIED. **Parent:** [F07](../SPEC.md).
 
-## Purpose and business behavior
-Provide trust as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_reputation
-- mod_evidence
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F07.S03.M01 | [Reputation](mod_reputation/SPEC.md) | SPECIFIED | Two-sided reviews only after a completed transaction context (deal/cycle/booking/rental); summary counts and Bayesian average; sybil dampening by account age and linkage. |
+| F07.S03.M02 | [Trust evidence](mod_evidence/SPEC.md) | SPECIFIED | Self-attested and third-party signed claims (e.g. 'met in person', 'operator verified email'), no KYC storage. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/identity` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| commerce.deal.opened | F09.S01.M01 | F07.S03.M01 | external |
+| mutiny.cycle.committed | F02.S03.M01 | F07.S03.M01 | external |
+| services.booking.confirmed | F03.S02.M01 | F07.S03.M01 | external |
+| rentals.reservation.confirmed | F05.S01.M01 | F07.S03.M01 | external |
+| commerce.deal.completed | F09.S01.M01 | F07.S03.M01 | external |
+| mutiny.cycle.completed | F02.S03.M04 | F07.S03.M01 | external |
+| services.booking.completed | F03.S02.M02 | F07.S03.M01 | external |
+| rentals.rental.closed | F05.S02.M02 | F07.S03.M01 | external |
+| commerce.dispute.resolved | F09.S02.M02 | F07.S03.M01 | external |
+| mutiny.recovery.resolved | F02.S03.M04 | F07.S03.M01 | external |
+| commerce.deal.cancelled | F09.S01.M01 | F07.S03.M01 | external |
+| comms.meetup.no_show | F08.S03.M02 | F07.S03.M01 | external |
+| comms.meetup.no_show_contradicted | F08.S03.M02 | F07.S03.M01 | external |
+| federation.record.accepted | F11.S01.M02 | F07.S03.M01 | external |
+| federation.tombstone.applied | F11.S01.M02 | F07.S03.M01 | external |
+| identity.portable_doc.published | F07.S02.M01 | F07.S03.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F07.S03.M01 | external |
+| federation.tombstone.applied | F11.S01.M02 | F07.S03.M02 | external |
+| identity.portable_doc.published | F07.S02.M01 | F07.S03.M02 | external |
+| identity.device_key.revoked | F07.S01.M01 | F07.S03.M02 | external |
+| federation.peer.added | F11.S03.M01 | F07.S03.M02 | external |
+| federation.peer.removed | F11.S03.M01 | F07.S03.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F07.S03.M02 | external |

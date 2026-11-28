@@ -12,7 +12,7 @@
 
 ## Specification
 
-- **export:** Section commerce.reconciliation in classrup-export/v1; one line with the latest completed ReconciliationReport (schema classrup.commerce.reconciliation_report/v1).
+- **export:** ExportSectionPort section commerce.reconciliation in classrup-export/v1; one line with the latest completed ReconciliationReport (schema classrup.commerce.reconciliation_report/v1).
 - **import:** Imported report is stored with status completed and an imported flag, never merged; a new run is scheduled immediately after import.
 - **backup:** Derived data; recomputable from Deals, claims, observations and receipts, so the vault export of those is the backup.
 - **migration rollback:** Additive fields only; reports older than 30 days are purged on rollback or upgrade because they are recomputable.
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

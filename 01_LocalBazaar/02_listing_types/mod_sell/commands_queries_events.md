@@ -16,7 +16,7 @@
 
 | Command | Capability | Input | Output | Errors | Emits | Idempotent |
 |---|---|---|---|---|---|---|
-| `bazaar.sell_terms.define` | bazaar.sell_terms.define | [vault-local] { listingId, expectedRevision? (absent on first definition), askingPrice, acceptedCurrencies, paymentMethods, cryptoAssets?, negotiable?, minOffer?, pickup?, delivery?, deliveryNote? } | { sellTermsId, revision, priceChanged, unsentChanges } | VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RATE_LIMITED, BAZAAR_SELL_CURRENCY_UNKNOWN, BAZAAR_SELL_CRYPTO_ASSET_REQUIRED, BAZAAR_SELL_MIN_OFFER_INVALID, BAZAAR_SELL_PAYMENT_DETAILS_PUBLIC | bazaar.sell_terms.set | yes (Idempotency-Key) |
+| `bazaar.sell_terms.define` | bazaar.sell_terms.define | [vault-local] { listingId, expectedRevision? (absent on first definition), askingPrice, acceptedCurrencies, paymentMethods, cryptoAssets?, negotiable?, barterAcceptable?, minOffer?, pickup?, delivery?, deliveryNote? } | { sellTermsId, revision, priceChanged, unsentChanges } | VALIDATION_FAILED, NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, RATE_LIMITED, BAZAAR_SELL_CURRENCY_UNKNOWN, BAZAAR_SELL_CRYPTO_ASSET_REQUIRED, BAZAAR_SELL_MIN_OFFER_INVALID, BAZAAR_SELL_PAYMENT_DETAILS_PUBLIC, BAZAAR_EDIT_REVISION_LIMIT | bazaar.sell_terms.set | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -29,11 +29,13 @@
 
 | Type | Privacy | Payload |
 |---|---|---|
-| `bazaar.sell_terms.set` | P0 | { listingId, ownerId, revision, askingPrice, acceptedCurrencies, paymentMethods, negotiable, priceChanged } |
+| `bazaar.sell_terms.set` | P0 | { listingId, ownerId, revision, askingPrice, acceptedCurrencies, paymentMethods, negotiable, barterAcceptable, priceChanged } |
 
 ### Events consumed
 
-_None._
+| Type | Effect |
+|---|---|
+| `bazaar.listing.deleted` | schedule purge of the listing's SellTerms 30 days after deletion and keep a tombstone {id, type, deletedAt} for 180 days |
 
 ### Module errors
 
@@ -46,12 +48,14 @@ _None._
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
+**Note:** Privacy ports (N6): the module registers ExportSectionPort (section bazaar.sell_terms), DeletionPort (plan: purge terms of own listings) and RetentionPurgePort (purge 30 days after the listing is deleted, tombstone 180 days) with F10.S01.M03, F10.S01.M04 and F10.S01.M02. SellTerms hold no counterparty data, so nothing is pseudonymized.
+
 ### Example
 
 ```
 vault.dispatch("bazaar.sell_terms.define", { "listingId": "0192f3a4-5b6c-7d8e-9f01-23456789abcd",
   "askingPrice": { "amount": "5000", "currency": "EUR" }, "acceptedCurrencies": ["EUR"], "paymentMethods": ["cash", "external"],
-  "negotiable": true, "minOffer": { "amount": "3500", "currency": "EUR" }, "pickup": true },
+  "negotiable": true, "barterAcceptable": true, "minOffer": { "amount": "3500", "currency": "EUR" }, "pickup": true },
   idempotencyKey: "0192f3a4-0000-7000-8000-000000000071")
 => { "sellTermsId": "0192f3ac-...", "revision": 1, "priceChanged": false, "unsentChanges": false }
 ```
@@ -65,4 +69,4 @@ vault.dispatch("bazaar.sell_terms.define", { "listingId": "0192f3a4-5b6c-7d8e-9f
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M02, F09.S03.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M02, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

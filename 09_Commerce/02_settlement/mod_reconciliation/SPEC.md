@@ -10,7 +10,7 @@ Periodically compares, inside the user's vault, the Deals, payment claims, chain
 
 ## Responsibilities
 
-- [object Object]
+- Own ReconciliationReport: a derived, recomputable snapshot with counts and a list of mismatches, produced daily, on demand and incrementally after key events.
 - Detect ten mismatch kinds with severities and emit commerce.reconciliation.mismatch_found once per new mismatch.
 - Let the user dismiss a mismatch with a note so it is not re-announced, while it stays visible in the report.
 - Keep scanning cost bounded (500 records per tick, yielding to the UI) so large vaults stay responsive.
@@ -55,11 +55,11 @@ Periodically compares, inside the user's vault, the Deals, payment claims, chain
 - Commands: `commerce.reconciliation.run`, `commerce.reconciliation.dismiss`
 - Queries: `commerce.reconciliation.latest`, `commerce.reconciliation.list`
 - Emits: `commerce.reconciliation.mismatch_found`
-- Consumes: `commerce.deal.completed`, `commerce.payment.finalized`, `commerce.payment.reorged`, `commerce.receipt.issued`, `commerce.payment.expired`
+- Consumes: `commerce.deal.completed`, `commerce.payment.finalized`, `commerce.payment.reorged`, `commerce.receipt.issued`, `commerce.payment.expired`, `commerce.payment.failed`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001
+F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001
 
 ## Process specifications and aggregation
 
@@ -71,15 +71,15 @@ F09.S01.M01, F09.S01.M03, F09.S02.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CT
 | PS-072-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-072-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-072-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-072-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-072-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-072-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-072-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-072-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
 
-Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/commerce/src/settlement/reconciliation/index.ts`.
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 defines the declared operations or local library interface, constrained by the authority rules in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/commerce/src/settlement/reconciliation/index.ts`.
 
 ## Acceptance criteria
 
-- All tests T01 to T15 pass in CI.
+- All tests T01 to T16 pass in CI.
 - The module never writes to another module's records (write-spy test).
 - Each mismatch kind is detected exactly when its rule holds.

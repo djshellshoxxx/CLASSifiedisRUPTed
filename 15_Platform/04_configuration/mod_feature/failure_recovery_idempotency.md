@@ -16,7 +16,7 @@
 - **concurrency:** No shared mutable state at runtime. In CI, generation runs once per build; concurrent runs write identical content.
 - **retries:** Nothing to retry at runtime; CI reruns on failure after the underlying edit is fixed.
 - **offline:** The registry is compiled into the app and works fully offline in the vault and without a relay.
-- **partial failure:** If validation passes but writing fails the build fails and nothing is published. If a module spec is missing, generation continues in normal mode with specMissing flagged and fails in strict mode.
+- **partial failure:** If validation passes but writing fails the build fails and nothing is published. If a module spec is missing, generation continues in normal mode with dependsOnKnown false and the module default off and unregistered, and fails in strict mode with PLATFORM_FEATURE_SPEC_MISSING.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -27,6 +27,7 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | TEST-PS-123-09.T04 | integration | PS-123-03.R02, PS-123-03.R03, PS-123-06.R02 | break validation in each pipeline step | generation fails, previous file untouched, nothing published |
 | TEST-PS-123-09.T07 | integration | PS-123-01.R03, PS-123-06.R01 | build twice from the same commit, then edit planning/modules.yaml without regenerating | identical bytes; stale check fails with PLATFORM_FEATURE_REGISTRY_STALE |
 | TEST-PS-123-09.T08 | integration | PS-123-06.R03, PS-123-02.R03 | vault of release N queries relay of release N+1 hash | mismatch reported informationally, work continues, unknown modules listed |
+| TEST-PS-123-09.T16 | unit | PS-123-02.R04, PS-123-06.R03 | fixture catalog where module X has no spec and module Y (default on) depends on X; generate in normal and strict mode | X has dependsOnKnown false, defaultState off, registered false; Y fails V04 with PLATFORM_FEATURE_DEFAULT_VIOLATION until it defaults off; strict mode fails with PLATFORM_FEATURE_SPEC_MISSING |
 
 ## Dependencies
 

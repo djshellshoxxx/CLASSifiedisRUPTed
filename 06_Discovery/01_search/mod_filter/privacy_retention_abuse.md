@@ -35,7 +35,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-044-09.T06 | integration | PS-044-01.R02, PS-044-07.R01 | compiled filter run against SQLite with 1 000 documents | returned set equals a brute-force JavaScript filter of the same data |
+| TEST-PS-044-09.T06 | integration | PS-044-01.R02, PS-044-07.R01, PS-044-01.R04 | compiled filters, including distanceKm 50 and 100 km and L1 documents, run against SQLite with 1 000 documents | returned set equals a brute-force JavaScript filter of the same data and is non-empty for 50 and 100 km |
 | TEST-PS-044-09.T07 | abuse | PS-044-07.R02, PS-044-07.R03, PS-044-08.R01 | 10 000 fuzz strings with SQL metacharacters and 5 000-item lists | no SQL injection, errors for oversize lists, validation under 1 ms p95 |
 
 ## Dependencies

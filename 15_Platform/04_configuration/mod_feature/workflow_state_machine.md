@@ -12,7 +12,7 @@
 
 ## Specification
 
-**Note:** No entity lifecycle. Generation pipeline steps: parse planning/modules.yaml, merge module.spec.yaml depends_on and scope, validate V01-V04 and V07, topologically order, canonicalize and hash, write registry.generated.json atomically.
+**Note:** No entity lifecycle. Generation pipeline steps: parse planning/modules.yaml, merge module.spec.yaml depends_on and scope (or mark dependsOnKnown false), derive surface, validate V01-V04 and V07-V09, topologically order, canonicalize and hash, write registry.generated.json atomically.
 
 ### Timeouts and scheduled transitions
 

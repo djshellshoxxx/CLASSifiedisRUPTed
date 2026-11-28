@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-142-04.R01** The module exposes pnpm test:compat (N-1 data and API), pnpm test:compat:browsers (matrix, nightly) and pnpm compat:schema-diff.
+- **PS-142-04.R01** The module exposes pnpm test:compat (N-1 data and API), pnpm test:compat:browsers (automated matrix, nightly and release), pnpm compat:schema-diff and pnpm compat:checklist <version>, which merges the signed manual cells from gates/manual/<version>/ into reports/compat.json.
 - **PS-142-04.R02** Exit codes: 0 pass, 1 compatibility failure, 2 matrix cell failure, 3 configuration failure.
 - **PS-142-04.R03** The OpenAPI diff compares the generated relay spec of the previous release tag with the working tree and fails on removed paths, removed fields or changed types.
 
@@ -38,6 +38,9 @@ _None._
 | QUALITY_COMPAT_UPGRADE_UNSAFE | 422 | no | vault upgrade lost or duplicated records (exit 1) |
 | QUALITY_COMPAT_BROWSER_FAILED | 422 | no | a browser matrix cell failed (exit 2) |
 | QUALITY_COMPAT_API_BREAKING | 422 | no | relay API diff shows a breaking change (exit 1) |
+| QUALITY_COMPAT_EXT_UNSAFE | 422 | no | a reader drops unknown payload keys, alters or over-admits ext, or accepts an unknown critical ext key (exit 1) |
+| QUALITY_COMPAT_ROLLBACK_UNSAFE | 422 | no | N-1 rollback after an IndexedDB version bump loses records, opens partially or offers no restore (exit 1) |
+| QUALITY_COMPAT_MATRIX_MISLABELED | 422 | no | a matrix cell lacks its engine source and version or an automated cell is labelled as a real Safari or Firefox stable release (exit 3) |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
 
@@ -51,7 +54,10 @@ $ pnpm test:compat
   schema diff: 1 additive field (mutiny.proposal.note)  OK
   openapi diff: 0 breaking  OK
 $ pnpm test:compat:browsers
-  chrome 150,149 OK | firefox 142,141 OK | safari 26,18 OK | ios-safari 16.4 push feature-detect OK
+  automated: chrome 150 (Chrome for Testing) OK | chrome 149 (Chrome for Testing) OK | chrome-beta 151 (Playwright channel) OK
+             firefox-engine Gecko 142.0 (Playwright build) OK | webkit-engine WebKit 26.0 (Playwright build, Safari-engine proxy) OK
+             webkit-engine push: feature-detect and content-free payload format OK
+  manual (gates/manual/0.3.0/): firefox 142, 141 | safari 26, 18 (macOS) | ios-safari 26, 18 | iOS 16.4+ installed-PWA push  -> pending checklist
 ```
 
 ## Verification
@@ -62,4 +68,4 @@ $ pnpm test:compat:browsers
 
 ## Dependencies
 
-Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03, F11.S01.M02, F11.S01.M03, F10.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

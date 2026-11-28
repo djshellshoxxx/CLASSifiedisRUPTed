@@ -7,19 +7,20 @@
 ## Requirements
 
 - **PS-082-08.R01** The CI check reports counts of threats, controls and tests, and the age of the last review.
-- **PS-082-08.R02** A review older than 90 days raises a CI warning for 14 days, then a failure.
+- **PS-082-08.R02** A review older than 90 days fails release candidate builds at once, while other builds warn on days 91 to 104 and fail from day 105.
 - **PS-082-08.R03** The check runs within the CI time budget.
 
 ## Specification
 
 **Metrics**
-- CI report: threats_total, threats_without_test, controls_unresolved, days_since_review
+- CI report: threats_total, threats_without_test, controls_unresolved, days_since_review, review_state=ok|warn|fail
 
 **Logs**
 - CI log lists each violation with file, entry ID and rule ID.
 
 **Budgets**
 - privacy-threat-check completes in ≤ 5 s for 100 entries; rendering Markdown ≤ 10 s.
+- Review age - non-release-candidate builds pass through day 90, warn on days 91 to 104 and fail from day 105; release candidate builds fail from day 91.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -27,7 +28,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-082-09.T12 | unit | PS-082-08.R01, PS-082-08.R02, PS-082-08.R03 | run on 100 entries with a 100-day-old review date | completes ≤ 5 s; warning on day 91 and failure after day 104 |
+| TEST-PS-082-09.T12 | unit | PS-082-08.R01, PS-082-08.R02, PS-082-08.R03 | run on 100 entries with review ages 90, 91, 104 and 105 days as a non-release-candidate build, and 90 and 91 days as a release candidate build | completes ≤ 5 s; non-RC passes at 90, warns at 91 and 104 and fails at 105; RC passes at 90 and fails at 91 |
 
 ## Dependencies
 

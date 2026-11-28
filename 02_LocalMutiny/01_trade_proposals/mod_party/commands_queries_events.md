@@ -41,6 +41,7 @@
 | `mutiny.proposal.revised` | verify roster equals the new head snapshot; on peer revisions create missing roster rows with origin peer |
 | `mutiny.cycle.declined` | mark the declining party left with reason declined |
 | `mutiny.cycle.participant_dropped` | mark the dropped party left with the coarse reason |
+| `privacy.deletion.completed` | pseudonymize the erased DID in retained rosters of terminal subjects and drop its mailbox hints |
 
 ### Module errors
 
@@ -75,4 +76,4 @@ mutiny.party.leave { "subjectId":"0192f400-…", "actorId":"did:key:z6MkCarol", 
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

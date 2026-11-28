@@ -1,31 +1,40 @@
-# F08.S01 — messaging
+# F08.S01 — 01_messaging
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F08.
+**Status:** SPECIFIED. **Parent:** [F08](../SPEC.md).
 
-## Purpose and business behavior
-Provide messaging as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_private
-- mod_threads
-- mod_attachments
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F08.S01.M01 | [Private messages](mod_private/SPEC.md) | SPECIFIED | End-to-end encrypted messages (x25519 + XChaCha20-Poly1305 via @noble), relay stores ciphertext only; size ≤ 8 KiB text; delivery receipts optional. |
+| F08.S01.M02 | [Conversation threads](mod_threads/SPEC.md) | SPECIFIED | Threads bound to a context (listing/proposal/cycle/booking/rental) with participant set; block enforcement; per-thread mute. |
+| F08.S01.M03 | [Message attachments](mod_attachments/SPEC.md) | SPECIFIED | Encrypted image attachments ≤ 5 MiB, metadata stripped before encryption, per-object key for crypto-shredding. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/comms` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| comms.thread.archived | F08.S01.M02 | F08.S01.M01 | internal |
+| identity.portable_doc.published | F07.S02.M01 | F08.S01.M01 | external |
+| identity.device_key.added | F07.S01.M01 | F08.S01.M01 | external |
+| identity.device_key.revoked | F07.S01.M01 | F08.S01.M01 | external |
+| identity.block.added | F07.S02.M02 | F08.S01.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F08.S01.M01 | external |
+| mutiny.party.joined | F02.S01.M02 | F08.S01.M02 | external |
+| mutiny.party.left | F02.S01.M02 | F08.S01.M02 | external |
+| mutiny.cycle.cancelled | F02.S03.M03 | F08.S01.M02 | external |
+| mutiny.cycle.completed | F02.S03.M04 | F08.S01.M02 | external |
+| services.booking.cancelled | F03.S02.M01 | F08.S01.M02 | external |
+| services.booking.completed | F03.S02.M02 | F08.S01.M02 | external |
+| rentals.rental.closed | F05.S02.M02 | F08.S01.M02 | external |
+| bazaar.listing.archived | F01.S01.M04 | F08.S01.M02 | external |
+| identity.block.added | F07.S02.M02 | F08.S01.M02 | external |
+| comms.message.deleted | F08.S01.M01 | F08.S01.M03 | internal |
+| federation.delivery.failed | F11.S02.M01 | F08.S01.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F08.S01.M03 | external |

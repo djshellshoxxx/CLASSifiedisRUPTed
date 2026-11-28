@@ -14,13 +14,14 @@
 
 _None._
 
-Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
+Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-127-09.T08 | abuse | PS-127-05.R01, PS-127-05.R02, PS-127-05.R03, PS-127-07.R02 | attempt to read secrets via any command or query; scanner run with write token | no route exposes secrets; scanner cannot publish |
+| TEST-PS-127-09.T02 | unit | PS-127-02.R01, PS-127-02.R03, PS-127-04.R01, PS-127-05.R01 | missing, ambiguous, permissive, symlinked, short secrets; checkSecretFile on a 0644 relay key file | documented SECURITY_SECRET_* code each; relay does not start |
+| TEST-PS-127-09.T08 | abuse | PS-127-05.R01, PS-127-05.R02, PS-127-05.R03 | attempt to read secrets via any command or query; scanner run with write token | no route exposes secrets; scanner cannot publish |
 
 ## Dependencies
 

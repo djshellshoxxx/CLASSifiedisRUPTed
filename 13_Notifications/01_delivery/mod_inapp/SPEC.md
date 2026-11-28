@@ -82,7 +82,7 @@ F13.S02.M04, F08.S01.M01, F08.S01.M02, F08.S03.M03, CTR-FED-001, CTR-ID-001, CTR
 | PS-103-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-103-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
 
-Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/notify/src/delivery/inapp/index.ts`.
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 defines the declared operations or local library interface, constrained by the authority rules in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/notify/src/delivery/inapp/index.ts`.
 
 ## Acceptance criteria
 

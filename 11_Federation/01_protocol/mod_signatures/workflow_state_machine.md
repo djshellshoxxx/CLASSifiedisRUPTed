@@ -12,7 +12,7 @@
 
 ## Specification
 
-**Note:** Stateless library; no entity lifecycle.
+**Note:** Stateless library; no entity lifecycle. The (keyid, nonce) replay memory is an injected NonceStore owned by the caller (relay inbox or vault sync engine) with 600 s expiry.
 
 ### Timeouts and scheduled transitions
 
@@ -22,7 +22,7 @@ _None._
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-085-09.T10 | unit | PS-085-03.R01, PS-085-03.R02, PS-085-03.R03, PS-085-04.R01, PS-085-04.R03, PS-085-05.R01, PS-085-05.R02, PS-085-05.R03, PS-085-06.R01 | call every function twice with identical input and inspect module for I/O | identical outputs, no network or filesystem access, Result returned, no event emitted |
+| TEST-PS-085-09.T10 | unit | PS-085-01.R01, PS-085-03.R01, PS-085-03.R02, PS-085-03.R03, PS-085-04.R01, PS-085-04.R03, PS-085-05.R01, PS-085-05.R03 | call every function twice with identical input and inspect module for I/O and key-store access | identical outputs, no network or filesystem access, no event emitted, private keys only received as call arguments |
 
 ## Dependencies
 

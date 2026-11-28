@@ -1,31 +1,63 @@
-# F02.S04 — value_balancing
+# F02.S04 — 04_value_balancing
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.
+**Status:** SPECIFIED. **Parent:** [F02](../SPEC.md).
 
-## Purpose and business behavior
-Provide value_balancing as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_mixed
-- mod_currency
-- mod_valuation
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F02.S04.M01 | [Mixed-value compensation](mod_mixed/SPEC.md) | SPECIFIED | Money/extra-item legs offsetting value gaps beyond tolerance; payment via F09 claims, never custody. |
+| F02.S04.M02 | [Barter currency normalization](mod_currency/SPEC.md) | SPECIFIED | Normalize declared values to cycle settlement currency using pinned FX quotes (F09.S03.M02), record quote IDs, expiry triggers re-consent. |
+| F02.S04.M03 | [Participant valuation](mod_valuation/SPEC.md) | SPECIFIED | Participant-declared values per item with optional reference (listing price), dispute-flagging of implausible values; never platform appraisal. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/mutiny` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| mutiny.cycle.committed | F02.S03.M01 | F02.S04.M01 | external |
+| mutiny.cycle.cancelled | F02.S03.M03 | F02.S04.M01 | external |
+| mutiny.cycle.declined | F02.S03.M01 | F02.S04.M01 | external |
+| mutiny.proposal.revised | F02.S01.M04 | F02.S04.M01 | external |
+| mutiny.leg.received | F02.S03.M04 | F02.S04.M01 | external |
+| commerce.payment.claimed | F09.S01.M01 | F02.S04.M01 | external |
+| commerce.payment.acknowledged | F09.S01.M01 | F02.S04.M01 | external |
+| commerce.payment.finalized | F09.S01.M03 | F02.S04.M01 | external |
+| commerce.payment.disputed | F09.S01.M01 | F02.S04.M01 | external |
+| commerce.payment.expired | F09.S01.M01 | F02.S04.M01 | external |
+| commerce.dispute.resolved | F09.S02.M02 | F02.S04.M01 | external |
+| commerce.dispute.withdrawn | F09.S02.M02 | F02.S04.M01 | external |
+| commerce.deal.cancelled | F09.S01.M01 | F02.S04.M01 | external |
+| mutiny.recovery.resolved | F02.S03.M04 | F02.S04.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S04.M01 | external |
+| mutiny.valuation.declared | F02.S04.M03 | F02.S04.M02 | internal |
+| mutiny.proposal.revised | F02.S01.M04 | F02.S04.M02 | external |
+| mutiny.cycle.committed | F02.S03.M01 | F02.S04.M02 | external |
+| mutiny.proposal.accepted | F02.S01.M01 | F02.S04.M02 | external |
+| mutiny.cycle.declined | F02.S03.M01 | F02.S04.M02 | external |
+| mutiny.cycle.cancelled | F02.S03.M03 | F02.S04.M02 | external |
+| mutiny.proposal.rejected | F02.S01.M01 | F02.S04.M02 | external |
+| mutiny.proposal.expired | F02.S01.M01 | F02.S04.M02 | external |
+| mutiny.proposal.withdrawn | F02.S01.M01 | F02.S04.M02 | external |
+| mutiny.revision.forked | F02.S01.M04 | F02.S04.M02 | external |
+| mutiny.lock.conflict_detected | F02.S03.M02 | F02.S04.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S04.M02 | external |
+| commerce.fx_quote.issued | F09.S03.M02 | F02.S04.M02 | external |
+| bazaar.listing.edited | F01.S01.M02 | F02.S04.M03 | external |
+| bazaar.sell_terms.set | F01.S02.M01 | F02.S04.M03 | external |
+| bazaar.listing.unpublished | F01.S01.M03 | F02.S04.M03 | external |
+| mutiny.cycle.locked | F02.S03.M02 | F02.S04.M03 | external |
+| mutiny.cycle.unlocked | F02.S03.M02 | F02.S04.M03 | external |
+| comms.consent.signed | F08.S02.M02 | F02.S04.M03 | external |
+| comms.consent.received | F08.S02.M02 | F02.S04.M03 | external |
+| mutiny.cycle.cancelled | F02.S03.M03 | F02.S04.M03 | external |
+| mutiny.cycle.completed | F02.S03.M04 | F02.S04.M03 | external |
+| mutiny.proposal.withdrawn | F02.S01.M01 | F02.S04.M03 | external |
+| mutiny.proposal.rejected | F02.S01.M01 | F02.S04.M03 | external |
+| privacy.consent.withdrawn | F10.S01.M01 | F02.S04.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S04.M03 | external |

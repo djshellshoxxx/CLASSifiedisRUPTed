@@ -12,7 +12,7 @@
 
 ## Specification
 
-**Note:** Receipts are immutable evidence records with no lifecycle; delivery state is carried by the sync outbox (prepared, transport_acknowledged, peer_accepted) and verification result by the verification field.
+**Note:** Receipts are immutable evidence records with no lifecycle; delivery state is carried by the sync outbox (prepared, transport_acknowledged, peer_accepted) and verification result, party binding and key status by the verification field.
 
 ### Timeouts and scheduled transitions
 
@@ -27,4 +27,4 @@ _None._
 
 ## Dependencies
 
-Module depends on: F09.S01.M01, F09.S03.M03, F07.S01.M01, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S01.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M03, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-IOX-001. Predecessor: [domain_schema.md](domain_schema.md).

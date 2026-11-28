@@ -15,7 +15,7 @@
 - **export:** reports/compat.json and compat.md; N-1 export bundles act as fixtures.
 - **import:** Imports N-1 export bundles (CTR-IOX-001) as fixtures; bundles of an unknown major version are refused with UNSUPPORTED_SCHEMA_VERSION.
 - **backup:** Fixtures in git for last 2 releases; reports 30 days in CI.
-- **migration rollback:** Fixtures are generated at each release tag before schema changes merge; rollback by git revert; app rollback to N-1 is tested for additive changes.
+- **migration rollback:** Fixtures are generated at each release tag before schema changes merge; rollback by git revert; app rollback to N-1 is tested per 06.R02 (no IndexedDB version bump - N-1 reads N data; with a bump - VersionError, then restore from the pre-upgrade export).
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -23,10 +23,10 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-142-09.T04 | unit | PS-142-02.R03, PS-142-10.R02 | statement with unknown optional field and with unknown major version | optional ignored; major refused with UNSUPPORTED_SCHEMA_VERSION; N export into N-1 refused clearly |
+| TEST-PS-142-09.T04 | unit | PS-142-02.R03, PS-142-10.R02 | statements with a payload unknown key outside ext, an unknown ext key of 4 KiB, ext of 4 KiB + 1 byte, an unknown key listed in ext.crit, and an unknown major version; an N export into N-1 | payload unknown key gives VALIDATION_FAILED; the 4 KiB ext is accepted, preserved byte-exact and cid and signature re-verify; oversize ext rejected; unknown critical ext refused; major refused with UNSUPPORTED_SCHEMA_VERSION; N export refused clearly by N-1; a reader that drops the unknown key fails with QUALITY_COMPAT_EXT_UNSAFE |
 | TEST-PS-142-09.T11 | integration | PS-142-07.R03, PS-142-10.R01 | modify a released fixture directory in a branch | rejected as append-only; reports retained 30 days |
 | TEST-PS-142-09.T15 | integration | PS-142-10.R03 | revert module in a branch | other suites unaffected; release gate fails closed without compat report |
 
 ## Dependencies
 
-Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03, F11.S01.M02, F11.S01.M03, F10.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

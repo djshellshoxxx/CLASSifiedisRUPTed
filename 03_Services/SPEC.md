@@ -1,30 +1,52 @@
 # F03 — Services marketplace
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** PROJECT.
+**Status:** SPECIFIED. **Parent:** [ClassRup](../PROJECT_SPEC.md). **Package slug:** `services`.
 
-## Purpose and business behavior
-Provide services marketplace as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Subfeatures
 
-## Scope
-- 01_service_catalog
-- 02_service_booking
+- [F03.S01 01_service_catalog](01_service_catalog/SPEC.md) — 2 modules
+- [F03.S02 02_service_booking](02_service_booking/SPEC.md) — 3 modules
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+The feature is enabled by flag `F03` (CTR-FLG-001); each module can be disabled independently when no enabled module depends on it. Upstream features: F01, F06, F07, F08, F09, F10, F11, F18.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Cross-subfeature and external events
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| bazaar.listing.unpublished | F01.S01.M03 | F03.S01.M01 | external |
+| bazaar.listing.expired | F01.S01.M04 | F03.S01.M01 | external |
+| identity.device_key.revoked | F07.S01.M01 | F03.S01.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S01.M01 | external |
+| services.quote.declined | F03.S02.M01 | F03.S01.M02 | internal |
+| services.quote.expired | F03.S02.M01 | F03.S01.M02 | internal |
+| services.booking.cancelled | F03.S02.M01 | F03.S01.M02 | internal |
+| identity.block.added | F07.S02.M02 | F03.S01.M02 | external |
+| identity.device_key.revoked | F07.S01.M01 | F03.S01.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S01.M02 | external |
+| commerce.dispute.resolved | F09.S02.M02 | F03.S02.M01 | external |
+| commerce.dispute.withdrawn | F09.S02.M02 | F03.S02.M01 | external |
+| identity.block.added | F07.S02.M02 | F03.S02.M01 | external |
+| services.offering.withdrawn | F03.S01.M01 | F03.S02.M01 | internal |
+| services.availability.changed | F03.S01.M02 | F03.S02.M01 | internal |
+| privacy.deletion.completed | F10.S01.M04 | F03.S02.M01 | external |
+| commerce.payment.claimed | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.payment.acknowledged | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.payment.confirming | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.confirmed | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.finalized | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.reorged | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.failed | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.disputed | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.payment.expired | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.deal.cancelled | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.dispute.resolved | F09.S02.M02 | F03.S02.M02 | external |
+| commerce.dispute.withdrawn | F09.S02.M02 | F03.S02.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S02.M02 | external |
+| commerce.dispute.opened | F09.S02.M02 | F03.S02.M03 | external |
+| commerce.dispute.resolved | F09.S02.M02 | F03.S02.M03 | external |
+| commerce.dispute.withdrawn | F09.S02.M02 | F03.S02.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S02.M03 | external |

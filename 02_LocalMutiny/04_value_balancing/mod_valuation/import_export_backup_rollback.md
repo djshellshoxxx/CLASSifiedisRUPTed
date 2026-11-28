@@ -12,7 +12,7 @@
 
 ## Specification
 
-- **export:** Section mutiny.valuations in classrup-export/v1; one line per own ItemValuation (schema classrup.mutiny.item_valuation/v1) including flags received.
+- **export:** Section mutiny.valuations in classrup-export/v1; one line per own ItemValuation (schema classrup.mutiny.item_valuation/v1, local record) including flags received, plus its signed projections (schema classrup.mutiny.item_valuation_projection/v1).
 - **import:** Records are verified; superseded history imports read-only; the current record per item is restored with lockedBySubjectId cleared; conflicting IDs rejected.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold only signed public projections (IOX-7).
 - **migration rollback:** Additive optional fields only in v1; rollback ignores unknown fields; the basis enum only grows and unknown values read as other.
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S02.M01, F01.S03.M01, F01.S01.M01, F09.S03.M01, F09.S03.M03, F16.S02.M03, F07.S01.M01, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S02.M01, F01.S03.M01, F01.S01.M01, F09.S03.M01, F09.S03.M03, F16.S02.M03, F07.S01.M01, F07.S02.M02, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

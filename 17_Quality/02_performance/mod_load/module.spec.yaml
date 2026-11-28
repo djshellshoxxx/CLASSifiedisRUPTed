@@ -1,10 +1,10 @@
 id: F17.S02.M01
 scope: MVP
-summary: A Node load-test script that drives a relay (2 vCPU / 4 GB reference profile, SQLite WAL) with read, write, search and cycle-matching traffic and compares measured latencies with the budgets of CTR-OBS-001 OBS-4. It writes a JSON and Markdown report and exits non-zero when any budget is exceeded. It runs a short smoke profile on release candidates and the full profile nightly. Per ADR-0016 and CTR-OBS-001 OBS-7 the budgets of OBS-4 apply to relays only (index, mailbox, matching over public projections, content-free push, auction host); vault performance is covered by unit and e2e budgets.
+summary: A Node load-test script that drives a relay (2 vCPU / 4 GB reference profile, SQLite WAL) with read, write, search and cycle-matching traffic and compares measured latencies with the budgets of CTR-OBS-001 OBS-4. It writes a JSON and Markdown report and exits non-zero when any budget is exceeded. The release workflow runs the smoke and then the standard profile on the release commit because budgets are release-gated (F17.S03.M01), the nightly workflow runs standard and a weekly workflow runs soak. Per ADR-0016 and CTR-OBS-001 OBS-7 the budgets of OBS-4 apply to relays only (index, mailbox, matching over public projections, content-free push, auction host); vault performance is covered by unit and e2e budgets.
 responsibilities:
 - Implement the load driver (Node 22, undici keep-alive, open-loop arrival rate) with profiles smoke (30 s), standard (5 min) and soak (60 min).
-- 'Measure p50/p95/p99 latency and error rate per scenario: read 50 req/s p95 at most 150 ms, write 50 req/s p95 at most 300 ms, search over 100 000 listings p95 at most 200 ms, cycle search on a graph of 5 000 edges with max length 5 p95 at most 250 ms.'
-- Seed datasets deterministically (100 000 listings, 5 000 want/offer edges, 10 000 actors) from a fixed seed using the production commands bulk path.
+- 'Measure p50/p95/p99 latency and error rate per scenario: read 50 req/s p95 at most 150 ms; writes (signed projection index writes with signature verification, mailbox put of opaque envelopes, auction bids at a host relay) 50 req/s p95 at most 300 ms; search over 100 000 listings p95 at most 200 ms; cycle search on a graph of 5 000 edges with max length 5 p95 at most 250 ms.'
+- 'Seed datasets deterministically from a fixed seed the way real relays receive data: 10 000 generated did:key principals sign 100 000 classrup.bazaar.listing/v1 public projections and the public want and have projections that yield 5 000 matching edges, submitted through the relay index-write command federation.record.ingest (F11.S01.M02) with signature verification on every write; listings are vault-authored signed projections and no bulk path bypasses verification.'
 - Emit reports/load.json and reports/load.md and fail the run on any budget violation or error rate above 0.1 %.
 non_responsibilities:
 - Fault injection (F17.S02.M02).
@@ -16,16 +16,23 @@ depends_on:
 - CTR-TST-001
 - CTR-IDM-001
 - CTR-ERR-001
+- CTR-CAP-001
+- CTR-FED-001
 - F17.S01.M01
 - F15.S02.M01
 - F15.S02.M03
+- F12.S03.M03
+- F11.S01.M02
+- F08.S01.M01
+- F04.S01.M02
+- F07.S01.M02
 user_stories:
 - As a release manager, I get a pass or fail verdict for the OBS-4 budgets with the p95 numbers for every scenario.
 - As a developer, I run the smoke profile locally and see which endpoint regressed.
 - As an operator, I compare nightly reports over 30 days to spot slow degradation.
 edge_cases:
 - The generator itself saturates the machine; the report records generator CPU and marks the run invalid if generator CPU exceeds 70 %.
-- The relay returns RATE_LIMITED during the test; the load script uses a dedicated unthrottled test tenant and counts any 429 as an error.
+- The relay returns RATE_LIMITED during the test; rate limits stay on, the load tenant's limits were raised by the setup step through an F12.S03.M03 RatePolicy whose revision and values are in the report, and any 429 counts as an error.
 - The seeded dataset is stale after a schema change; the seed script version-checks and rebuilds, failing with QUALITY_LOAD_SEED_STALE.
 - Latency spikes from a one-off garbage collection; the report uses p95 over the whole window and also flags max over 2 s.
 - Coordinated omission would hide stalls; the driver is open loop and measures from intended send time.
@@ -45,7 +52,7 @@ processes:
     - Each scenario has a declared target (rate, duration, p95 budget) and the verdict is pass only when measured p95 is at most the budget and error rate at most 0.1 %.
     - 'The driver rejects runs that are invalid: generator CPU above 70 %, achieved rate below 95 % of target, or less than the profile duration.'
     - The load script refuses to run against any host not on the explicit allow list (localhost and the CI relay) with a typed error.
-    - 'The load script targets relay services only: signed public-projection index reads and writes, mailbox put and get of opaque encrypted envelopes, matching over public projections, content-free push enqueue and auction hosting; the relay never receives plaintext P2+ data in the test.'
+    - 'The load script targets relay services only: signed public-projection index reads and writes (write_index through federation.record.ingest with signature verification), mailbox put and get of opaque encrypted envelopes with the content-free push enqueue that a mailbox put triggers (N17), matching over public projections and auction hosting (auction_bid through auctions.bid.place at the host relay); the relay never receives plaintext P2+ data in the test.'
     rules:
     - V01 | Measured p95 is at most the OBS-4 budget for the scenario | QUALITY_LOAD_BUDGET_EXCEEDED
     - V02 | Error rate is at most 0.1 % and no 429 occurs on the load tenant | QUALITY_LOAD_ERROR_RATE
@@ -63,7 +70,7 @@ processes:
   commands_queries_events:
     requirements:
     - The module exposes pnpm load:smoke, pnpm load:standard, pnpm load:soak and pnpm load --scenario <name>.
-    - Scenarios are read_index, write_mailbox, search_text, search_geo, cycle_search and mixed_70_30.
+    - Scenarios are read_index, write_index, write_mailbox, search_text, search_geo, cycle_search, auction_bid and mixed_70_30.
     - 'Exit codes: 0 pass, 1 budget failure, 2 invalid run, 3 configuration or seed failure.'
     commands: []
     queries: []
@@ -79,21 +86,23 @@ processes:
     example: |-
       $ pnpm load:standard
         read_index   50 req/s  p95 88 ms  budget 150 ms  OK
+        write_index  50 req/s  p95 212 ms budget 300 ms  OK  (50 000 signatures verified)
         write_mailbox    50 req/s  p95 241 ms budget 300 ms  OK
+        auction_bid  50 req/s  p95 198 ms budget 300 ms  OK  (host-signed receipts)
         search_text    p95 176 ms budget 200 ms  OK
         cycle_search   5000 edges len5 p95 301 ms budget 250 ms  QUALITY_LOAD_BUDGET_EXCEEDED
         exit 1  report reports/load.json
   authorization_capabilities:
     requirements:
-    - The load driver authenticates to the test relay with relay access tokens from the challenge–response flow (CTR-CAP-001 CAP-10) using a generated device key; no relay operator or admin role is used.
-    - Rate limits are not disabled; the dedicated tenant has limits raised through configuration (CTR-FLG-001) and the report records the values.
+    - The load driver authenticates its traffic to the test relay with relay access tokens from the challenge–response flow (CTR-CAP-001 CAP-10) using generated device keys, and the traffic never uses a relay operator or admin role; only the setup step (RatePolicy) and the metrics scraper hold a separate operator token of the throwaway test relay, minted per run and revoked at the end.
+    - Rate limits are not disabled; the setup step raises the load tenant's limits through an F12.S03.M03 RatePolicy (moderation.ratepolicy.set on the test relay) and the report records the policy revision and values.
     - Load never runs against production hosts; the host allow list is enforced in code and by CI network rules.
     capabilities: []
     notes: 'No runtime capabilities: this module runs only in developer shells and CI jobs with no relay session. Nothing here grants or checks CTR-CAP-001 capabilities, and test code never ships in the relay or PWA bundles.'
   failure_recovery_idempotency:
     requirements:
     - 'Runs are repeatable: a fresh relay and database are created per run and the seed is deterministic.'
-    - Write scenarios use unique Idempotency-Keys per request and also replay 1 % of requests with the same key to verify idempotency under load.
+    - Write scenarios use unique Idempotency-Keys per request (signed index writes dedupe by cid) and also replay 1 % of requests with the same key or cid to verify idempotency under load.
     - If the relay crashes mid-run, the run is invalid, exit 2, and the relay log tail is saved.
     idempotency: A load run is self-contained; re-running seeds a fresh database. Seeding is idempotent by deterministic IDs.
     concurrency: The driver uses an open-loop scheduler with up to 256 in-flight connections; the number of in-flight requests is recorded in the report.
@@ -115,12 +124,12 @@ processes:
     - T02 | Budgets quietly relaxed to pass | budgets read from CTR-OBS-001 constants file; changes need a contract change reviewed by the architecture owner
     - T03 | Report leaks sensitive data | report schema whitelists fields; relay logs scanned for canaries
     abuse_controls:
-    - Per-run tokens are minted for the test tenant and revoked at the end.
-    - The soak profile is allowed only in the nightly workflow with a 90 min timeout.
+    - Per-run relay access tokens and the separate scraper operator token are minted for the throwaway test relay and revoked at the end.
+    - The soak profile is allowed only in the weekly workflow of F17.S03.M01 with timeout-minutes 90; nightly runs standard and the release workflow runs smoke then standard.
   observability_performance:
     requirements:
     - 'The driver exports the metrics it measures: classrup_quality_load_latency_ms by scenario and percentile, error rate and achieved rate.'
-    - The relay's own /metrics endpoint (CTR-OBS-001 OBS-2) is scraped every 5 s during the run and stored in the report.
+    - The relay's own metrics (CTR-OBS-001 OBS-2, operator-only /metrics) are scraped every 5 s during the run by the separate scraper with its per-run operator token for the test relay, never by the load driver, and stored in the report.
     - Smoke profile completes in at most 3 min including seeding; standard in at most 15 min including seeding of 100 000 listings.
     metrics:
     - classrup_quality_load_latency_ms{scenario,percentile}
@@ -137,17 +146,17 @@ processes:
     - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
     - Self-tests run the driver against a stub server with known latencies to prove percentile computation within 2 %.
     - A planted slowdown of 400 ms in write handling must turn the write scenario red.
-    fixtures: 'Seed 20261104: 100 000 listings, 10 000 actors, 5 000 edges; reference runner 2 vCPU / 4 GB, SQLite WAL; scenario mix read 70 percent, write 30 percent.'
+    fixtures: 'Seed 20261104: 10 000 did:key principals signing 100 000 listing projections and the want and have projections for 5 000 edges, submitted through federation.record.ingest; one hosted auction with 200 eligible bidders; load-tenant RatePolicy raising limits to 10x the scenario rate; reference runner 2 vCPU / 4 GB, SQLite WAL; scenario mix read 70 percent, write 30 percent.'
     tests:
     - T01 | unit | 01.R01,01.R02,08.R02 | generate a report from a recorded run | schema valid; environment fields and scraped metrics present
-    - T02 | unit | 01.R03 | seed twice with seed 20261104 | identical dataset hashes
+    - T02 | unit | 01.R03 | seed twice with seed 20261104 through federation.record.ingest | identical dataset hashes; 100 000 listing writes each signed by one of 10 000 did:keys and each verified by the relay
     - T03 | unit | 02.R01,09.R02 | stub server with known latencies (p95 100 ms) | computed p95 within 2 % and verdict correct
     - T04 | unit | 02.R02 | force generator CPU 80 percent and achieved rate 90 percent | QUALITY_LOAD_INVALID_RUN and exit 2
     - T05 | abuse | 02.R03,05.R03 | point the driver at a non-allow-listed host | QUALITY_LOAD_HOST_FORBIDDEN and exit 3
     - T06 | unit | 03.R01,03.R02,04.R03 | run phases with a stub relay | warm-up discarded; exit codes follow the documented mapping
     - T07 | load | 03.R03,06.R03 | soak against the relay with a planted memory leak | growth above 10 % flagged and exit 1
-    - T08 | load | 04.R01,04.R02,08.R03 | run all six scenarios under smoke and standard | each scenario reports; durations within 3 and 15 min
-    - T09 | integration | 05.R01,05.R02 | inspect token and limits used | device-key relay access token only; raised relay limits recorded in report
+    - T08 | load | 04.R01,04.R02,08.R03 | run all eight scenarios under smoke and standard | each scenario reports; durations within 3 and 15 min
+    - T09 | integration | 05.R01,05.R02 | inspect tokens and limits used by traffic, setup and scraper | traffic uses device-key relay access tokens only; only setup and scraper used the per-run operator token, revoked at the end; RatePolicy revision and raised limits recorded in the report; rate limiting stayed enabled
     - T10 | integration | 06.R01,06.R02 | replay 1 percent of write requests with the same key | identical responses, no duplicate records
     - T11 | chaos | 06.R03 | kill the relay mid-run | run invalid, exit 2, log tail saved
     - T12 | abuse | 07.R01,07.R02,07.R03 | scan report and relay logs for canaries and retention config | no canary; reports kept 90 days
@@ -155,9 +164,11 @@ processes:
     - T14 | load | 02.R01 | reference run of read, write, search and cycle scenarios | p95 within OBS-4 budgets and error rate at most 0.1 %
     - T15 | integration | 09.R01 | traceability tool run | every requirement maps to a passing test
     - T16 | integration | 10.R01,10.R02,10.R03 | gates module parses a v1 report with an extra unknown field; budget file changed by commit | parsed successfully; budgets unchanged without contract change
-    - T17 | integration | 02.R04 | inspect request bodies sent to the relay during a smoke run | only signed public projections and opaque encrypted envelopes; no plaintext P2+ canary
+    - T17 | integration | 02.R04 | inspect request bodies sent to the relay during a smoke run | only signed public projections, bidder-signed bids with E2E-encrypted bidder fields and opaque encrypted envelopes; no plaintext P2+ canary
+    - T18 | load | 02.R04,01.R03 | write_index at 50 req/s for 5 min with 1 percent of envelopes forged | p95 at most 300 ms; every write signature-verified by the relay; forged envelopes rejected with FED_SIGNATURE_INVALID and reported as expected rejections, not as errors
+    - T19 | load | 02.R04 | auction_bid at 50 req/s against the hosted auction | p95 at most 300 ms; each accepted bid has a host-signed receipt; error rate at most 0.1 %
     acceptance:
-    - On the 2 vCPU reference runner all OBS-4 budgets pass at 50 req/s.
+    - On the 2 vCPU reference runner all OBS-4 budgets pass at 50 req/s for read, write_index, write_mailbox, auction_bid, search and cycle scenarios.
     - A planted 400 ms slowdown is detected as a budget failure with exit 1.
     - The load script refuses to run against any non-allow-listed host.
     - Reports are machine-readable and consumed by the release gates.

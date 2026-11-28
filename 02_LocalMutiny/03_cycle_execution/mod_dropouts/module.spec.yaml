@@ -9,15 +9,17 @@ summary: >-
   Each vault decides from the evidence it holds and its own clock; peers learn through signed notices or their own timeouts.
 responsibilities:
   - Record each dropout as an append-only DropoutRecord with reason, phase (before commit, committed without handover, after handover), outcome and evidence basis (signed statement or local clock).
-  - Produce the principal's signed withdrawal statement when the principal leaves, and verify peers' withdrawal and decline statements.
+  - Produce the principal's signed withdrawal statement when the principal leaves, and be the single ingest owner of peers' classrup.mutiny.cycle_withdrawal/v1; declines and revocations are F08 ConsentStatements ingested by F08.S02.M02, and this module reacts to their events for committed cycles.
   - Evaluate timeouts and loss signals lazily on vault open and every 60 s while open, cancel cycles with no handover evidence, and leave handover cases to F02.S03.M04.
   - Guarantee the no-silent-reroute rule by refusing every operation that would change a cycle's participant set.
+  - Release the principal's own reservations through the F02.S03.M02 LockPort.releaseForSubject inside the same transaction as every cancellation, and run orphan reconciliation on vault open.
+  - Register the module's export section, deletion and retention purge handlers with F10 (N6) and pseudonymize erased participants in retained dropout records.
 non_responsibilities:
-  - Reservations and their release (F02.S03.M02 consumes the cancelled event) and consent (F02.S03.M01).
+  - Reservation records and the mechanics of release (F02.S03.M02, called through LockPort.releaseForSubject in the same transaction) and consent before commit (F02.S03.M01).
   - Handover attestations and recovery options (F02.S03.M04).
   - Global suspension or takedown of an account; none exists (ADR-0016). A relay hosting policy may stop indexing someone, which is not a dropout signal here.
   - "Future: pre-consented alternates and automatic re-matching after a cancellation; both would still require new explicit consent from every participant."
-depends_on: [F02.S03.M01, F02.S03.M04, F02.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
+depends_on: [F02.S03.M01, F02.S03.M02, F02.S03.M04, F02.S01.M02, F08.S02.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001]
 user_stories:
   - As a participant who can no longer take part, I withdraw before any handover and my reservation is released, and the others are told by a signed notice.
   - As a participant in a cycle whose member went silent, I see the cycle cancelled at the deadline by my own clock with a plain reason, and my item is available again.
@@ -30,6 +32,8 @@ edge_cases:
   - A participant's reservation expires before the execution deadline because their statement had a short expiry; their reservation is invalid for commit, but if already committed it is recorded as a lock_lost dropout.
   - The vault was closed over the consent deadline; on next open the timeout is evaluated before any other action.
   - The account holder erased their identity locally; dropout records are pseudonymized but remain as evidence.
+  - A participant revokes their consent through F08 after my vault committed and before any handover; my vault records a dropout with public reason withdrew, cancels and releases my reservation in the same transaction.
+  - A relay injects a withdrawal it signed itself, or a cancellation notice for a cycle; nothing is cancelled because only the participant's own signed withdrawal or this vault's clock counts.
 ux:
   screens:
     - "Withdraw confirmation dialog: states the phase ('before any handover: the cycle is cancelled' or 'after a handover started: recovery options will open'), the effect on others and that no one is substituted."
@@ -102,7 +106,7 @@ processes:
       - "Execution deadline: at consentDeadline + executionWindowMs a committed cycle without handover evidence is cancelled with reason execution_timeout; with evidence it moves to partial execution."
       - "Both deadlines are evaluated on vault open and every 60 s while open; clock disagreement with relay receipt times counts as past the deadline."
     requirements:
-      - Before any handover evidence exists a dropout cancels the cycle and the vault releases its own reservations in the same transaction, and exactly one cancelled event is emitted per cycle.
+      - Before any handover evidence exists a dropout cancels the cycle and the vault releases its own reservations in the same transaction through the F02.S03.M02 LockPort.releaseForSubject, and exactly one cancelled event is emitted per cycle.
       - After any handover evidence exists a dropout never cancels the cycle; it is recorded and the cycle moves to partially_executed with a recovery case, so already handed-over items are not abandoned.
       - No dropout, timeout or loss signal adds, removes or substitutes participants, and the next step for the others is only a fresh suggestion and fresh consent.
       - Late evidence arriving after cancellation never reopens the cycle; it is stored and may open a standalone recovery case.
@@ -111,24 +115,26 @@ processes:
       - withdraw is a vault command that produces the signed statement classrup.mutiny.cycle_withdrawal/v1; ingest verifies peers' notices and produces none; evaluate is a vault-local sweep that produces a signed withdrawal only when the principal itself must leave.
       - Events are written in the same IndexedDB transaction as the records, and statements go to the sync outbox with states prepared, transport_acknowledged and peer_accepted.
       - The module exposes coarse reasons only to other participants and keeps private reasons local.
+      - "Statement schemas and signer roles registered with the F11.S01.M01 registry (N2): classrup.mutiny.cycle_withdrawal/v1 signed by the withdrawing participant, ingest owner this module; declines and revocations use classrup.comms.consent/v1 (ingest owner F08.S02.M02) and arrive as comms.consent.received and comms.consent.revoked; statements from DIDs the principal blocked are dropped silently (N7)."
+      - Every event payload carries the participant DIDs that notification routing needs to resolve the remaining participants (N4).
     commands:
       - name: mutiny.dropout.withdraw
         capability: mutiny.dropout.withdraw
-        input: "{ cycleId, expectedRevision, reasonCode? } — vault command; produces statement classrup.mutiny.cycle_withdrawal/v1 signed by the principal"
+        input: "{ cycleId, expectedRevision, reasonCode? } — vault command; produces statement classrup.mutiny.cycle_withdrawal/v1 {cycleId, revisionHash, publicReason} signed by the principal; calls LockPort.releaseForSubject (F02.S03.M02) in the same transaction when the outcome is cancelled"
         output: "{ dropoutId, phase, outcome, cycleStatus, syncState: local_committed | prepared }"
         errors: [NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FORBIDDEN, MUTINY_DROPOUT_PHASE_CONFLICT]
         emits: [mutiny.cycle.participant_dropped, mutiny.cycle.cancelled]
         idempotent: true
       - name: mutiny.dropout.ingest
         capability: mutiny.dropout.ingest
-        input: "{ envelope: classrup.mutiny.cycle_withdrawal/v1 | classrup.mutiny.cycle_decline/v1, provenance } — vault command; produces no statement"
+        input: "{ envelope: classrup.mutiny.cycle_withdrawal/v1 signed by the withdrawing participant, provenance } — vault command; the only envelope type this module ingests; produces no statement; calls LockPort.releaseForSubject in the same transaction when the outcome is cancelled"
         output: "{ accepted: boolean, dropoutId?, phase?, outcome?, quarantineReason? }"
         errors: [MUTINY_DROPOUT_STATEMENT_INVALID, UNSUPPORTED_SCHEMA_VERSION, VALIDATION_FAILED, NOT_FOUND]
         emits: [mutiny.cycle.participant_dropped, mutiny.cycle.cancelled]
         idempotent: true
       - name: mutiny.dropout.evaluate
         capability: mutiny.dropout.evaluate
-        input: "{ cycleId? } — vault-local sweep over non-terminal cycles; produces a signed withdrawal only if the principal's own item or reservation was lost or a local block applies"
+        input: "{ cycleId? } — vault-local sweep over non-terminal cycles, also run on vault open for orphan reconciliation (own active locks of terminal cycles are released); produces a signed withdrawal only if the principal's own item or reservation was lost or a local block applies; calls LockPort.releaseForSubject in the same transaction as each cancellation"
         output: "{ evaluated: int, dropouts: { cycleId, participantId, publicReason, outcome }[] }"
         errors: [MUTINY_DROPOUT_NOT_DUE, DEPENDENCY_UNAVAILABLE]
         emits: [mutiny.cycle.participant_dropped, mutiny.cycle.cancelled]
@@ -145,12 +151,15 @@ processes:
         output: "{ dropout: DropoutRecord }"
         errors: [NOT_FOUND]
     events_produced:
-      - {type: mutiny.cycle.participant_dropped, privacy: P2, payload: "{ cycleId, participantId, publicReason, phase, outcome, evidenceBasis, handoverEvidenceCount }"}
-      - {type: mutiny.cycle.cancelled, privacy: P2, payload: "{ cycleId, reason, droppedParticipantIds, releasedAt }"}
+      - {type: mutiny.cycle.participant_dropped, privacy: P2, payload: "{ cycleId, participantId, participantIds (all participants), remainingParticipantIds, publicReason, phase, outcome, evidenceBasis, handoverEvidenceCount, afterConsent }"}
+      - {type: mutiny.cycle.cancelled, privacy: P2, payload: "{ cycleId, participantIds, reason, droppedParticipantIds, releasedAt }"}
     events_consumed:
       - {type: mutiny.cycle.proposed, effect: "register the consent deadline timer for the cycle"}
       - {type: mutiny.cycle.committed, effect: "register the execution deadline timer for the cycle"}
-      - {type: mutiny.cycle.declined, effect: "if the declining participant had consented and this vault has committed, record a dropout for the committed phase"}
+      - {type: mutiny.cycle.declined, effect: "record a before_commit dropout record with public reason withdrew for the decliner; the cycle itself was already declined by F02.S03.M01"}
+      - {type: comms.consent.received, effect: "a decline (kind decline, subjectType mutiny_cycle) accepted by F08 for a committed or executing cycle is recorded as a dropout of the decliner with basis signed_by_participant and handled by phase"}
+      - {type: comms.consent.revoked, effect: "a revocation of a counted mutiny_cycle consent accepted by F08 after this vault committed is recorded as a dropout with public reason withdrew and basis signed_by_participant: before handover the cycle is cancelled and own reservations released in the same transaction, after handover it goes to recovery; before commit F02.S03.M01 voids the consent instead"}
+      - {type: privacy.deletion.completed, effect: "pseudonymize the erased DID in retained dropout records with the deletion pseudonym; privateReason of own records is purged; signed statements stay verifiable"}
       - {type: mutiny.cycle.unlocked, effect: "if the reservation of an active cycle expired or was lost, record a lock_lost dropout for its giver"}
       - {type: mutiny.leg.handed_over, effect: "update the evidence count used for phase decisions and stop the cancellation path for this cycle"}
       - {type: mutiny.leg.received, effect: "update the evidence count used for phase decisions and stop the cancellation path for this cycle"}
@@ -183,7 +192,7 @@ processes:
   failure_recovery_idempotency:
     requirements:
       - All commands are idempotent per CTR-IDM-001; a repeated withdraw returns the stored record.
-      - A withdrawal, the phase computation, the cycle cancellation and the release of the principal's reservations happen in one IndexedDB transaction, so no state exists where the cycle is cancelled but items are still held.
+      - A withdrawal, the phase computation, the cycle cancellation and the release of the principal's reservations happen in one IndexedDB transaction, with F02.S03.M02 LockPort.releaseForSubject called inside it, so no state exists where the cycle is cancelled but items are still held; the mutiny.cycle.cancelled event is additionally consumed by F02.S03.M02 idempotently and orphan reconciliation runs on vault open.
       - Conflicting evidence, such as a handover attestation arriving after cancellation, never reopens a cycle and is escalated to recovery rather than merged.
     idempotency: "Idempotency-Key replay 24 h; records are unique per (cycleId, participantId, publicReason) so a repeated notice or sweep creates nothing new."
     concurrency: "Web Locks mutex per cycleId; expectedRevision on withdraw; phase computed inside the transaction after taking the cycle lock, and MUTINY_DROPOUT_PHASE_CONFLICT is returned if evidence changes concurrently."
@@ -195,8 +204,9 @@ processes:
       - Other participants receive only the coarse reason (withdrew, unavailable, timeout); the finer private reason, including that a block exists, never leaves the vault.
       - Dropout records are retained as evidence for RET-EVIDENCE and pseudonymized if the person erases their identity locally.
       - Griefing by repeated withdrawals is limited by local reputation signals, recipients' quarantine of repeat withdrawers and the cap on open cycles, since no central reputation write exists.
+      - The module registers ExportSectionPort (section mutiny.dropouts), DeletionPort and RetentionPurgePort with F10 (N6), annotates every DropoutRecord field with its F10.S02.M02 class, and on privacy.deletion.completed pseudonymizes the erased participant in retained records.
     data:
-      - "DropoutRecord: P2; privateReason is P3 within the record and stripped from every export to other users."
+      - "DropoutRecord: P2; privateReason is P3 within the record and stripped from every export to other users; field classes annotated per F10.S02.M02."
     retention:
       - "RET-EVIDENCE 2 years after the last related activity."
     threats:
@@ -206,6 +216,7 @@ processes:
       - "T04 | Withdrawal timed after others' handover to abuse recovery | phase is computed from verified evidence and routes to partially_executed with recovery and dispute options"
       - "T05 | Forged timeout to cancel others' cycles | timeouts are recorded only on the local clock for the local vault; a peer cannot make my vault cancel"
       - "T06 | Replay of an old withdrawal to cancel a new cycle | statement names the cycle id and revision hash, and different cycles have different ids"
+      - "T07 | A relay forges a withdrawal or a cancellation notice | only a withdrawal signed by the participant it names counts (V04); there is no cancel statement at all, each vault cancels only from its own evidence and clock"
     abuse_controls:
       - "Recipients quarantine DIDs with more than 3 withdrawals in 30 days for new proposals into their vault, locally and silently."
       - "Local rate limit of 10 withdraw commands per day."
@@ -238,15 +249,19 @@ processes:
       - "T08 | contract | 04.R01,04.R02,09.R02,09.R03 | commands, events and statements | outputs validate against classrup.mutiny.dropout_record/v1, cycle_withdrawal/v1 and registry"
       - "T09 | abuse | 05.R01,05.R02,07.R02,01.R02,02.R02 | forged withdrawal for another person; other principal calls withdraw; replay on new cycle | quarantined or FORBIDDEN; replay ignored"
       - "T10 | abuse | 07.R01,04.R03 | local block of a participant mid-cycle | principal withdrawn with public reason unavailable; no statement or event reveals the block"
-      - "T11 | integration | 06.R01,06.R02 | replay withdraw; crash between cancellation and release | one record; no partial state; release and cancel atomic"
-      - "T12 | chaos | 06.R03,05.R03 | relay down while withdrawing | local cancellation immediate; UI shows prepared; peers cancel by their own deadline"
+      - "T11 | integration | 06.R01,06.R02,03.R01 | replay withdraw; crash inside the withdraw transaction after LockPort.releaseForSubject was called; abort of that transaction | one record; after abort the cycle and the holds are unchanged; after commit cancellation and release are both visible, never only one"
+      - "T12 | chaos | 06.R03 | relay down while withdrawing | local cancellation immediate; UI shows prepared; peers cancel by their own deadline"
       - "T13 | abuse | 07.R03 | participant with 4 withdrawals in 30 days proposes again | recipient vault quarantines silently"
       - "T14 | load | 08.R02,08.R03 | withdraw with 8 participants; sweep 50 cycles on emulated Moto G | within budgets"
       - "T15 | unit | 08.R01,09.R01 | diagnostics and traceability tool | no identifiers or private reasons in diagnostics; every PS-022 requirement maps to a passing test"
-      - "T16 | integration | 05.R03,07.R02 | identity erased locally | records pseudonymized and retained; privateReason stripped from exports to others"
+      - "T16 | integration | 07.R02,07.R04 | identity erased locally; F10 export and retention sweep | section mutiny.dropouts exported; records pseudonymized and retained; privateReason stripped from exports to others; signatures still verify"
       - "T17 | integration | 10.R01,10.R02,10.R03 | export, import, rollback | dropout records round-trip; imported cycles do not reopen"
+      - "T18 | abuse | 05.R03,02.R02 | relay injects a withdrawal signed with the relay key naming Bob, a fabricated cancel notice, and a replayed old withdrawal of Bob from another cycle | all ignored or quarantined; no cycle cancelled and no reservation released"
+      - "T19 | integration | 01.R03,03.R01,03.R02 | Bob revokes his consent through F08 after commit, once before any handover and once after Alice's handed_over | first: dropout withdrew, cancelled, own reservations released in the same transaction; second: partially_executed with recovery"
+      - "T20 | contract | 04.R04,04.R05 | registry lookup for classrup.mutiny.cycle_withdrawal/v1; payloads of participant_dropped and cancelled | signer role is the withdrawing participant; payloads carry participantIds, remainingParticipantIds and afterConsent"
+      - "T21 | integration | 06.R03,03.R04 | vault opened with an own active lock whose cycle is already cancelled (orphan) | evaluate on open releases it through LockPort.releaseForSubject; no cycle reopens"
     acceptance:
-      - All tests T01–T17 pass in CI.
+      - All tests T01–T21 pass in CI.
       - Before any handover evidence a dropout always ends in cancellation with released reservations; after evidence it never cancels and always leads to partially_executed with recovery.
       - No code path changes or substitutes cycle participants and no signed statement or event exposes a private reason.
   import_export_backup_rollback:

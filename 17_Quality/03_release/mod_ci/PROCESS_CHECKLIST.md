@@ -4,7 +4,7 @@
 
 - [x] [PS-141-01 Domain schema](domain_schema.md) — 3 requirements, tests mapped
 - [x] [PS-141-02 Validation rules](validation_rules.md) — 3 requirements, tests mapped
-- [x] [PS-141-03 Workflow state machine](workflow_state_machine.md) — 3 requirements, tests mapped
+- [x] [PS-141-03 Workflow state machine](workflow_state_machine.md) — 4 requirements, tests mapped
 - [x] [PS-141-04 Commands, queries and events](commands_queries_events.md) — 3 requirements, tests mapped
 - [x] [PS-141-05 Authorization and capabilities](authorization_capabilities.md) — 3 requirements, tests mapped
 - [x] [PS-141-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 3 requirements, tests mapped

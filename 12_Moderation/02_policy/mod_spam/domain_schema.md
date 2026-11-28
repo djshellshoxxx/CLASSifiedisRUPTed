@@ -9,19 +9,19 @@
 - **PS-097-01.R01** The module owns no persistent entities; all inputs are signed projections or local records and results are events carrying the evidence values.
 - **PS-097-01.R02** The derived fingerprint index stores only hashes and counters, never text, and expires entries after 30 days.
 - **PS-097-01.R03** Every result records the heuristic set version and thresholds used so decisions can be reproduced.
+- **PS-097-01.R04** Fingerprint and key-observation rows key the subject by a store-salted hash; the subject did:key appears only in the query input and in the store-local P2 event, never in an index row or a log.
 
 ## Specification
 
-**Note:** Owns no catalog entities. A derived fingerprint index (tenant, actor key hash, normalized sha256, simhash64, observedAt) is kept per store for 30 days (RET-SHORT), is rebuilt from the index or vault, and is never exported.
+**Note:** Owns no catalog entities. Derived per-store indexes, never exported and rebuilt from the relay index or the vault: fingerprints (tenant, subject key hash, normalized sha256, simhash64, targetCid, receivedAt, claimedCreatedAt?) kept 30 days (RET-SHORT), and key observations (tenant, subject key hash, firstSeenAt, lastSeenAt) kept 30 days after lastSeenAt (RET-SHORT). The key hash is HMAC-SHA-256 with a store-local salt, so indexes of two stores cannot be joined.
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-097-09.T01 | unit | PS-097-01.R03, PS-097-02.R01, PS-097-02.R02 | oversized text; out-of-range thresholds | PAYLOAD_TOO_LARGE; VALIDATION_FAILED; operator cannot set all heuristics off |
-| TEST-PS-097-09.T02 | unit | PS-097-01.R02, PS-097-03.R01 | duplicate window and simhash distance 3 and 4 | distance 3 flagged duplicate_near, distance 4 not |
-| TEST-PS-097-09.T03 | property | PS-097-01.R01, PS-097-03.R02 | random texts evaluated twice with the same index snapshot | identical output; no exceptions; bounded runtime |
+| TEST-PS-097-09.T03 | property | PS-097-01.R01, PS-097-01.R03, PS-097-02.R03, PS-097-03.R01, PS-097-06.R01 | random and hostile texts evaluated twice with the same index snapshot | identical output including rulesVersion and thresholds; no exceptions; score within 0..100; bounded runtime |
+| TEST-PS-097-09.T18 | unit | PS-097-01.R02, PS-097-01.R04, PS-097-07.R02 | inspect index rows after evaluations on relays X and Y; injected clock 31 days later | only hashes and counters; key hashes differ between X and Y; entries expired |
 
 ## Dependencies
 
-Module depends on: F12.S03.M02, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F12.S03.M03, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).

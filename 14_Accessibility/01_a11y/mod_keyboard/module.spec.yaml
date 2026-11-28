@@ -5,19 +5,22 @@ summary: >-
   pointer: visible focus that is never obscured (WCAG 2.2 criterion 2.4.11), skip link, focus management on
   route change and in dialogs, no keyboard traps, a single-pointer alternative for every dragging interaction
   (2.5.7) and touch targets of at least 44 by 44 CSS px (the project minimum, above the 24 px of criterion
-  2.5.8). It runs entirely in the browser; the PWA sends no telemetry, so findings come from tests and local
-  development warnings only.
+  2.5.8). It runs entirely in the browser and never reads vault data: the PWA shell reads the user's
+  preferences from F15.S04.M03 LocalSettings and passes them in as parameters. The PWA sends no telemetry,
+  so findings come from tests and local development warnings only.
 responsibilities:
   - Provide focus-visible styling tokens (outline at least 2 px, contrast at least 3:1 against adjacent colours) and scroll-padding tokens so sticky headers and bottom navigation never obscure the focused element (2.4.11).
   - Provide the skip link, route-change focus management (focus the new view heading and set the document title) and an accessible dialog helper built on the native dialog element with focus trap, Escape to close and focus restore.
   - Provide keyboard primitives such as roving tabindex lists, menus and tabs following WAI-ARIA Authoring Practices, plus the rule that single-character shortcuts are absent or can be turned off or remapped (2.1.4).
   - Provide reorder, pan and slider helpers that expose button-based alternatives for every drag gesture (2.5.7), such as photo reorder with move earlier and move later buttons.
-  - Provide a target-size token --target-min of 44px and lint rules that fail the build on tabindex greater than 0, click handlers on non-interactive elements and interactive elements smaller than the token.
+  - Provide a target-size token --target-min of 44px, lint rules that fail the build on tabindex greater than 0, click handlers on non-interactive elements and interactive primitives not sized with the token, and an end-to-end measurement of the computed hit area of every interactive element.
 non_responsibilities:
   - Screen reader names, landmarks and live regions (F14.S01.M02).
-  - The conformance gate, axe runs and the manual checklist (F14.S01.M03).
+  - The conformance gate, axe runs, the waiver file schema and the manual checklist (F14.S01.M03).
   - Message strings and direction handling (F14.S02.M01).
-  - "Future: user-configurable keyboard shortcut maps and a command palette; MVP has no single-character shortcuts."
+  - Storing user preferences such as the reduced-motion override (F15.S04.M03 LocalSettings; the PWA shell passes the value to the primitives).
+  - Sanitising rich user content and setting the Content-Security-Policy of the PWA (rendering components and the PWA shell under the F16.S03.M01 threat model); the primitives rely on both.
+  - "Future: user-configurable keyboard shortcut maps and a command palette; MVP has no single-character shortcuts and therefore no shortcut setting."
 depends_on: [CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001]
 user_stories:
   - As a keyboard user, I can reach and operate every control in tab order, see where focus is and never lose it behind a sticky bar.
@@ -32,16 +35,17 @@ edge_cases:
   - A toast appears with an action button; it is reachable by keyboard, does not steal focus and stays at least 10 s or until dismissed.
   - Forced colors mode is on; focus outline uses the system Highlight colour instead of the token.
   - Virtual keyboard opens on a phone and covers a field; the field scrolls into view using visual viewport insets.
+  - A received listing description from another vault contains '<input autofocus>' and an inline script calling focus(); the description renders as text, no autofocus attribute reaches the DOM, the CSP blocks the script and focus stays where the user left it.
 ux:
   screens:
     - "Skip link 'Skip to main content' visible on focus at the top of every page."
     - "Dialogs, menus, tabs, reorder lists and sliders used across the app follow the shared primitives."
-    - "Developer-only overlay (development build) that outlines elements failing the target size or focus rules."
+    - "Developer-only overlay (development build) that outlines elements failing the target size or focus rules and shows the rule code."
   states: [focus-visible, dialog-open, dialog-closed, route-changed, reduced-motion, forced-colors]
   a11y:
     - Every focusable element has a visible focus indicator of at least 2 px with 3:1 contrast, also in dark mode and forced colors.
     - Targets are at least 44×44 CSS px, with at least 8 px spacing when smaller inline text links are unavoidable.
-    - Animations honour prefers-reduced-motion and focus moves never depend on animation completion.
+    - Animations honour prefers-reduced-motion or the reduced-motion value the PWA shell passes in from F15.S04.M03 LocalSettings, and focus moves never depend on animation completion.
 processes:
   domain_schema:
     requirements:
@@ -49,20 +53,21 @@ processes:
       - Design tokens define --focus-ring-width 2px, --focus-ring-offset 2px, --target-min 44px and --scroll-pad-top and --scroll-pad-bottom computed from the heights of sticky bars.
       - Primitive components expose a documented keyboard contract (keys and expected behaviour) that tests assert.
     entities: []
-    note: "UI library and tooling; it stores no data and owns no catalog entity."
+    note: "UI library and tooling; it stores no data and owns no catalog entity. Preference values such as motion (system | reduced) arrive as parameters from the PWA shell, which reads them from F15.S04.M03 LocalSettings."
   validation_rules:
     requirements:
-      - Build-time lint and unit checks reject patterns that make keyboard operation impossible.
+      - Build-time lint and unit checks, plus end-to-end measurements for properties that exist only after the CSS cascade (computed hit area and obscured focus), reject patterns that make keyboard or single-pointer operation impossible.
       - Each rule failure has one stable code that appears in CI output and in the developer overlay.
-      - Rules are enforced on every pull request and cannot be waived without an expiring entry in tests/a11y/waivers.yaml (F14.S01.M03).
+      - Rules are enforced on every pull request and cannot be waived without an expiring entry in tests/a11y/waivers.yaml (schema owned by F14.S01.M03) whose single target is the file glob or component that fails; the lint runner of this module reads that same file.
     rules:
       - "V01 | no tabindex greater than 0 in any template or component | I18N_A11Y_TABINDEX_POSITIVE"
       - "V02 | click or pointer handlers are attached only to native interactive elements or elements with a role and key handlers | I18N_A11Y_NON_INTERACTIVE_HANDLER"
-      - "V03 | interactive elements have a computed hit area of at least 44 by 44 CSS px, except inline text links in running text | I18N_A11Y_TARGET_SIZE"
+      - "V03 | lint: interactive primitives set min-inline-size and min-block-size from var(--target-min) and do not override them with smaller fixed sizes, except inline text links in running text | I18N_A11Y_TARGET_SIZE"
       - "V04 | every drag, swipe or pointer-path interaction has a single-pointer or button alternative | I18N_A11Y_NO_DRAG_ALTERNATIVE"
       - "V05 | focus can leave every component with Tab, Shift+Tab or Escape (no trap), except modal dialogs that close with Escape | I18N_A11Y_KEYBOARD_TRAP"
       - "V06 | the focused element's bounding box is not fully covered by a sticky or fixed element after scrolling into view | I18N_A11Y_FOCUS_OBSCURED"
       - "V07 | no single-character keyboard shortcut is registered without an off switch or modifier key | I18N_A11Y_SINGLE_KEY_SHORTCUT"
+      - "V08 | end-to-end: getBoundingClientRect of every interactive element measures at least 44 by 44 CSS px at 320 px width and at 200 percent zoom, except inline text links in running text | I18N_A11Y_TARGET_SIZE"
   workflow_state_machine:
     requirements:
       - Focus management is a deterministic function of navigation events and dialog open and close events.
@@ -78,13 +83,13 @@ processes:
       - Errors are developer-facing lint and test failures with stable codes and never reach end users.
     commands: []
     queries: []
-    note: "API: <SkipLink/>, useRouteFocus(), openDialog(options) -> Promise<result>, createRovingList(), createReorderList({ items, onMove }) with move-up and move-down buttons, createSlider() with arrow keys and numeric input, tokens in css/a11y-tokens.css."
+    note: "API: <SkipLink/>, useRouteFocus(), openDialog(options) -> Promise<result>, createRovingList(), createReorderList({ items, onMove }) with move-up and move-down buttons, createSlider() with arrow keys and numeric input, setMotionPreference(system|reduced) called by the PWA shell with the F15.S04.M03 LocalSettings value, tokens in css/a11y-tokens.css."
     events_produced: []
     events_consumed: []
     errors:
       - "I18N_A11Y_TABINDEX_POSITIVE | 400 | no | build failure for tabindex greater than 0"
       - "I18N_A11Y_NON_INTERACTIVE_HANDLER | 400 | no | build failure for handlers on non-interactive elements"
-      - "I18N_A11Y_TARGET_SIZE | 400 | no | interactive element smaller than 44 by 44 CSS px"
+      - "I18N_A11Y_TARGET_SIZE | 400 | no | interactive element not sized with the token (lint) or measured smaller than 44 by 44 CSS px (end-to-end)"
       - "I18N_A11Y_NO_DRAG_ALTERNATIVE | 400 | no | drag interaction without a single-pointer alternative"
       - "I18N_A11Y_KEYBOARD_TRAP | 400 | no | focus cannot leave a component by keyboard"
       - "I18N_A11Y_FOCUS_OBSCURED | 400 | no | focused element is hidden behind a sticky element"
@@ -93,10 +98,11 @@ processes:
       const result = await openDialog({ title: t("listing.delete.title"), confirmLabel: t("common.delete"), destructive: true });
       // focus moves to the dialog heading, Tab cycles inside, Escape resolves { confirmed: false }, focus returns to the trigger button
       createReorderList({ items: photos, onMove: (from, to) => reorder(from, to) }); // renders "Move earlier" and "Move later" buttons beside every drag handle
+      setMotionPreference(settings.a11yMotion ?? "system"); // called by the PWA shell after reading F15.S04.M03 LocalSettings; the library never reads the vault
   authorization_capabilities:
     requirements:
       - The library performs no authorization and has no roles; it runs in the browser under the unlocked local principal.
-      - It must not read or store vault data and must not transmit anything over the network.
+      - It must not read or store vault data and must not transmit anything over the network; preference values are passed in as parameters by the PWA shell.
       - Developer overlays are compiled out of production builds.
     capabilities: []
   failure_recovery_idempotency:
@@ -104,23 +110,24 @@ processes:
       - Focus helpers are idempotent, so calling the route-focus handler twice leaves focus on the same element.
       - If the intended focus target is missing, the helper falls back in order to the view heading, the main landmark, then the document body and logs a development warning.
       - Dialog helpers never leave the page inert; unmounting a dialog always removes the inert and aria-hidden state it applied.
-    idempotency: "Calling useRouteFocus() or closing an already closed dialog has no further effect."
+    idempotency: "Calling useRouteFocus() or closing an already closed dialog has no further effect; setMotionPreference with the current value does nothing."
     concurrency: "Single-threaded UI; the dialog stack serializes open and close, and rapid double activation opens one dialog."
     retries: "Not applicable; no network or storage operations."
     offline: "Fully offline; all code ships in the app shell."
-    partial_failure: "If a dialog fails to render, the inert state is cleared and focus is restored to the trigger so the page stays usable."
+    partial_failure: "If a dialog fails to render, the inert state is cleared and focus is restored to the trigger so the page stays usable. If the shell passes no motion value, the primitives follow prefers-reduced-motion."
   privacy_retention_abuse:
     requirements:
       - The module collects nothing; keyboard events are handled locally and never logged with key values (to avoid capturing typed secrets).
       - Developer warnings contain element selectors only, never field values.
-      - The PWA sends no telemetry (OBS-7), so accessibility problems found by users are reported by the user through the normal feedback form, not automatically.
+      - The PWA sends no telemetry (OBS-7), so accessibility problems found by users are reported by the user through the project issue tracker, optionally attaching the file written by the F15.S03.M01 'Export diagnostics' action; nothing is reported automatically.
+      - Received content cannot move focus, because user-supplied markup is rendered as text, any rich content is sanitised so autofocus, tabindex and on* attributes are removed before it reaches the DOM, and the PWA CSP script-src 'self' without 'unsafe-inline' blocks injected script; the primitives themselves move focus only on user action, route change or dialog open.
     data:
-      - "No data stored or transmitted."
+      - "No data stored or transmitted; preference values passed in by the shell are held in memory only."
     retention:
-      - "None; in-memory focus history is discarded on page unload."
+      - "None; in-memory focus history and the motion value are discarded on page unload."
     threats:
       - "T01 | Keystroke capture through global key handlers | handlers are scoped to components, never log key values and are covered by a code review lint rule"
-      - "T02 | Focus stealing by third-party or injected content | focus moves only on user action or route change; no autofocus except in dialogs and the first field of a form the user opened"
+      - "T02 | Focus stealing by received or injected content | user-supplied markup is rendered as text; rich content is sanitised so autofocus, tabindex and on* attributes are removed; CSP script-src 'self' without 'unsafe-inline' blocks injected script; primitives move focus only on user action, route change or dialog open"
       - "T03 | Clickjacking-like overlays that hide the focused element | V06 check in end-to-end tests and CSP frame-ancestors none"
     abuse_controls:
       - "Toasts and dialogs are limited to one modal at a time and at most 3 stacked toasts, so content cannot flood the focus order."
@@ -140,36 +147,42 @@ processes:
       - "Primitives add ≤ 6 KiB gzip to the initial JS budget (CTR-OBS-001 OBS-5)."
   contract_and_acceptance_tests:
     requirements:
-      - Every requirement of this module is covered by at least one automated test.
+      - Every requirement of this module is covered by at least one automated test, except 09.R04, which is the manual device-session requirement itself and is covered by the recorded manual test.
       - Keyboard-only Playwright flows cover the core journeys on the Pixel 7 and iPhone 14 profiles with an external keyboard emulation.
       - Lint rules have positive and negative fixtures proving they fail and pass correctly.
-    fixtures: "Fixture app with sticky header 56 px and bottom nav 64 px, dialog stack of 2, photo reorder list of 5, canvas map with list alternative; lint fixtures for each rule."
+      - A manual keyboard session on physical Pixel 7 and iPhone 14 devices supplements the automated tests and is recorded per release, with device, date and owner, in the F14.S01.M03 release checklist (V05).
+    fixtures: "Fixture app with sticky header 56 px and bottom nav 64 px, dialog stack of 2, photo reorder list of 5, canvas map with list alternative; lint fixtures for each rule; a waiver file with valid, expired and missing entries targeting component paths; a received listing whose description contains '<input autofocus>' and '<script>document.querySelector(\"button\").focus()</script>'; LocalSettings fixtures with a11yMotion system, reduced and an invalid value."
     tests:
-      - "T01 | unit | 01.R01,01.R02,02.R01 | compute tokens and lint templates with tabindex 3, div onclick, button 40 px high | V01, V02, V03 codes raised; compliant fixtures pass"
+      - "T01 | unit | 01.R01,01.R02,02.R01 | compute tokens and lint templates with tabindex 3, div onclick, a button primitive with a fixed 40 px height | V01, V02, V03 codes raised; compliant fixtures pass"
       - "T02 | e2e | 01.R03,03.R01 | keyboard-only: tab through the listing form, open and close dialogs, change route | all controls reachable, focus order logical, focus on heading after route change within 100 ms"
       - "T03 | e2e | 01.R03,03.R02,06.R03 | nested dialogs close in sequence; trigger removed while dialog open | focus restored to triggers in order; fallback to nearest focusable ancestor"
-      - "T04 | e2e | 01.R03,02.R02 | reorder 5 photos using only buttons and then with pointer drag | identical results; V04 fixture without buttons fails"
-      - "T05 | e2e | 01.R01,01.R02,02.R03 | focus each control with sticky header and bottom nav at 320 px width and 200 percent zoom | element never fully covered (V06); target sizes ≥ 44 px"
-      - "T06 | unit | 02.R02,02.R03 | register single-character shortcut without modifier | V07 raised; with modifier or off switch passes"
+      - "T04 | e2e | 01.R03 | reorder 5 photos using only buttons and then with pointer drag | identical results; V04 fixture without buttons fails"
+      - "T05 | e2e | 01.R02,02.R01 | focus each control with sticky header and bottom nav at 320 px width and 200 percent zoom, measuring getBoundingClientRect | element never fully covered (V06); every measured hit area ≥ 44 by 44 CSS px except inline links (V08)"
+      - "T06 | unit | 02.R01 | register single-character shortcut without modifier | V07 raised; with modifier or off switch passes"
       - "T07 | unit | 03.R01,03.R02,03.R03 | open and close dialogs rapidly in random order (property test, 200 runs) | stack consistent; inert state cleared; focus restored"
-      - "T08 | unit | 04.R01,04.R02,04.R03,05.R01,05.R02,05.R03 | inspect module exports, DOM events and network calls | no domain events, no vault or network access, errors are lint codes"
+      - "T08 | unit | 04.R01,04.R02,04.R03,05.R01,05.R02 | inspect module exports, DOM events, storage and network calls | no domain events, no vault, IndexedDB or network access, preference only via setMotionPreference parameter, errors are lint codes"
       - "T09 | unit | 06.R01,06.R02,06.R03 | call route focus twice; missing target; dialog render error | idempotent; fallback order followed; page not left inert"
-      - "T10 | abuse | 07.R01,07.R02,07.R03 | log capture while typing a password and injecting content that calls focus() | key values never logged; injected focus calls do not move focus without user action"
-      - "T11 | a11y | 01.R03,07.R03 | axe on pages using each primitive in light, dark and forced colors | zero serious or critical findings"
+      - "T10 | abuse | 07.R01,07.R02,07.R03,07.R04 | log and network capture while typing a password; render a received listing description containing '<input autofocus>' and an inline script calling focus() | key values never logged; no request leaves the page; markup shown as text; no autofocus, tabindex or on* attribute in the DOM; focus does not move; a securitypolicyviolation event shows the script blocked by CSP"
+      - "T11 | a11y | 01.R03 | axe on pages using each primitive in light, dark and forced colors | zero serious or critical findings"
       - "T12 | load | 08.R01,08.R02,08.R03 | measure focus move, dialog open, suite duration and bundle size | ≤ 100 ms, ≤ 100 ms, ≤ 5 min and ≤ 6 KiB gzip"
       - "T13 | unit | 09.R01,09.R03 | traceability tool run | every PS-109 requirement maps to a passing test"
-      - "T14 | manual | 09.R02,10.R01 | 20-minute keyboard and screen reader session on a physical Pixel 7 and iPhone 14 | checklist 2.4.11, 2.5.7, 2.5.8 completed with no blockers"
-      - "T15 | unit | 10.R02,10.R03 | upgrade token file from v1 to v1.1 and roll back | components render with defaults; no consumer breaks"
+      - "T14 | manual | 09.R04 | 20-minute keyboard session on a physical Pixel 7 and iPhone 14 with a hardware keyboard | checklist items 2.4.11, 2.5.7 and 2.5.8 completed with no blockers and recorded with device, date and owner in the F14.S01.M03 release checklist"
+      - "T15 | unit | 10.R03 | upgrade token file from v1 to v1.1 and roll back | components render with defaults; no consumer breaks"
+      - "T16 | integration | 02.R02 | trigger each rule V01–V08 in the lint runner, the e2e suite and the development build overlay | each failure prints its stable code in CI output, and the overlay marks the element with the same code"
+      - "T17 | unit | 02.R03 | V02 violation in a component path with a valid component-target waiver, with an expired waiver and with no waiver | passes only with the valid waiver; expired or missing waiver fails with the original rule code; the runner reads tests/a11y/waivers.yaml"
+      - "T18 | unit | 05.R03 | build the production bundle and search it for the overlay module and its strings | no overlay code or strings in the production bundle; the development build contains them"
+      - "T19 | e2e | 09.R02 | Playwright keyboard-only run of browse, create listing, make offer and open thread on the Pixel 7 and iPhone 14 profiles with keyboard emulation | every journey completes without a pointer, no trap, focus visible at every step"
+      - "T20 | integration | 10.R01,10.R02 | vault export and import round trip through F15.S04.M03 with a11yMotion reduced, then with an invalid value | export holds nothing from this module; reduced survives and the shell passes it to setMotionPreference; invalid value falls back to system"
     acceptance:
-      - All tests T01–T15 pass in CI.
+      - All automated tests pass in CI; manual test T14 is recorded as passed in the release checklist (F14.S01.M03 V05).
       - Every core journey is completable with the keyboard only on the two mobile profiles with an external keyboard.
       - No interactive element is smaller than 44 by 44 CSS px except documented inline links.
   import_export_backup_rollback:
     requirements:
       - The module stores no user data, so a user export contains nothing from it.
-      - User preferences that affect keyboard behaviour (for example shortcuts off, reduced motion override) live in vault settings and travel with the vault export of F10.
+      - The only user preference that affects these primitives, the reduced-motion override, lives in F15.S04.M03 LocalSettings (optional field a11yMotion system | reduced) and travels with that module's vault export; the PWA shell reads LocalSettings and passes the value to the primitives as a parameter, so 05.R02 holds.
       - Token and primitive changes are versioned and rollback restores the previous release without migration.
-    export: "No module data is exported; the settings keys a11y.shortcuts and a11y.motion are part of the vault settings export owned by F10."
-    import: "Imported settings are validated against the allowed values (shortcuts on or off, motion system or reduced); unknown keys are ignored."
+    export: "No module data is exported; a11yMotion is part of the F15.S04.M03 LocalSettings vault export. MVP has no single-character shortcuts, so there is no shortcut setting."
+    import: "F15.S04.M03 validates an imported a11yMotion against system or reduced and falls back to system for any other value; the primitives only ever receive the validated value from the PWA shell."
     backup: "Nothing to back up; tokens and primitives ship with the app bundle."
-    migration_rollback: "Tokens are additive; rollback to the previous release restores previous tokens and primitives without data migration."
+    migration_rollback: "Tokens are additive; rollback to the previous release restores previous tokens and primitives without data migration; an a11yMotion value unknown to an older release is ignored and prefers-reduced-motion applies."

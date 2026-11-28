@@ -6,16 +6,16 @@
 
 ## Requirements
 
-- **PS-107-10.R01** A user's vault export contains their channel consents and signed statements.
+- **PS-107-10.R01** A user's vault export contains their channel consents with the signed statements and applied receipts.
 - **PS-107-10.R02** Import re-verifies statements and never re-registers a consent at a relay without a fresh user confirmation.
 - **PS-107-10.R03** Schema changes follow expand and contract; new channels are additive enum values behind a relay capability flag.
 
 ## Specification
 
-- **export:** Section notify.channel_consents in classrup-export/v1; one line per ChannelConsent (schema classrup.notify.channel_consent/v1) without tokens.
+- **export:** Section notify.channel_consents in classrup-export/v1 through ExportSectionPort; one line per ChannelConsent (schema classrup.notify.channel_consent/v1) plus its statements and receipts; no token is exported because none is stored.
 - **import:** Statements are re-verified; granted records import as withdrawn pending reconfirmation when older than 30 days; existing IDs are skipped.
-- **backup:** The vault export is the primary backup (IOX-6); relay consent rows are covered by relay SQLite backup (IOX-3, IOX-7) and restored consents are checked against expiry.
-- **migration rollback:** Additive fields only in v1; rollback is safe because the relay treats unknown channels as unsupported and unknown fields are ignored.
+- **backup:** The vault export is the primary backup (IOX-6); relay registrations are covered by relay SQLite backup (IOX-3, IOX-7) and restored registrations are checked against expiry and the change feed is resumed from the highest changeSeq.
+- **migration rollback:** Additive fields only in v1; rollback is safe because the relay treats unknown channels as unsupported and unknown fields are ignored; retained unsubscribe keys survive a rollback.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F10.S01.M01, F07.S01.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F10.S01.M01, F07.S01.M01, F07.S02.M01, F11.S01.M01, F11.S03.M01, F15.S01.M01, F15.S02.M01, F16.S02.M02, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

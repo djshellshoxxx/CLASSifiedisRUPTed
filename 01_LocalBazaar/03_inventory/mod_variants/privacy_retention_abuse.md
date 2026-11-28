@@ -9,11 +9,12 @@
 - **PS-009-07.R01** Variant data is P3 while the listing is a draft and becomes public only through the signed projection; quantities are never part of it beyond an in-stock flag.
 - **PS-009-07.R02** Variants are retained RET-STANDARD with the listing; tombstones are kept 180 days.
 - **PS-009-07.R03** Attribute text is plain text and is scanned by the same prohibited-item rules as listing text at publication.
+- **PS-009-07.R04** The module registers ExportSectionPort (section bazaar.variants), DeletionPort and RetentionPurgePort with F10 (N6) and annotates every Variant field with its F10.S02.M02 class.
 
 ## Specification
 
 **Data classification**
-- Variant: P3 draft data, P0 when projected.
+- Variant: P3 draft data, P0 when projected; field classes annotated per F10.S02.M02.
 - Quantity: P2 in F01.S03.M01.
 
 **Retention**
@@ -39,8 +40,8 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 |---|---|---|---|---|
 | TEST-PS-009-09.T02 | unit | PS-009-01.R02, PS-009-07.R01 | read projection and events | variants only in projection; no quantities in event or projection beyond in-stock flag |
 | TEST-PS-009-09.T11 | abuse | PS-009-07.R02, PS-009-07.R03 | variant attribute with prohibited keyword at publish | publication blocked by policy; retention shows RET-STANDARD |
-| TEST-PS-009-09.T12 | abuse | PS-009-07.R01, PS-009-07.R03 | 101 commands in an hour; 11 price changes in a day | RATE_LIMITED on the 101st and 11th |
+| TEST-PS-009-09.T19 | integration | PS-009-07.R04 | export section, deletion plan and retention purge through the F10 ports | section bazaar.variants present with field classes; deletion plan deletes variants with tombstones |
 
 ## Dependencies
 
-Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S02.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S01.M03, F01.S02.M01, F01.S04.M01, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

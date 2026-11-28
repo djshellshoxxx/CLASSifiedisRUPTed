@@ -35,6 +35,7 @@ See the module test table below (all processes).
 | TEST-PS-074-09.T13 | unit | PS-074-08.R01, PS-074-08.R03, PS-074-09.R01 | CI report generation | vector count and seeds are present in the CI artifact; traceability tool maps every requirement to a passing test |
 | TEST-PS-074-09.T14 | unit | PS-074-01.R01, PS-074-09.R02 | lint rule run on a file using parseFloat | lint fails the build |
 | TEST-PS-074-09.T15 | unit | PS-074-10.R01, PS-074-10.R02, PS-074-10.R03 | publish vectors file and load it from a fresh checkout and the previous major | vectors load, versions are recorded and backward compatible |
+| TEST-PS-074-09.T16 | property | PS-074-01.R04, PS-074-02.R01 | maxAmount for decimals 0 to 36 including EUR 2, JPY 0, BTC 8, ETH 18, USDC 6 and a 36-decimal asset, plus decimals -1, 37 and 2.5 | 10^(10 + decimals) for decimals up to 27 and 10^38 - 1 above, always a canonical amount of at most 38 digits that parseMinor accepts; out-of-range decimals return COMMERCE_MONEY_INVALID; identical results in the shared JSON vectors |
 
 ## Acceptance criteria
 

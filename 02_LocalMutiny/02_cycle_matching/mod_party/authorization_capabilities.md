@@ -19,15 +19,15 @@
 | mutiny.matching_profile.read_own | principal | own vault |
 | mutiny.matching_profile.read_projections | principal | own vault; returns only public projection fields of peers, never exclusions |
 
-Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
+Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-019-09.T08 | abuse | PS-019-05.R01, PS-019-05.R02, PS-019-07.R01 | other actor updates profile; projection signed by wrong DID; request logs inspected | FORBIDDEN or quarantine; no exclusion in any log |
-| TEST-PS-019-09.T09 | contract | PS-019-04.R02, PS-019-05.R03 | sync state progression with fake relay | UI model shows only the reached state among local_committed, prepared, transport_acknowledged, peer_accepted |
+| TEST-PS-019-09.T18 | abuse | PS-019-05.R03 | relay refuses to index, rewrites or replays a projection | refusal removes only that relay's copy; rewritten projection fails signature; replay ignored; no relay request can change the local profile |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M02, F16.S02.M03, F12.S03.M04, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M02, F06.S02.M01, F16.S02.M03, F12.S03.M04, F15.S01.M01, F11.S01.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

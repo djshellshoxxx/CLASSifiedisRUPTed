@@ -13,7 +13,7 @@
 ## Specification
 
 - **idempotency:** Tasks are pure functions of the commit and fixtures; re-running overwrites the report.
-- **concurrency:** Axe runs are sharded across at most 4 parallel Playwright workers; each route-state-theme combination is an independent job.
+- **concurrency:** Axe runs are sharded across at most 4 parallel Playwright workers; each route-state-theme-viewport-locale combination is an independent job.
 - **retries:** A failed browser launch or navigation timeout retries once; assertion failures are never retried.
 - **offline:** CI uses a seeded offline-capable fixture server; no external network is needed for the checks.
 - **partial failure:** If a shard crashes, the aggregator marks the run failed with the missing combinations listed.
@@ -25,8 +25,8 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-111-09.T09 | chaos | PS-111-06.R01, PS-111-06.R02, PS-111-06.R03 | kill one Playwright shard; inject a flaky navigation timeout | run marked failed listing missing combinations; flaky retry reported, real findings not hidden |
-| TEST-PS-111-09.T10 | unit | PS-111-06.R01, PS-111-07.R01, PS-111-07.R02 | run twice on the same commit; scan report for page text or user data | identical findings; reports contain selectors and rule ids only |
+| TEST-PS-111-09.T10 | unit | PS-111-06.R01, PS-111-07.R01, PS-111-07.R02, PS-111-05.R03 | run twice on the same commit; scan reports for page text or user data; regenerate fixtures from their seeds | identical findings; reports contain selectors and rule ids only; regenerated fixtures are byte-identical to the committed ones and contain only synthetic data |
 
 ## Dependencies
 
-Module depends on: F14.S01.M01, F14.S01.M02, F14.S02.M01, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F14.S01.M01, F14.S01.M02, F14.S02.M01, F16.S02.M01, F07.S01.M03, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

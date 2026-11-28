@@ -37,13 +37,18 @@ See the module test table below (all processes).
 | TEST-PS-016-09.T15 | unit | PS-016-09.R01 | traceability tool run | every PS-016 requirement maps to a passing test |
 | TEST-PS-016-09.T16 | integration | PS-016-10.R01, PS-016-10.R02, PS-016-10.R03 | export and import | reports are not exported; imported subjects re-run checks on first open |
 | TEST-PS-016-09.T17 | a11y | PS-016-01.R01 | checklist screen | axe zero serious issues, basis chips announced |
+| TEST-PS-016-09.T18 | unit | PS-016-02.R02 | absolute minimum reference 500 EUR minor converted with pinned quotes EUR->JPY 163/1 and EUR->BTC 1/60000 | 815 JPY and 8333 satoshi (HALF_EVEN, MNY-4); EUR settlement uses 500 unchanged |
+| TEST-PS-016-09.T19 | unit | PS-016-02.R01, PS-016-03.R02 | C11 at revision time with a 30 h cross-currency deadline and a 14 d plus 23 d window; C11 at consent time 40 minutes before a 10-day trade proposal deadline; C06 with 20 minutes left and expired | MUTINY_DEADLINE_INVALID twice; consent allowed; warn then fail |
+| TEST-PS-016-09.T20 | unit | PS-016-01.R01, PS-016-04.R02 | registry with profiles 3 and 4 registered, get(5), explicit effectiveProfile, explanation of a 4-party suggestion with the 3-party profile | engine default for 5; explicit profile used; MUTINY_PROFILE_LENGTH_MISMATCH |
+| TEST-PS-016-09.T21 | integration | PS-016-07.R04 | F10 export, deletion and retention sweep | section mutiny.feasibility declared excluded; erased principal's reports purged; reports purged after 30 days |
+| TEST-PS-016-09.T22 | unit | PS-016-02.R03, PS-016-07.R03 | gap above tolerance with an unsigned local acceptance, then with an acceptedImbalances entry in the signed snapshot | first fails C05; second passes C05 with basis signed_projection |
 
 ## Acceptance criteria
 
-- All tests T01–T17 pass in CI.
+- All tests T01–T22 pass in CI.
 - No peer claim is ever presented as verified and overall feasible is impossible with any unverifiable or peer_claim basis.
 - MNY-5 tolerance is exact at the boundary for bigint amounts.
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M04, F02.S01.M02, F02.S01.M03, F02.S04.M02, F02.S04.M03, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

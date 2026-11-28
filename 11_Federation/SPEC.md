@@ -1,31 +1,61 @@
 # F11 — Federation and portability
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** PROJECT.
+**Status:** SPECIFIED. **Parent:** [ClassRup](../PROJECT_SPEC.md). **Package slug:** `federation`.
 
-## Purpose and business behavior
-Provide federation and portability as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Subfeatures
 
-## Scope
-- 01_protocol
-- 02_relay_sync
-- 03_interop
+- [F11.S01 01_protocol](01_protocol/SPEC.md) — 3 modules
+- [F11.S02 02_relay_sync](02_relay_sync/SPEC.md) — 3 modules
+- [F11.S03 03_interop](03_interop/SPEC.md) — 3 modules
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+The feature is enabled by flag `F11` (CTR-FLG-001); each module can be disabled independently when no enabled module depends on it. Upstream features: F06, F07, F10, F12, F15, F16.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Cross-subfeature and external events
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| federation.block_rule.changed | F11.S03.M02 | F11.S01.M02 | internal |
+| federation.peer.suspended | F11.S03.M01 | F11.S01.M02 | internal |
+| federation.conflict.detected | F11.S02.M03 | F11.S01.M02 | internal |
+| federation.conflict.resolved | F11.S02.M03 | F11.S01.M02 | internal |
+| federation.account.moved | F11.S03.M03 | F11.S01.M02 | internal |
+| identity.portable_doc.published | F07.S02.M01 | F11.S01.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F11.S01.M02 | external |
+| bazaar.listing.unpublished | F01.S01.M03 | F11.S01.M02 | external |
+| bazaar.listing.expired | F01.S01.M04 | F11.S01.M02 | external |
+| services.offering.withdrawn | F03.S01.M01 | F11.S01.M02 | external |
+| platform.flag.changed | F15.S04.M02 | F11.S01.M02 | external |
+| federation.record.accepted | F11.S01.M02 | F11.S02.M01 | internal |
+| federation.tombstone.applied | F11.S01.M02 | F11.S02.M01 | internal |
+| federation.peer.added | F11.S03.M01 | F11.S02.M01 | internal |
+| federation.peer.suspended | F11.S03.M01 | F11.S02.M01 | internal |
+| federation.peer.reinstated | F11.S03.M01 | F11.S02.M01 | internal |
+| federation.peer.removed | F11.S03.M01 | F11.S02.M01 | internal |
+| federation.account.moved | F11.S03.M03 | F11.S02.M01 | internal |
+| identity.portable_doc.published | F07.S02.M01 | F11.S02.M01 | external |
+| privacy.consent.withdrawn | F10.S01.M01 | F11.S02.M01 | external |
+| platform.flag.changed | F15.S04.M02 | F11.S02.M01 | external |
+| federation.account.moved | F11.S03.M03 | F11.S02.M03 | internal |
+| identity.portable_doc.published | F07.S02.M01 | F11.S02.M03 | external |
+| federation.peer.suspended | F11.S03.M01 | F11.S02.M03 | internal |
+| privacy.deletion.completed | F10.S01.M04 | F11.S02.M03 | external |
+| federation.record.rejected | F11.S01.M02 | F11.S03.M01 | internal |
+| federation.conflict.detected | F11.S02.M03 | F11.S03.M01 | internal |
+| federation.delivery.failed | F11.S02.M01 | F11.S03.M01 | internal |
+| platform.flag.changed | F15.S04.M02 | F11.S03.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F11.S03.M01 | external |
+| identity.block.added | F07.S02.M02 | F11.S03.M02 | external |
+| identity.block.removed | F07.S02.M02 | F11.S03.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F11.S03.M02 | external |
+| identity.portable_doc.published | F07.S02.M01 | F11.S03.M03 | external |
+| identity.device_key.revoked | F07.S01.M01 | F11.S03.M03 | external |
+| federation.delivery.failed | F11.S02.M01 | F11.S03.M03 | internal |
+| federation.conflict.detected | F11.S02.M03 | F11.S03.M03 | internal |
+| federation.conflict.resolved | F11.S02.M03 | F11.S03.M03 | internal |
+| privacy.deletion.requested | F10.S01.M04 | F11.S03.M03 | external |
+| privacy.deletion.cancelled | F10.S01.M04 | F11.S03.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F11.S03.M03 | external |

@@ -6,3 +6,6 @@
 - **UX-2** Every async view has explicit states: loading, empty, error (localized from `messageKey`, with retry when retryable), offline-pending, conflict, and success. Status changes are announced via `aria-live="polite"`; destructive confirmations via accessible dialog.
 - **UX-3** Strings live in message catalogs `packages/i18n/messages/<locale>.json` with `{name}` placeholders and plural forms via `Intl.PluralRules`; numbers/money/dates via `Intl.NumberFormat`/`Intl.DateTimeFormat`. Default locale `en`; layouts use CSS logical properties for RTL.
 - **UX-4** Money is always displayed with currency code or symbol plus the precision source (e.g. “≈ 42.10 EUR, quote from <source> at 10:15”).
+
+## ADR-0016 amendment (review pass, 2026-11-11)
+- **UX-5** Replaces the 3.3.8 clause of UX-1: there are no accounts or logins (ADR-0016). Vault unlock, recovery-kit restore and backup passphrase entry rely on the WCAG 3.3.8 assistance-mechanism exception: `autocomplete` current-password/new-password, paste and password managers never blocked, show/hide toggle, recovery kit import by file or QR.

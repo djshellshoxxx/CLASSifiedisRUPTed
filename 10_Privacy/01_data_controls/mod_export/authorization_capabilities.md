@@ -18,8 +18,10 @@
 | privacy.export.cancel | local-principal | job requested or collecting |
 | privacy.export.download | local-principal | vault unlocked within 5 minutes; job ready and not expired |
 | privacy.export.read | local-principal | vault unlocked |
+| privacy.import.preview | local-principal | vault unlocked within 5 minutes; a local bundle handle the user chose |
+| privacy.import.commit | local-principal | vault unlocked within 5 minutes; preview younger than 30 minutes and verified |
 
-Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
+Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Verification
 
@@ -29,4 +31,4 @@ Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F10.S01.M01, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F10.S02.M02, F10.S01.M02, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

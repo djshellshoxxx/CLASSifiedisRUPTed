@@ -1,31 +1,52 @@
-# F03.S02 — service_booking
+# F03.S02 — 02_service_booking
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F03.
+**Status:** SPECIFIED. **Parent:** [F03](../SPEC.md).
 
-## Purpose and business behavior
-Provide service_booking as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_quotes
-- mod_milestones
-- mod_disputes
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F03.S02.M01 | [Service quotes and booking](mod_quotes/SPEC.md) | SPECIFIED | Request → quote (expiry) → accept creates Booking; cancellation policy terms. |
+| F03.S02.M02 | [Service milestones](mod_milestones/SPEC.md) | SPECIFIED | Milestones with amounts; provider submits, client approves; payment claims per milestone (F09). |
+| F03.S02.M03 | [Service disputes](mod_disputes/SPEC.md) | SPECIFIED | Service-specific dispute intake (scope, milestones) delegating case handling to F09.S02.M02. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/services` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| services.milestone.submitted | F03.S02.M02 | F03.S02.M01 | internal |
+| services.milestone.approved | F03.S02.M02 | F03.S02.M01 | internal |
+| services.booking.completed | F03.S02.M02 | F03.S02.M01 | internal |
+| services.dispute.opened | F03.S02.M03 | F03.S02.M01 | internal |
+| commerce.dispute.resolved | F09.S02.M02 | F03.S02.M01 | external |
+| commerce.dispute.withdrawn | F09.S02.M02 | F03.S02.M01 | external |
+| identity.block.added | F07.S02.M02 | F03.S02.M01 | external |
+| services.offering.withdrawn | F03.S01.M01 | F03.S02.M01 | external |
+| services.availability.changed | F03.S01.M02 | F03.S02.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S02.M01 | external |
+| services.booking.confirmed | F03.S02.M01 | F03.S02.M02 | internal |
+| services.booking.cancelled | F03.S02.M01 | F03.S02.M02 | internal |
+| commerce.payment.claimed | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.payment.acknowledged | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.payment.confirming | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.confirmed | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.finalized | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.reorged | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.failed | F09.S01.M03 | F03.S02.M02 | external |
+| commerce.payment.disputed | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.payment.expired | F09.S01.M01 | F03.S02.M02 | external |
+| commerce.deal.cancelled | F09.S01.M01 | F03.S02.M02 | external |
+| services.dispute.opened | F03.S02.M03 | F03.S02.M02 | internal |
+| commerce.dispute.resolved | F09.S02.M02 | F03.S02.M02 | external |
+| commerce.dispute.withdrawn | F09.S02.M02 | F03.S02.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S02.M02 | external |
+| commerce.dispute.opened | F09.S02.M02 | F03.S02.M03 | external |
+| commerce.dispute.resolved | F09.S02.M02 | F03.S02.M03 | external |
+| commerce.dispute.withdrawn | F09.S02.M02 | F03.S02.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F03.S02.M03 | external |

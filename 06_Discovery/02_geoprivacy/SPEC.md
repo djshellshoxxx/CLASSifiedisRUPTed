@@ -1,31 +1,30 @@
-# F06.S02 — geoprivacy
+# F06.S02 — 02_geoprivacy
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F06.
+**Status:** SPECIFIED. **Parent:** [F06](../SPEC.md).
 
-## Purpose and business behavior
-Provide geoprivacy as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_coarse
-- mod_location
-- mod_proximity
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F06.S02.M01 | [Coarse location regions](mod_coarse/SPEC.md) | SPECIFIED | Pure geohash encode/decode/neighbors, snapping to L1/L2/L3 cells, cell-to-cell distance buckets (CTR-PRV-001). |
+| F06.S02.M02 | [User location settings](mod_location/SPEC.md) | SPECIFIED | User home region (L2 public), optional manual entry without GPS permission, exact location shares to one counterparty with TTL ≤ 24 h (L4, P3). |
+| F06.S02.M03 | [Proximity queries](mod_proximity/SPEC.md) | SPECIFIED | Radius search over cells (min 5 km) with bucketed distances and per-actor rate limits against trilateration. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/discovery` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| federation.record.accepted | F11.S01.M02 | F06.S02.M02 | external |
+| identity.block.added | F07.S02.M02 | F06.S02.M02 | external |
+| comms.meetup.cancelled | F08.S03.M03 | F06.S02.M02 | external |
+| commerce.deal.cancelled | F09.S01.M01 | F06.S02.M02 | external |
+| commerce.deal.completed | F09.S01.M01 | F06.S02.M02 | external |
+| comms.thread.archived | F08.S01.M02 | F06.S02.M02 | external |
+| privacy.deletion.requested | F10.S01.M04 | F06.S02.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F06.S02.M02 | external |

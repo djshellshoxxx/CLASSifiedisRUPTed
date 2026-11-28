@@ -1,32 +1,74 @@
-# F02.S03 — cycle_execution
+# F02.S03 — 03_cycle_execution
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.
+**Status:** SPECIFIED. **Parent:** [F02](../SPEC.md).
 
-## Purpose and business behavior
-Provide cycle_execution as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_consent
-- mod_lock
-- mod_dropouts
-- mod_recovery
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F02.S03.M01 | [Cycle consent](mod_consent/SPEC.md) | SPECIFIED | Turns suggestion into Cycle proposal; collects signed all-party consent on exact revision; commit only when unanimous before deadline (default 72 h). |
+| F02.S03.M02 | [Cycle locks](mod_lock/SPEC.md) | SPECIFIED | Lease all items in a cycle atomically (all-or-nothing) via inventory holds; renew/expire; concurrent cycles over same item resolved first-commit-wins. |
+| F02.S03.M03 | [Cycle dropouts](mod_dropouts/SPEC.md) | SPECIFIED | Handle withdrawal, expiry, block, suspension of a participant; before handover cancel and release; never silently reroute. |
+| F02.S03.M04 | [Cycle execution and recovery](mod_recovery/SPEC.md) | SPECIFIED | Per-leg giver/receiver attestations, completion, partial-execution recovery options (return, compensation, dispute via F09.S02.M02). |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/mutiny` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| mutiny.proposal.accepted | F02.S01.M01 | F02.S03.M01 | external |
+| mutiny.proposal.revised | F02.S01.M04 | F02.S03.M01 | external |
+| mutiny.cycle.locked | F02.S03.M02 | F02.S03.M01 | internal |
+| mutiny.cycle.unlocked | F02.S03.M02 | F02.S03.M01 | internal |
+| comms.consent.signed | F08.S02.M02 | F02.S03.M01 | external |
+| comms.consent.received | F08.S02.M02 | F02.S03.M01 | external |
+| comms.consent.revoked | F08.S02.M02 | F02.S03.M01 | external |
+| mutiny.revision.forked | F02.S01.M04 | F02.S03.M01 | external |
+| mutiny.lock.conflict_detected | F02.S03.M02 | F02.S03.M01 | internal |
+| mutiny.cycle.cancelled | F02.S03.M03 | F02.S03.M01 | internal |
+| mutiny.leg.handed_over | F02.S03.M04 | F02.S03.M01 | internal |
+| mutiny.leg.received | F02.S03.M04 | F02.S03.M01 | internal |
+| mutiny.cycle.completed | F02.S03.M04 | F02.S03.M01 | internal |
+| mutiny.cycle.partially_executed | F02.S03.M04 | F02.S03.M01 | internal |
+| identity.reputation.recomputed | F07.S03.M01 | F02.S03.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S03.M01 | external |
+| mutiny.cycle.declined | F02.S03.M01 | F02.S03.M02 | internal |
+| mutiny.cycle.cancelled | F02.S03.M03 | F02.S03.M02 | internal |
+| mutiny.cycle.completed | F02.S03.M04 | F02.S03.M02 | internal |
+| mutiny.cycle.partially_executed | F02.S03.M04 | F02.S03.M02 | internal |
+| mutiny.recovery.resolved | F02.S03.M04 | F02.S03.M02 | internal |
+| mutiny.leg.handed_over | F02.S03.M04 | F02.S03.M02 | internal |
+| mutiny.leg.received | F02.S03.M04 | F02.S03.M02 | internal |
+| mutiny.proposal.rejected | F02.S01.M01 | F02.S03.M02 | external |
+| mutiny.proposal.withdrawn | F02.S01.M01 | F02.S03.M02 | external |
+| mutiny.proposal.expired | F02.S01.M01 | F02.S03.M02 | external |
+| mutiny.revision.forked | F02.S01.M04 | F02.S03.M02 | external |
+| bazaar.inventory.released | F01.S03.M01 | F02.S03.M02 | external |
+| bazaar.inventory.conflict_detected | F01.S03.M01 | F02.S03.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S03.M02 | external |
+| mutiny.cycle.proposed | F02.S03.M01 | F02.S03.M03 | internal |
+| mutiny.cycle.committed | F02.S03.M01 | F02.S03.M03 | internal |
+| mutiny.cycle.declined | F02.S03.M01 | F02.S03.M03 | internal |
+| comms.consent.received | F08.S02.M02 | F02.S03.M03 | external |
+| comms.consent.revoked | F08.S02.M02 | F02.S03.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S03.M03 | external |
+| mutiny.cycle.unlocked | F02.S03.M02 | F02.S03.M03 | internal |
+| mutiny.leg.handed_over | F02.S03.M04 | F02.S03.M03 | internal |
+| mutiny.leg.received | F02.S03.M04 | F02.S03.M03 | internal |
+| identity.block.added | F07.S02.M02 | F02.S03.M03 | external |
+| bazaar.listing.unpublished | F01.S01.M03 | F02.S03.M03 | external |
+| bazaar.listing.expired | F01.S01.M04 | F02.S03.M03 | external |
+| mutiny.cycle.committed | F02.S03.M01 | F02.S03.M04 | internal |
+| mutiny.cycle.participant_dropped | F02.S03.M03 | F02.S03.M04 | internal |
+| mutiny.cycle.cancelled | F02.S03.M03 | F02.S03.M04 | internal |
+| mutiny.compensation.settled | F02.S04.M01 | F02.S03.M04 | external |
+| commerce.payment.disputed | F09.S01.M01 | F02.S03.M04 | external |
+| commerce.dispute.opened | F09.S02.M02 | F02.S03.M04 | external |
+| commerce.dispute.resolved | F09.S02.M02 | F02.S03.M04 | external |
+| commerce.dispute.withdrawn | F09.S02.M02 | F02.S03.M04 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S03.M04 | external |

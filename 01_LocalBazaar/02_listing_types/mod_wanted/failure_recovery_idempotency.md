@@ -13,10 +13,10 @@
 ## Specification
 
 - **idempotency:** Idempotency-Key required on commands, kept 24 h; consumers record (consumer, eventId) before side effects and skip duplicates.
-- **concurrency:** expectedRevision on define, mark_fulfilled and withdraw; unique index on listing id; listing events and owner actions are serialized by the IndexedDB transaction, first commit wins.
+- **concurrency:** expectedRevision on define, mark_fulfilled and withdraw; unique index on listing id; listing events and owner actions are serialized by the IndexedDB transaction, first commit wins. The listing revision recorded by define uses the Listing expectedRevision inside the same transaction.
 - **retries:** Consumers retry failed handling with backoff base 500 ms cap 30 s up to 8 attempts, then dead-letter locally and show a diagnostics entry (EVT-6).
 - **offline:** Fully offline capable; unsent changes are shown until the projection is re-sent and a signed relay receipt exists.
-- **partial failure:** If an event handler fails after the status change, the whole handler transaction rolls back and the event is retried; the want never shows open while its listing is unpublished.
+- **partial failure:** If an event handler fails after the status change, the whole handler transaction rolls back and the event is retried; the want never shows open while its listing is unpublished or expired. If recording the listing revision fails, the want edit is rolled back.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -30,4 +30,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F18.S01.M03, F09.S03.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S01.M01, F01.S01.M02, F18.S01.M03, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

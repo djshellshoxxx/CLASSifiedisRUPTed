@@ -19,7 +19,7 @@
 - debug filter.rejected {code, path} - never the value.
 
 **Budgets**
-- validateFilter plus compileFilter <= 1 ms p95 for a filter with all keys and 200 categories; compiled queries use discovery_doc_cell or the category index (explain-plan test).
+- validateFilter plus compileFilter <= 1 ms p95 for a filter with all keys and 200 categories; compiled queries use discovery_doc_cell (precision 5), discovery_doc_cell4 (precision 4) or the category index (explain-plan test).
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -28,7 +28,7 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-044-09.T07 | abuse | PS-044-07.R02, PS-044-07.R03, PS-044-08.R01 | 10 000 fuzz strings with SQL metacharacters and 5 000-item lists | no SQL injection, errors for oversize lists, validation under 1 ms p95 |
-| TEST-PS-044-09.T11 | integration | PS-044-08.R02, PS-044-08.R03 | explain query plan for distance and category filters | index used, metrics counted by code without values |
+| TEST-PS-044-09.T11 | integration | PS-044-08.R02, PS-044-08.R03 | explain query plan for distance filters of 10 and 100 km and category filters | discovery_doc_cell and discovery_doc_cell4 used, metrics counted by code without values |
 
 ## Dependencies
 

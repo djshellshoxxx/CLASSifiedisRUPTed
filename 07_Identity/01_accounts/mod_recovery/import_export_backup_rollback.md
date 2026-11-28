@@ -12,8 +12,8 @@
 
 ## Specification
 
-- **export:** Section identity.recovery_kit in classrup-export/v1 (schema classrup.identity.recovery_kit/v1) with metadata and encrypted blob; the words are never included.
-- **import:** A kit with unsupported parameters or checksum mismatch is imported as superseded and reported; at most one imported kit becomes active.
+- **export:** Section identity.recovery_kit in classrup-export/v1 (schema classrup.identity.recovery_kit/v1) with metadata, docHint and encrypted blob, plus observed notices; the words are never included.
+- **import:** A kit with unsupported parameters or checksum mismatch is imported as superseded and reported; at most one imported kit becomes active; observed notices import with their original firstSeenAt.
 - **backup:** The vault export is the primary backup (IOX-6); the user-selected encrypted backup location receives only the kit file; relays never receive kits.
 - **migration rollback:** A stronger KDF is a new kit schema major with a registered migration that requires the user to create a new kit; rollback keeps v1 kits recoverable with the original parameters.
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-053-09.T15 | integration | PS-053-10.R01, PS-053-10.R02, PS-053-10.R03 | export, import to a fresh vault, vault erase | kit metadata and blob round-trip; words never in export; erase leaves the printed kit valid |
+| TEST-PS-053-09.T15 | integration | PS-053-10.R01, PS-053-10.R02, PS-053-10.R03 | export, import to a fresh vault, vault erase, and a stronger-KDF kit version next to a v1 kit | kit metadata and blob round-trip; words never in export; erase leaves the printed kit valid; v1 kit still recovers |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F07.S02.M01, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-PRV-001, CTR-IOX-001, CTR-UX-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

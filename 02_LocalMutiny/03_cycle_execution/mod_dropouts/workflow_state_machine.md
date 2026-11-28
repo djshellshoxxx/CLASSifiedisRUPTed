@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-022-03.R01** Before any handover evidence exists a dropout cancels the cycle and the vault releases its own reservations in the same transaction, and exactly one cancelled event is emitted per cycle.
+- **PS-022-03.R01** Before any handover evidence exists a dropout cancels the cycle and the vault releases its own reservations in the same transaction through the F02.S03.M02 LockPort.releaseForSubject, and exactly one cancelled event is emitted per cycle.
 - **PS-022-03.R02** After any handover evidence exists a dropout never cancels the cycle; it is recorded and the cycle moves to partially_executed with a recovery case, so already handed-over items are not abandoned.
 - **PS-022-03.R03** No dropout, timeout or loss signal adds, removes or substitutes participants, and the next step for the others is only a fresh suggestion and fresh consent.
 - **PS-022-03.R04** Late evidence arriving after cancellation never reopens the cycle; it is stored and may open a standalone recovery case.
@@ -31,7 +31,10 @@
 | TEST-PS-022-09.T05 | integration | PS-022-03.R04, PS-022-06.R03 | handed_over attestation arrives after cancellation | cycle stays cancelled and a standalone recovery case is opened |
 | TEST-PS-022-09.T06 | integration | PS-022-03.R01, PS-022-04.R03 | 6-party cycle with two silent participants at deadline on local clocks | cycle cancelled with dropout records basis local_clock; no signature produced for the silent ones |
 | TEST-PS-022-09.T07 | abuse | PS-022-03.R03, PS-022-07.R03 | attempt to add, remove or replace a participant through revision, roster or dropout calls | MUTINY_REROUTE_FORBIDDEN everywhere; participantIds unchanged |
+| TEST-PS-022-09.T11 | integration | PS-022-06.R01, PS-022-06.R02, PS-022-03.R01 | replay withdraw; crash inside the withdraw transaction after LockPort.releaseForSubject was called; abort of that transaction | one record; after abort the cycle and the holds are unchanged; after commit cancellation and release are both visible, never only one |
+| TEST-PS-022-09.T19 | integration | PS-022-01.R03, PS-022-03.R01, PS-022-03.R02 | Bob revokes his consent through F08 after commit, once before any handover and once after Alice's handed_over | first: dropout withdrew, cancelled, own reservations released in the same transaction; second: partially_executed with recovery |
+| TEST-PS-022-09.T21 | integration | PS-022-06.R03, PS-022-03.R04 | vault opened with an own active lock whose cycle is already cancelled (orphan) | evaluate on open releases it through LockPort.releaseForSubject; no cycle reopens |
 
 ## Dependencies
 
-Module depends on: F02.S03.M01, F02.S03.M04, F02.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S03.M01, F02.S03.M02, F02.S03.M04, F02.S01.M02, F08.S02.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

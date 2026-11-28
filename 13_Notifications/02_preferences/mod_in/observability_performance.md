@@ -13,15 +13,15 @@
 ## Specification
 
 **Metrics**
-- classrup_notify_pref_mirror_total{outcome=ok|stale|rejected} (relay)
-- classrup_notify_pref_resolve_ms (histogram, relay)
+- classrup_notify_pref_mirror_total{outcome=applied|stale|conflict|rejected} (relay)
+- classrup_notify_pref_resolve_ms (histogram, relay) and classrup_notify_pref_resolve_defaults_total (relay)
 - classrup_notify_pref_changes_total (local diagnostics)
 
 **Logs**
-- relay info preference.mirrored {userHash, seq, correlationId} — no categories.
+- relay info preference.mirrored {userHash, channel, seq, outcome, correlationId} — no categories.
 
 **Budgets**
-- set p95 ≤ 50 ms; relay mirror p95 ≤ 300 ms at 50 req/s; resolve p95 ≤ 20 ms with 100 000 users.
+- set p95 ≤ 50 ms; check p95 ≤ 2 ms; relay mirror p95 ≤ 300 ms at 50 req/s; resolve p95 ≤ 20 ms with 100 000 users.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -33,4 +33,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F11.S01.M01, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

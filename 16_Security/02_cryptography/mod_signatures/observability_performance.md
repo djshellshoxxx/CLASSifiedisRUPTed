@@ -13,16 +13,16 @@
 ## Specification
 
 **Metrics**
-- classrup_security_signature_verifications_total{outcome=valid|invalid,code}
+- classrup_security_signature_verifications_total{outcome=accepted|not_accepted,code}
 - classrup_security_signature_verify_ms (histogram)
 - classrup_security_signature_freshness_total{class=fresh|stale|unknown}
 
 **Logs**
-- relay warn signature.invalid {context, code, correlationId} — no payload, no key ID.
+- relay warn signature.not_accepted {context, code, correlationId} — no payload, no key ID.
 
 **Budgets**
 - sign and verify p95 ≤ 5 ms (desktop) and ≤ 25 ms (Moto G profile) for 4 KiB; canonicalization of 64 KiB ≤ 10 ms.
-- Library bundle ≤ 12 KiB gzip excluding @noble/curves.
+- Library bundle ≤ 12 KiB gzip excluding @noble/curves and the F11.S01.M03 primitives.
 
 Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
@@ -30,8 +30,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-130-09.T11 | load | PS-130-08.R01, PS-130-08.R02, PS-130-08.R03 | 1 000 verifications per second for 5 minutes, 4 KiB payloads; Moto G profile | p95 ≤ 5 ms desktop and ≤ 25 ms Moto G; metrics exported |
+| TEST-PS-130-09.T11 | load | PS-130-08.R01, PS-130-08.R02, PS-130-08.R03 | 1 000 verifications per second for 5 minutes, 4 KiB payloads; Moto G profile | p95 ≤ 5 ms desktop and ≤ 25 ms Moto G; metrics exported and visible to the F16.S03.M02 hooks |
 
 ## Dependencies
 
-Module depends on: F16.S02.M02, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M03, CTR-FED-001, CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

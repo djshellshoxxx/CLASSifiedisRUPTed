@@ -6,7 +6,7 @@
 
 ## Requirements
 
-- **PS-133-04.R01** The CLI parses the register, validates rules V01 to V05, resolves references against planning/modules.yaml, module.spec.yaml files and test IDs, and exits non-zero on any error.
+- **PS-133-04.R01** The CLI parses the register, validates rules V01 to V06, resolves references against planning/modules.yaml, module.spec.yaml files and test IDs, and exits non-zero on any error.
 - **PS-133-04.R02** The report lists counts per boundary and STRIDE letter, rows by residual risk level and dangling references, in text and JSON.
 - **PS-133-04.R03** The CLI runs in CI on every pull request touching module specs or the register, and in the release gate.
 
@@ -57,7 +57,7 @@ SECURITY_THREATMODEL_DANGLING_CONTROL THR-B2-03 -> F16.S02.M03.07.R02 not found 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-133-09.T06 | integration | PS-133-04.R01, PS-133-04.R02, PS-133-04.R03 | run CLI in CI on a pull request touching a spec | report text and JSON produced; non-zero exit blocks merge |
-| TEST-PS-133-09.T12 | manual | PS-133-03.R01, PS-133-04.R03, PS-133-10.R01 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request |
+| TEST-PS-133-09.T12 | manual | PS-133-03.R01, PS-133-04.R03 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request |
 
 ## Dependencies
 

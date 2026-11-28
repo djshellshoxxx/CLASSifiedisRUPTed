@@ -19,8 +19,8 @@
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-082-09.T01 | unit | PS-082-01.R01, PS-082-01.R02, PS-082-02.R01 | run the check on the valid fixture and on one missing a test | valid passes with exit 0; invalid exits 1 naming the entry and rule |
-| TEST-PS-082-09.T02 | unit | PS-082-01.R03, PS-082-02.R02 | catalog with a dangling PS requirement ID and unknown PRIVT ID | both reported with entry ID |
-| TEST-PS-082-09.T11 | manual | PS-082-07.R03, PS-082-01.R03 | reviewer reads the user-facing summary page | states pseudonymity is not anonymity, relay metadata visibility and non-recall limits; reading level grade 8 |
+| TEST-PS-082-09.T02 | unit | PS-082-01.R02, PS-082-02.R02 | catalog with a dangling PS requirement ID and unknown PRIVT ID | both reported with entry ID |
+| TEST-PS-082-09.T10 | unit | PS-082-01.R03, PS-082-07.R01 | scan catalog for emails, keys, URLs to real services and exploit payload patterns | none found |
 
 ## Dependencies
 

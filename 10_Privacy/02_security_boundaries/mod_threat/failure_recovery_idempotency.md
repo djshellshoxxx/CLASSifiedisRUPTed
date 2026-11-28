@@ -24,8 +24,9 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-082-09.T08 | integration | PS-082-06.R01, PS-082-06.R03 | run the check twice and with a failing renderer | identical output; renderer failure does not hide check result |
+| TEST-PS-082-09.T08 | integration | PS-082-06.R01 | run the check twice and with a failing renderer | identical output; renderer failure does not hide check result |
 | TEST-PS-082-09.T09 | abuse | PS-082-05.R02, PS-082-06.R02 | attempt to merge a catalog change without privacy reviewer approval or with a failing check | CI blocks the merge |
+| TEST-PS-082-09.T15 | unit | PS-082-03.R02, PS-082-06.R03 | run privacy-threat-check --release-candidate on the fixture history, then rebuild the same release candidate | a review task listing the modules changed since the last review is generated once; the rebuild does not duplicate it |
 
 ## Dependencies
 

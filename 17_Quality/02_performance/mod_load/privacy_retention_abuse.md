@@ -1,6 +1,6 @@
 # PS-139-07 — Privacy, retention and abuse: Load testing
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M01 Load testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/load` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M01 Load testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/load` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -28,8 +28,8 @@
 | T03 | Report leaks sensitive data | report schema whitelists fields; relay logs scanned for canaries |
 
 **Abuse controls**
-- Per-run tokens are minted for the test tenant and revoked at the end.
-- The soak profile is allowed only in the nightly workflow with a 90 min timeout.
+- Per-run relay access tokens and the separate scraper operator token are minted for the throwaway test relay and revoked at the end.
+- The soak profile is allowed only in the weekly workflow of F17.S03.M01 with timeout-minutes 90; nightly runs standard and the release workflow runs smoke then standard.
 
 Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
@@ -41,4 +41,4 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 ## Dependencies
 
-Module depends on: CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, F17.S01.M01, F15.S02.M01, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, F17.S01.M01, F15.S02.M01, F15.S02.M03, F12.S03.M03, F11.S01.M02, F08.S01.M01, F04.S01.M02, F07.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

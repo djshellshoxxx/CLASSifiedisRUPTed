@@ -22,10 +22,9 @@ _None._
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-081-09.T03 | unit | PS-081-02.R02, PS-081-03.R02 | full class by sink matrix (5 classes by 9 sinks) | result equals the PRV-001 table; P3 and P4 never allowed to log, federation, notification, projection |
-| TEST-PS-081-09.T04 | unit | PS-081-02.R03, PS-081-03.R03 | locations L0 to L4 for public sinks | L3 and L4 snapped to L2 cell or refused with PRIVACY_LOCATION_TOO_PRECISE; L0 to L2 pass |
-| TEST-PS-081-09.T05 | property | PS-081-03.R01, PS-081-03.R03, PS-081-06.R01 | random records and schemas | redaction is idempotent and monotonic; class order is total |
-| TEST-PS-081-09.T12 | integration | PS-081-07.R02, PS-081-03.R03 | CI lint on the repository schemas | fails for an injected unannotated field and an event class below its max field class; passes otherwise |
+| TEST-PS-081-09.T03 | unit | PS-081-01.R04, PS-081-02.R02, PS-081-03.R02 | full class by sink matrix (5 classes by 11 sinks) and the location cap per sink | every result equals the matrix in the domain_schema note; P4 denied everywhere; P3 only to event, export and ui_owner |
+| TEST-PS-081-09.T05 | property | PS-081-03.R01, PS-081-03.R02, PS-081-06.R01 | random records and schemas | redaction is pure, idempotent and monotonic; class order is total |
+| TEST-PS-081-09.T15 | unit | PS-081-10.R01, PS-081-10.R02, PS-081-10.R03, PS-081-03.R03 | load v1 maps and a v2 candidate with an added class or sink | v1 maps load; an added class or sink requires the major version flag |
 
 ## Dependencies
 

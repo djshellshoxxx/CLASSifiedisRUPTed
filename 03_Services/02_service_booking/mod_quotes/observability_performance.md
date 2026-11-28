@@ -13,12 +13,13 @@
 ## Specification
 
 **Metrics**
-- classrup_services_quotes_total{outcome=requested|issued|accepted|declined|expired} (local counter)
+- classrup_services_quotes_total{outcome=requested|issued|superseded|accepted|declined|expired} (local counter)
 - classrup_services_statements_quarantined_total{code} (local counter)
+- classrup_services_bookings_conflicted_total{kind} (local counter)
 - classrup_services_booking_confirm_latency_ms (local histogram from acceptance receipt to confirmation)
 
 **Logs**
-- info booking.confirmed {bookingId, correlationId} in the local diagnostics log - no descriptions, amounts or addresses.
+- info booking.confirmed {bookingId, correlationId} in the local diagnostics log - no descriptions, attachment names, amounts or addresses.
 
 **Budgets**
 - vault command p95 ≤ 150 ms; list queries p95 ≤ 80 ms for 50 items; statement verification p95 ≤ 30 ms.
@@ -34,4 +35,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F03.S01.M01, F03.S01.M02, F09.S01.M01, F08.S01.M01, F07.S01.M01, F07.S02.M02, F11.S01.M03, F09.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F03.S01.M01, F03.S01.M02, F08.S01.M01, F08.S01.M03, F08.S02.M02, F07.S01.M01, F07.S02.M02, F11.S01.M03, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

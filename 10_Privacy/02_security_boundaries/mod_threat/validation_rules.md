@@ -9,6 +9,7 @@
 - **PS-082-02.R01** Every active threat entry must have at least one adversary, one control, one test and a non-empty residual-risk statement.
 - **PS-082-02.R02** Control and test references must resolve to existing requirement IDs and test IDs.
 - **PS-082-02.R03** The catalog must cover the mandatory topics list, and a topic without an active or retired entry fails the check.
+- **PS-082-02.R04** The mandatory topics include cross-relay linkability (one DID on every relay, mailbox hints in public projections, key-linkage reads by host relays), enumeration and scraping of public indexes, and the integrity of signed privacy statements (replay, forgery, signer-role confusion, fork or equivocation).
 
 ## Specification
 
@@ -17,8 +18,8 @@
 | V01 | each active threat has adversaries, assets, attack description, residual risk, at least 1 control and at least 1 test | VALIDATION_FAILED |
 | V02 | every control requirement ID exists in a module spec | VALIDATION_FAILED |
 | V03 | every PRIVT test ID exists in a module spec test list or the privacy suite index | VALIDATION_FAILED |
-| V04 | mandatory topics geolocation, metadata, sybil, social-graph, cycle-graph, relay-compromise, federated-peer, device, traffic-analysis, counterparty, auction-host, update-channel each have an entry | VALIDATION_FAILED |
-| V05 | review date is within 90 days for the current release candidate | PRECONDITION_FAILED |
+| V04 | mandatory topics geolocation, metadata, sybil, social-graph, cycle-graph, cross-relay-linkability, enumeration-scraping, relay-compromise, federated-peer, statement-integrity, device, traffic-analysis, counterparty, auction-host, update-channel each have an entry | VALIDATION_FAILED |
+| V05 | review age - a release candidate build fails when the last review is more than 90 days old; any other build passes up to day 90, warns on days 91 to 104 and fails from day 105 | PRECONDITION_FAILED |
 | V06 | residual risk text avoids the words anonymous and untraceable | VALIDATION_FAILED |
 
 ## Verification
@@ -26,9 +27,9 @@
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-082-09.T01 | unit | PS-082-01.R01, PS-082-01.R02, PS-082-02.R01 | run the check on the valid fixture and on one missing a test | valid passes with exit 0; invalid exits 1 naming the entry and rule |
-| TEST-PS-082-09.T02 | unit | PS-082-01.R03, PS-082-02.R02 | catalog with a dangling PS requirement ID and unknown PRIVT ID | both reported with entry ID |
+| TEST-PS-082-09.T02 | unit | PS-082-01.R02, PS-082-02.R02 | catalog with a dangling PS requirement ID and unknown PRIVT ID | both reported with entry ID |
 | TEST-PS-082-09.T03 | unit | PS-082-02.R03, PS-082-04.R01 | fixture with geolocation entry removed | check fails on missing mandatory topic |
-| TEST-PS-082-09.T05 | unit | PS-082-03.R03, PS-082-02.R03 | residual risk accepted without reviewer or date | check fails |
+| TEST-PS-082-09.T17 | unit | PS-082-02.R04, PS-082-02.R03 | fixtures each missing one of cross-relay-linkability, enumeration-scraping and statement-integrity | check fails naming the missing topic; the valid fixture passes |
 
 ## Dependencies
 

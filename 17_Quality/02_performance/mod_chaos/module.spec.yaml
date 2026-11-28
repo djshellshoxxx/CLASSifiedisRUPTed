@@ -1,14 +1,15 @@
 id: F17.S02.M02
 scope: MVP
-summary: 'Fault-injection suites that prove invariants hold under faults of the local-first architecture (ADR-0016): database busy (relay SQLite BUSY and IndexedDB transaction abort), consumer crash on the local outbox, duplicate and reordered statement delivery, clock skew, relay or peer outage, and three trust faults: forked vaults signing conflicting promises, offline revocation lag and a malicious relay tampering with statements. Faults are injected through ports and wrappers in test vaults and relays, never in production paths. Every scenario ends by asserting the invariants: no lost committed command, no duplicate effect, no last-writer-wins on consent, money or inventory, local records intact, outbox eventually drained.'
+summary: 'Fault-injection suites that prove invariants hold under faults of the local-first architecture (ADR-0016): database busy (relay SQLite BUSY and IndexedDB transaction abort), consumer crash on the local outbox, duplicate and reordered statement delivery, clock skew, relay or peer outage, and seeded random-timing reruns of the trust-fault suites owned by F17.S01.M03 (relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay, relay_withhold_equivocate) against that module''s oracle. Faults are injected through ports and wrappers in test vaults (including the storage/indexeddb adapter) and test relays, never in production paths. Every scenario ends by asserting the invariants: no lost committed command, no duplicate effect, no last-writer-wins on consent, money or inventory, ordering independent of wall time, no expired entity resurrected, local records intact, and every vault reservation store, saga and sync outbox (and on the relay only relay-hosted leases and queues) drained or in a documented state within the scenario''s recovery bound.'
 responsibilities:
-- 'Provide fault injectors: relay SQLite BUSY and IndexedDB transaction abort on N writes, consumer crash before and after ack, duplicate and reordered statement delivery, clock skew of plus or minus 5 min and 24 h, relay or peer outage, forked vault with conflicting signed promises, revocation delivered late, and a tampering relay.'
-- 'Define the invariant set checked after every scenario: committed commands appear exactly once, entity revisions strictly increase, outbox drained within 60 s of recovery, idempotent replay returns stored response, no event is lost.'
+- 'Provide fault injectors: relay SQLite BUSY, and IndexedDB transaction abort on the Nth write by wrapping the vault storage/indexeddb adapter (F15.S02.M03) in test vaults, consumer crash before and after ack, duplicate and reordered statement delivery, clock skew of plus or minus 5 min and 24 h on one vault clock or on the relay clock, relay or peer outage, and the random fault timing used to rerun the F17.S01.M03 trust-fault suites.'
+- 'Define the invariant set checked after every scenario: committed commands appear exactly once, entity revisions strictly increase, idempotent replay returns the stored response, no event is lost, ordering (seq, revision, outbox order) never depends on wall time, an expired entity never comes back, and every vault reservation store, saga and sync outbox plus the relay-hosted leases and queues are drained or in a documented terminal state within the scenario''s recovery bound (06.R04).'
 - Run each scenario with 3 seeds in the PR profile (smoke, 2 min total) and 30 seeds nightly with randomised fault timing.
 - Write a chaos report with the seed, fault schedule and violated invariant on failure so it can be replayed.
 non_responsibilities:
 - Throughput targets (F17.S02.M01).
 - Offline client behavior (F17.S02.M03).
+- The trust-fault scenario definitions and their expected outcomes (F17.S01.M03 owns the single oracle); this module only reruns them with seeded random fault timing.
 - Infrastructure-level chaos such as killing real hosts or network partitions between machines.
 - 'Future: staged chaos in a pre-production environment.'
 depends_on:
@@ -21,6 +22,12 @@ depends_on:
 - F17.S01.M01
 - F17.S01.M03
 - F15.S02.M03
+- F15.S01.M01
+- F11.S02.M01
+- F11.S01.M02
+- F01.S03.M01
+- F16.S02.M02
+- F16.S01.M01
 user_stories:
 - As an engineer, I replay a failed chaos run from its seed and fault schedule to debug a lost event.
 - As an operator, I trust that a busy database causes retries and not lost commands.
@@ -28,9 +35,12 @@ user_stories:
 edge_cases:
 - SQLITE_BUSY persists for longer than the busy timeout of 5 000 ms; the command returns DEPENDENCY_UNAVAILABLE retryable and nothing is half-committed.
 - Consumer crashes after applying an effect but before acking; redelivery must not duplicate the effect.
-- The same event is delivered twice and out of order; the inbox dedupes by event ID and revision.
-- Clock skew moves time backwards by 24 h; monotonic ordering uses hybrid logical clock or revision, not wall time alone, and expiry sweeps do not fire early.
-- A federation peer is down for 10 minutes; the delivery queue backs off and resumes with no duplicate imports.
+- The same event is delivered twice and out of order; the inbox dedupes by event ID and revision, and statements dedupe by cid.
+- The clock moves backwards by 24 h after a reservation expired; ordering by seq, revision and outbox order is unchanged, and the expired reservation stays expired with its expiry event fired exactly once (never resurrected).
+- One vault clock runs 24 h ahead; that vault expires its own reservations and cycles by its own clock (wall-clock expiry is the specified behavior of F15.S01.M01, FLOW-06 and N14 absolute expiresAt, and ADR-0016 offers no trusted time), and the other vaults receive a signed withdrawal or expiry statement instead of silently diverging.
+- A vault clock is skewed while a relay-hosted auction close lease (IDM-3) runs; the lease follows the relay clock only.
+- A federation peer is down for 10 minutes; the F11.S02.M01 PeerOutbox retries in IDM-4 rounds scheduled 1 min and then 15 min after the previous round, and resumes at the next scheduled round or on federation.peer.reinstated with no duplicate imports.
+- A vault outbox destination relay is unreachable for 10 minutes; the OutboxEntry moves to failed with failureReason retry_exhausted after 6 IDM-4 attempts and is sent after Retry now; nothing drains automatically.
 - A fault is injected while a cycle execution is mid-way; saga compensation completes or the state remains consistent and visible.
 - Two forked vaults sign conflicting reservations; each peer detects the conflict, freezes the coordination and requires explicit renegotiation.
 - A relay tampers with an envelope in transit; the receiver vault rejects the signature and quarantines the statement.
@@ -42,7 +52,7 @@ processes:
     requirements:
     - The module owns no persisted entities; faults are described in a scenario file (YAML) and results in reports/chaos.json.
     - A scenario lists fault type, injection point, duration, seed, and the invariants to assert; the schema is validated before the run.
-    - Fault injectors wrap ports and the clock in the test relay; production code contains no chaos hooks and a build check proves it.
+    - Fault injectors wrap ports and the clock in the test relay and in test vaults (the F15.S02.M03 storage/indexeddb adapter over fake-indexeddb aborts a transaction on the Nth write; each vault clock is skewable on its own); production code contains no chaos hooks and a build check of both the relay bundle and the vault (PWA) bundles proves it.
     entities: []
     note: 'Tooling module: owns no persisted entities. Its outputs are test configuration, source files under the code path and CI artifacts (JSON/JUnit/LCOV reports) that are regenerated on every run and never stored by the relay.'
   validation_rules:
@@ -53,23 +63,24 @@ processes:
     rules:
     - V01 | Scenario has seed, fault type, bounded parameters and a recovery step | QUALITY_CHAOS_SCENARIO_INVALID
     - V02 | After recovery every committed command appears exactly once and revisions are strictly increasing | QUALITY_CHAOS_INVARIANT_VIOLATED
-    - V03 | Outbox is drained and no orphan hold or stuck saga exists within 60 s of fault removal | QUALITY_CHAOS_RECOVERY_TIMEOUT
-    - V04 | Production build contains no chaos hooks | QUALITY_CHAOS_HOOK_IN_PROD
+    - V03 | Within the scenario recovery bound (06.R04) no participant vault holds a classrup.bazaar.reservation/v1 hold past expiresAt, no vault saga is stuck, every OutboxEntry is in a documented F15.S01.M01 state, and relay-hosted leases and mailbox and federation queues are drained | QUALITY_CHAOS_RECOVERY_TIMEOUT
+    - V04 | Production relay and vault (PWA) builds contain no chaos hooks | QUALITY_CHAOS_HOOK_IN_PROD
     - 'V05 | Fault parameters do not exceed bounds: BUSY 30 s, skew 24 h, outage 10 min, 5 crashes | QUALITY_CHAOS_SCENARIO_INVALID'
-    - V06 | Trust-fault scenarios fork_conflict, relay_tamper, revocation_lag and relay_down exist and pass | QUALITY_CHAOS_TRUST_SCENARIO_MISSING
+    - V06 | Every F17.S01.M03 trust-fault suite (relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay, relay_withhold_equivocate) is rerun with seeded random fault timing and passes that module's oracle | QUALITY_CHAOS_TRUST_SCENARIO_MISSING
+    - V07 | Under clock skew ordering never depends on wall time, an expired entity never comes back, each expiry event fires exactly once, and relay-hosted leases use only the relay clock | QUALITY_CHAOS_INVARIANT_VIOLATED
   workflow_state_machine:
     requirements:
     - There is no entity lifecycle; a scenario runs phases arrange, inject, observe, recover, assert.
-    - 'Recovery is time-boxed: invariants must hold within 60 s of fault removal, otherwise the scenario fails.'
+    - 'Recovery is time-boxed per scenario on the FakeClock (06.R04): 60 s for local faults (db_busy, idb_abort, consumer_crash, duplicate_delivery, combined_busy_crash); for peer_outage the next scheduled F11.S02.M01 round plus one IDM-4 cycle (about 16 min of fake time) or 60 s after federation.peer.reinstated; otherwise the scenario fails.'
     - 'Scenarios are independent: each starts from a fresh relay and database.'
-    - 'Trust-fault scenarios are mandatory: fork_conflict (freeze and renegotiate, never last-writer-wins), relay_tamper (signature failure leads to quarantine), revocation_lag (statements by a revoked key accepted only until the revocation arrives) and relay_down (local records intact, delivery status unknown or prepared).'
+    - 'Trust-fault scenarios are mandatory reruns of the F17.S01.M03 suites with the same names and that module''s oracle, which owns the expected outcomes: relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay and relay_withhold_equivocate, each with 3 seeds in the PR profile and 30 seeds nightly of randomised fault timing.'
     machines: []
     note: 'Tooling module: no domain entity has a lifecycle. Runs are stateless processes that exit 0 (pass) or non-zero (fail).'
     timeouts: []
   commands_queries_events:
     requirements:
     - The module exposes pnpm test:chaos (smoke profile), pnpm test:chaos:nightly and pnpm test:chaos --scenario <name> --seed <n>.
-    - Scenarios are db_busy, consumer_crash, duplicate_delivery, clock_skew, peer_outage, combined_busy_crash, fork_conflict, relay_tamper, revocation_lag and relay_down.
+    - Scenarios are db_busy, idb_abort, consumer_crash, duplicate_delivery, clock_skew, peer_outage, vault_outbox_outage, combined_busy_crash and the reruns of the F17.S01.M03 trust-fault suites relay_down, fork_conflict, revocation_lag, relay_tamper, signer_role_mismatch, relay_replay and relay_withhold_equivocate.
     - 'Exit codes: 0 pass, 1 invariant violated, 2 recovery timeout, 3 scenario invalid.'
     commands: []
     queries: []
@@ -78,15 +89,19 @@ processes:
     errors:
     - QUALITY_CHAOS_SCENARIO_INVALID | 422 | no | scenario lacks seed or recovery, or exceeds fault bounds (exit 3)
     - QUALITY_CHAOS_INVARIANT_VIOLATED | 422 | no | an invariant failed after recovery (exit 1)
-    - QUALITY_CHAOS_RECOVERY_TIMEOUT | 422 | no | system did not recover within 60 s (exit 2)
-    - QUALITY_CHAOS_HOOK_IN_PROD | 422 | no | chaos hook detected in a production bundle (exit 1)
-    - QUALITY_CHAOS_TRUST_SCENARIO_MISSING | 422 | no | a mandatory trust-fault scenario is missing or failing (exit 1)
+    - QUALITY_CHAOS_RECOVERY_TIMEOUT | 422 | no | system did not recover within the scenario recovery bound (exit 2)
+    - QUALITY_CHAOS_HOOK_IN_PROD | 422 | no | chaos hook detected in a production relay or vault bundle (exit 1)
+    - QUALITY_CHAOS_TRUST_SCENARIO_MISSING | 422 | no | a mandatory trust-fault rerun is missing or fails the F17.S01.M03 oracle (exit 1)
     note: 'Tooling module: exposes no relay commands or queries and emits no domain events; the interface is the pnpm scripts and CLI exit codes listed in the example.'
     example: |-
       $ pnpm test:chaos --scenario duplicate_delivery --seed 31
         inject: deliver event offer.accepted x3, reorder 2
         recover: 4.1 s
         invariants: exactly-once OK, revisions monotonic OK, outbox drained OK
+        exit 0
+      $ pnpm test:chaos --scenario clock_skew --seed 32
+        inject: vault Bob clock -24 h after reservation r1 expired; vault Carol clock +24 h with live reservation r2
+        invariants: ordering wall-time independent OK, r1 not resurrected (expired event x1) OK, Carol expired r2 and sent signed withdrawal OK
         exit 0
   authorization_capabilities:
     requirements:
@@ -99,10 +114,12 @@ processes:
     requirements:
     - 'Idempotency is verified under each fault: replaying a command whose response was lost returns the stored result with no duplicate effect (CTR-IDM-001).'
     - Consumers dedupe by event ID, so duplicate or reordered deliveries are safe (CTR-EVT-001).
-    - After any single injected fault, a sweep of the relay with nothing else running shows zero orphan holds, zero stuck sagas and zero undelivered outbox events.
-    idempotency: Scenarios are re-runnable from the seed; the relay under test is rebuilt per scenario so earlier faults leave no residue.
+    - 'After any single injected fault, a sweep with nothing else running covers every participant vault (reservation store: no classrup.bazaar.reservation/v1 hold past expiresAt; saga state: no saga stuck outside a documented state; sync outbox: every OutboxEntry in a documented F15.S01.M01 state) and, on the relay, only the relay-hosted leases (auction close) and the mailbox and federation queues.'
+    - 'Recovery bounds are per scenario and derived from the owner''s schedule on the FakeClock: 60 s for local faults (db_busy, idb_abort, consumer_crash, duplicate_delivery, combined_busy_crash); for peer_outage the next scheduled F11.S02.M01 round (1 min, then 15 min after the previous round) plus one IDM-4 cycle, about 16 min of fake time, or 60 s after federation.peer.reinstated; for vault_outbox_outage the F15.S01.M01 behavior is asserted instead of auto-drain - after 6 IDM-4 attempts (each delay uniform in [0, min(30 s, 500 ms x 2^(n-1))], retryAfterMs honoured) the entry is failed with failureReason retry_exhausted, and after Retry now it reaches transport_acknowledged.'
+    - 'Clock skew invariants are checkable without trusted time (ADR-0016 section 5): (1) ordering by seq, revision and outbox order never depends on wall time; (2) an entity that has expired never comes back when the clock moves backwards and its expiry event fires exactly once; (3) a vault whose clock is +24 h expires its own reservations and cycles by its own clock and the other vaults see a signed withdrawal or expiry rather than silent divergence; (4) relay-hosted leases (IDM-3, auction close) use only the relay clock.'
+    idempotency: Scenarios are re-runnable from the seed; the relay and the vaults under test are rebuilt per scenario so earlier faults leave no residue.
     concurrency: Scenarios run sequentially per relay but in parallel across workers; fault schedules use a seeded PRNG so concurrency interleavings are reproducible.
-    retries: No retries of failed scenarios; the system's retry behavior (busy timeout 5 000 ms, exponential backoff 1 s to 60 s with jitter) is what is under test.
+    retries: No retries of failed scenarios; the system's retry behavior is what is under test - busy timeout 5 000 ms, CTR-IDM-001 IDM-4 full-jitter backoff (base 500 ms, cap 30 s, 6 attempts, retryAfterMs honoured) and the F11.S02.M01 PeerOutbox rounds at 1 min, 15 min, 1 h, 6 h and 24 h after the previous round.
     offline: Peer outage and network faults are simulated by fake transports; no real network is used.
     partial_failure: The runner continues remaining scenarios after one fails, writes all results, and exits with the worst code.
   privacy_retention_abuse:
@@ -135,22 +152,22 @@ processes:
     - JSON line per scenario {ts, level, msg, module, scenario, seed, recoveryMs, code?} without payload data.
     budgets:
     - Smoke profile at most 2 min; nightly at most 30 min.
-    - Recovery within 60 s of fault removal; outbox lag back under 60 s (OBS-6 readiness).
+    - Recovery within the per-scenario bound (60 s for local faults; peer_outage next scheduled round plus one IDM-4 cycle of fake time); relay outbox lag back under 60 s (OBS-6 readiness).
   contract_and_acceptance_tests:
     requirements:
     - Every requirement of this module is covered by at least one automated test using the mapping in section 09.
     - A planted bug (consumer applies effect twice on redelivery) must be caught by the duplicate_delivery scenario.
-    - A planted bug (expiry uses wall clock without monotonic guard) must be caught by clock_skew.
-    fixtures: Seeds 31, 32, 33 (smoke) and 1..30 (nightly); FakeClock 2026-11-04T10:00:00Z; FaultyStore wrapper around SQLite; FakePeer with scripted outage 10 min; offers and cycle execution as workload.
+    - A planted bug (an expired reservation is resurrected after the clock moves back) must be caught by clock_skew.
+    fixtures: Seeds 31, 32, 33 (smoke) and 1..30 (nightly); FakeClock 2026-11-04T10:00:00Z with one skewable clock per vault and one for the relay; FaultyStore wrapper around SQLite; FaultyIndexedDb wrapper around the vault storage/indexeddb adapter on fake-indexeddb; FakePeer with scripted outage 10 min; an unreachable vault outbox destination; the F17.S01.M03 trust-fault scenario definitions and oracle; offers, reservations, cycle execution and one hosted auction as workload.
     tests:
     - T01 | unit | 01.R01,01.R02,02.R03 | validate a scenario file without seed or recovery | rejected with QUALITY_CHAOS_SCENARIO_INVALID
-    - T02 | integration | 01.R03,02.R02,04.R03 | scan production bundles and run with out-of-bound parameters | no chaos hooks; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew
+    - T02 | integration | 01.R03,02.R02,04.R03 | scan the production relay bundle and the vault (PWA) bundles, and run with out-of-bound parameters | no chaos hooks in either; QUALITY_CHAOS_SCENARIO_INVALID for 31 s BUSY and 25 h skew
     - 'T03 | chaos | 02.R01,06.R01 | db_busy: SQLITE_BUSY for 12 s during accept commands | commands retried or DEPENDENCY_UNAVAILABLE; no half-commit; exactly-once after replay'
-    - 'T04 | chaos | 03.R01,03.R02,06.R03 | consumer_crash: crash before and after ack on a cycle execution | no duplicate effect; orphan holds zero; recovery within 60 s'
+    - 'T04 | chaos | 03.R01,03.R02,06.R03 | consumer_crash - crash before and after ack on a cycle execution | no duplicate effect; no hold past expiresAt in any participant vault reservation store; no stuck vault saga; recovery within 60 s'
     - T05 | chaos | 03.R03,04.R02 | run each scenario twice in sequence | each starts from a fresh relay and database
-    - T06 | chaos | 04.R01,04.R03,09.R02 | duplicate_delivery with planted double-apply bug | invariant violated and exit 1
-    - 'T07 | chaos | 06.R02,09.R03 | clock_skew: minus 24 h then plus 24 h with planted wall-clock expiry bug | bug detected; correct implementation keeps expiries and revisions monotonic'
-    - T08 | chaos | 05.R03 | peer_outage 10 min then recovery | local commands keep succeeding; federation deliveries resume without duplicate import; audit entries intact
+    - T06 | chaos | 04.R01,04.R03,06.R02,09.R02 | duplicate_delivery - events and statements delivered twice and reordered, correct code then a planted double-apply bug | correct code dedupes by event ID and cid with one effect; the planted bug violates the invariant and exits 1
+    - 'T07 | chaos | 06.R05,09.R03 | clock_skew - vault Bob -24 h after reservation r1 expired; vault Carol +24 h holding live reservation r2 in an open cycle; vault clock skewed during a relay-hosted auction close lease; planted bug resurrecting an expired reservation | the planted bug is detected; with correct code ordering by seq, revision and outbox order is unchanged, r1 stays expired with its expiry event fired once, Carol expires r2 and the cycle by her own clock and the other vaults receive her signed withdrawal, and the auction lease follows the relay clock only'
+    - T08 | chaos | 06.R04 | peer_outage 10 min then recovery, once by schedule and once with federation.peer.reinstated | local commands keep succeeding; deliveries resume at the next scheduled round within about 16 min of fake time, or within 60 s of reinstatement, without duplicate import
     - T09 | chaos | 05.R01,05.R02 | scan relay for HTTP exposure of injection endpoints | none reachable; fake ports only
     - T10 | abuse | 07.R02,07.R03 | grep captured logs for P3 canary after each scenario | none found; retention config 30 days
     - T11 | chaos | 07.R01,08.R01,08.R03 | run all scenarios and read the report | metrics present, recovery times recorded, seeds listed
@@ -159,11 +176,16 @@ processes:
     - T14 | integration | 10.R01,10.R02,10.R03 | replay a failed run from its exported seed and fault schedule | same violation reproduced; v1 scenario schema enforced
     - 'T15 | chaos | 06.R01 | combined_busy_crash: busy writes while consumer crashes | invariants hold and outbox drained'
     - 'T16 | chaos | 03.R04 | fork_conflict: conflicting signed reservations delivered in both orders | both vaults freeze; no last-writer-wins; renegotiation required'
-    - T17 | chaos | 03.R04 | relay_tamper and revocation_lag scenarios | tampered statement quarantined with signature_invalid; statement by revoked key refused after revocation arrives
-    - T18 | chaos | 03.R04 | relay_down mid-flow | local records intact; status prepared; no claim of delivery
+    - 'T17 | chaos | 03.R04 | reruns of relay_tamper and revocation_lag with random timing - (a) received before the revocation arrives and before revocationEffectiveFrom; (b) received after it arrives with a backdated createdAt; (c) received inside [effectiveFrom, arrival]; (d) effectiveFrom 31 days back | tampered statement rejected with FED_SIGNATURE_INVALID and quarantined; (a) valid; (b) refused with FEDERATION_SIGNER_ROLE_INVALID and listed in quarantine; (c) re-marked signed during claimed compromise with the dependent coordination frozen; (d) VALIDATION_FAILED; lag reported as arrival minus effectiveFrom, at most 30 days; same verdicts as the F17.S01.M03 oracle'
+    - T18 | chaos | 03.R04 | relay_down mid-flow rerun with random timing | local records intact; OutboxEntry prepared; no claim of delivery; same verdict as the F17.S01.M03 oracle
+    - T19 | abuse | 05.R03 | issue a command the actor is not authorized for before and after db_busy and peer_outage faults | both attempts denied with the same code; both decisions have audit entries after recovery and none is lost
+    - 'T20 | chaos | 06.R04 | vault_outbox_outage - destination relay unreachable for 10 min, then Retry now after it returns | each of the 6 attempt delays lies in [0, min(30 s, 500 ms x 2^(n-1))], retryAfterMs honoured; entry failed with retry_exhausted after attempt 6 and no 7th attempt; after Retry now it reaches transport_acknowledged'
+    - T21 | chaos | 03.R04 | reruns of signer_role_mismatch, relay_replay and relay_withhold_equivocate with 3 seeds each | each passes the F17.S01.M03 oracle; a missing rerun fails with QUALITY_CHAOS_TRUST_SCENARIO_MISSING
+    - 'T22 | chaos | 01.R03,06.R03 | idb_abort - the vault storage/indexeddb adapter aborts the 3rd write of an offer-accept transaction | the whole transaction rolls back (no hold without a Deal); the sweep of each vault reservation store, saga state and sync outbox and of the relay queues shows nothing stuck'
     acceptance:
     - All five fault types (DB busy, consumer crash, duplicate delivery, clock skew, peer outage) are covered by passing scenarios.
-    - After each fault the invariant set holds and the outbox drains within 60 s.
+    - After each fault the invariant set holds within the scenario recovery bound (60 s for local faults; next scheduled round plus one IDM-4 cycle for peer outage; failed then Retry now for a vault outbox outage).
+    - Every F17.S01.M03 trust-fault suite passes its oracle under randomised fault timing.
     - A planted double-apply bug is caught within the smoke profile.
     - A failed run can be replayed exactly from its exported seed and fault schedule.
   import_export_backup_rollback:

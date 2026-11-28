@@ -1,32 +1,54 @@
-# F02.S01 — trade_proposals
+# F02.S01 — 01_trade_proposals
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F02.
+**Status:** SPECIFIED. **Parent:** [F02](../SPEC.md).
 
-## Purpose and business behavior
-Provide trade_proposals as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_two
-- mod_party
-- mod_offer
-- mod_counteroffer
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F02.S01.M01 | [Two-party barter](mod_two/SPEC.md) | SPECIFIED | Direct item-for-item(s) proposals between two parties, optional compensation leg, both-party consent on exact revision. |
+| F02.S01.M02 | [Proposal party roster](mod_party/SPEC.md) | SPECIFIED | Roster of parties in a proposal (2..N), roles giver/receiver per leg, uniqueness, block checks. |
+| F02.S01.M03 | [Barter offer items](mod_offer/SPEC.md) | SPECIFIED | Legs (giver, receiver, item refs with quantities, declared value) composing a proposal; ownership/availability verified via InventoryPort. |
+| F02.S01.M04 | [Barter counteroffers](mod_counteroffer/SPEC.md) | SPECIFIED | Material revisions create new immutable revision; all prior consents void; max 20 revisions. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/mutiny` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| mutiny.proposal.revised | F02.S01.M04 | F02.S01.M01 | internal |
+| mutiny.revision.forked | F02.S01.M04 | F02.S01.M01 | internal |
+| comms.consent.signed | F08.S02.M02 | F02.S01.M01 | external |
+| comms.consent.received | F08.S02.M02 | F02.S01.M01 | external |
+| comms.consent.revoked | F08.S02.M02 | F02.S01.M01 | external |
+| mutiny.cycle.locked | F02.S03.M02 | F02.S01.M01 | external |
+| mutiny.cycle.unlocked | F02.S03.M02 | F02.S01.M01 | external |
+| mutiny.lock.conflict_detected | F02.S03.M02 | F02.S01.M01 | external |
+| mutiny.party.left | F02.S01.M02 | F02.S01.M01 | internal |
+| identity.block.added | F07.S02.M02 | F02.S01.M01 | external |
+| bazaar.inventory.depleted | F01.S03.M01 | F02.S01.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S01.M01 | external |
+| identity.block.added | F07.S02.M02 | F02.S01.M02 | external |
+| mutiny.proposal.revised | F02.S01.M04 | F02.S01.M02 | internal |
+| mutiny.cycle.declined | F02.S03.M01 | F02.S01.M02 | external |
+| mutiny.cycle.participant_dropped | F02.S03.M03 | F02.S01.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S01.M02 | external |
+| mutiny.proposal.revised | F02.S01.M04 | F02.S01.M03 | internal |
+| bazaar.listing.edited | F01.S01.M02 | F02.S01.M03 | external |
+| bazaar.listing.unpublished | F01.S01.M03 | F02.S01.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S01.M03 | external |
+| mutiny.proposal.accepted | F02.S01.M01 | F02.S01.M04 | internal |
+| mutiny.proposal.rejected | F02.S01.M01 | F02.S01.M04 | internal |
+| mutiny.proposal.expired | F02.S01.M01 | F02.S01.M04 | internal |
+| mutiny.proposal.withdrawn | F02.S01.M01 | F02.S01.M04 | internal |
+| mutiny.lock.conflict_detected | F02.S03.M02 | F02.S01.M04 | external |
+| privacy.deletion.completed | F10.S01.M04 | F02.S01.M04 | external |
+| mutiny.cycle.committed | F02.S03.M01 | F02.S01.M04 | external |
+| mutiny.cycle.declined | F02.S03.M01 | F02.S01.M04 | external |
+| mutiny.cycle.cancelled | F02.S03.M03 | F02.S01.M04 | external |
+| mutiny.normalization.expired | F02.S04.M02 | F02.S01.M04 | external |

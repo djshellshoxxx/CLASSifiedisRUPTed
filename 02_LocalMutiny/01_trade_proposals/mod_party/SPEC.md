@@ -13,6 +13,7 @@ The roster of a proposal or cycle as one vault sees it: 2..8 distinct parties id
 - Create and hold the roster for a subject, enforcing 2..8 unique parties, a single coordinator and ring positions 0..N-1.
 - Check pairwise local blocks and the principal's account limits before the principal joins, and reject without disclosing which pair or which block.
 - Mark parties left or removed when a signed notice, a local block, a decline or a timeout says so, emitting joined and left events for local consumers.
+- Own the error code MUTINY_PARTICIPANT_DUPLICATE (N1), which F02.S02.M05 references, and register export, deletion and retention handlers with F10 (N6).
 
 ## Not responsible for
 
@@ -54,11 +55,11 @@ The roster of a proposal or cycle as one vault sees it: 2..8 distinct parties id
 - Commands: `mutiny.party.join`, `mutiny.party.leave`
 - Queries: `mutiny.party.list_for_subject`, `mutiny.party.check_roster`
 - Emits: `mutiny.party.joined`, `mutiny.party.left`
-- Consumes: `identity.block.added`, `mutiny.proposal.revised`, `mutiny.cycle.declined`, `mutiny.cycle.participant_dropped`
+- Consumes: `identity.block.added`, `mutiny.proposal.revised`, `mutiny.cycle.declined`, `mutiny.cycle.participant_dropped`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001
+F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -70,15 +71,15 @@ F07.S01.M01, F07.S02.M02, F12.S03.M04, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR
 | PS-014-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-014-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-014-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-014-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-014-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-014-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-014-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-014-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
 
-Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/mutiny/src/trade_proposals/party/index.ts`.
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 defines the declared operations or local library interface, constrained by the authority rules in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/mutiny/src/trade_proposals/party/index.ts`.
 
 ## Acceptance criteria
 
-- All tests T01–T14 pass in CI.
+- All tests T01–T15 pass in CI.
 - No error, event or log reveals who blocked whom.
 - A left party is never replaced and ring positions never change after a revision is sealed.

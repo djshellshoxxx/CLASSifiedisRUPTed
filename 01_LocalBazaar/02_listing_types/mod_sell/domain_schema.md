@@ -9,6 +9,7 @@
 - **PS-006-01.R01** SellTerms stores the asking price as Money (integer minor units string), accepted currencies, payment methods, negotiable flag, minimum offer and fulfilment options for one listing.
 - **PS-006-01.R02** SellTerms is P3 while the listing is a draft and P0 inside the signed projection once published; payment instructions are never stored.
 - **PS-006-01.R03** Free-text fields are short, plain text and screened so no account number, wallet address or contact detail becomes public.
+- **PS-006-01.R04** SellTerms carries the public barterAcceptable flag (default false), exposed in the projection and in bazaar.sell_terms.set so barter matching and discovery filters can use it (N15).
 
 ## Specification
 
@@ -22,11 +23,12 @@ Schema `classrup.bazaar.sell_terms/v1` · storage **device** · privacy **P3** �
 | tenantId | uuidv7 — fixed local-vault tenant (ID-6) |
 | listingId | uuidv7 — ref F01.S01.M01 Listing of kind sell; unique |
 | ownerId | did:key — local principal |
-| askingPrice | Money — CTR-MNY-001; > 0; <= 1 000 000 000 000 minor units |
+| askingPrice | Money — CTR-MNY-001; > 0; <= maxAmount(currency) = 10^(10 + registry decimals) minor units (F09.S03.M03) |
 | acceptedCurrencies | string[] — 1..5 registered currency codes, includes askingPrice.currency |
 | paymentMethods | string[] — 1..3 of cash \| crypto \| external |
 | cryptoAssets? | string[] — 1..5 registry codes (for example BTC, USDC); required when crypto is accepted |
 | negotiable | boolean — default true |
+| barterAcceptable | boolean — default false; public in the projection (N15) |
 | minOffer? | Money — same currency as askingPrice; > 0 and <= askingPrice; never published, only used locally |
 | pickup | boolean — default true |
 | delivery | boolean — default false |
@@ -40,6 +42,7 @@ Schema `classrup.bazaar.sell_terms/v1` · storage **device** · privacy **P3** �
 - Exactly one SellTerms exists per sell listing and it cannot exist for other kinds.
 - askingPrice.currency is in acceptedCurrencies and every code is registered in F09.S03.M01.
 - minOffer is never part of any event, projection or statement.
+- Field classes are annotated per F10.S02.M02 (minOffer P3; askingPrice, acceptedCurrencies, paymentMethods, cryptoAssets, negotiable, barterAcceptable, pickup, delivery and deliveryNote P0 once projected).
 
 ### Storage DDL
 
@@ -55,8 +58,9 @@ CREATE UNIQUE INDEX bazaar_sell_terms_listing ON bazaar_sell_terms(tenant_id, li
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-006-09.T01 | unit | PS-006-01.R01, PS-006-02.R01, PS-006-02.R02 | define valid terms; send amount 49.99 as float; unknown currency | stored with integer string; float and unknown currency rejected with documented codes |
-| TEST-PS-006-09.T02 | unit | PS-006-01.R02, PS-006-01.R03, PS-006-02.R03 | violate each rule V01-V10 | documented error code returned and nothing stored |
+| TEST-PS-006-09.T10 | abuse | PS-006-01.R02, PS-006-01.R03, PS-006-07.R01, PS-006-07.R02 | scan projection, events and logs; note with IBAN; schema search for payment instruction fields | no minOffer or drafts leave device; projected subset only after publish; note rejected; no payment instruction field exists |
+| TEST-PS-006-09.T17 | contract | PS-006-01.R04 | define with barterAcceptable true on published P | bazaar.sell_terms.set carries barterAcceptable true and the projection preview of F01.S01.M03 exposes it; minOffer still absent |
 
 ## Dependencies
 
-Module depends on: F01.S01.M01, F01.S01.M02, F09.S03.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F01.S01.M01, F01.S01.M02, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [module SPEC](SPEC.md).

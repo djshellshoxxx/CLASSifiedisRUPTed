@@ -1,30 +1,18 @@
 # F14 — Accessibility and localization
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** PROJECT.
+**Status:** SPECIFIED. **Parent:** [ClassRup](../PROJECT_SPEC.md). **Package slug:** `i18n`.
 
-## Purpose and business behavior
-Provide accessibility and localization as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Subfeatures
 
-## Scope
-- 01_a11y
-- 02_internationalization
+- [F14.S01 01_a11y](01_a11y/SPEC.md) — 3 modules
+- [F14.S02 02_internationalization](02_internationalization/SPEC.md) — 2 modules
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+The feature is enabled by flag `F14` (CTR-FLG-001); each module can be disabled independently when no enabled module depends on it. Upstream features: F06, F07, F09, F15, F16.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Cross-subfeature and external events
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+_None._

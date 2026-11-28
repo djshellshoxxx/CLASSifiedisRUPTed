@@ -13,12 +13,12 @@
 ## Specification
 
 **Metrics**
-- classrup_notify_quiet_mirror_total{outcome=ok|stale|rejected} (relay)
+- classrup_notify_quiet_mirror_total{outcome=applied|stale|conflict|rejected} (relay)
 - classrup_notify_quiet_evaluate_ms (histogram)
 - classrup_notify_quiet_tzdata_version (info gauge)
 
 **Logs**
-- relay info quiet_hours.mirrored {userHash, seq, correlationId} — no time zone and no windows.
+- relay info quiet_hours.mirrored {userHash, seq, outcome, correlationId} — no time zone and no windows.
 
 **Budgets**
 - evaluate p99 ≤ 1 ms per call; 100 000 evaluations ≤ 5 s on a relay core.
@@ -34,4 +34,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F13.S02.M03, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F13.S02.M03, F11.S01.M01, F16.S02.M02, F07.S02.M01, F15.S01.M01, F15.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

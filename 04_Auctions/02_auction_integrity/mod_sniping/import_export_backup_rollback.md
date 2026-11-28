@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-038-10.R01** Vault exports carry the extension history for auctions the user took part in, with host signatures.
-- **PS-038-10.R02** Import verifies each signature against the host key and the contiguity of seq; broken histories are kept as read-only history with a warning.
+- **PS-038-10.R02** Import verifies each signature against the host key, the rules version against the terms and the contiguity of seq; broken histories are kept as read-only history with a warning.
 - **PS-038-10.R03** Schema changes follow expand and contract and keep v1 readable for 180 days.
 
 ## Specification
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F11.S01.M01, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

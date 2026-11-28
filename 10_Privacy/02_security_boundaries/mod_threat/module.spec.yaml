@@ -4,14 +4,15 @@ scope: MVP
 summary: >-
   The living privacy threat model for the local-first hybrid architecture. It catalogs how an adversary could learn who a
   user is, where they are, who they trade with or what they own: geolocation inference, metadata leakage, Sybil identities,
-  social-graph and cycle-graph deanonymization, compromised or curious relays, malicious federated peers, local device
-  compromise, and update-channel attacks. Each threat has an ID, assets, adversary, attack path, mapped controls (module
-  and requirement IDs), residual risk stated in plain words, and privacy test IDs. A CI check keeps the catalog and the tests
-  in sync. The model states limits honestly, namely that pseudonymity is not anonymity, relays see routing metadata, and copies others
+  social-graph and cycle-graph deanonymization, linking one user across relays, scraping of public indexes, compromised or
+  curious relays, malicious federated peers, replayed or forged privacy statements, local device compromise, and
+  update-channel attacks. Each threat has an ID, assets, adversary, attack path, mapped controls (module and requirement
+  IDs), residual risk stated in plain words, and privacy test IDs. A CI check keeps the catalog and the tests in sync. The
+  model states limits honestly, namely that pseudonymity is not anonymity, relays see routing metadata, and copies others
   fetched cannot be recalled.
 responsibilities:
   - Maintain docs/privacy/threat_model as the single catalog of privacy threats PT-01 onward with adversary classes A1 to A7, assets, controls, residual risk and test IDs.
-  - Cover at least geolocation, metadata, Sybil, social-graph and cycle-graph deanonymization, relay compromise, malicious federated peers, device compromise, push and mailbox traffic analysis, counterparty disclosure, auction host abuse and update-channel compromise.
+  - Cover at least geolocation, metadata, Sybil, social-graph and cycle-graph deanonymization, cross-relay linkability, enumeration and scraping, relay compromise, malicious federated peers, statement integrity, device compromise, push and mailbox traffic analysis, counterparty disclosure, auction host abuse and update-channel compromise.
   - Map every threat to controls by module ID and requirement ID and to automated privacy tests with IDs PRIVT-<area>-<nn>.
   - Run a review at every release candidate and at least every 90 days, recording reviewer, date and changes.
   - Provide a CI check that fails when a threat lacks a control, a test or a residual-risk statement, or when a referenced requirement or test ID does not exist.
@@ -32,6 +33,7 @@ edge_cases:
   - Two adversary classes combine, for example a relay operator who also runs Sybil accounts; the entry for combined attacks lists both and the strongest control gap.
   - A residual risk is accepted by a reviewer who then leaves; the acceptance remains with date and name, and the next review re-confirms it.
   - A test ID is renamed; the check reports the dangling reference with the file and line.
+  - The last review is 95 days old; a feature-branch build passes with a warning while a release candidate build fails until the review is recorded.
 ux:
   notes: "Documentation module with no screens. Output is Markdown rendered at docs/privacy/threat_model and a user-facing summary page 'What ClassRup protects and what it does not' in the PWA help, written in plain language at reading level grade 8."
 processes:
@@ -47,12 +49,13 @@ processes:
       - Every active threat entry must have at least one adversary, one control, one test and a non-empty residual-risk statement.
       - Control and test references must resolve to existing requirement IDs and test IDs.
       - The catalog must cover the mandatory topics list, and a topic without an active or retired entry fails the check.
+      - The mandatory topics include cross-relay linkability (one DID on every relay, mailbox hints in public projections, key-linkage reads by host relays), enumeration and scraping of public indexes, and the integrity of signed privacy statements (replay, forgery, signer-role confusion, fork or equivocation).
     rules:
       - "V01 | each active threat has adversaries, assets, attack description, residual risk, at least 1 control and at least 1 test | VALIDATION_FAILED"
       - "V02 | every control requirement ID exists in a module spec | VALIDATION_FAILED"
       - "V03 | every PRIVT test ID exists in a module spec test list or the privacy suite index | VALIDATION_FAILED"
-      - "V04 | mandatory topics geolocation, metadata, sybil, social-graph, cycle-graph, relay-compromise, federated-peer, device, traffic-analysis, counterparty, auction-host, update-channel each have an entry | VALIDATION_FAILED"
-      - "V05 | review date is within 90 days for the current release candidate | PRECONDITION_FAILED"
+      - "V04 | mandatory topics geolocation, metadata, sybil, social-graph, cycle-graph, cross-relay-linkability, enumeration-scraping, relay-compromise, federated-peer, statement-integrity, device, traffic-analysis, counterparty, auction-host, update-channel each have an entry | VALIDATION_FAILED"
+      - "V05 | review age - a release candidate build fails when the last review is more than 90 days old; any other build passes up to day 90, warns on days 91 to 104 and fails from day 105 | PRECONDITION_FAILED"
       - "V06 | residual risk text avoids the words anonymous and untraceable | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
@@ -69,7 +72,7 @@ processes:
       - The check output is machine readable JSON in addition to text for the completeness report.
     commands: []
     queries: []
-    note: "Documentation and CI-check module. Interface: docs/privacy/threat_model/threats.yaml, rendered THREAT_MODEL.md, and the CI command privacy-threat-check which returns exit code 0 or 1 and a JSON summary. No relay or vault commands, no events."
+    note: "Documentation and CI-check module. Interface: docs/privacy/threat_model/threats.yaml, rendered THREAT_MODEL.md, and the CI command privacy-threat-check which returns exit code 0 or 1 and a JSON summary, and with --release-candidate generates the review task. No relay or vault commands, no events."
     events_produced: []
     events_consumed: []
     errors:
@@ -78,10 +81,11 @@ processes:
       threat entry excerpt:
       id: PT-01  title: Trilateration of a seller's location through repeated distance queries
       adversaries: [A2 curious member, A3 relay operator]  assets: [home area]
-      controls: [F10.S02.M03 coarse cells, CTR-PRV-001 PRV-2 distance buckets and minimum radius 5 km, relay rate limits]
+      controls: [{module: F06.S02.M01, requirement: PS-047-07.R01}, {module: F06.S02.M01, requirement: PS-047-02.R03},
+                 {module: F06.S02.M03, requirement: PS-049-07.R02}, {module: F06.S02.M03, requirement: PS-049-07.R04}]
       residualRisk: A determined adversary with many queries over weeks may narrow a user to a 5 km cell, not to an address.
-      tests: [PRIVT-GEO-01, PRIVT-GEO-02]
-      CI: privacy-threat-check => 14 active threats, 0 violations
+      tests: [PRIVT-GEO-01, PRIVT-GEO-02]  status: active  reviewedAt: 2026-11-04  reviewer: privacy reviewer on duty
+      CI: privacy-threat-check => 17 active threats, 0 violations
   authorization_capabilities:
     requirements:
       - The catalog is public documentation readable by anyone; there is no runtime authorization.
@@ -109,8 +113,8 @@ processes:
       - "Kept in git history indefinitely; retired entries remain."
     threats:
       - "T01 | PT-01 Trilateration of location via repeated proximity or distance queries | geohash cell storage (PRV-1), bucketed distances and minimum 5 km radius (PRV-2), relay rate limits on proximity queries, no distances finer than the cell; tests PRIVT-GEO-01 and PRIVT-GEO-02"
-      - "T02 | PT-02 Location from photo EXIF, background landmarks or filenames | EXIF/GPS strip and re-encode (F10.S02.M03, PRV-4), relay rejects images with GPS tags, upload guidance about landmarks; residual risk landmarks in image content; tests PRIVT-GEO-03"
-      - "T03 | PT-03 Metadata leakage through IP address, timing, user agent or fine timestamps | IP truncation /24 and /48 for any retained value, public timestamps coarsened to the hour, user agent reduced to family and major version, no third-party requests; tests PRIVT-META-01 to PRIVT-META-04"
+      - "T02 | PT-02 Location from photo EXIF, background landmarks or filenames | EXIF/GPS strip and re-encode in the browser (F10.S02.M03), relays verify and reject images with GPS tags and never re-encode (N9), upload guidance about landmarks; residual risk landmarks in image content; tests PRIVT-GEO-03"
+      - "T03 | PT-03 Metadata leakage through IP address, timing, user agent or fine timestamps | networks only in memory and daily-salted keys as the only retained IP form, public projections sign hour-floored timestamps and hour-floored public record IDs with ordering by seq, user agent reduced to family and major version, no third-party requests; residual risk - a /24 or /48 network still identifies a site within one day, and relays and peers see the arrival time of every statement; tests PRIVT-META-01 to PRIVT-META-04"
       - "T04 | PT-04 Sybil identities to farm reputation, observe a victim or distort matching | keys are cheap so reputation is local per observer and weighted by attestations, relay-level rate limits and invitation policies, no global ranking claimed; residual risk Sybil accounts cannot be eliminated; tests PRIVT-SYB-01"
       - "T05 | PT-05 Social-graph deanonymization from follows, blocks, reviews and message partners | blocklists P3 and never exported to others, reviews show pseudonym only, no public friend lists, graph features computed in the vault; residual risk public reviews link pseudonyms to trades; tests PRIVT-GRAPH-01"
       - "T06 | PT-06 Cycle-graph deanonymization by a participant or matcher who sees who trades with whom | proposals are P2 end-to-end encrypted to listed participants, relay matching runs only over public projections, participants see only their own legs and neighbours, no cycle composition in public events; residual risk participants learn their neighbours; tests PRIVT-GRAPH-02"
@@ -121,44 +125,51 @@ processes:
       - "T11 | PT-11 Counterparty learns more than needed such as exact address or real name | exact address P3 never shared by default, L3 only by explicit action and L4 only user-initiated with TTL up to 24 h, public meetups suggested, consent shown per disclosure; tests PRIVT-GEO-04"
       - "T12 | PT-12 Auction host or other chosen host abuses order or metadata | host explicitly chosen by seller and accepted by bidders, signed bid receipts, bid history exportable, UI names the host; residual risk host sees bid timing; tests PRIVT-HOST-01"
       - "T13 | PT-13 Malicious update of the PWA or relay software exfiltrates data | subresource integrity, signed releases, pinned service worker versions with update on user consent, reproducible build check, strict CSP with no inline scripts; tests PRIVT-SUP-01"
-      - "T14 | PT-14 Re-identification of pseudonymized evidence after deletion | per-deletion pseudonym with destroyed salt, evidence limited to RET-EVIDENCE duration, honest notice that behavioral linkage may remain; tests PRIVT-DEL-01"
+      - "T14 | PT-14 Re-identification of pseudonymized evidence after deletion | per-deletion pseudonym with destroyed salt, no retained record joining the did and the pseudonym, evidence limited to RET-EVIDENCE duration, honest notice that behavioral linkage and counterparties' signed copies may remain; tests PRIVT-DEL-01"
+      - "T15 | PT-15 Cross-relay linkability of one user through the same did:key on every relay, the mailbox hint in public projections (N15) and key-linkage reads by host relays (N11) | each relay sees only what it hosts, mailbox IDs rotate per relay and per period, key-linkage reads are served only to a host relay the seller chose, relays never share access tokens; residual risk - in the MVP one did:key per principal is used on every relay, so colluding relays or anyone reading public projections from several relays can link a user's public activity, and per-relay pseudonymous DIDs are future work; tests PRIVT-LINK-01 and PRIVT-LINK-02"
+      - "T16 | PT-16 Enumeration and scraping of public indexes and proximity search to harvest listings, pseudonyms and cells | public projections carry only P0 fields and L2 cells, proximity queries rate limited with minimum radius (F06.S02.M03, F12.S03.M03), cursor caps and no bulk export endpoint for the public index; residual risk - patient scraping of public P0 data over time cannot be prevented and copies cannot be recalled; tests PRIVT-SCRAPE-01"
+      - "T17 | PT-17 Replay, forgery, signer-role confusion, fork or equivocation of signed privacy statements (consent grants and withdrawals, tombstones, deletion statements and notices) | signer role checks through the F11.S01.M01 registry, audience binding, per-author seq and prev with fork detection (F11.S02.M03), replay dedupe and grant-after-withdrawal refusal (F10.S01.M01), replay-based freshness of deletion statements (F10.S01.M04); residual risk - a stolen device key signs valid statements until its revocation reaches each verifier; tests PRIVT-STMT-01 and PRIVT-STMT-02"
     abuse_controls:
       - "Catalog changes require review by a privacy reviewer; the CI check blocks merges that violate completeness."
   observability_performance:
     requirements:
       - The CI check reports counts of threats, controls and tests, and the age of the last review.
-      - A review older than 90 days raises a CI warning for 14 days, then a failure.
+      - A review older than 90 days fails release candidate builds at once, while other builds warn on days 91 to 104 and fail from day 105.
       - The check runs within the CI time budget.
     metrics:
-      - "CI report: threats_total, threats_without_test, controls_unresolved, days_since_review"
+      - "CI report: threats_total, threats_without_test, controls_unresolved, days_since_review, review_state=ok|warn|fail"
     logs:
       - "CI log lists each violation with file, entry ID and rule ID."
     budgets:
       - "privacy-threat-check completes in ≤ 5 s for 100 entries; rendering Markdown ≤ 10 s."
+      - "Review age - non-release-candidate builds pass through day 90, warn on days 91 to 104 and fail from day 105; release candidate builds fail from day 91."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement is covered by at least one automated test of the check tool or a documented manual review step.
       - The mandatory topic list is verified by a fixture-based test.
       - Link integrity between the catalog and module specs is verified on the real repository in CI.
-    fixtures: "Fixture catalogs: valid with 14 entries, missing test, dangling requirement ID, missing topic, residual risk containing banned words, stale review date; the real repository specs for link checks."
+    fixtures: "Fixture catalogs: valid with 17 entries, missing test, dangling requirement ID, missing topic, residual risk containing banned words, review dates 90, 91, 104 and 105 days old; a git history with two release candidates; the real repository specs for link checks."
     tests:
       - "T01 | unit | 01.R01,01.R02,02.R01 | run the check on the valid fixture and on one missing a test | valid passes with exit 0; invalid exits 1 naming the entry and rule"
-      - "T02 | unit | 01.R03,02.R02 | catalog with a dangling PS requirement ID and unknown PRIVT ID | both reported with entry ID"
+      - "T02 | unit | 01.R02,02.R02 | catalog with a dangling PS requirement ID and unknown PRIVT ID | both reported with entry ID"
       - "T03 | unit | 02.R03,04.R01 | fixture with geolocation entry removed | check fails on missing mandatory topic"
-      - "T04 | unit | 03.R01,03.R02 | retire a threat without reason, then with reason; delete an entry | retire without reason fails; deletion detected by diff check and fails"
-      - "T05 | unit | 03.R03,02.R03 | residual risk accepted without reviewer or date | check fails"
+      - "T04 | unit | 03.R01 | retire a threat without reason, then with reason; delete an entry | retire without reason fails; deletion detected by diff check and fails"
+      - "T05 | unit | 03.R03 | residual risk accepted without reviewer or date | check fails"
       - "T06 | contract | 04.R02,04.R03,09.R02 | run the check with --json | JSON summary validates against its schema and matches text output"
       - "T07 | integration | 05.R01,05.R03 | run the check in an offline sandbox with no secrets | works with no network"
-      - "T08 | integration | 06.R01,06.R03 | run the check twice and with a failing renderer | identical output; renderer failure does not hide check result"
+      - "T08 | integration | 06.R01 | run the check twice and with a failing renderer | identical output; renderer failure does not hide check result"
       - "T09 | abuse | 05.R02,06.R02 | attempt to merge a catalog change without privacy reviewer approval or with a failing check | CI blocks the merge"
-      - "T10 | unit | 07.R01,07.R02 | scan catalog for emails, keys, URLs to real services and exploit payload patterns | none found"
-      - "T11 | manual | 07.R03,01.R03 | reviewer reads the user-facing summary page | states pseudonymity is not anonymity, relay metadata visibility and non-recall limits; reading level grade 8"
-      - "T12 | unit | 08.R01,08.R02,08.R03 | run on 100 entries with a 100-day-old review date | completes ≤ 5 s; warning on day 91 and failure after day 104"
-      - "T13 | integration | 09.R01,09.R03 | real repository run | all 14 active threats resolve controls and tests; every PS-082 requirement maps to a passing test"
+      - "T10 | unit | 01.R03,07.R01 | scan catalog for emails, keys, URLs to real services and exploit payload patterns | none found"
+      - "T11 | manual | 07.R03 | reviewer reads the user-facing summary page | states pseudonymity is not anonymity, relay metadata visibility and non-recall limits; reading level grade 8"
+      - "T12 | unit | 08.R01,08.R02,08.R03 | run on 100 entries with review ages 90, 91, 104 and 105 days as a non-release-candidate build, and 90 and 91 days as a release candidate build | completes ≤ 5 s; non-RC passes at 90, warns at 91 and 104 and fails at 105; RC passes at 90 and fails at 91"
+      - "T13 | integration | 09.R01,09.R03 | real repository run | all 17 active threats resolve controls and tests; every PS-082 requirement maps to a passing test"
       - "T14 | integration | 10.R01,10.R02,10.R03 | export the catalog bundle and restore from git tag | identical files and check result; schema v1 file validates after upgrade"
+      - "T15 | unit | 03.R02,06.R03 | run privacy-threat-check --release-candidate on the fixture history, then rebuild the same release candidate | a review task listing the modules changed since the last review is generated once; the rebuild does not duplicate it"
+      - "T16 | manual | 07.R02 | privacy reviewer compares each attack description with the security disclosure policy | no entry holds more detail than needed to verify its controls; sensitive details are referenced to F16.S03.M03"
+      - "T17 | unit | 02.R04,02.R03 | fixtures each missing one of cross-relay-linkability, enumeration-scraping and statement-integrity | check fails naming the missing topic; the valid fixture passes"
     acceptance:
       - privacy-threat-check passes on the real repository with 0 violations.
-      - All twelve mandatory topics have an active or retired entry with controls, tests and residual risk.
+      - All fifteen mandatory topics have an active or retired entry with controls, tests and residual risk.
       - The user-facing summary states the honesty constraints verbatim in plain language.
   import_export_backup_rollback:
     requirements:

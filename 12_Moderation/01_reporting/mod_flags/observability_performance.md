@@ -13,7 +13,8 @@
 ## Specification
 
 **Metrics**
-- classrup_moderation_reports_total{outcome=received|duplicate|rejected|withdrawn} (relay)
+- classrup_moderation_reports_total{outcome=received|duplicate|rejected|withdrawn|forwarded_refused} (relay)
+- classrup_moderation_report_statements_total{type=receipt|linked|outcome} (relay)
 - classrup_moderation_report_intake_lag_ms (relay gauge: now - oldest received report without case)
 - Local diagnostics counter reports_prepared (vault, exportable, never sent)
 
@@ -33,7 +34,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 |---|---|---|---|---|
 | TEST-PS-094-09.T13 | load | PS-094-08.R01, PS-094-08.R03 | 50 report receives per second for 5 minutes on relay | p95 ≤ 300 ms, intake lag p95 ≤ 5 s, no reporter key in logs |
 | TEST-PS-094-09.T14 | unit | PS-094-08.R02, PS-094-09.R01 | vault file with 256 KiB snapshot on Moto G profile; traceability tool run | p95 ≤ 150 ms; every PS-094 requirement maps to a passing test |
+| TEST-PS-094-09.T16 | e2e | PS-094-03.R02, PS-094-08.R02 | mobile reporter files a report offline then reconnects | single report, delivery status progresses Saved, Sent, Relay acknowledged honestly, axe zero serious issues |
 
 ## Dependencies
 
-Module depends on: F12.S01.M02, F12.S02.M03, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S01.M02, F12.S02.M03, F12.S03.M03, F07.S02.M02, F08.S01.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

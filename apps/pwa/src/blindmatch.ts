@@ -1,24 +1,34 @@
+import { en as englishMessages } from '../../../packages/i18n/src/internationalization/languages/blindmatch/en.ts';
+import { mountBlindMatchLanguage, type BlindMatchMessage } from './blindmatch-language.ts';
 import { createLocalIntentStore, createLocalMatchSession, privateIntentCriteriaSchema,
   type LocalIntentStore, type LocalMatchSession, type LocalMatchSessionOptions,
   type LocalMatchSuggestion, type PrivateIntent } from '../../../packages/blindmatch/src/index.ts';
 import { createSystemClock, type Clock, type StoredRecord } from '../../../packages/kernel/src/index.ts';
 import type { UnlockedVault } from '../../../packages/vault/src/index.ts';
 
+class PrivateIntentFormError extends Error {
+  constructor(key: 'invalidExpiry' | 'needCurrency' | 'invalidFilters') {
+    super(englishMessages[`blindmatch.${key}`]);
+    this.key = key;
+  }
+  readonly key: BlindMatchMessage;
+}
+
 /** The form uses UTC explicitly; keep an unchanged saved expiry's subsecond precision. */
 export function privateIntentFormInput(data: FormData, previous?: PrivateIntent) {
   const text = (name: string) => String(data.get(name) ?? '');
   const rawExpiry = text('expires');
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(rawExpiry)) {
-    throw new Error('Enter a valid expiry date and time in UTC.');
+    throw new PrivateIntentFormError('invalidExpiry');
   }
   const canonicalExpiry = `${rawExpiry.length === 16 ? `${rawExpiry}:00` : rawExpiry}.000Z`;
   const date = new Date(canonicalExpiry);
   if (!Number.isFinite(date.getTime()) || date.toISOString() !== canonicalExpiry) {
-    throw new Error('Enter a valid expiry date and time in UTC.');
+    throw new PrivateIntentFormError('invalidExpiry');
   }
   const currency = text('currency').trim().toUpperCase();
   const min = text('min'), max = text('max');
-  if ((min || max) && !currency) throw new Error('Choose a currency for the price limits.');
+  if ((min || max) && !currency) throw new PrivateIntentFormError('needCurrency');
   const criteria = privateIntentCriteriaSchema.safeParse({
     query: text('query').normalize('NFC'),
     ...(text('category') ? { categoryId: text('category') } : {}),
@@ -27,7 +37,7 @@ export function privateIntentFormInput(data: FormData, previous?: PrivateIntent)
     ...(text('region') ? { regionCell: text('region') } : {}),
     ...(currency ? { price: { currency, ...(min ? { min } : {}), ...(max ? { max } : {}) } } : {}),
   });
-  if (!criteria.success) throw new Error('Check the search filters, coarse area and exact whole minor-unit price limits.');
+  if (!criteria.success) throw new PrivateIntentFormError('invalidFilters');
   return {
     criteria: criteria.data,
     expiresAt: previous && canonicalExpiry === `${previous.expiresAt.slice(0, 19)}.000Z` ? previous.expiresAt : canonicalExpiry,
@@ -55,54 +65,56 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
   let intents: LocalIntentStore | undefined, matching: LocalMatchSession | undefined;
   let editing: Row | undefined, operation: Operation | undefined;
   const rowButtons: HTMLButtonElement[] = [];
-  const node = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string): HTMLElementTagNameMap[K] => {
-    const element = document.createElement(tag);
-    if (text !== undefined) element.textContent = text;
+  const language = mountBlindMatchLanguage(ports.container);
+  const { message, translate } = language;
+  const node = <K extends keyof HTMLElementTagNameMap>(tag: K, label?: BlindMatchMessage | (() => string)): HTMLElementTagNameMap[K] => {
+    const element = ownerDocument.createElement(tag);
+    if (label !== undefined) message(element, label);
     return element;
   };
-  const title = node('h2', 'Private local matching'); title.id = 'blindmatch-title';
+  const title = node('h2', 'title'); title.id = 'blindmatch-title';
   ports.container.setAttribute('aria-labelledby', title.id);
-  const help = node('p', 'Save private search preferences in your encrypted vault and match them against up to 128 already-retained public listings. Nothing is published or sent to a provider. Matching starts only when you run it.');
+  const help = node('p', 'help');
   help.id = 'blindmatch-help';
-  const enableLabel = node('label', 'Enable local matching for this session'); enableLabel.className = 'check';
+  const enableLabel = node('label', 'enable'); enableLabel.className = 'check';
   const enable = node('input'); enable.type = 'checkbox'; enable.checked = false;
   enable.setAttribute('aria-describedby', help.id); enableLabel.prepend(enable);
   const content = node('div'); content.hidden = true;
   const form = node('form'); form.id = 'blindmatch-form'; form.autocomplete = 'off';
-  const fields = node('fieldset'); fields.append(node('legend', 'Private intent'));
-  function input(label: string, name: string) {
+  const fields = node('fieldset'); fields.append(node('legend', 'intent'));
+  function input(label: BlindMatchMessage, name: string) {
     const wrapper = node('label', label), control = node('input');
     control.name = name; control.autocomplete = 'off'; control.spellcheck = false;
     wrapper.append(control); fields.append(wrapper); return control;
   }
-  function select(label: string, name: string, choices: readonly (readonly [string, string])[]) {
+  function select(label: BlindMatchMessage, name: string, choices: readonly (readonly [string, BlindMatchMessage])[]) {
     const wrapper = node('label', label), control = node('select'); control.name = name;
     for (const [value, text] of choices) { const option = node('option', text); option.value = value; control.append(option); }
     wrapper.append(control); fields.append(wrapper); return control;
   }
-  const query = input('Private search text', 'query'); query.maxLength = 120;
-  const category = input('Category identifier (optional)', 'category'); category.maxLength = 36;
-  const kind = select('Matching listing type', 'kind', [['', 'Any listing type'], ['sell', 'For sale'], ['wanted', 'Wanted'], ['giveaway', 'Giveaway']]);
-  const condition = select('Matching condition', 'condition', [['', 'Any condition'], ['new', 'New'], ['like_new', 'Like new'], ['good', 'Good'], ['fair', 'Fair'], ['poor', 'Poor'], ['for_parts', 'For parts']]);
-  const region = input('Matching coarse area (optional)', 'region'); region.maxLength = 5;
-  const currency = input('Price currency (optional)', 'currency'); currency.maxLength = 10;
-  const min = input('Minimum price (whole minor units)', 'min');
-  const max = input('Maximum price (whole minor units)', 'max');
-  for (const amount of [min, max]) { amount.inputMode = 'numeric'; amount.maxLength = 78; amount.pattern = '(0|[1-9][0-9]{0,77})'; }
-  const expires = input('Expires at (UTC)', 'expires'); expires.type = 'datetime-local'; expires.step = '1'; expires.required = true;
-  fields.append(node('p', 'Use UTC for expiry and whole minor units for prices, such as 1250 for CAD 12.50. Saving creates a draft; editing an existing intent returns it to draft.'));
+  const query = input('query', 'query'); query.maxLength = 120; query.dir = 'auto';
+  const category = input('category', 'category'); category.maxLength = 36;
+  const kind = select('kind', 'kind', [['', 'anyKind'], ['sell', 'sell'], ['wanted', 'wanted'], ['giveaway', 'giveaway']]);
+  const condition = select('condition', 'condition', [['', 'anyCondition'], ['new', 'new'], ['like_new', 'likeNew'], ['good', 'good'], ['fair', 'fair'], ['poor', 'poor'], ['for_parts', 'forParts']]);
+  const region = input('region', 'region'); region.maxLength = 5;
+  const currency = input('currency', 'currency'); currency.maxLength = 10;
+  const min = input('min', 'min');
+  const max = input('max', 'max');
+  for (const amount of [min, max]) { amount.dir = 'ltr'; amount.inputMode = 'numeric'; amount.maxLength = 78; amount.pattern = '(0|[1-9][0-9]{0,77})'; }
+  const expires = input('expires', 'expires'); expires.type = 'datetime-local'; expires.step = '1'; expires.required = true;
+  fields.append(node('p', 'formHelp'));
   const formActions = node('div'); formActions.className = 'actions';
-  const save = node('button', 'Save private intent'); save.type = 'submit';
-  const cancelEdit = node('button', 'Cancel editing'); cancelEdit.type = 'button'; cancelEdit.hidden = true;
+  const save = node('button', 'save'); save.type = 'submit';
+  const cancelEdit = node('button', 'cancelEdit'); cancelEdit.type = 'button'; cancelEdit.hidden = true;
   formActions.append(save, cancelEdit); fields.append(formActions); form.append(fields);
   const status = node('p'); status.id = 'blindmatch-status'; status.setAttribute('role', 'status');
   const error = node('p'); error.id = 'blindmatch-error'; error.setAttribute('role', 'alert');
-  const cancelMatch = node('button', 'Cancel local match'); cancelMatch.type = 'button'; cancelMatch.hidden = true;
+  const cancelMatch = node('button', 'cancelMatch'); cancelMatch.type = 'button'; cancelMatch.hidden = true;
   const rows = node('div'); rows.id = 'blindmatch-intents';
   const results = node('div'); results.id = 'blindmatch-results';
-  content.append(form, status, error, cancelMatch, node('h3', 'Saved private intents'), rows, node('h3', 'Local matching results'), results,
-    node('p', 'Results refer to a locally verified signed snapshot. Availability remains a peer claim. A match grants no contact, consent, reservation or trade.'));
-  ports.container.replaceChildren(title, help, enableLabel, content); ports.container.hidden = false;
+  content.append(form, status, error, cancelMatch, node('h3', 'savedList'), rows, node('h3', 'results'), results,
+    node('p', 'resultNotice'));
+  ports.container.replaceChildren(title, help, language.control, language.announcement, enableLabel, content); ports.container.hidden = false;
 
   function current(at = generation): boolean {
     try { return alive && enabled && !pageSuspended && !ownerDocument.hidden
@@ -115,7 +127,7 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
     for (const button of rowButtons) button.disabled = operation !== undefined || dirty || editing !== undefined;
     cancelEdit.hidden = !dirty && !editing;
     cancelMatch.hidden = operation?.kind !== 'match';
-    save.textContent = editing ? 'Save intent changes' : 'Save private intent';
+    message(save, editing ? 'saveChanges' : 'save');
     content.setAttribute('aria-busy', operation ? 'true' : 'false');
   }
   function clearForm(): void { editing = undefined; dirty = false; form.reset(); controls(); }
@@ -125,10 +137,10 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
   }
   function failure(problem: unknown): void {
     const code = problem && typeof problem === 'object' && 'code' in problem ? problem.code : undefined;
-    error.textContent = code === 'EXPIRED' ? 'This private intent has expired. Edit its expiry before matching.'
-      : code === 'VALIDATION_FAILED' ? 'Check the filters and expiry, then try again.'
-      : code === 'CONFLICT_REVISION' ? 'The saved intent changed. Reopen this view and review its current state before retrying.'
-      : 'This action could not be confirmed. A save may already have completed. Reopen this view and review saved state before retrying.';
+    message(error, code === 'EXPIRED' ? 'expired'
+      : code === 'VALIDATION_FAILED' ? 'invalid'
+      : code === 'CONFLICT_REVISION' ? 'conflict'
+      : 'unknown');
     status.textContent = '';
   }
   async function perform(kind: Operation['kind'], work: (ticket: Operation, store: LocalIntentStore, matcher: LocalMatchSession) => Promise<void>): Promise<void> {
@@ -141,12 +153,12 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
   }
   function renderReferences(items: readonly LocalMatchSuggestion[]): void {
     results.replaceChildren();
-    if (!items.length) { results.append(node('p', 'No eligible retained public listings matched this intent.')); return; }
+    if (!items.length) { results.append(node('p', 'emptyResults')); return; }
     for (const item of items) {
-      const card = node('article'); card.className = 'card'; card.append(node('h4', 'Public listing reference'));
+      const card = node('article'); card.className = 'card'; card.append(node('h4', 'reference'));
       const details = node('dl');
-      for (const [label, value] of [['Owner', item.ownerId], ['Listing', item.listingId], ['Revision', String(item.revision)], ['CID', item.cid]]) {
-        const valueNode = node('dd', value); valueNode.className = 'mono';
+      for (const [label, value] of [['owner', item.ownerId], ['listing', item.listingId], ['revision', String(item.revision)], ['cid', item.cid]] as const) {
+        const valueNode = node('dd'); valueNode.textContent = value; valueNode.dir = 'ltr'; valueNode.className = 'mono';
         details.append(node('dt', label), valueNode);
       }
       card.append(details); results.append(card);
@@ -156,31 +168,34 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
     if (!current(at)) return;
     const version = ++renderVersion;
     rowButtons.length = 0; rows.replaceChildren();
-    if (!items.length) rows.append(node('p', 'No saved private intents.'));
+    if (!items.length) rows.append(node('p', 'emptyIntents'));
     for (const row of items) {
       const card = node('article'); card.className = 'card';
-      card.append(node('h4', row.data.criteria.query || 'Private intent'),
-        node('p', `State: ${row.data.state} · Revision: ${row.revision} · Expires: ${row.data.expiresAt} (UTC)`));
+      const heading = node('h4', 'intent');
+      if (row.data.criteria.query) { heading.textContent = row.data.criteria.query; heading.dir = 'auto'; }
+      const { state, expiresAt } = row.data;
+      const revision = row.revision;
+      card.append(heading, node('p', () => translate('row', { state: translate(state), revision, expiry: expiresAt })));
       const actions = node('div'); actions.className = 'actions';
       const usable = () => current(at) && version === renderVersion && !operation && !dirty && !editing;
-      function button(label: string, callback: () => void) {
+      function button(label: BlindMatchMessage, callback: () => void) {
         const control = node('button', label); control.type = 'button';
         control.addEventListener('click', () => { if (usable()) callback(); });
         rowButtons.push(control); actions.append(control);
       }
-      button('Edit private intent', () => {
+      button('edit', () => {
         invalidateResults(); editing = structuredClone(row); dirty = false;
         const criteria = row.data.criteria;
         query.value = criteria.query; category.value = criteria.categoryId ?? ''; kind.value = criteria.kind ?? '';
         condition.value = criteria.condition ?? ''; region.value = criteria.regionCell ?? '';
         currency.value = criteria.price?.currency ?? ''; min.value = criteria.price?.min ?? ''; max.value = criteria.price?.max ?? '';
         expires.value = row.data.expiresAt.slice(0, 19); controls(); query.focus();
-        status.textContent = 'Editing a private intent. Save or cancel editing before matching.';
+        message(status, 'editing');
       });
-      button('Run local match', () => {
+      button('run', () => {
         invalidateResults();
         void perform('match', async (ticket, store, matcher) => {
-          status.textContent = 'Preparing the saved private intent…';
+          message(status, 'preparing');
           let selected = row;
           if (selected.data.state !== 'active') {
             const activated = await store.setState({ id: row.id, expectedRevision: row.revision, state: 'active' });
@@ -192,15 +207,16 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
           if (!admitted(ticket)) return;
           if (!saved.ok) throw saved.error;
           renderRows(saved.value, ticket.generation);
-          status.textContent = 'Matching locally against authenticated retained public listings…';
+          message(status, 'matching');
           const matched = await matcher.match({ id: selected.id, expectedRevision: selected.revision });
           if (!admitted(ticket)) return;
           if (!matched.ok) throw matched.error;
           renderReferences(matched.value.items);
-          status.textContent = `Local match complete: ${matched.value.items.length} public listing reference${matched.value.items.length === 1 ? '' : 's'}. Results stay in this view.`;
+          const count = matched.value.items.length;
+          message(status, () => language.resultCount(count));
         });
       });
-      if (row.data.state === 'active') button('Pause private intent', () => {
+      if (row.data.state === 'active') button('pause', () => {
         invalidateResults();
         void perform('write', async (ticket, store) => {
           const paused = await store.setState({ id: row.id, expectedRevision: row.revision, state: 'paused' });
@@ -209,11 +225,11 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
           const saved = await store.list();
           if (!admitted(ticket)) return;
           if (!saved.ok) throw saved.error;
-          renderRows(saved.value, ticket.generation); status.textContent = 'Private intent paused.';
+          renderRows(saved.value, ticket.generation); message(status, 'pauseDone');
         });
       });
-      button('Erase private intent', () => {
-        if (!window.confirm('Erase this private intent from this vault? Independent backups and other copies are not erased.')) return;
+      button('erase', () => {
+        if (!ownerWindow?.confirm(translate('confirmErase'))) return;
         if (!usable()) return;
         invalidateResults();
         void perform('write', async (ticket, store) => {
@@ -223,7 +239,7 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
           const saved = await store.list();
           if (!admitted(ticket)) return;
           if (!saved.ok) throw saved.error;
-          renderRows(saved.value, ticket.generation); status.textContent = 'Private intent erased from this vault. Independent backups and other copies remain separate.';
+          renderRows(saved.value, ticket.generation); message(status, 'eraseDone');
         });
       });
       card.append(actions); rows.append(card);
@@ -256,24 +272,34 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
       loadCandidates: ports.loadCandidates, ...(ports.blockedOwners ? { blockedOwners: ports.blockedOwners } : {}) });
     content.hidden = false;
     void perform('load', async (ticket, store) => {
-      status.textContent = 'Loading saved private intents…';
+      message(status, 'loading');
       const saved = await store.list();
       if (!admitted(ticket)) return;
       if (!saved.ok) throw saved.error;
-      renderRows(saved.value, ticket.generation); status.textContent = 'Local matching enabled for this session. Choose an intent and run it explicitly.';
+      renderRows(saved.value, ticket.generation); message(status, 'enabled');
     });
   });
   form.addEventListener('input', () => {
     if (!current() || operation) return;
     dirty = true; invalidateResults(); controls();
   });
+  // Preserve native constraints and focus the first invalid field while showing
+  // the validation message in the language explicitly chosen for this panel.
+  form.addEventListener('invalid', event => {
+    event.preventDefault();
+    if (!current() || operation) return;
+    const invalid = form.querySelector<HTMLInputElement>('input:invalid');
+    if (!invalid || invalid !== event.target) return;
+    message(error, invalid === expires ? 'invalidExpiry' : 'invalidFilters');
+    invalid.focus();
+  }, true);
   form.addEventListener('submit', event => {
     event.preventDefault();
     if (!current() || operation) return;
     const previous = editing;
     let input: ReturnType<typeof privateIntentFormInput>;
     try { input = privateIntentFormInput(new FormData(form), previous?.data); }
-    catch (problem) { error.textContent = problem instanceof Error ? problem.message : 'Check the private intent fields.'; return; }
+    catch (problem) { message(error, problem instanceof PrivateIntentFormError ? problem.key : 'invalid'); return; }
     invalidateResults();
     void perform('write', async (ticket, store) => {
       const saved = previous ? await store.revise({ id: previous.id, expectedRevision: previous.revision, ...input }) : await store.create(input);
@@ -283,16 +309,16 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
       const all = await store.list();
       if (!admitted(ticket)) return;
       if (!all.ok) throw all.error;
-      renderRows(all.value, ticket.generation); status.textContent = 'Private intent saved locally as draft. Run local match when ready.';
+      renderRows(all.value, ticket.generation); message(status, 'saved');
     });
   });
   cancelEdit.addEventListener('click', () => {
     if (!current() || operation) return;
-    invalidateResults(); clearForm(); status.textContent = 'Editing cleared. Saved private intents are unchanged.';
+    invalidateResults(); clearForm(); message(status, 'cleared');
   });
   cancelMatch.addEventListener('click', () => {
     if (!current() || operation?.kind !== 'match') return;
-    invalidateResults(); status.textContent = 'Local matching cancelled. Review saved state before retrying if activation was still in progress.';
+    invalidateResults(); message(status, 'cancelled');
   });
   controls();
   return {
@@ -300,6 +326,7 @@ export function mountBlindMatch(ports: BlindMatchPorts) {
     destroy() {
       if (!alive) return;
       alive = false;
+      language.destroy();
       ownerDocument.removeEventListener('visibilitychange', visibilityChanged);
       ownerWindow?.removeEventListener('pagehide', pageHidden);
       ownerWindow?.removeEventListener('pageshow', pageShown);

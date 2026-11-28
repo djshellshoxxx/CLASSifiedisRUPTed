@@ -437,3 +437,90 @@ for (const change of ['visibility-hidden', 'pagehide'] as const) {
     expect((await snapshot(page)).loaderCalls).toBe(2);
   });
 }
+
+test.describe('localized private matching', () => {
+  test.use({ locale: 'fr-CA', viewport: { width: 320, height: 720 } });
+
+  test('negotiates the local language and preserves a private draft across language changes', async ({ page }) => {
+    await openFixture(page);
+    const panel = page.locator('#blindmatch');
+    await expect(panel).toHaveAttribute('lang', 'fr');
+    await panel.getByRole('checkbox').check();
+    const query = panel.getByRole('textbox', { name: 'Texte de recherche privé', exact: true });
+    await query.fill('vélo {count}');
+    await panel.locator('[name="min"]').fill('900719925474099301');
+    await panel.locator('[name="expires"]').fill('2026-11-28T12:00');
+    await panel.getByRole('button', { name: 'Enregistrer la recherche privée' }).click();
+    await expect(panel.getByRole('alert')).toHaveText('Choisissez une devise pour les limites de prix.');
+    const language = panel.getByRole('combobox', { name: 'Langue de BlindMatch' });
+    await language.selectOption('de');
+    await expect(panel).toHaveAttribute('lang', 'de');
+    await expect(panel.getByRole('alert')).toHaveText('Wählen Sie eine Währung für die Preisgrenzen.');
+    await expect(panel.getByRole('textbox', { name: 'Privater Suchtext' })).toHaveValue('vélo {count}');
+    await expect(panel.locator('[name="min"]')).toHaveValue('900719925474099301');
+    await panel.locator('[name="expires"]').fill('');
+    await panel.getByRole('button', { name: 'Private Suche speichern' }).click();
+    await expect(panel.getByRole('alert')).toHaveText('Geben Sie ein gültiges Ablaufdatum mit Uhrzeit in UTC ein.');
+    await expect(panel.locator('[name="expires"]')).toBeFocused();
+    await panel.locator('[name="expires"]').fill('2026-11-28T12:00');
+    await panel.locator('[name="currency"]').fill('CAD');
+    await panel.getByRole('button', { name: 'Private Suche speichern' }).click();
+    await expect(panel.locator('#blindmatch-intents article')).toHaveCount(1);
+    await panel.getByRole('combobox', { name: 'BlindMatch-Sprache' }).selectOption('es');
+    await panel.getByRole('button', { name: 'Buscar coincidencias locales' }).click();
+    await expect(panel.getByRole('status').filter({ hasText: '0 referencias' })).toBeVisible();
+    await expect(panel.getByRole('heading', { name: 'vélo {count}', exact: true })).toBeVisible();
+    expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect((await snapshot(page)).loaderCalls).toBe(1);
+  });
+});
+
+test('rapid language changes preserve focus and clear private fields on disable', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await openFixture(page);
+  const panel = page.locator('#blindmatch');
+  await panel.getByRole('checkbox').check();
+  const query = panel.locator('[name="query"]');
+  await query.fill('private language stress fixture');
+  const requests: string[] = [];
+  page.on('request', request => requests.push(request.url()));
+  const preferred = async (tag: string) => page.evaluate(locale => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: [locale] });
+    window.dispatchEvent(new Event('languagechange'));
+  }, tag);
+  await page.evaluate(() => {
+    const select = document.querySelector<HTMLSelectElement>('#blindmatch-language')!;
+    const choices = ['de', 'fr', 'es', 'en', ''];
+    for (let i = 0; i < 250; i++) {
+      select.value = choices[i % choices.length]!;
+      select.dispatchEvent(new Event('change'));
+    }
+  });
+  await preferred('ar-XB');
+  await expect(panel).toHaveAttribute('dir', 'rtl');
+  await expect(panel).toHaveAttribute('lang', 'ar-XB');
+  await expect(query).toBeFocused();
+  await expect(query).toHaveValue('private language stress fixture');
+  const unchanged = await panel.evaluate(async el => {
+    const records: MutationRecord[] = [];
+    const observer = new MutationObserver(batch => records.push(...batch));
+    observer.observe(el, { characterData: true, childList: true, subtree: true });
+    window.dispatchEvent(new Event('languagechange'));
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    observer.disconnect();
+    return records.length;
+  });
+  expect(unchanged).toBe(0);
+  await preferred('en-XA');
+  await expect(panel).toHaveAttribute('dir', 'ltr');
+  await expect(panel).toHaveAttribute('lang', 'en-XA');
+  expect(await panel.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await panel.getByRole('checkbox').uncheck();
+  await preferred('zz');
+  await expect(panel).toHaveAttribute('lang', 'en');
+  await expect(query).toHaveValue('');
+  await expect(panel.locator('#blindmatch-status')).toBeEmpty();
+  await expect(panel.locator('#blindmatch-results')).toBeEmpty();
+  expect((await snapshot(page)).loaderCalls).toBe(0);
+  expect(requests).toEqual([]);
+});

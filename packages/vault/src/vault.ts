@@ -213,8 +213,9 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
   };
   let session: UnlockedVault | undefined;
   let closed = false;
+  let closeSettlement: Promise<void> | undefined;
   let opening = false;
-  const check = (): void => { if (closed) throw new Error('Vault closed'); };
+  const check = (): void => { if (closed || raw.invalidation?.aborted) throw new Error('Vault closed'); };
   const key = (): Promise<StoredRecord<unknown> | undefined> => { check(); return raw.read(tx => tx.records.get(KEY_TENANT, KEY_TYPE, KEY_ID)); };
   const wrapIdentity = async (identity: ProtectedIdentity, passphrase: string): Promise<object> => {
     if (!unlockStorage) return identity;
@@ -222,12 +223,20 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
     try { return { format: STORAGE_IDENTITY_FORMAT, sealed: await seal(bytes, passphrase) }; }
     finally { bytes.fill(0); }
   };
-  const close = async (): Promise<void> => {
+  const close = (): Promise<void> => {
+    if (closeSettlement) return closeSettlement;
     closed = true;
     session?.identity.lock();
     session = undefined;
-    await raw.close();
+    raw.invalidation?.removeEventListener('abort', invalidate);
+    closeSettlement = (async () => { await raw.close(); })();
+    return closeSettlement;
   };
+  // Native invalidation must revoke the exposed signer synchronously, not just
+  // the cached storage. Drain separately so an active callback cannot deadlock.
+  const invalidate = (): void => { void close().catch(() => undefined); };
+  raw.invalidation?.addEventListener('abort', invalidate, { once: true });
+  if (raw.invalidation?.aborted) invalidate();
   const exclusive = async <T>(fn: () => Promise<T>): Promise<T> => {
     check();
     if (opening || session) throw new Error('Vault session already open');
@@ -270,17 +279,26 @@ export function vaultFromStorage(raw: Storage, codecs: readonly BackupCodec[] = 
     return records;
   }
   function activate(identity: UnlockedIdentity, protectedIdentity: ProtectedIdentity): UnlockedVault {
-    if (closed) { identity.lock(); throw new Error('Vault closed'); }
+    if (closed || raw.invalidation?.aborted) { identity.lock(); throw new Error('Vault closed'); }
     let active = true;
     const guard = (): void => { check(); if (!active) throw new Error('Vault locked'); };
     const storage: Storage = {
       kind: raw.kind,
+      ...(raw.invalidation ? { invalidation: raw.invalidation } : {}),
       transaction<T, E>(fn: (tx: Tx) => Result<T, E> | Promise<Result<T, E>>, opts?: { readonly mode?: TxMode }) {
         guard();
         return raw.transaction(async tx => { guard(); const result = await fn(tx); guard(); return result; }, opts);
       },
-      async read<T>(fn: (tx: Tx) => T | Promise<T>) { guard(); return raw.read(async tx => { guard(); const result = await fn(tx); guard(); return result; }); },
-      async ping() { guard(); return raw.ping(); },
+      async read<T>(fn: (tx: Tx) => T | Promise<T>) {
+        guard();
+        const result = await raw.read(async tx => { guard(); const value = await fn(tx); guard(); return value; });
+        guard();
+        return result;
+      },
+      async ping() {
+        try { guard(); const live = await raw.ping(); return !raw.invalidation?.aborted && live; }
+        catch (error) { if (raw.invalidation?.aborted) return false; throw error; }
+      },
       close,
     };
     // Shared snapshot admission for issuance and verification. No write lock is

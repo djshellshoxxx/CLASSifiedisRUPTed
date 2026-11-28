@@ -1,6 +1,6 @@
 # PS-139-02 — Validation rules: Load testing
 
-**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M01 Load testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/load` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md)
+**Status:** SPECIFIED (Stage 3). **Module:** [F17.S02.M01 Load testing](SPEC.md) · **Scope:** MVP · **Code:** `tests/load` · **Contracts:** [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md), [CTR-TST-001](../../../planning/contracts/CTR-TST-001.md), [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md), [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md), [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md), [CTR-FED-001](../../../planning/contracts/CTR-FED-001.md)
 
 > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
@@ -9,7 +9,7 @@
 - **PS-139-02.R01** Each scenario has a declared target (rate, duration, p95 budget) and the verdict is pass only when measured p95 is at most the budget and error rate at most 0.1 %.
 - **PS-139-02.R02** The driver rejects runs that are invalid: generator CPU above 70 %, achieved rate below 95 % of target, or less than the profile duration.
 - **PS-139-02.R03** The load script refuses to run against any host not on the explicit allow list (localhost and the CI relay) with a typed error.
-- **PS-139-02.R04** The load script targets relay services only: signed public-projection index reads and writes, mailbox put and get of opaque encrypted envelopes, matching over public projections, content-free push enqueue and auction hosting; the relay never receives plaintext P2+ data in the test.
+- **PS-139-02.R04** The load script targets relay services only: signed public-projection index reads and writes (write_index through federation.record.ingest with signature verification), mailbox put and get of opaque encrypted envelopes with the content-free push enqueue that a mailbox put triggers (N17), matching over public projections and auction hosting (auction_bid through auctions.bid.place at the host relay); the relay never receives plaintext P2+ data in the test.
 
 ## Specification
 
@@ -29,8 +29,10 @@
 | TEST-PS-139-09.T04 | unit | PS-139-02.R02 | force generator CPU 80 percent and achieved rate 90 percent | QUALITY_LOAD_INVALID_RUN and exit 2 |
 | TEST-PS-139-09.T05 | abuse | PS-139-02.R03, PS-139-05.R03 | point the driver at a non-allow-listed host | QUALITY_LOAD_HOST_FORBIDDEN and exit 3 |
 | TEST-PS-139-09.T14 | load | PS-139-02.R01 | reference run of read, write, search and cycle scenarios | p95 within OBS-4 budgets and error rate at most 0.1 % |
-| TEST-PS-139-09.T17 | integration | PS-139-02.R04 | inspect request bodies sent to the relay during a smoke run | only signed public projections and opaque encrypted envelopes; no plaintext P2+ canary |
+| TEST-PS-139-09.T17 | integration | PS-139-02.R04 | inspect request bodies sent to the relay during a smoke run | only signed public projections, bidder-signed bids with E2E-encrypted bidder fields and opaque encrypted envelopes; no plaintext P2+ canary |
+| TEST-PS-139-09.T18 | load | PS-139-02.R04, PS-139-01.R03 | write_index at 50 req/s for 5 min with 1 percent of envelopes forged | p95 at most 300 ms; every write signature-verified by the relay; forged envelopes rejected with FED_SIGNATURE_INVALID and reported as expected rejections, not as errors |
+| TEST-PS-139-09.T19 | load | PS-139-02.R04 | auction_bid at 50 req/s against the hosted auction | p95 at most 300 ms; each accepted bid has a host-signed receipt; error rate at most 0.1 % |
 
 ## Dependencies
 
-Module depends on: CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, F17.S01.M01, F15.S02.M01, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-OBS-001, CTR-TST-001, CTR-IDM-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, F17.S01.M01, F15.S02.M01, F15.S02.M03, F12.S03.M03, F11.S01.M02, F08.S01.M01, F04.S01.M02, F07.S01.M02. Predecessor: [domain_schema.md](domain_schema.md).

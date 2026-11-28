@@ -13,10 +13,10 @@
 ## Specification
 
 - **idempotency:** Idempotency-Key required on every command; keys and request hashes kept 24 h; replay returns the stored result.
-- **concurrency:** expectedRevision on update, retire, reactivate, remove; the unique indexes on attributes and positions enforce limits under races; two tabs adding the 50th variant give one success and one BAZAAR_VARIANT_LIMIT.
+- **concurrency:** expectedRevision on update, retire, reactivate, remove; the unique indexes on attributes and positions enforce limits under races; two tabs adding the 50th variant give one success and one BAZAAR_VARIANT_LIMIT. The open-offer check reads the offers module inside the same transaction.
 - **retries:** Only IndexedDB aborts are retried (max 3); validation and conflict errors are not retried.
 - **offline:** Fully available offline; the UI shows unsent changes until the listing projection is re-sent through F01.S01.M03.
-- **partial failure:** If set_quantity fails (for example below reserved), the variant change is rolled back and the inventory error code is returned unchanged.
+- **partial failure:** If set_quantity fails (for example below reserved, or the listing-level item still has a hold), the variant change is rolled back and the inventory error code is returned unchanged or mapped to BAZAAR_VARIANT_LISTING_HELD.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
@@ -31,4 +31,4 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 ## Dependencies
 
-Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S02.M01, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F01.S03.M01, F01.S01.M01, F01.S01.M02, F01.S01.M03, F01.S02.M01, F01.S04.M01, F09.S03.M01, F09.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

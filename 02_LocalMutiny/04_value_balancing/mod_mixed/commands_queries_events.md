@@ -9,6 +9,7 @@
 - **PS-026-04.R01** propose, withdraw and suggest_plan are vault commands or pure queries that produce no statement, because legs are consented inside the signed revision; claim produces the payment claim statement defined by F09.S01.M01.
 - **PS-026-04.R02** Acknowledgement by the payee is a F09.S01.M01 command and arrives here as a consumed event; this module never marks a payment acknowledged on its own.
 - **PS-026-04.R03** Events are written in the same IndexedDB transaction as the state change and statements go to the sync outbox with states prepared, transport_acknowledged and peer_accepted.
+- **PS-026-04.R04** Deals follow the N5 contract: commerce.deal.open {contextRef {type: cycle_compensation, id}, contextCid, parties, obligations} with deterministic dealId, commerce.deal.cancel on cancellation, and payment events matched by dealId with obligationId or claimId; this module produces no statement of its own and acts only on F09 records the receiving vault accepted (N2).
 
 ## Specification
 
@@ -18,13 +19,14 @@
 |---|---|---|---|---|---|---|
 | `mutiny.compensation.propose` | mutiny.compensation.propose | { subjectType, subjectId, kind, payerId, payeeId, amount: Money, methods[], extraLegId?, planBasis? } — vault command; produces no statement, sealed later by a revision | { compensationLegId, status: proposed, residualGaps: { actorId, gapMinor, withinTolerance }[] } | VALIDATION_FAILED, MUTINY_COMPENSATION_PARTY_INVALID, MUTINY_COMPENSATION_LIMIT, MUTINY_COMPENSATION_NOT_ALLOWED, CONFLICT_STATE | mutiny.compensation.proposed | yes (Idempotency-Key) |
 | `mutiny.compensation.withdraw` | mutiny.compensation.withdraw | { compensationLegId, expectedRevision } | { compensationLegId, revision, status: withdrawn } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE |  | yes (Idempotency-Key) |
-| `mutiny.compensation.claim` | mutiny.compensation.claim | { compensationLegId, method, claimRef?, expectedRevision } — vault command; produces the payment claim statement of F09.S01.M01 (classrup.commerce.payment_claim/v1) signed by the payer | { compensationLegId, paymentClaimId, claimStatusLabel: claimed_unverified, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_COMPENSATION_CLAIM_NOT_ALLOWED, DEPENDENCY_UNAVAILABLE | mutiny.compensation.claimed | yes (Idempotency-Key) |
+| `mutiny.compensation.claim` | mutiny.compensation.claim | { compensationLegId, method, claimRef?, expectedRevision } — vault command; calls commerce.payment.claim {dealId, obligationId: compensationLegId, method, amount, txRef?}, which produces classrup.commerce.payment_claim/v1 signed by the payer | { compensationLegId, paymentClaimId, claimStatusLabel: claimed_unverified, syncState } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, MUTINY_COMPENSATION_CLAIM_NOT_ALLOWED, DEPENDENCY_UNAVAILABLE | mutiny.compensation.claimed | yes (Idempotency-Key) |
+| `mutiny.compensation.activate` | mutiny.compensation.activate | { compensationLegId, recoveryCaseId, acceptingActionCid } — internal vault port called by F02.S03.M04 in the transaction of the last required accept of a compensation option; opens the Deal; produces no statement of its own (commerce.deal.open produces classrup.commerce.deal/v1) | { compensationLegId, status: due, dealId, dueAt } | NOT_FOUND, CONFLICT_STATE, MUTINY_COMPENSATION_NOT_ALLOWED, DEPENDENCY_UNAVAILABLE |  | yes (Idempotency-Key) |
 
 ### Queries
 
 | Query | Capability | Input | Output | Errors |
 |---|---|---|---|---|
-| `mutiny.compensation.suggest_plan` | mutiny.compensation.read | { subjectType, subjectId, acceptedImbalances?: { actorId, amount }[] } | { legs: { payerId, payeeId, amount: Money }[], residuals: { actorId, gapMinor, withinTolerance }[], toleranceBasis: profile version } | NOT_FOUND, VALIDATION_FAILED |
+| `mutiny.compensation.suggest_plan` | mutiny.compensation.read | { subjectType, subjectId, acceptedImbalances?: { actorId, maxAmount }[] (draft values for the next revision; only the entries sealed in the head snapshot count for feasibility) } | { legs: { payerId, payeeId, amount: Money }[], residuals: { actorId, gapMinor, withinTolerance }[], toleranceBasis: profile version } | NOT_FOUND, VALIDATION_FAILED |
 | `mutiny.compensation.get` | mutiny.compensation.read | { compensationLegId } | { leg: CompensationLeg, claimStatusLabel?, expiresInMs? } | NOT_FOUND |
 | `mutiny.compensation.list_for_subject` | mutiny.compensation.read | { subjectType, subjectId, status? } | { items: CompensationLeg[], allSettled: boolean } | NOT_FOUND |
 
@@ -45,11 +47,16 @@
 | `mutiny.cycle.declined` | withdraw proposed legs of the cycle |
 | `mutiny.proposal.revised` | withdraw proposed legs that the new head revision does not reference; mark referenced ones sealed |
 | `mutiny.leg.received` | settle extra_item legs when the carrying leg has a valid receiver attestation |
-| `commerce.payment.claimed` | for a leg claimed by the payer on another device or a peer's claim, move due to claimed and set claimStatusLabel |
-| `commerce.payment.acknowledged` | move claimed to settled for cash or external payments and emit settled |
-| `commerce.payment.disputed` | move claimed to disputed |
-| `commerce.payment.expired` | move claimed to expired |
-| `commerce.dispute.resolved` | move disputed legs to settled or waived according to the recorded outcome |
+| `commerce.payment.claimed` | matched by dealId and obligationId: for a leg claimed by the payer on another device or a peer's claim, move due to claimed, store paymentClaimId and set claimStatusLabel |
+| `commerce.payment.acknowledged` | matched by dealId and claimId: move claimed or disputed to settled for cash or external payments and emit settled |
+| `commerce.payment.finalized` | matched by dealId and claimId: move a crypto claim from claimed to settled via final and emit settled |
+| `commerce.payment.disputed` | matched by dealId and claimId: move claimed to disputed |
+| `commerce.payment.expired` | matched by dealId and claimId: move claimed to expired |
+| `commerce.dispute.resolved` | move disputed legs to settled or waived according to the recorded outcome, or to expired for resolution lapsed |
+| `commerce.dispute.withdrawn` | move the disputed leg whose claim the case concerned back to claimed |
+| `commerce.deal.cancelled` | move due legs of that Deal to withdrawn when not already terminal |
+| `mutiny.recovery.resolved` | apply the recorded disposition to compensation legs of the cycle (waived or kept); for outcome unresolved move disputed legs to expired |
+| `privacy.deletion.completed` | pseudonymize the erased DID in retained terminal legs with the deletion pseudonym and purge claimRef; F09 evidence keeps its own retention |
 
 ### Module errors
 
@@ -81,8 +88,12 @@ mutiny.compensation.claim { "compensationLegId":"0192f470-…", "method":"cash",
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
+| TEST-PS-026-09.T04 | unit | PS-026-01.R01, PS-026-04.R01 | planner with an acceptedImbalances entry of the head snapshot covering one gap | that participant omitted and fewer legs produced |
+| TEST-PS-026-09.T05 | integration | PS-026-03.R01, PS-026-03.R04, PS-026-04.R04 | cycle committed then claim then acknowledged | proposed to due to claimed to settled; Deal opened with contextRef {type: cycle_compensation, id: cycleId}, contextCid equal to the head contentHash and one obligation per money leg; events matched by dealId and claimId; settled event emitted |
 | TEST-PS-026-09.T08 | contract | PS-026-04.R01, PS-026-04.R02, PS-026-04.R03, PS-026-09.R02 | commands, events and statement | outputs and payloads validate against classrup.mutiny.compensation_leg/v1, F09 claim statement and registry |
+| TEST-PS-026-09.T18 | integration | PS-026-03.R05, PS-026-04.R04 | recovery compensation option Dan to Alice 80.00 EUR accepted by Dan only, then by Alice | leg stays proposed, then mutiny.compensation.activate moves it to due and opens a Deal with contextRef id recoveryCaseId |
+| TEST-PS-026-09.T22 | integration | PS-026-03.R02, PS-026-04.R04 | cycle cancelled before handover with due legs; commerce.deal.cancelled received for another Deal | commerce.deal.cancel called once; legs withdrawn in both cases |
 
 ## Dependencies
 
-Module depends on: F02.S04.M02, F02.S04.M03, F02.S02.M03, F09.S01.M01, F09.S03.M03, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S04.M02, F02.S04.M03, F02.S02.M03, F09.S01.M01, F09.S01.M03, F09.S02.M02, F09.S03.M03, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

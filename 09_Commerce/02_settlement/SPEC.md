@@ -1,31 +1,36 @@
-# F09.S02 — settlement
+# F09.S02 — 02_settlement
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F09.
+**Status:** SPECIFIED. **Parent:** [F09](../SPEC.md).
 
-## Purpose and business behavior
-Provide settlement as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_receipts
-- mod_disputes
-- mod_reconciliation
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F09.S02.M01 | [Receipts](mod_receipts/SPEC.md) | SPECIFIED | Signed receipts (COM-6) by payee/payer, verification of signature, export. |
+| F09.S02.M02 | [Disputes](mod_disputes/SPEC.md) | SPECIFIED | Shared case handling for deals/cycles/bookings/rentals: evidence refs, mediator (moderator) assignment, outcomes (no-fault close, refund-claimed, return-agreed, enforcement referral); platform cannot move money. |
+| F09.S02.M03 | [Settlement reconciliation](mod_reconciliation/SPEC.md) | SPECIFIED | Periodic reconciliation of deals vs claims vs chain observations; stale/mismatch detection for users and operators. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/commerce` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| commerce.payment.acknowledged | F09.S01.M01 | F09.S02.M01 | external |
+| commerce.payment.finalized | F09.S01.M03 | F09.S02.M01 | external |
+| identity.device_key.revoked | F07.S01.M01 | F09.S02.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F09.S02.M01 | external |
+| commerce.payment.disputed | F09.S01.M01 | F09.S02.M02 | external |
+| services.dispute.opened | F03.S02.M03 | F09.S02.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F09.S02.M02 | external |
+| commerce.deal.completed | F09.S01.M01 | F09.S02.M03 | external |
+| commerce.payment.finalized | F09.S01.M03 | F09.S02.M03 | external |
+| commerce.payment.reorged | F09.S01.M03 | F09.S02.M03 | external |
+| commerce.receipt.issued | F09.S02.M01 | F09.S02.M03 | internal |
+| commerce.payment.expired | F09.S01.M01 | F09.S02.M03 | external |
+| commerce.payment.failed | F09.S01.M03 | F09.S02.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F09.S02.M03 | external |

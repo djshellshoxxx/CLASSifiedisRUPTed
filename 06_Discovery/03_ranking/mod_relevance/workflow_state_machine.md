@@ -36,7 +36,8 @@ _None._
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-051-09.T04 | property | PS-051-03.R01, PS-051-03.R02, PS-051-03.R03 | random concurrent publish and rollback attempts | at every point exactly one active version; retired never reactivated |
+| TEST-PS-051-09.T18 | unit | PS-051-03.R02, PS-051-02.R01 | rollback to the active version and to a missing version | CONFLICT_STATE and NOT_FOUND, nothing changes |
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F06.S01.M01, F11.S01.M01, F11.S01.M03, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -6,16 +6,16 @@
 
 ## Requirements
 
-- **PS-091-10.R01** A vault export contains the user's selected relays without secrets; an operator export contains peers with keys and quotas.
+- **PS-091-10.R01** A vault export contains the user's selected relays and their listing choice without secrets; an operator export contains peers with keys and quotas.
 - **PS-091-10.R02** Imported peers never become active automatically; they import as proposed or suspended and need fresh opt-in confirmation.
 - **PS-091-10.R03** Schema changes follow expand/contract and v1 stays readable for 180 days.
 
 ## Specification
 
-- **export:** Section federation.peers in classrup-export/v1, one line per Peer (schema classrup.federation.peer/v1), without health history.
-- **import:** Active and suspended peers import as suspended with reason operator until a human reinstates them after re-checking the fingerprint; proposed peers import as proposed.
+- **export:** Section federation.peers in classrup-export/v1 through the ExportSectionPort, one line per Peer (schema classrup.federation.peer/v1), without health history.
+- **import:** Active and suspended peers import as suspended with reason operator until a human reinstates them after re-checking the fingerprint; proposed peers import as proposed; expired inbound offers are not imported.
 - **backup:** Vault export is the primary backup (IOX-6); relay peers are covered by relay SQLite backup (CTR-IOX-001 IOX-3).
-- **migration rollback:** Additive fields only in v1; rollback is safe because unknown optional fields are ignored and pinned keys are unchanged.
+- **migration rollback:** Additive fields only in v1 (origin, fingerprintConfirmedAt, peerStatement, offerExpiresAt, listInIdentityDoc); rollback is safe because unknown optional fields are ignored and pinned keys are unchanged.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F11.S01.M03, F15.S04.M02, F07.S02.M01, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M03, F15.S04.M02, F07.S02.M01, F12.S03.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FLG-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

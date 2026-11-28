@@ -15,23 +15,24 @@
 | Rule | Check | Error |
 |---|---|---|
 | V01 | principal unlocked the vault within the last 5 minutes | UNAUTHENTICATED |
-| V02 | no job is requested or collecting in this vault | PRECONDITION_FAILED |
-| V03 | at most 3 export requests per 24 hours per vault | RATE_LIMITED |
-| V04 | estimated size at most 2 GiB and free storage at least 1.2 times the estimate | PRIVACY_EXPORT_QUOTA |
+| V02 | no job is requested or collecting in this vault; a new command ID while one is active returns params.activeJobId | PRECONDITION_FAILED |
+| V03 | at most 3 export requests per 24 hours per vault, counting each part of a set once per set | RATE_LIMITED |
+| V04 | estimated size of the bundle or part at most 2 GiB and free storage at least 1.2 times the estimate | PRIVACY_EXPORT_QUOTA |
 | V05 | every section line is valid JSON with schema from the module's registered list | PRIVACY_EXPORT_SECTION_FAILED |
-| V06 | no line contains another user's P2 or higher content outside the user's own shared copies | PRIVACY_EXPORT_SECTION_FAILED |
+| V06 | every line has passed redactForExport (F10.S02.M02), so no line contains another user's P2 or higher content outside the user's own shared copies, nor any P4 or unclassified path | PRIVACY_EXPORT_SECTION_FAILED |
 | V07 | manifest sha256 per section matches the streamed bytes and the Ed25519 signature verifies | PRIVACY_EXPORT_SIGNATURE_INVALID |
 | V08 | download requested while status ready and not past expiresAt | EXPIRED |
+| V09 | part index is between 1 and total, total at most 8, and the media date range does not overlap another part of the same setId | VALIDATION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-078-09.T01 | unit | PS-078-01.R01, PS-078-01.R03, PS-078-02.R01 | request an export with fresh and stale unlock | fresh creates job with sections; stale returns UNAUTHENTICATED |
-| TEST-PS-078-09.T03 | unit | PS-078-02.R02, PS-078-02.R03 | rules V01 to V08 violated in turn | documented error code returned and no partial file left |
-| TEST-PS-078-09.T04 | integration | PS-078-02.R02, PS-078-03.R01 | module section throws after 3 attempts | job failed naming the module; no partial bundle; PRIVACY_EXPORT_SECTION_FAILED |
-| TEST-PS-078-09.T13 | integration | PS-078-07.R02, PS-078-02.R02 | bundle scanned for P4 fields and other users' private content | none present; user's own shared copies present |
+| TEST-PS-078-09.T01 | unit | PS-078-01.R01, PS-078-02.R01 | request an export with fresh and stale unlock | fresh creates job with sections; stale returns UNAUTHENTICATED |
+| TEST-PS-078-09.T03 | unit | PS-078-02.R02, PS-078-02.R03 | rules V01 to V09 violated in turn | documented error code returned and no partial file left |
+| TEST-PS-078-09.T04 | integration | PS-078-02.R02, PS-078-03.R01, PS-078-04.R02 | 10 module sections, one of which throws after 3 attempts | at most 4 sections run at the same time; job failed naming the module; no partial bundle; PRIVACY_EXPORT_SECTION_FAILED |
+| TEST-PS-078-09.T13 | integration | PS-078-07.R02, PS-078-02.R02 | bundle scanned for P4 fields, unclassified fields and other users' private content | none present; user's own shared copies present |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F10.S01.M01, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F10.S02.M02, F10.S01.M02, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -22,10 +22,11 @@
 
 | ID | Threat | Control |
 |---|---|---|
-| T01 | One author floods a page | max 3 results per author per page, 200-document relay cap per author in the index |
+| T01 | One author floods a page | max 3 results per author per page, 100-document relay cap per author in the index (F06.S01.M01) |
 | T02 | Many throwaway authors capture new-author slots (Sybil, Douceur 2002) | only 2 slots per 20-result page, 50 percent minimum score ratio, 30 day window by local first-seen; honest limit - without a trusted identity authority the library cannot prove the authors are distinct people |
 | T03 | Promotion crowds out organic results | promoted share at most 20 percent of a page, multiplier cap 1.25 in F06.S03.M01, mandatory label |
 | T04 | Explanation used to deceive | explanation is generated from the same score components used for ranking, never free text from authors |
+| T05 | A self-hosted relay skips these rules in its own code | vaults run auditPage on every relay page and label the relay 'ranking policy not followed' |
 
 **Abuse controls**
 - Constants are code-level and need a decision record to change; relays cannot raise the promoted share above 20 percent.
@@ -36,8 +37,8 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-050-09.T08 | abuse | PS-050-05.R01, PS-050-05.R02, PS-050-05.R03, PS-050-07.R01 | candidate objects with extra fields such as userId, reputation, bio | extra fields rejected by schema; ranking identical with and without them |
-| TEST-PS-050-09.T09 | abuse | PS-050-07.R02, PS-050-07.R03 | 50 new authors created in a burst with equal scores | only 2 slots per page are filled and the 50 percent ratio is enforced |
+| TEST-PS-050-09.T08 | abuse | PS-050-05.R01, PS-050-05.R02, PS-050-05.R03, PS-050-07.R01, PS-050-07.R02 | candidate objects with extra fields such as userId, reputation, bio | extra fields rejected by schema (V05); ranking identical with and without them |
+| TEST-PS-050-09.T15 | manual | PS-050-07.R03 | review the product help page against the constants file | the page lists 3 per author, 2 new-author slots per 20, the 50 percent ratio, the 30-day window, promoted at most 20 percent and the stated Sybil limit, matching the constants |
 
 ## Dependencies
 

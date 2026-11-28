@@ -14,7 +14,7 @@ responsibilities:
   - Build the CompatibilityGraph from retained public want and have projections, matching profiles, valuations and local block lists, with pair distances computed cell to cell from the L2 cells of the giver's listing projection and the receiver's want projection; regionL1 is used only for partitioning.
   - Attach a trust panel per participant (first-seen age of the projection in this vault, completed-trade count from F07.S03.M01, same-owner key linkage from F07 per N11), exclude identities with no history unless the principal opted in (F02.S02.M04 includeUnknownIdentities), and flag rings in which two or more participants are key-linked.
   - Register the engine default LengthProfile with the F02.S02.M05 registry and read all profiles from it, and register export, deletion and retention handlers with F10 (N6).
-  - Enumerate elementary cycles of length 2..Lmax (default 5, tenant maximum 8) in deterministic order within hard budgets of 100000 expanded nodes and 250 ms.
+  - Enumerate elementary cycles of length 2..Lmax (default 5; at most 8 in the vault; on a relay at most the tenant limit maxCycleLength 3..6 read from F15.S04.M03 TenantPort.limits(tenantId)) in deterministic order within hard budgets of 100000 expanded nodes and 250 ms.
   - Score cycles with the tuple (participants, minus relative value imbalance, minus max distance bucket, oldest-want age) and select disjoint cycles greedily.
   - Persist CycleSuggestion records with a stable cycleKey, expiry (24 h) and a locally re-verifiable explanation, and import relay-computed suggestions only after local re-verification.
 non_responsibilities:
@@ -22,7 +22,7 @@ non_responsibilities:
   - Per-length thresholds and explanation text (F02.S02.M01, F02.S02.M02 register LengthProfile providers with this engine).
   - Eligibility and opt-in data (F02.S02.M04) and the pure feasibility checks (F02.S02.M05).
   - "Future: exact maximum-weight cycle packing with an ILP solver behind the same CyclePackingPort (ADR-0005), multi-item bundles per leg, sharding across overlapping L1 cells, and learned ranking."
-depends_on: [F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001]
+depends_on: [F02.S02.M04, F02.S02.M05, F02.S04.M03, F01.S01.M01, F01.S02.M02, F01.S03.M01, F06.S02.M01, F07.S02.M02, F07.S02.M01, F07.S03.M01, F07.S03.M02, F09.S03.M02, F09.S03.M03, F11.S01.M01, F11.S01.M02, F16.S02.M03, F15.S01.M01, F15.S04.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-OBS-001, CTR-SCH-001]
 user_stories:
   - As a member who wants a bicycle and has a guitar, I am shown a 3-party cycle that includes me, with what I give, what I receive and why it was suggested, and nothing is reserved until I choose to propose it.
   - As a member, I can dismiss a suggestion and it will not come back for 30 days.
@@ -89,7 +89,7 @@ processes:
         invariants:
           - Every legs[i].receiverId equals legs[i+1 mod length].giverId, all giverIds are distinct and all inventoryItemIds are distinct.
           - A participant DID and an inventory item appear in at most one suggestion with status suggested per vault.
-          - length equals legs.length and is at most min(tenant Lmax, 8).
+          - length equals legs.length and is at most 8; a relay_global suggestion is at most the computing relay tenant's maxCycleLength.
       - name: CompatibilityGraph
         schema: classrup.mutiny.compatibility_graph/v1
         storage: derived
@@ -121,15 +121,17 @@ processes:
       CREATE INDEX mutiny_suggestion_expiry ON mutiny_cycle_suggestion(tenant_id, status, expires_at);
   validation_rules:
     requirements:
-      - Run parameters are validated before any search; Lmax outside 2..tenant maximum (8) or budgets above the ADR-0005 caps are refused.
+      - Run parameters are validated before any search; Lmax outside 2..8 in the vault, Lmax above the tenant limit maxCycleLength on a relay, or budgets above the ADR-0005 caps are refused.
       - Edge admission rules are pure functions of signed projections, profiles, valuations and local blocks, applied identically in vault and relay modes.
       - A relay-delivered suggestion is accepted for display only after its signature and every leg are re-verified locally; otherwise it is stored unverified and cannot be proposed.
+      - "Relay-side matching (compute_public) reads TenantPort.limits(tenantId).maxCycleLength (integer 3..6, default 5, F15.S04.M03) before any search, uses it as the default and the maximum lmax of the run and refuses a larger lmax; when TenantPort cannot answer the run is refused with DEPENDENCY_UNAVAILABLE and never falls back to 8."
+      - "Want admission reads WantSpec.minCondition (ordered new > like_new > good > fair > poor > for_parts, which replaced conditionsAccepted) from bazaar.want.list_open for the principal's own wants and from the want subset of retained classrup.bazaar.listing/v1 projections for peer wants; maxBudget is applied only when budgetVisible is true, the only case in which a projection carries it (N15), so a private budget that list_open returns inside the owner's vault is never used and vault and relay runs admit the same edges."
     rules:
-      - "V01 | lmax is an integer in 2..tenant maximum (default tenant maximum 8, default run value 5) | MUTINY_LMAX_INVALID"
+      - "V01 | lmax is an integer in 2..8 for vault runs (default 5) and in 2..TenantPort.limits(tenantId).maxCycleLength (3..6, default 5, F15.S04.M03) for relay compute_public runs | MUTINY_LMAX_INVALID"
       - "V02 | expansionBudget ≤ 100000 and timeBudgetMs ≤ 250 | VALIDATION_FAILED"
       - "V03 | both endpoints of an edge have a verified, non-tombstoned matching_profile projection with optedIn true and not paused | MUTINY_PROFILE_NOT_ELIGIBLE"
       - "V04 | giver differs from receiver, item quantity available ≥ 1, listing published and flagged barterAcceptable, projection not older than 30 days and not dated in the future | MUTINY_EDGE_INVALID"
-      - "V05 | want category equals or is an ancestor of the item category, item condition is at least the want minimum condition, and item indicative value ≤ want maxBudget when present | MUTINY_EDGE_INVALID"
+      - "V05 | want category equals or is an ancestor of the item category, item condition is at least as good as the want's minCondition on the ordered scale new > like_new > good > fair > poor > for_parts, and item indicative value ≤ want maxBudget only when budgetVisible is true (N15); a private budget is ignored | MUTINY_EDGE_INVALID"
       - "V06 | pair bucket = F02.S02.M04 ordinal of F06.S02.M01 bucketBetween(giver listing projection cell, receiver want projection cell), both checked with assertPublicCell and at most L2; an L1-only cell counts as at least 3; the bucket is ≤ both participants' maxDistanceBucket and the profile maxPairBucket | MUTINY_EDGE_INVALID"
       - "V07 | neither party is in the other's local block list or excluded set known to this vault | BLOCKED_PARTY"
       - "V08 | graph has ≤ 2000 nodes and ≤ 20000 edges after partitioning by L1 cell | MUTINY_GRAPH_TOO_LARGE"
@@ -185,9 +187,9 @@ processes:
         idempotent: true
       - name: mutiny.suggestion.compute_public
         capability: mutiny.suggestion.compute_public
-        input: "{ partition?: l1 geohash4, lmax? ≤ tenant maximum, scheduledAt } — relay command; delivers each suggestion as an end-to-end encrypted envelope to the participants' mailboxes, calls notify.notification.dispatch for a content-free push, keeps computed rings RET-EPHEMERAL and never logs them"
+        input: "{ partition?: l1 geohash4, lmax? (2..TenantPort.limits(tenantId).maxCycleLength, default that limit), scheduledAt } — relay command; reads the tenant limit from F15.S04.M03 TenantPort before the search; delivers each suggestion as an end-to-end encrypted envelope to the participants' mailboxes, calls notify.notification.dispatch for a content-free push, keeps computed rings RET-EPHEMERAL and never logs them"
         output: "{ runId, stats, deliveredEnvelopes: int }"
-        errors: [MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED]
+        errors: [MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED, DEPENDENCY_UNAVAILABLE]
         emits: [mutiny.matching.run_completed]
         idempotent: true
     queries:
@@ -224,7 +226,7 @@ processes:
       - {type: identity.reputation.recomputed, effect: "refresh completedTrades in the trust panel of active suggestions containing that DID"}
       - {type: privacy.deletion.completed, effect: "delete all suggestions and graph caches of the erased local principal; suggestions are RET-SHORT and not evidence"}
     errors:
-      - "MUTINY_LMAX_INVALID | 422 | no | Lmax is outside 2..tenant maximum"
+      - "MUTINY_LMAX_INVALID | 422 | no | Lmax is outside 2..8 in the vault or above the relay tenant's maxCycleLength"
       - "MUTINY_GRAPH_TOO_LARGE | 422 | no | graph exceeds 2000 nodes or 20000 edges even after L1 partitioning"
       - "MUTINY_MATCHING_NOT_ENABLED | 409 | no | the principal has not opted in to matching"
       - "MUTINY_RUN_IN_PROGRESS | 409 | yes | another matching run holds the mutex"
@@ -354,8 +356,10 @@ processes:
       - "T23 | unit | 02.R02,01.R01 | pair distance from L2 cells u4pru and u4prv, an L1-only listing cell, and a 6-character cell | ordinal 0, at least 3, and DISCOVERY_PRECISION_FORBIDDEN rejection of the projection edge"
       - "T24 | contract | 04.R05 | registry entry of classrup.mutiny.cycle_suggestion/v1 and relay push hook | signer role relay; compute_public calls notify.notification.dispatch once per delivered envelope with no content"
       - "T25 | integration | 07.R05 | F10 export, deletion and retention sweep | section mutiny.suggestions exported; erased principal's suggestions and graphs deleted; graph caches purged at 24 h"
+      - "T26 | unit | 02.R05,02.R02 | own want from list_open and peer want projection with minCondition good against items in like_new, good and fair; a want with budgetVisible false whose private maxBudget is below the item value; the same want with budgetVisible true | edges for like_new and good only; the private budget is ignored and the edge is built in vault and relay mode alike; with budgetVisible true the edge is refused with reason MUTINY_EDGE_INVALID"
+      - "T27 | contract | 02.R04,02.R01 | relay tenant with maxCycleLength 3 and default 5; compute_public with lmax 4, without lmax, and with a TenantPort stub that fails; vault generate with lmax 8 | lmax 4 refused with MUTINY_LMAX_INVALID; without lmax the run uses lmax 3 and returns no 4-cycle, and with the default limit it uses lmax 5; failing TenantPort gives DEPENDENCY_UNAVAILABLE and no run; vault run with lmax 8 allowed"
     acceptance:
-      - All tests T01–T25 pass in CI with seeds recorded.
+      - All tests T01–T27 pass in CI with seeds recorded.
       - No suggestion is ever created as a proposal, reservation, consent or signed statement by the engine.
       - Same inputHash and parameters produce identical suggestions on two different devices.
   import_export_backup_rollback:

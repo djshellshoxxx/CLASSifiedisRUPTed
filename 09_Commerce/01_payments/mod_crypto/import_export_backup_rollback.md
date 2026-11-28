@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section commerce.crypto in classrup-export/v1; one line per CryptoPaymentRequest and ChainObservation (schemas classrup.commerce.crypto_request/v1, classrup.commerce.chain_observation/v1). Verifier endpoint settings and API keys are excluded.
+- **export:** ExportSectionPort section commerce.crypto in classrup-export/v1; one line per CryptoPaymentRequest and ChainObservation (schemas classrup.commerce.crypto_request/v1, classrup.commerce.chain_observation/v1). Verifier endpoint settings, consent and API keys are excluded.
 - **import:** Observations with final status import as read-only evidence marked imported-not-reverified; non-final observations import as watching; request statements are verified again and invalid ones are quarantined.
 - **backup:** The vault export is the primary backup (IOX-6); relays hold no requests or observations.
-- **migration rollback:** Additive fields only in v1; rollback is safe because older readers ignore new optional fields. A change to a finality policy requires a new policy identifier and never rewrites stored observations.
+- **migration rollback:** Additive fields only in v1 (chainTipAtCreation, coveredAmount, origin, post-final watch fields); rollback is safe because older readers ignore new optional fields. A change to a finality policy requires a new policy identifier and never rewrites stored observations.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F09.S01.M01, F09.S03.M01, F09.S03.M03, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F09.S01.M01, F09.S03.M01, F09.S03.M03, F07.S02.M02, F11.S01.M01, F11.S01.M03, F10.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

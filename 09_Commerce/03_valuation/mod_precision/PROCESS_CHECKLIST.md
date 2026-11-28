@@ -2,7 +2,7 @@
 
 **Status:** SPECIFIED. > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-- [x] [PS-074-01 Domain schema](domain_schema.md) — 3 requirements, tests mapped
+- [x] [PS-074-01 Domain schema](domain_schema.md) — 4 requirements, tests mapped
 - [x] [PS-074-02 Validation rules](validation_rules.md) — 3 requirements, tests mapped
 - [x] [PS-074-03 Workflow state machine](workflow_state_machine.md) — 3 requirements, tests mapped
 - [x] [PS-074-04 Commands, queries and events](commands_queries_events.md) — 3 requirements, tests mapped

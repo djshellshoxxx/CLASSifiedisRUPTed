@@ -30,20 +30,24 @@ See the module test table below (all processes).
 | TEST-PS-022-09.T08 | contract | PS-022-04.R01, PS-022-04.R02, PS-022-09.R02, PS-022-09.R03 | commands, events and statements | outputs validate against classrup.mutiny.dropout_record/v1, cycle_withdrawal/v1 and registry |
 | TEST-PS-022-09.T09 | abuse | PS-022-05.R01, PS-022-05.R02, PS-022-07.R02, PS-022-01.R02, PS-022-02.R02 | forged withdrawal for another person; other principal calls withdraw; replay on new cycle | quarantined or FORBIDDEN; replay ignored |
 | TEST-PS-022-09.T10 | abuse | PS-022-07.R01, PS-022-04.R03 | local block of a participant mid-cycle | principal withdrawn with public reason unavailable; no statement or event reveals the block |
-| TEST-PS-022-09.T11 | integration | PS-022-06.R01, PS-022-06.R02 | replay withdraw; crash between cancellation and release | one record; no partial state; release and cancel atomic |
-| TEST-PS-022-09.T12 | chaos | PS-022-06.R03, PS-022-05.R03 | relay down while withdrawing | local cancellation immediate; UI shows prepared; peers cancel by their own deadline |
+| TEST-PS-022-09.T11 | integration | PS-022-06.R01, PS-022-06.R02, PS-022-03.R01 | replay withdraw; crash inside the withdraw transaction after LockPort.releaseForSubject was called; abort of that transaction | one record; after abort the cycle and the holds are unchanged; after commit cancellation and release are both visible, never only one |
+| TEST-PS-022-09.T12 | chaos | PS-022-06.R03 | relay down while withdrawing | local cancellation immediate; UI shows prepared; peers cancel by their own deadline |
 | TEST-PS-022-09.T13 | abuse | PS-022-07.R03 | participant with 4 withdrawals in 30 days proposes again | recipient vault quarantines silently |
 | TEST-PS-022-09.T14 | load | PS-022-08.R02, PS-022-08.R03 | withdraw with 8 participants; sweep 50 cycles on emulated Moto G | within budgets |
 | TEST-PS-022-09.T15 | unit | PS-022-08.R01, PS-022-09.R01 | diagnostics and traceability tool | no identifiers or private reasons in diagnostics; every PS-022 requirement maps to a passing test |
-| TEST-PS-022-09.T16 | integration | PS-022-05.R03, PS-022-07.R02 | identity erased locally | records pseudonymized and retained; privateReason stripped from exports to others |
+| TEST-PS-022-09.T16 | integration | PS-022-07.R02, PS-022-07.R04 | identity erased locally; F10 export and retention sweep | section mutiny.dropouts exported; records pseudonymized and retained; privateReason stripped from exports to others; signatures still verify |
 | TEST-PS-022-09.T17 | integration | PS-022-10.R01, PS-022-10.R02, PS-022-10.R03 | export, import, rollback | dropout records round-trip; imported cycles do not reopen |
+| TEST-PS-022-09.T18 | abuse | PS-022-05.R03, PS-022-02.R02 | relay injects a withdrawal signed with the relay key naming Bob, a fabricated cancel notice, and a replayed old withdrawal of Bob from another cycle | all ignored or quarantined; no cycle cancelled and no reservation released |
+| TEST-PS-022-09.T19 | integration | PS-022-01.R03, PS-022-03.R01, PS-022-03.R02 | Bob revokes his consent through F08 after commit, once before any handover and once after Alice's handed_over | first: dropout withdrew, cancelled, own reservations released in the same transaction; second: partially_executed with recovery |
+| TEST-PS-022-09.T20 | contract | PS-022-04.R04, PS-022-04.R05 | registry lookup for classrup.mutiny.cycle_withdrawal/v1; payloads of participant_dropped and cancelled | signer role is the withdrawing participant; payloads carry participantIds, remainingParticipantIds and afterConsent |
+| TEST-PS-022-09.T21 | integration | PS-022-06.R03, PS-022-03.R04 | vault opened with an own active lock whose cycle is already cancelled (orphan) | evaluate on open releases it through LockPort.releaseForSubject; no cycle reopens |
 
 ## Acceptance criteria
 
-- All tests T01–T17 pass in CI.
+- All tests T01–T21 pass in CI.
 - Before any handover evidence a dropout always ends in cancellation with released reservations; after evidence it never cancels and always leads to partially_executed with recovery.
 - No code path changes or substitutes cycle participants and no signed statement or event exposes a private reason.
 
 ## Dependencies
 
-Module depends on: F02.S03.M01, F02.S03.M04, F02.S01.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S03.M01, F02.S03.M02, F02.S03.M04, F02.S01.M02, F08.S02.M02, F07.S01.M01, F07.S02.M02, F16.S02.M03, F15.S01.M01, F11.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

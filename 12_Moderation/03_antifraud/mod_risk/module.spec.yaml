@@ -1,38 +1,43 @@
 id: F12.S03.M01
 scope: MVP
 summary: >-
-  Combines the signals a store holds about a counterparty key into an explainable risk level (low, medium,
-  high) with a 0 to 100 score and a list of factors whose contributions sum to the score. A high level
-  triggers friction only: an extra confirmation before a deal step, lower relay limits, or a manual review
-  queue entry on a relay. It never bans, hides or silently downgrades anyone. The assessment is local to the
-  store that computed it: a vault shows its owner a caution about a counterparty based on the owner's own
-  history, and a relay uses its own signals for its hosting limits.
+  Combines the signals a store holds about a key into an explainable risk level (low, medium, high) with a 0 to
+  100 score and a list of factors whose points sum to the score, using the published points table risk/1. A high
+  level triggers friction only: an extra confirmation before a deal step, lower relay limits, or a manual review
+  queue entry on a relay. It never bans, hides or silently downgrades anyone. The assessment is local to the store
+  that computed it: a vault shows its owner a caution about a counterparty based on the owner's own history, a
+  relay uses its own signals for its hosting limits, and the author's vault runs the N19 query moderation.risk.assess
+  on its own listing publication before signing. Level rises and drops are both emitted, so frictions lift as soon
+  as decay lowers a level.
 responsibilities:
-  - Own the RiskAssessment record per subject key (and per proposed transaction) with level, score, factors and validity window.
-  - Compute the score from decayed signals (F12.S03.M02), account age on this store and completed dealings, with a fixed versioned model.
-  - Emit moderation.risk.elevated when a level rises, and keep the factors visible to the subject on a relay and to the owner in a vault.
-  - Recommend frictions by level and leave their enforcement to the consumer (local confirmation UI, F12.S03.M04 limits, relay review queue).
+  - Own the RiskAssessment record per subject key, per proposed transaction and per own listing publication, with level, score, factors and validity window.
+  - Compute the score from decayed signals (F12.S03.M02), the store's own first observation of a key, completed dealings recorded as signals and, for transactions, the amount bucket, with the fixed versioned points table risk/1.
+  - Emit moderation.risk.elevated when a level rises and moderation.risk.lowered when hysteresis lets it drop, and keep the factors visible to the subject on a relay and to the owner in a vault.
+  - Expose moderation.risk.assess in-process (N19) for transaction and listing_publication subjects.
+  - Recommend frictions by level and leave their enforcement to the consumer (local confirmation UI, F01.S01.M03 hold for confirmation, F12.S03.M04 limits, F12.S02.M01 review queue).
 non_responsibilities:
   - Signal ingestion and decay storage (F12.S03.M02).
-  - Applying limits (F12.S03.M04) and suspensions (F12.S02.M01).
+  - Applying limits (F12.S03.M04), holding publications (F01.S01.M03) and suspensions (F12.S02.M01).
   - Reputation display (F07.S03.M01).
   - "Future: calibrated models with feedback from outcomes; sharing of levels between relays by signed attestation."
 depends_on: [F12.S03.M02, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-OBS-001]
 user_stories:
-  - As a user about to accept a trade with someone whose history on my device includes two no-shows, I see 'Be careful: 2 no-shows in your history' and must confirm once more.
-  - As a relay member limited by a high level, I can see the factors that led to it and what lowers it, and nothing is hidden from me.
+  - "As a user about to accept a trade with someone whose history on my device includes two no-shows, I see 'Be careful: 2 no-shows in your history' and, at level high, must confirm once more."
+  - As a relay member limited by a high level, I can see the factors that led to it and what lowers it, nothing is hidden from me, and the limit lifts as soon as the level drops.
   - As a relay moderator, I see factors, not just a number, and cannot use the level as the sole reason for removal.
+  - As a new member publishing many listings in my first day, my own device asks me to confirm before signing, and nothing is sent anywhere because of it.
 edge_cases:
-  - A brand-new key with no signals; the score is 0 and level low, and a new-key factor of at most 10 points applies only on relays that enable it.
+  - A brand-new key with no signals; the score is 0 and level low, and a new-key factor of at most 10 points applies only on relays that enable it, measured from the relay's own first observation of the key.
   - One severe signal (shill suspicion, weight 40) alone; score 40 is medium and cannot reach high without a second independent factor.
-  - Signals expire and the score drops below 60; hysteresis returns high to medium only below 60 (high threshold 70) and medium to low only below 25 (medium threshold 35).
+  - Signals decay and the score drops; hysteresis returns high to medium only below 60 (high threshold 70) and medium to low only below 25 (medium threshold 35), and the recompute is scheduled at the computed crossing time, so moderation.risk.lowered is emitted then rather than at a daily sweep.
   - Two assessments are computed concurrently after bursts of signals; the later computation by input digest wins and the earlier is discarded idempotently.
   - The subject disputes their level; the UI explains factors and offers the appeal route only for enforcement actions, and says levels are not actions.
   - A transaction assessment is requested for a counterparty never seen; the result is level low with factor 'no history' and confidence unknown.
+  - identity.account.created describes only the local principal; it feeds only the own-publication factor and is never used as another key's age.
 ux:
   screens:
     - "Caution banner on counterparty profiles and on trade confirmation steps: level label, up to 3 factor sentences, 'Why am I seeing this?' link, extra confirmation checkbox when level is high."
-    - "My safety status (relay members): own level, factors with points, frictions currently applied, and what reduces each factor over time."
+    - "My safety status (relay members): own level, factors with points, frictions currently applied, and when each factor is expected to decay below its threshold."
     - "Relay moderator case view: level, factor table, input digest, model version."
   states: [loading, low, medium, high, unknown-history, stale]
   a11y:
@@ -42,103 +47,116 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A RiskAssessment stores subject (key or transaction reference), level, score, factors with per-factor points, model version, input digest, frictions and validity window, with tenant and revision per CTR-ID-001.
-      - Assessments are derived data of P3 in a vault and P3 on a relay, retained 30 days under RET-SHORT, and recomputable from signals.
+      - A RiskAssessment stores subject (key, transaction reference or own listing publication), level, score, factors with per-factor points, model version, input digest, frictions, validity window and next threshold crossing, with tenant and revision per CTR-ID-001.
+      - Assessments are derived data, P3 in a vault (owner only) and P2 on a relay (the subject and that relay's moderators), retained 30 days under RET-SHORT, and recomputable from signals.
       - The sum of factor points equals the score before clamping to 0..100, and every factor names a signal kind and count, never a content item.
+      - "Points follow the published table risk/1: per signal kind floor of the summed decayed weights (compensations netted, a kind never below 0); deal credit −2 per unexpired deal_completed signal together with manual_positive weights, never below −20; new_key 10 under 24 h and 5 under 7 days since the relay's first observation (relay opt-in, keys only); amount_bucket small 0, medium 5, large 10 (transactions only); for listing_publication, publication_velocity 3 per publication beyond 5 in 24 h up to 45, new_principal 10 under 7 days and spam_score floor(score / 2)."
     entities:
       - name: RiskAssessment
         schema: classrup.moderation.riskassessment/v1
         storage: derived
-        privacy: P3
+        privacy: P2
         retention: RET-SHORT
         fields:
           - "id: uuidv7 — primary key"
           - "tenantId: uuidv7 — store scope"
-          - "subjectType: enum — key | transaction"
-          - "subjectRef: string — did:key or transaction reference (deal, cycle proposal or auction ID)"
+          - "subjectType: enum — key | transaction | listing_publication"
+          - "subjectRef: string — did:key, transaction reference (deal, cycle proposal or auction ID) or own publication draft ID"
           - "level: enum — low | medium | high"
           - "score: int — 0..100"
           - "factors: object[] — { kind, count, points }; sum of points = score before clamping"
           - "frictions: string[] — extra_confirmation | lower_limits | review_queue | show_caution"
           - "modelVersion: string — risk/1"
-          - "inputDigest: string — SHA-256 hex of ordered signal IDs, account age bucket and model version"
+          - "inputDigest: string — SHA-256 hex of ordered signal IDs, first-seen bucket, amount bucket, publication inputs and model version"
           - "computedAt: timestamp — RFC 3339 UTC, store clock"
-          - "validUntil: timestamp — computedAt + 24 h for keys, + 15 min for transactions"
+          - "validUntil: timestamp — computedAt + 24 h for keys, + 15 min for transactions and listing publications"
+          - "nextCrossingAt?: timestamp — earliest time decay moves the score across a hysteresis threshold, at most computedAt + 24 h (keys only)"
           - "previousLevel?: enum — low | medium | high"
           - "revision: int — CTR-ID-001 ID-4"
         invariants:
-          - level is a pure function of score and the hysteresis state: high at ≥ 70 (leaves below 60), medium at ≥ 35 (leaves below 25), otherwise low.
+          - "level is a pure function of score and the hysteresis state: high at ≥ 70 (leaves below 60), medium at ≥ 35 (leaves below 25), otherwise low."
           - frictions for level low is empty; high never includes any action that hides, bans or removes.
           - Same inputDigest produces the same score, level and factors.
+          - Vault rows are P3 and never leave the vault; relay rows are readable only by the subject and that relay's moderators.
+    note: "Store-local derived first-seen map (subject key hash → firstSeenAt), recorded by this store's own observation (relay: identity.session.started of kind relay_token or the first verified signed request; vault: the first verified statement from the key), kept while the key has signals or assessments plus 30 days."
     sql: |
       CREATE TABLE moderation_risk_assessment (
         id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, subject_type TEXT NOT NULL, subject_ref TEXT NOT NULL, level TEXT NOT NULL,
-        score INTEGER NOT NULL, input_digest TEXT NOT NULL, computed_at TEXT NOT NULL, valid_until TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL);
+        score INTEGER NOT NULL, input_digest TEXT NOT NULL, computed_at TEXT NOT NULL, valid_until TEXT NOT NULL, next_crossing_at TEXT,
+        revision INTEGER NOT NULL, data TEXT NOT NULL);
       CREATE UNIQUE INDEX moderation_risk_subject ON moderation_risk_assessment(tenant_id, subject_type, subject_ref, input_digest);
       CREATE INDEX moderation_risk_latest ON moderation_risk_assessment(tenant_id, subject_type, subject_ref, computed_at);
+      CREATE INDEX moderation_risk_crossing ON moderation_risk_assessment(tenant_id, next_crossing_at);
   validation_rules:
     requirements:
       - Inputs are validated strictly, and the model version must be one this build knows.
       - A transaction assessment requires both party keys and a bucketed amount, never the raw amount.
       - Every violation maps to one stable error code.
     rules:
-      - "V01 | subjectType and subjectRef are well-formed (did:key or uuidv7 reference) | VALIDATION_FAILED"
+      - "V01 | subjectType and subjectRef are well-formed (did:key or uuidv7 reference) and no unknown fields are present | VALIDATION_FAILED"
       - "V02 | modelVersion is supported (risk/1) | VALIDATION_FAILED"
       - "V03 | transaction assessment includes two distinct party keys and amountBucket in small, medium, large | VALIDATION_FAILED"
-      - "V04 | the requester may assess this subject (own vault, or relay moderator with case, or subject on own key) | FORBIDDEN"
-      - "V05 | stored assessment is not older than validUntil unless refresh is requested | RISK_ASSESSMENT_STALE"
+      - "V04 | the requester may assess this subject (own vault, relay moderator with case, subject on own key, or listing_publication only for the local principal's own key) | FORBIDDEN"
+      - "V05 | stored assessment is not older than validUntil unless refresh is requested | MODERATION_RISK_ASSESSMENT_STALE"
+      - "V06 | listing_publication input carries spamScore 0..100 from moderation.spam.evaluate and publicationsLast24h ≥ 0 counted from the principal's own records | VALIDATION_FAILED"
   workflow_state_machine:
     note: "Assessments are immutable derived rows without lifecycle; level changes by computing a new assessment, and hysteresis uses the latest previous level."
     machines: []
     requirements:
       - Assessments have no transitions; a new computation creates a new row only when its inputDigest differs from the latest one.
       - Level rises are applied immediately and level drops use hysteresis so that borderline scores do not flap.
-      - Recomputation is triggered by moderation.signal.recorded after a 5 second debounce per subject and by a daily decay sweep for subjects with level other than low.
+      - Recomputation is triggered by moderation.signal.recorded after a 5 second debounce per subject and at the stored nextCrossingAt of decaying signals (at most 24 h after the last computation), so a level drop is detected when it happens.
+      - Every level rise emits moderation.risk.elevated and every level drop that hysteresis allows emits moderation.risk.lowered, each in the same transaction as the new assessment.
     timeouts:
-      - "Daily decay sweep at 03:00 UTC (relay) or on app idle once per 24 h (vault) recomputes assessments whose level is medium or high."
-      - "Transaction assessments expire after 15 minutes and are recomputed on demand."
+      - "Crossing scheduler: relay timer at nextCrossingAt; vault on the first app use after nextCrossingAt and at most once per 24 h on idle."
+      - "Transaction and listing publication assessments expire after 15 minutes and are recomputed on demand."
   commands_queries_events:
     requirements:
-      - The module exposes one recompute command and three queries; level changes are the only events.
+      - The module exposes one recompute command, the N19 query moderation.risk.assess and two read queries; level rises and drops are the only events.
       - Recompute is vault-local or relay-local and produces no signed statement; levels are never sent to other parties.
-      - The module consumes signal events to recompute, and emits moderation.risk.elevated in the same transaction as the new assessment.
+      - The module consumes signal events to recompute, and emits moderation.risk.elevated or moderation.risk.lowered in the same transaction as the new assessment.
+      - moderation.risk.assess is the in-process query named by N19 (it replaces moderation.riskassessment.assess_transaction, kept as an alias for one release) for transaction and listing_publication subjects, and F01.S01.M03 tests against its contract.
     commands:
       - name: moderation.riskassessment.recompute
         mode: "vault-local or relay-local; no signed statement"
         capability: moderation.riskassessment.recompute
-        input: "{ subjectType, subjectRef, counterpartyKey?, amountBucket?, refresh?: boolean }"
-        output: "{ assessmentId, level, score, factors[], frictions[], validUntil }"
-        errors: [VALIDATION_FAILED, FORBIDDEN, RISK_ASSESSMENT_STALE]
-        emits: [moderation.risk.elevated]
+        input: "{ subjectType: key, subjectRef, refresh?: boolean }"
+        output: "{ assessmentId, level, score, factors[], frictions[], validUntil, nextCrossingAt? }"
+        errors: [VALIDATION_FAILED, FORBIDDEN, MODERATION_RISK_ASSESSMENT_STALE]
+        emits: [moderation.risk.elevated, moderation.risk.lowered]
         idempotent: true
     queries:
       - name: moderation.riskassessment.get
         capability: moderation.riskassessment.read
         input: "{ subjectType, subjectRef }"
         output: "{ assessment: RiskAssessment, explanation: localized factor sentences }"
-        errors: [NOT_FOUND]
+        errors: [NOT_FOUND, MODERATION_RISK_ASSESSMENT_STALE]
       - name: moderation.riskassessment.get_mine
         capability: moderation.riskassessment.read_own
         input: "{ includeFactors?: boolean }"
-        output: "{ assessment: RiskAssessment for the caller's own key on this relay, nextImprovementAt? }"
+        output: "{ assessment: RiskAssessment for the caller's own key on this relay, nextCrossingAt? }"
         errors: [NOT_FOUND]
-      - name: moderation.riskassessment.assess_transaction
-        capability: moderation.riskassessment.read
-        input: "{ dealOrProposalRef, partyKeys: [a, b], amountBucket }"
-        output: "{ level, score, factors[], frictions[], validUntil }"
+      - name: moderation.risk.assess
+        capability: moderation.risk.assess
+        input: "{ subjectType: transaction|listing_publication, dealOrProposalRef?, partyKeys?: [a, b], amountBucket?: small|medium|large, publication?: { draftId, spamScore, publicationsLast24h } }"
+        output: "{ level: low|medium|high, score, factors[], frictions[], validUntil, modelVersion }"
         errors: [VALIDATION_FAILED, FORBIDDEN]
     events_produced:
-      - {type: moderation.risk.elevated, privacy: P3, payload: "{ assessmentId, subjectType, subjectRef, previousLevel, level, score, frictions, modelVersion }"}
+      - {type: moderation.risk.elevated, privacy: P2, payload: "{ assessmentId, subjectType: key, subjectRef, previousLevel, level, score, frictions, modelVersion } — store-local (EVT-8), keys only"}
+      - {type: moderation.risk.lowered, privacy: P2, payload: "{ assessmentId, subjectType: key, subjectRef, previousLevel, level, score, frictions, modelVersion } — store-local (EVT-8), keys only, emitted when hysteresis lets a level drop"}
     events_consumed:
       - {type: moderation.signal.recorded, effect: "schedule a debounced recompute for the signal's subject key"}
-      - {type: identity.account.created, effect: "record first-seen time for the account age factor in this store"}
-      - {type: commerce.deal.completed, effect: "increment completed dealings used for the trust credit, capped at 10 credits"}
+      - {type: identity.session.started, effect: "relay, kind relay_token: record firstSeenAt for did in the first-seen map when absent (relay's own observation for the new_key factor)"}
+      - {type: federation.record.accepted, effect: "vault: record firstSeenAt for the author key when absent (first verified statement from that key), used only for the 'no history' explanation"}
+      - {type: identity.account.created, effect: "vault only: record the local principal's own creation time for the new_principal factor of listing_publication assessments; never used as any other key's age"}
     errors:
-      - "RISK_ASSESSMENT_STALE | 409 | yes | stored assessment is past its validity; retry with refresh"
+      - "MODERATION_RISK_ASSESSMENT_STALE | 409 | yes | stored assessment is past its validity; retry with refresh"
+    note: "Deal credit counts deal_completed signals that F12.S03.M02 records from the parties[] of commerce.deal.completed (N3); this module does not consume deal events itself. Frictions risk/1: vault keys medium show_caution, high show_caution and extra_confirmation; relay keys medium lower_limits, high lower_limits and review_queue; listing_publication medium or high extra_confirmation (F01.S01.M03 holds for owner confirmation)."
     example: |
-      vault command moderation.riskassessment.assess_transaction (local)
-      { "dealOrProposalRef": "0192f3f0-8888-7000-8000-000000000008", "partyKeys": ["did:key:z6MkMe", "did:key:z6MkOther"], "amountBucket": "medium" }
-      -> { "level": "high", "score": 74, "factors": [ { "kind": "no_show", "count": 2, "points": 17 }, { "kind": "dispute_opened", "count": 1, "points": 8 }, { "kind": "amount_bucket", "count": 1, "points": 5 } ], "frictions": ["extra_confirmation", "show_caution"], "validUntil": "2026-11-04T10:15:00Z" }
+      query moderation.risk.assess (vault-local, in-process; fixture subject B: 2 no_show and 1 dispute_opened signals 10 days old, 3 deal_completed signals)
+      { "subjectType": "transaction", "dealOrProposalRef": "0192f3f0-8888-7000-8000-000000000008", "partyKeys": ["did:key:z6MkMe", "did:key:z6MkOther"], "amountBucket": "medium" }
+      -> { "level": "low", "score": 24, "factors": [ { "kind": "no_show", "count": 2, "points": 17 }, { "kind": "dispute_opened", "count": 1, "points": 8 }, { "kind": "amount_bucket", "count": 1, "points": 5 }, { "kind": "deal_credit", "count": 3, "points": -6 } ], "frictions": [], "validUntil": "2026-11-04T10:15:00Z", "modelVersion": "risk/1" }
+      (17 = floor(2 × 10 × 0.5^(10/60)), 8 = floor(10 × 0.5^(10/60)), 17 + 8 + 5 − 6 = 24, below 35 so low)
   authorization_capabilities:
     requirements:
       - "Vault policy: only the local principal can read or recompute assessments in its vault."
@@ -148,33 +166,36 @@ processes:
       - "moderation.riskassessment.recompute | local principal, moderator, operator | vault unlocked, or relay role; subject permitted by V04"
       - "moderation.riskassessment.read | local principal, moderator | vault unlocked, or relay moderator with open case on the subject"
       - "moderation.riskassessment.read_own | local principal, member | vault unlocked, or member reading own key on a relay"
+      - "moderation.risk.assess | local principal, moderator | in-process only: vault unlocked for a transaction of the principal or its own listing publication, or relay moderator with an open case; not routable over HTTP"
   failure_recovery_idempotency:
     requirements:
       - Recompute is idempotent by inputDigest and creates at most one assessment per digest.
-      - The assessment row and the elevation event commit in one transaction.
+      - The assessment row and the level event commit in one transaction.
       - Debounced recomputes tolerate duplicate and out-of-order signal events.
     idempotency: "Unique (tenantId, subjectType, subjectRef, inputDigest); repeated recompute returns the stored assessment; local Idempotency-Key replay returns the stored response for 24 h."
     concurrency: "Concurrent recomputes race on the unique digest index; the loser reads the winner; hysteresis reads the latest committed previous level in the same transaction."
-    retries: "Event consumer retries per EVT-6; callers retry DEPENDENCY_UNAVAILABLE and RISK_ASSESSMENT_STALE with refresh."
+    retries: "Event consumer retries per EVT-6; callers retry DEPENDENCY_UNAVAILABLE and MODERATION_RISK_ASSESSMENT_STALE with refresh."
     offline: "The vault computes assessments offline from local signals; relay assessments need the relay."
-    partial_failure: "If signal reads fail the recompute aborts and the previous assessment stays valid until validUntil; frictions never auto-escalate on failure."
+    partial_failure: "If signal reads fail the recompute aborts and the previous assessment stays valid until validUntil; frictions never auto-escalate on failure; a missed crossing time is caught by the next scheduler run within 24 h."
   privacy_retention_abuse:
     requirements:
-      - Assessments are P3 derived data kept 30 days and contain only factor kinds and counts, never content or counterparties' identities beyond the subject key.
+      - Assessments are derived data (P3 in a vault, P2 on a relay) kept 30 days and contain only factor kinds and counts, never content or counterparties' identities beyond the subject key.
       - "Consumers receive the minimum, level and factor kinds, not signal sources."
       - Misuse of levels (as a de facto ban, or to shame) is limited by friction-only semantics, subject visibility and no federation.
     data:
-      - "RiskAssessment: P3 derived (vault owner; relay moderators with case; subject on relay)."
-      - "moderation.risk.elevated: P3, consumed by F12.S03.M04 and by local UI only."
+      - "RiskAssessment: P3 in a vault (owner only); P2 on a relay (subject and that relay's moderators with a case)."
+      - "moderation.risk.elevated and moderation.risk.lowered: P2 store-local, consumed by F12.S03.M04, F12.S02.M01 and local UI only."
+      - "First-seen map: P2 derived, store-local, hashed keys."
     retention:
-      - "Assessments: 30 days (RET-SHORT)."
+      - "Assessments: 30 days (RET-SHORT) through the store sweep."
       - "Level history rows for hysteresis: the latest one is always kept."
     threats:
       - "T01 | Silent shadow penalty | frictions are enumerated and shown to the subject; no friction hides content or blocks access; schema forbids ban-like friction values"
-      - "T02 | Gaming the model by farming positive signals | positive credit capped at 20 points and only from completed dealings; negative signals dominate by design"
+      - "T02 | Gaming the model by farming positive signals | deal credit capped at −20 points (10 completed dealings) and only from deal_completed signals; negative signals dominate by design"
       - "T03 | Using levels to defame | levels never leave the store; relay does not publish them; the UI says levels are not findings"
-      - "T04 | Model drift or opacity | fixed versioned model risk/1 with published formula, input digest, factors that sum to the score"
+      - "T04 | Model drift or opacity | fixed versioned model risk/1 with the published points table, input digest and factors that sum to the score"
       - "T05 | Flapping levels cause UI churn or friction oscillation | hysteresis thresholds (70/60 and 35/25) and 5 second debounce"
+      - "T06 | Frictions kept after the level dropped | crossing scheduler and moderation.risk.lowered lift them when the drop happens"
     abuse_controls:
       - "Recompute is rate limited to 60 per hour per principal (F12.S03.M03) to prevent probing of the model with fake signals."
       - "Transaction assessments reveal only the level and factor kinds of the counterparty from the requester's own history."
@@ -185,44 +206,49 @@ processes:
       - Level changes per hour are observable to detect model anomalies.
     metrics:
       - "classrup_moderation_risk_assessments_total{level,outcome=created|unchanged}"
-      - "classrup_moderation_risk_elevations_total{from,to}"
+      - "classrup_moderation_risk_level_changes_total{from,to}"
       - "classrup_moderation_risk_recompute_ms (histogram)"
     logs:
-      - "relay info risk.elevated {assessmentId, previousLevel, level, correlationId} — no subject key, no factors."
+      - "relay info risk.level_changed {assessmentId, previousLevel, level, correlationId} — no subject key, no factors."
     budgets:
-      - "recompute p95 ≤ 50 ms; get p95 ≤ 100 ms; daily sweep of 10 000 elevated subjects ≤ 60 s."
+      - "recompute p95 ≤ 50 ms; get p95 ≤ 100 ms; assess p95 ≤ 20 ms in-process; crossing scheduler run over 10 000 subjects ≤ 60 s."
       - "Vault recompute on Moto G profile ≤ 150 ms."
   contract_and_acceptance_tests:
     requirements:
       - Every requirement of this module is covered by at least one automated test.
       - Score math, hysteresis and explanation completeness are covered by property tests.
       - Friction-only semantics are covered by a schema test and abuse tests.
-    fixtures: "Store with subject B and signals: 2 no_show (10 each, 60-day half-life, 10 days old), 1 dispute_opened (10), 3 completed dealings; fixed clock 2026-11-04T10:00:00Z."
+    fixtures: "Store with subject B and signals: 2 no_show (weight 10, 60-day half-life, 10 days old), 1 dispute_opened (weight 10, 60-day half-life, 10 days old), 3 deal_completed; subject C with 1 shill_suspected (weight 40, 90-day half-life, new); relay X with new_key enabled; fixed clock 2026-11-04T10:00:00Z with an injectable clock."
     tests:
-      - "T01 | unit | 01.R01,01.R03,02.R01,02.R02 | compute assessment for fixture | score equals documented sum of factor points; level per thresholds; model risk/1 recorded"
+      - "T01 | unit | 01.R01,01.R03,02.R01,02.R02 | key assessment of B; transaction assessment of B with amountBucket medium | key: no_show 17, dispute_opened 8, deal_credit −6, score 19, low; transaction: plus amount_bucket 5, score 24, low; model risk/1 recorded; frictions empty"
       - "T02 | property | 01.R03,03.R02 | random signal sets and times | factors sum to score before clamping; level function of score and hysteresis state; same digest same output"
-      - "T03 | unit | 02.R03 | invalid subject, unknown model, transaction without two keys, stale read | documented error codes"
-      - "T04 | integration | 03.R01,03.R03 | burst of 20 signal events within 5 seconds | one recompute; assessment unique per digest"
-      - "T05 | contract | 04.R01,04.R02,09.R02 | command, queries and event | validate against registry schemas; no signed statement produced"
-      - "T06 | integration | 04.R03,03.R02 | score crossing 70 up and 60 down | elevated event once on rise; level stays high until below 60"
+      - "T03 | unit | 02.R03 | invalid subject, unknown model, transaction without two keys, stale read, listing_publication for another key | documented error codes"
+      - "T04 | integration | 03.R01,03.R03 | burst of 20 signal events within 5 seconds; signals of a high subject decaying past 60 with the clock advanced to nextCrossingAt | one recompute for the burst; assessment unique per digest; a recompute runs at nextCrossingAt without waiting for a daily sweep"
+      - "T05 | contract | 04.R01,04.R02,09.R02 | command, queries and both events | validate against registry schemas; no signed statement produced"
+      - "T06 | integration | 04.R03,03.R02,03.R04 | score crossing 70 up, 65, then below 60, then below 25 | elevated once on rise; no event at 65; lowered to medium below 60 and lowered to low below 25, each in the assessment transaction"
       - "T07 | abuse | 05.R01,05.R02,05.R03 | counterparty reads own assessment from the other's vault; member reads another's relay assessment | NOT_FOUND; level never in federation payloads"
-      - "T08 | abuse | 07.R01,07.R02,07.R03 | schema with a ban-like friction value; 61 recomputes in an hour | schema rejects; 61st RATE_LIMITED"
-      - "T09 | integration | 06.R01,06.R02,06.R03 | same digest recompute twice; signal store failure; crash after assessment before event | single row; previous assessment valid; event delivered once after recovery"
-      - "T10 | unit | 07.R02,01.R02 | assessment retention at 30 days and consumer payload | purged; payload has level and kinds only"
-      - "T11 | load | 08.R01,08.R02,08.R03 | 200 recomputes per second for 5 minutes; sweep 10 000 subjects | p95 ≤ 50 ms, sweep ≤ 60 s"
+      - "T08 | abuse | 07.R01,07.R03 | schema with a ban-like friction value; 61 recomputes in an hour | schema rejects; 61st RATE_LIMITED"
+      - "T09 | integration | 06.R01,06.R02,06.R03 | same digest recompute twice; signal store failure; crash after assessment before event; out-of-order signal events | single row; previous assessment valid; event delivered once after recovery; same final level"
+      - "T10 | unit | 07.R02,01.R02 | injected clock 31 days after computation; consumer payload | assessment purged; payload has level and kinds only"
+      - "T11 | load | 08.R01,08.R02,08.R03 | 200 recomputes per second for 5 minutes; scheduler run over 10 000 subjects | p95 ≤ 50 ms, run ≤ 60 s, level change metric exported without keys"
       - "T12 | unit | 09.R01,09.R03 | traceability tool run | every PS-100 requirement maps to a passing test"
-      - "T13 | integration | 10.R01,10.R02,10.R03 | export, import, backup restore | assessments excluded from export and recomputed after restore with identical results"
+      - "T13 | integration | 10.R01,10.R02 | export, import, backup restore; thresholds out of range on import | assessments excluded from export and recomputed after restore with identical results; out-of-range thresholds rejected"
       - "T14 | e2e | 01.R02,04.R01 | mobile user confirms a trade with a high-level counterparty | caution banner and extra confirmation shown, factor sentences readable, axe zero serious issues"
+      - "T15 | abuse | 07.R01,01.R02 | F12 privacy suite after recomputes in a vault and on a relay: scan federation payloads, public projections, notifications and logs | no assessment field, score, level or factor appears in any of them"
+      - "T16 | integration | 10.R03 | model risk/2 in shadow for 7 days next to risk/1 | both computed; only risk/1 emits events and frictions; comparison metrics exported; rollback by configuration keeps risk/1 rows readable"
+      - "T17 | unit | 01.R04 | one fixture per points-table row: compensated kind, 12 deal_completed signals, manual_positive, new key at 2 h and 3 days on X and in a vault, amount buckets, 20 own publications in 24 h with spamScore 40 by a 2-day-old principal | each factor gets the documented points; credit floors at −20; no new_key in the vault; listing_publication 45 + 10 + 20 = 75 high"
+      - "T18 | contract | 03.R04 | moderation.risk.elevated high then moderation.risk.lowered low consumed by the F12.S03.M04 and F12.S02.M01 contract fixtures | limits move to 0.5× then back to base on the lowered event; a risk_review case is opened only on the rise"
+      - "T19 | contract | 04.R04 | F01.S01.M03 contract fixture calls moderation.risk.assess for listing_publication and for a transaction; the alias assess_transaction | outputs match the documented contract with level low|medium|high; alias returns the same result"
     acceptance:
-      - All tests T01–T14 pass in CI.
+      - All tests T01–T19 pass in CI.
       - Every high level shows its factors to the subject on a relay and to the vault owner locally, and triggers friction only.
-      - Identical inputs always yield identical level, score and factors.
+      - Identical inputs always yield identical level, score and factors, and frictions lift when a level drops.
   import_export_backup_rollback:
     requirements:
       - Assessments are derived and excluded from user exports and backups, and are recomputed from signals after import or restore.
       - The model formula and thresholds are exported with relay configuration and validated on import against allowed ranges.
       - Model changes are versioned and run in shadow mode for 7 days before activation.
-    export: "Not exported (derived); relay configuration export contains model version and thresholds."
-    import: "Assessments are not imported; after signals import, the daily sweep recomputes them; thresholds import only within allowed ranges."
+    export: "Not exported (derived); relay configuration export contains model version, points table and thresholds."
+    import: "Assessments are not imported; after signals import, the crossing scheduler recomputes them; thresholds import only within allowed ranges."
     backup: "Derived data excluded from backup (CTR-IOX-001 IOX-3 and IOX-6); restore recomputes."
-    migration_rollback: "A new model version runs in shadow for 7 days with comparison metrics; rollback restores the previous version by configuration; stored rows with older versions stay readable."
+    migration_rollback: "A new model version runs in shadow for 7 days with comparison metrics; rollback restores the previous version by configuration; stored rows with older versions stay readable; the query alias moderation.riskassessment.assess_transaction is removed after one release."

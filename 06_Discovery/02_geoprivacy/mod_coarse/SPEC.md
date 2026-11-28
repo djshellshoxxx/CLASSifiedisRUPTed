@@ -12,8 +12,9 @@ Pure, isomorphic geohash library implementing CTR-PRV-001 location levels. It en
 
 - Encode and decode standard geohash (base32 alphabet 0123456789bcdefghjkmnpqrstuvwxyz) and compute the 8 neighbors of a cell.
 - Snap a latitude and longitude to an L1, L2 or L3 cell and expose a guard that rejects any public or federated payload cell longer than 5 characters.
-- Enumerate cells covering a radius of 5..100 km around a center cell, using precision-5 cells up to 25 km and precision-4 cells above, with a hard cap of 512 cells.
-- Compute the distance bucket (lt5, 5_10, 10_25, 25_50, gt50) between two cells from cell-center distance only.
+- Enumerate cells covering a radius of 5..100 km around a center cell of 4 or 5 characters (its cell center is used), using precision-5 cells up to 25 km and precision-4 cells above, with a hard cap of 512 cells; callers compile the mixed precision as F06.S01.M03 specifies.
+- Compute the distance bucket (lt5, 5_10, 10_25, 25_50, gt50) between two cells of 4 to 6 characters from cell-center distance only, so an L1 document is bucketed from its L1 cell center.
+- Own the geo error codes (DISCOVERY_COORD_INVALID, DISCOVERY_PRECISION_FORBIDDEN, DISCOVERY_RADIUS_TOO_SMALL, DISCOVERY_RADIUS_NOT_ALLOWED, DISCOVERY_RADIUS_TOO_LARGE); other modules reference them through depends_on (N1).
 
 ## Not responsible for
 
@@ -34,6 +35,7 @@ Pure, isomorphic geohash library implementing CTR-PRV-001 location levels. It en
 - Latitude outside -90..90, longitude outside -180..180 or NaN; rejected with DISCOVERY_COORD_INVALID.
 - A search circle crosses the antimeridian or a pole; cell enumeration wraps longitude and clamps latitude, returning each cell once.
 - Radius below 5 km (for example 1 km) is requested; rejected with DISCOVERY_RADIUS_TOO_SMALL, never rounded silently.
+- Radius 7 km or 200 km is requested; rejected with DISCOVERY_RADIUS_NOT_ALLOWED because it is not in the allowed set.
 - A 6-character cell is passed to the public guard; rejected with DISCOVERY_PRECISION_FORBIDDEN.
 - A circle would need more than 512 cells; rejected with DISCOVERY_RADIUS_TOO_LARGE instead of truncating.
 
@@ -73,7 +75,7 @@ CTR-ID-001, CTR-ERR-001, CTR-PRV-001, CTR-TST-001
 | PS-047-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-047-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
 
-Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/discovery/src/geoprivacy/coarse/index.ts`.
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 defines the declared operations or local library interface, constrained by the authority rules in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/discovery/src/geoprivacy/coarse/index.ts`.
 
 ## Acceptance criteria
 

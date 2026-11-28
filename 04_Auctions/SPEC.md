@@ -1,30 +1,49 @@
 # F04 — Auctions
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** PROJECT.
+**Status:** SPECIFIED. **Parent:** [ClassRup](../PROJECT_SPEC.md). **Package slug:** `auctions`.
 
-## Purpose and business behavior
-Provide auctions as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Subfeatures
 
-## Scope
-- 01_auction_lifecycle
-- 02_auction_integrity
+- [F04.S01 01_auction_lifecycle](01_auction_lifecycle/SPEC.md) — 3 modules
+- [F04.S02 02_auction_integrity](02_auction_integrity/SPEC.md) — 3 modules
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+The feature is enabled by flag `F04` (CTR-FLG-001); each module can be disabled independently when no enabled module depends on it. Upstream features: F01, F07, F09, F10, F11, F12, F13, F15.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Cross-subfeature and external events
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| bazaar.listing.unpublished | F01.S01.M03 | F04.S01.M01 | external |
+| bazaar.listing.expired | F01.S01.M04 | F04.S01.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F04.S01.M01 | external |
+| auctions.auction.extended | F04.S02.M02 | F04.S01.M02 | internal |
+| auctions.result.voided | F04.S02.M03 | F04.S01.M02 | internal |
+| privacy.deletion.completed | F10.S01.M04 | F04.S01.M02 | external |
+| commerce.deal.opened | F09.S01.M01 | F04.S01.M03 | external |
+| commerce.deal.completed | F09.S01.M01 | F04.S01.M03 | external |
+| commerce.deal.cancelled | F09.S01.M01 | F04.S01.M03 | external |
+| commerce.payment.expired | F09.S01.M01 | F04.S01.M03 | external |
+| auctions.result.voided | F04.S02.M03 | F04.S01.M03 | internal |
+| privacy.deletion.completed | F10.S01.M04 | F04.S01.M03 | external |
+| auctions.bid.placed | F04.S01.M02 | F04.S02.M01 | internal |
+| auctions.bid.outbid | F04.S01.M02 | F04.S02.M01 | internal |
+| auctions.bid.retracted | F04.S01.M02 | F04.S02.M01 | internal |
+| auctions.auction.closed | F04.S01.M03 | F04.S02.M01 | internal |
+| auctions.auction.won | F04.S01.M03 | F04.S02.M01 | internal |
+| auctions.auction.scheduled | F04.S01.M01 | F04.S02.M01 | internal |
+| identity.attestation.added | F07.S03.M02 | F04.S02.M01 | external |
+| identity.attestation.revoked | F07.S03.M02 | F04.S02.M01 | external |
+| identity.portable_doc.published | F07.S02.M01 | F04.S02.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F04.S02.M01 | external |
+| auctions.auction.closed | F04.S01.M03 | F04.S02.M02 | internal |
+| privacy.deletion.completed | F10.S01.M04 | F04.S02.M02 | external |
+| moderation.report.received | F12.S01.M01 | F04.S02.M03 | external |
+| auctions.result.non_payment | F04.S01.M03 | F04.S02.M03 | internal |
+| auctions.auction.closed | F04.S01.M03 | F04.S02.M03 | internal |
+| bazaar.listing.edited | F01.S01.M02 | F04.S02.M03 | external |
+| moderation.appeal.decided | F12.S01.M03 | F04.S02.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F04.S02.M03 | external |

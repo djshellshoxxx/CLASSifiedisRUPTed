@@ -1,30 +1,20 @@
-# F06.S03 — ranking
+# F06.S03 — 03_ranking
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F06.
+**Status:** SPECIFIED. **Parent:** [F06](../SPEC.md).
 
-## Purpose and business behavior
-Provide ranking as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_relevance
-- mod_fairness
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F06.S03.M01 | [Relevance ranking](mod_relevance/SPEC.md) | SPECIFIED | Deterministic score: BM25 text, recency decay, distance bucket, promotion boost capped and labelled 'Promoted'. |
+| F06.S03.M02 | [Ranking fairness](mod_fairness/SPEC.md) | SPECIFIED | Diversity re-ranking (max 3 per seller per page), new-seller exposure floor, promoted ≤ 20 % of a page, explainability string per result. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/discovery` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+_None._

@@ -18,7 +18,7 @@
 | notify.notification.mark_read | local principal | notification.userDid is the local principal |
 | notify.notification.read_own | local principal | notification.userDid is the local principal |
 
-Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
+Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Verification
 

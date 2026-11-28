@@ -8,7 +8,7 @@
 
 - **PS-142-08.R01** The runner records pass or fail per cell, durations and the browser version tested.
 - **PS-142-08.R02** N-1 data tests finish in at most 60 s; schema and OpenAPI diff in at most 20 s; browser matrix in at most 25 min nightly.
-- **PS-142-08.R03** Web Push check on installed iOS 16.4+ PWA is simulated through feature detection and the content-free push payload format (reference and template key only).
+- **PS-142-08.R03** Automated runs only feature-detect Web Push and check the content-free push payload format (reference and template key only) on the WebKit engine build; real push delivery to an installed iOS 16.4+ PWA is a manual checklist cell recorded with device, iOS version and approver.
 
 ## Specification
 
@@ -31,8 +31,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-142-09.T12 | load | PS-142-08.R01, PS-142-08.R02 | run N-1 data, diff and matrix suites | 60 s, 20 s and 25 min budgets met; versions recorded |
-| TEST-PS-142-09.T13 | e2e | PS-142-08.R03 | iOS Safari 16.4 profile feature detection and content-free push payload | push capability detected; payload holds reference and template key only; fallback message shown otherwise |
+| TEST-PS-142-09.T13 | e2e | PS-142-08.R03 | WebKit engine build - Web Push feature detection and the content-free push payload | payload holds reference and template key only; the fallback message is shown when push is unsupported; the real iOS 16.4+ installed-PWA push cell stays pending until its manual checklist is signed |
 
 ## Dependencies
 
-Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03, F11.S01.M02, F11.S01.M03, F10.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

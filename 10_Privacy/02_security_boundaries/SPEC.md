@@ -1,31 +1,21 @@
-# F10.S02 — security_boundaries
+# F10.S02 — 02_security_boundaries
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F10.
+**Status:** SPECIFIED. **Parent:** [F10](../SPEC.md).
 
-## Purpose and business behavior
-Provide security_boundaries as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_threat
-- mod_model
-- mod_metadata
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F10.S02.M01 | [Privacy threat model](mod_threat/SPEC.md) | SPECIFIED | Living threat model (geolocation, metadata, Sybil, graph deanonymization, relay compromise) with mapped controls and privacy test suite IDs. |
+| F10.S02.M02 | [Data classification model](mod_model/SPEC.md) | SPECIFIED | P0–P4 and L0–L4 types, field-level classification annotations, redaction helpers used by logs/events/federation/export. |
+| F10.S02.M03 | [Metadata minimization](mod_metadata/SPEC.md) | SPECIFIED | EXIF/GPS stripping, IP truncation, timestamp coarsening for public views (to the hour), referrer/analytics minimization; verification checks. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/privacy` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+_None._

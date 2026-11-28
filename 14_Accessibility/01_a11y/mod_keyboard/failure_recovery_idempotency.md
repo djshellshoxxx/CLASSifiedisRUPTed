@@ -12,11 +12,11 @@
 
 ## Specification
 
-- **idempotency:** Calling useRouteFocus() or closing an already closed dialog has no further effect.
+- **idempotency:** Calling useRouteFocus() or closing an already closed dialog has no further effect; setMotionPreference with the current value does nothing.
 - **concurrency:** Single-threaded UI; the dialog stack serializes open and close, and rapid double activation opens one dialog.
 - **retries:** Not applicable; no network or storage operations.
 - **offline:** Fully offline; all code ships in the app shell.
-- **partial failure:** If a dialog fails to render, the inert state is cleared and focus is restored to the trigger so the page stays usable.
+- **partial failure:** If a dialog fails to render, the inert state is cleared and focus is restored to the trigger so the page stays usable. If the shell passes no motion value, the primitives follow prefers-reduced-motion.
 
 Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 

@@ -1,31 +1,43 @@
-# F04.S02 — auction_integrity
+# F04.S02 — 02_auction_integrity
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F04.
+**Status:** SPECIFIED. **Parent:** [F04](../SPEC.md).
 
-## Purpose and business behavior
-Provide auction_integrity as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_anti
-- mod_sniping
-- mod_fraud
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F04.S02.M01 | [Anti-shill controls](mod_anti/SPEC.md) | SPECIFIED | Block seller and linked accounts (device/key links from F07) from bidding; heuristic shill scoring to F12 signals. |
+| F04.S02.M02 | [Anti-sniping soft close](mod_sniping/SPEC.md) | SPECIFIED | Soft close: bid in final 2 min extends end by 2 min, max 30 extensions. |
+| F04.S02.M03 | [Auction fraud review](mod_fraud/SPEC.md) | SPECIFIED | Review flagged auctions, void results with reason, notify bidders, feed F12 enforcement. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/auctions` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| auctions.bid.placed | F04.S01.M02 | F04.S02.M01 | external |
+| auctions.bid.outbid | F04.S01.M02 | F04.S02.M01 | external |
+| auctions.bid.retracted | F04.S01.M02 | F04.S02.M01 | external |
+| auctions.auction.closed | F04.S01.M03 | F04.S02.M01 | external |
+| auctions.auction.won | F04.S01.M03 | F04.S02.M01 | external |
+| auctions.auction.scheduled | F04.S01.M01 | F04.S02.M01 | external |
+| auctions.review.opened | F04.S02.M03 | F04.S02.M01 | internal |
+| auctions.review.closed | F04.S02.M03 | F04.S02.M01 | internal |
+| identity.attestation.added | F07.S03.M02 | F04.S02.M01 | external |
+| identity.attestation.revoked | F07.S03.M02 | F04.S02.M01 | external |
+| identity.portable_doc.published | F07.S02.M01 | F04.S02.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F04.S02.M01 | external |
+| auctions.auction.closed | F04.S01.M03 | F04.S02.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F04.S02.M02 | external |
+| auctions.shill.suspected | F04.S02.M01 | F04.S02.M03 | internal |
+| moderation.report.received | F12.S01.M01 | F04.S02.M03 | external |
+| auctions.result.non_payment | F04.S01.M03 | F04.S02.M03 | external |
+| auctions.auction.closed | F04.S01.M03 | F04.S02.M03 | external |
+| bazaar.listing.edited | F01.S01.M02 | F04.S02.M03 | external |
+| moderation.appeal.decided | F12.S01.M03 | F04.S02.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F04.S02.M03 | external |

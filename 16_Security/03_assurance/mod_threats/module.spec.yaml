@@ -7,12 +7,14 @@ summary: >-
   on the device, a relay, federation peers, wallets and chains, and the physical exchange of goods. It also covers
   three cross-cutting hazards, malicious or altered code delivered by a static distributor, forked vaults, and
   offline revocation lag. Every threat row names a control, the module that owns it and the test that proves it.
-  The model states residual risk honestly and claims no external audit.
+  Where a control only detects an attack (for example a malicious distributor replacing the app), the row says so
+  and states the residual risk. Relay boundaries describe exactly what relays hold, as derived from the module
+  specs, and every relay-side control is relay-local. The model claims no external audit.
 responsibilities:
   - Maintain the trust boundary diagram and asset list (keys, vault contents, signed statements, relay data, release artifacts) with data classes from CTR-PRV-001.
   - Maintain the STRIDE threat register: stable IDs, boundary, STRIDE category, control, owning module, test reference and residual risk.
   - Review the model at every release (gate in F17.S03.M02) and on every new boundary, and record the review with date, reviewers and changed rows.
-  - Keep the model synchronized with module specs through a traceability check that every control and test reference exists.
+  - Keep the model synchronized with module specs through a traceability check that every control and test reference exists and that every relay-held entity of class P2 or higher is named in a B3 information-disclosure row.
   - Publish a user-readable summary of what the architecture protects and what it does not.
 non_responsibilities:
   - Implementing controls (owning modules) and detecting incidents (F16.S03.M02).
@@ -30,6 +32,8 @@ edge_cases:
   - A threat is accepted as residual risk; the row must state the accepted risk text, owner and review date no later than 6 months ahead.
   - Two reviewers disagree on severity; the more severe rating stands until a recorded decision with reasoning is added.
   - A vulnerability report arrives for a documented residual risk; the incident process (F16.S03.M02) is used and the threat row is updated with the finding.
+  - A new module adds a relay-stored entity of class P2 (for example a bid or a push subscription) without naming it in a B3 information-disclosure row; the check fails with SECURITY_THREATMODEL_COVERAGE_GAP naming the entity.
+  - The user summary says relays never hold plaintext without listing the exceptions; the forbidden-claim lint fails until the sentence names its exceptions or narrows its subject.
 ux:
   notes: "Documentation and tooling module. Outputs are docs/security/threat_model/THREAT_MODEL.md (register and diagram), a user-readable SECURITY_SUMMARY.md, and the CI check report. Documents follow WCAG-friendly structure: headings, tables with headers, diagrams with text alternatives."
   screens:
@@ -53,12 +57,14 @@ processes:
       - The traceability tool validates every row's references against module specs and test IDs.
       - Coverage rules require at least one row per STRIDE letter for each boundary B1 to B6, or a recorded not-applicable reason.
       - Every violation produces a stable tool error code and fails the CI job.
+      - The relay data inventory generated from module.spec.yaml storage and privacy declarations is compared with the B3 information-disclosure rows, so the model cannot understate what relays hold.
     rules:
       - "V01 | each boundary B1–B6 has rows for S, T, R, I, D and E or a not-applicable reason of at least 20 characters | SECURITY_THREATMODEL_COVERAGE_GAP"
       - "V02 | every row references an existing module ID and requirement ID | SECURITY_THREATMODEL_DANGLING_CONTROL"
       - "V03 | every row references at least one test ID that exists in the module's spec | SECURITY_THREATMODEL_NO_TEST"
       - "V04 | residual risk text is present and review date is within 6 months of the release date | SECURITY_THREATMODEL_REVIEW_STALE"
-      - "V05 | no row or summary claims third-party audit, certification or guaranteed security | SECURITY_THREATMODEL_FORBIDDEN_CLAIM"
+      - "V05 | no row or summary claims third-party audit, certification or guaranteed security, and no sentence claims a relay never holds plaintext (or never sees user data) unless it names its exceptions or limits itself to a named data kind such as private messages or keys | SECURITY_THREATMODEL_FORBIDDEN_CLAIM"
+      - "V06 | every entity whose storage is relay or relay+device and whose privacy class is P2 or higher in the module specs is named, with its module, in a B3 information-disclosure row | SECURITY_THREATMODEL_COVERAGE_GAP"
   workflow_state_machine:
     note: "Documents have no application lifecycle; the review process is a release-time procedure described in requirements."
     machines: []
@@ -74,7 +80,7 @@ processes:
     commands: []
     queries: []
     requirements:
-      - The CLI parses the register, validates rules V01 to V05, resolves references against planning/modules.yaml, module.spec.yaml files and test IDs, and exits non-zero on any error.
+      - The CLI parses the register, validates rules V01 to V06, resolves references against planning/modules.yaml, module.spec.yaml files and test IDs, and exits non-zero on any error.
       - The report lists counts per boundary and STRIDE letter, rows by residual risk level and dangling references, in text and JSON.
       - The CLI runs in CI on every pull request touching module specs or the register, and in the release gate.
     events_produced: []
@@ -121,8 +127,8 @@ processes:
       - "CI reports: 90 days."
     threats:
       - "T01 | B1 spoofing, a look-alike site or altered distributor serves a fake app | users are told the official origin; install flow shows origin; release manifest signed with the project release key and its fingerprint published in several places; PWA shows build hash"
-      - "T02 | B1 tampering, a malicious static distributor serves altered JavaScript | subresource integrity on every script, strict CSP without inline script, reproducible builds with published hashes, signed release manifest verified by the service worker before activating an update, update only after explicit user consent"
-      - "T03 | B1 repudiation, distributor denies serving a malicious build | users and third parties can compare served hashes with the release manifest; mismatches are reportable evidence; build transcripts are published"
+      - "T02 | B1 tampering, a malicious static distributor serves altered JavaScript | detection and limitation, not prevention - subresource integrity and strict CSP without inline script stop third-party injection but not a malicious origin; the running service worker checks the signed release manifest before activating an update and asks for consent (F15.S01.M03); reproducible builds with published hashes, mirrors and out-of-band hash comparison let users and third parties detect a bad build; residual risk - a malicious origin can replace the service worker and app on next load (first install, eviction or a forced update), which the app cannot prevent"
+      - "T03 | B1 repudiation, distributor denies serving a malicious build | detection - users and third parties compare served bundle hashes out of band with the signed release manifest, mirrors and reproducible build hashes; mismatches are reportable evidence and build transcripts are published; residual risk as in T02, a malicious origin can replace the app on next load and the evidence only shows it afterwards"
       - "T04 | B1 information disclosure, distributor logs IPs and access patterns | app has no analytics; distribution may be mirrored on several hosts; service worker caches the shell so repeat use makes no distributor requests; stated limits in user summary"
       - "T05 | B1 denial of service, host takes the app down | installed PWA works offline from cache; mirrors listed in the release manifest; vault export allows moving to another build"
       - "T06 | B1 elevation of privilege, compromised dependency in the build chain | lockfile with integrity hashes, minimal dependencies, pinned noble versions, CI secret scanning (F16.S01.M02), dependency review on every update"
@@ -131,18 +137,18 @@ processes:
       - "T09 | B2 repudiation, user denies a consent they signed | consents are Ed25519 signatures over exact revisions with context strings (F16.S02.M03); signatures evidence assertion by the key holder, not delivery or identity"
       - "T10 | B2 information disclosure, stolen device or cleared storage | private keys wrapped with scrypt N=2^17 and XChaCha20-Poly1305; auto-lock; P3 data stays local; export is encrypted when the user chooses"
       - "T11 | B2 denial of service, storage eviction or corruption destroys the vault | persistent storage request, last-export age warning after 30 days, backup file and recovery kit under user control, integrity self-check at start"
-      - "T12 | B2 elevation of privilege, a statement from another party is treated as the user's own authority | vault policy accepts statements only if signed by a key authorized for the role; others are quarantined (F16.S01.M01)"
+      - "T12 | B2 elevation of privilege, a statement from another party is treated as the user's own authority | vault policy accepts statements only if signed by the key the F11.S01.M01 registry requires for the role (F16.S01.M01 authorizeStatement); others are quarantined by F11.S01.M02"
       - "T13 | B3 spoofing, an attacker impersonates a relay | relay identity is its did:key; vault pins the relay key at selection and verifies signed receipts; peers verify relay request signatures"
       - "T14 | B3 tampering, a relay alters or drops mailbox envelopes or index projections | envelopes are end-to-end encrypted and signed by senders; vaults verify author signatures on projections; delivery states never exceed what was acknowledged"
       - "T15 | B3 repudiation, a relay denies receiving a report or message | relay-signed receipts with relay sequence numbers are evidence of that relay clock only; vault keeps them"
-      - "T16 | B3 information disclosure, a relay operator reads user data or metadata | relays never hold plaintext P2 or higher; they see ciphertext and routing metadata (mailbox ID, size, time); IP and timing exposure is stated; reports are sealed to moderation keys"
-      - "T17 | B3 denial of service, request flooding or storage exhaustion | rate limits per key and per prefix (F12.S03.M03), per-key storage quotas, account limits, per-relay read-only switch (F16.S03.M03)"
-      - "T18 | B3 elevation of privilege, compromised moderator or operator role | relay roles per relay only, expiry on roles, two-person admin grants, hash-chained audit log, no global role (F16.S01.M01)"
+      - "T16 | B3 information disclosure, a relay operator reads user data or metadata | relays never hold private message plaintext, user keys or vault contents - mailboxes hold ciphertext plus routing metadata (mailbox ID, size, time); relays do hold in plaintext the P2 and P3 data of services users choose there, each minimized, limited to that relay and retained per its module - bids and results on an auction host relay (F04.S01.M02, F04.S01.M03), push subscription endpoints (F13.S01.M01), email addresses for email notifications (F13.S01.M02), moderation reports, cases and evidence (F12), rate buckets, audit and incident records (F12.S03.M03, F16.S01.M01, F16.S03.M02), session token hashes and login challenges (F07.S01.M02), and public P0 handles (F07.S01.M01); IP and timing exposure is stated; the relay inventory is generated from the module specs (V06)"
+      - "T17 | B3 denial of service, request flooding or storage exhaustion | relay-local rate limits per key and per prefix (F12.S03.M03), per-key storage quotas, relay-local per-key limits (F12.S03.M04), relay-wide read-only switch (F16.S03.M03)"
+      - "T18 | B3 elevation of privilege, compromised moderator or operator role | relay roles per relay and scope only, bound to the principal and usable only with active device keys, expiry on non-admin roles, signed two-person admin approvals, hash-chained audit log with published anchors, no global role (F16.S01.M01)"
       - "T19 | B4 spoofing, a peer relay forges records from an author | federation envelopes are Ed25519 signed over JCS bytes by the author key and verified before storage (CTR-FED-001); invalid signatures rejected"
       - "T20 | B4 tampering, a peer modifies or reorders records in transit or at rest | cid dedup, hash chain with prev and seq per author, gap detection, signatures cover the whole envelope"
       - "T21 | B4 repudiation, a peer denies serving or relaying content | provenance records originRelay, receivedAt, via[] and verifiedAt locally; peers sign relay requests with their relay keys"
       - "T22 | B4 information disclosure, a peer collects data beyond what was shared | only P0 opted-in records are exported, L2 maximum location, peer allowlist with quotas; tombstones propagate but cannot recall copies already fetched, and the UI says so"
-      - "T23 | B4 denial of service, a peer floods inbound batches | batches limited to 100 envelopes, per-peer quotas, federation kill switch and peer suspension (F16.S03.M03)"
+      - "T23 | B4 denial of service, a peer floods inbound batches | batches limited to 100 envelopes, per-peer quotas, the relay-local federation kill switch for relay-to-relay traffic (F16.S03.M03) and peer suspension (F11.S03.M01)"
       - "T24 | B4 elevation of privilege, a peer pushes moderation or policy authority across relays | no global takedown exists; peer advisories are advice only; blocklists apply locally by choice"
       - "T25 | B5 spoofing, fake payment page or address substitution | wallet addresses are signed in the deal statement; the vault shows the address from the signed statement and compares on payment claim; payments are claims between parties (CTR-COM-001)"
       - "T26 | B5 tampering, chain reorganization reverses a payment | confirmation depth policy and reorg events in F09.S01.M03; finality labelled in the UI; no platform custody"
@@ -158,13 +164,13 @@ processes:
       - "T36 | B6 elevation of privilege, coercion into releasing goods or signing consent | consent must name the exact revision; users can decline at any step; support for cancelled legs in cycle recovery flows"
       - "T37 | X1 tampering by forked vaults, one principal signs two conflicting promises from two copies of the vault | receivers detect conflicting signed statements with the same sequence or reservation, freeze the affected coordination and require explicit renegotiation; no last-writer-wins for consent, money or inventory"
       - "T38 | X1 repudiation, a principal blames a fork for a conflicting promise | both signed statements are retained as evidence; a user who restores an older backup is warned about re-signing after the backup point"
-      - "T39 | X2 elevation of privilege, a revoked key still accepted by an offline verifier | revocation freshness is reported on every verification; high-stakes actions need fresh status or explicit acknowledgement; revocation statements carry through any relay or peer"
-      - "T40 | X2 spoofing, attacker uses a stolen key during the revocation lag window | consents received in the 30-day claimed compromise window are labelled; recovery key revocations override; users told that revocation cannot reach offline parties instantly"
-      - "T41 | X2 denial of service, revocation source suppressed by a relay | multiple sources polled, source and age recorded, freshness unknown after 7 days"
+      - "T39 | X2 elevation of privilege, a revoked key still accepted by an offline verifier | revocation freshness from signed list heads is reported on every verification (F16.S02.M02); high-stakes actions need fresh status from two sources or explicit acknowledgement; revocations travel in root-signed identity documents through any relay or peer"
+      - "T40 | X2 spoofing, attacker uses a stolen key during the revocation lag window | consents received in the clamped claimed-compromise window are labelled; revocations by the key itself or the DID root key apply at once, another device key's revocation waits 7 days for the root key, recovery-driven revocations wait 72 hours (F07); users are told that revocation cannot reach offline parties instantly"
+      - "T41 | X2 denial of service, revocation source suppressed or frozen by a relay | multiple sources polled, signed list heads with monotonic sequence so a replayed old list is detected, freshness from issuedAt, unknown after 7 days (F16.S02.M02)"
       - "T42 | B1 information disclosure, supply chain leaks secrets from the build | secrets scanning in CI, no production secrets in build, release signing key held offline"
     abuse_controls:
       - "The register changes only by pull request with two approvals and the CI check."
-      - "Documents are scanned for forbidden claims (audit, certified, guaranteed) by V05."
+      - "Documents are scanned for forbidden claims (audit, certified, guaranteed, never holds plaintext without listed exceptions) by V05."
   observability_performance:
     requirements:
       - CI reports the number of rows, STRIDE coverage, dangling references and review age as numbers on every run.
@@ -184,26 +190,30 @@ processes:
       - Every requirement of this module is covered by at least one automated or documented review test.
       - The checker has fixtures with intentionally broken registers for each error code.
       - The release gate integration is tested with a passing and failing register.
-    fixtures: "Fixture registers: valid (42 rows), missing STRIDE letter, dangling control, no test, stale review, forbidden claim; module spec fixtures with known requirement IDs."
+    fixtures: "Fixture registers: valid (42 rows), missing STRIDE letter, dangling control, no test, stale review, forbidden claim, plaintext claim without exceptions, B3 row missing a relay-held entity; module spec fixtures with known requirement IDs and storage declarations."
     tests:
       - "T01 | unit | 01.R01,01.R02,02.R01 | parse the valid fixture register | 42 rows parsed with all required fields; boundaries B1–B6, X1, X2 recognized"
       - "T02 | unit | 02.R02,02.R03 | each broken fixture | documented SECURITY_THREATMODEL_* code, row ID in the message, exit 1"
-      - "T03 | unit | 01.R03,02.R01 | boundary with all STRIDE letters, and one with a not-applicable reason of 10 characters | accepted for the full set; reason under 20 characters rejected"
-      - "T04 | integration | 03.R01,03.R02 | change a control module ID in a spec; add a module touching keys without register rows | dangling reference error; out-of-cycle review flag raised"
+      - "T03 | unit | 02.R02,02.R01 | boundary with all STRIDE letters, and one with a not-applicable reason of 10 characters | accepted for the full set; reason under 20 characters rejected with SECURITY_THREATMODEL_COVERAGE_GAP"
+      - "T04 | integration | 03.R02,02.R01 | change a control module ID in a spec; add a module touching keys without register rows | dangling reference error; out-of-cycle review flag raised with a 14-day due date"
       - "T05 | integration | 03.R03,08.R03 | residual risk with review date 7 months old | SECURITY_THREATMODEL_REVIEW_STALE and gate failed state shown in the report"
       - "T06 | integration | 04.R01,04.R02,04.R03 | run CLI in CI on a pull request touching a spec | report text and JSON produced; non-zero exit blocks merge"
-      - "T07 | abuse | 05.R01,05.R02,05.R03,07.R03 | author self-approves register change; document containing 'externally audited'; draft with exploit details | merge blocked by required reviewers; SECURITY_THREATMODEL_FORBIDDEN_CLAIM; flagged by review checklist"
+      - "T07 | abuse | 05.R01,05.R03,07.R03 | author self-approves register change; document containing 'externally audited'; draft with exploit details | merge blocked by required reviewers; SECURITY_THREATMODEL_FORBIDDEN_CLAIM; flagged by review checklist and kept in the private advisory"
       - "T08 | integration | 06.R01,06.R02,06.R03 | run twice on the same input; unparsable spec | identical output; no files modified; parse error reported and exit 1"
-      - "T09 | integration | 07.R01,07.R02 | scan register and summary for emails, IPs, keys and tokens | none found"
+      - "T09 | integration | 07.R01 | scan register and summary for emails, IPs, keys and tokens | none found"
       - "T10 | load | 08.R01,08.R02 | full repository with 148 module specs and 200 register rows | check completes ≤ 30 s; metrics present in report"
-      - "T11 | unit | 09.R01,09.R03 | traceability tool run | every PS-133 requirement maps to a passing test"
-      - "T12 | manual | 03.R01,04.R03,10.R01 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request"
+      - "T11 | unit | 09.R01 | traceability tool run | every PS-133 requirement maps to a passing test"
+      - "T12 | manual | 03.R01,04.R03 | tabletop review of rows T02, T37 and T39 by two maintainers before each release | review recorded with date and reviewers; any change merged via pull request"
       - "T13 | integration | 10.R01,10.R02,10.R03 | export register as JSON, import into the checker in a fresh checkout, bump schema version | identical results; old version still parsed for 180 days"
       - "T14 | unit | 09.R02 | fixture suite completeness | every error code has at least one failing fixture"
+      - "T15 | integration | 01.R03,03.R01,07.R02 | tag the reviewed model at a release; run the gate when the last tagged review is older than the previous release; inspect repository history | release tag present and older versions retained in history; gate fails with the review date"
+      - "T16 | integration | 09.R03,05.R02 | release gate with a passing register and with a failing one; publish the report and summary | gate passes then fails; report and summary readable without repository write access"
+      - "T17 | unit | 02.R03,07.R03,02.R01 | summary sentence 'relays never hold plaintext' with no exceptions; the same sentence naming its exceptions; 'relays never hold private message plaintext'; register change without a release-notes entry | SECURITY_THREATMODEL_FORBIDDEN_CLAIM; accepted; accepted; release-notes check fails"
+      - "T18 | integration | 02.R04,01.R02 | relay inventory generated from the module specs compared with B3 rows; remove the bid entity from row T16 | all relay-held P2 and P3 entities named; SECURITY_THREATMODEL_COVERAGE_GAP naming F04.S01.M02 Bid"
     acceptance:
-      - All tests T01–T14 pass in CI and the register has zero dangling references.
+      - All tests T01–T18 pass in CI and the register has zero dangling references.
       - Every boundary B1 to B6 has all six STRIDE categories covered or a recorded reason, and X1 and X2 have rows.
-      - No document claims third-party audit, certification or guaranteed security.
+      - No document claims third-party audit, certification, guaranteed security or a relay that never holds plaintext without its exceptions, and every relay-held P2+ entity is named in a B3 row.
   import_export_backup_rollback:
     requirements:
       - The register is exportable as JSON and markdown from the repository and the export includes the review history.

@@ -21,7 +21,7 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-123-09.T01 | unit | PS-123-01.R01, PS-123-01.R02, PS-123-02.R02 | generate from the valid fixture twice | identical bytes, fields present on every record, hash equals sha256 of canonical JSON |
-| TEST-PS-123-09.T02 | unit | PS-123-02.R01, PS-123-02.R03 | each of V01-V07 violated in turn | documented code returned; query for unknown key returns NOT_FOUND |
+| TEST-PS-123-09.T02 | unit | PS-123-02.R01, PS-123-02.R03 | each of V01-V09 violated in turn | documented code returned; query for unknown key returns NOT_FOUND |
 | TEST-PS-123-09.T03 | property | PS-123-03.R01, PS-123-02.R01 | random digraphs with and without injected back edges | cycle detected exactly when one exists; topological order places dependencies first |
 | TEST-PS-123-09.T04 | integration | PS-123-03.R02, PS-123-03.R03, PS-123-06.R02 | break validation in each pipeline step | generation fails, previous file untouched, nothing published |
 | TEST-PS-123-09.T05 | contract | PS-123-04.R01, PS-123-04.R02, PS-123-04.R03 | call all four queries in the vault and on a relay | identical results for the same release; no commands or events exist; response within 5 ms |
@@ -29,16 +29,18 @@ See the module test table below (all processes).
 | TEST-PS-123-09.T07 | integration | PS-123-01.R03, PS-123-06.R01 | build twice from the same commit, then edit planning/modules.yaml without regenerating | identical bytes; stale check fails with PLATFORM_FEATURE_REGISTRY_STALE |
 | TEST-PS-123-09.T08 | integration | PS-123-06.R03, PS-123-02.R03 | vault of release N queries relay of release N+1 hash | mismatch reported informationally, work continues, unknown modules listed |
 | TEST-PS-123-09.T09 | abuse | PS-123-07.R01, PS-123-07.R02, PS-123-07.R03 | inspect registry and query payloads | contain no personal data or configuration values; client-claimed dependency satisfaction not trusted by relay |
-| TEST-PS-123-09.T10 | load | PS-123-08.R01, PS-123-08.R03 | generate for 148 modules and 5 000 synthetic modules; run 10 000 queries | generation ≤ 2 s for catalog, size within budgets, query p95 ≤ 5 ms |
+| TEST-PS-123-09.T10 | load | PS-123-08.R01, PS-123-08.R03 | generate for the catalog and for 5 000 synthetic modules; run 10 000 queries | generation ≤ 2 s for the catalog and ≤ 2 s per 1 000 modules, size within budgets, query p95 ≤ 5 ms |
 | TEST-PS-123-09.T11 | integration | PS-123-08.R02 | relay metrics scrape after queries | duration histogram exported per CTR-OBS-001 |
 | TEST-PS-123-09.T12 | unit | PS-123-09.R01 | traceability tool run | every PS-123 requirement maps to a passing test |
-| TEST-PS-123-09.T13 | integration | PS-123-09.R02, PS-123-09.R03 | generate the real catalog | 18 features, 148 modules, acyclic, defaults satisfy FLG-2, FUTURE modules off and unregistered, core F15 and F16 on |
-| TEST-PS-123-09.T14 | a11y | PS-123-04.R03 | Settings > Features scanned with axe | zero serious issues; dependency text is real list text |
+| TEST-PS-123-09.T13 | integration | PS-123-09.R02, PS-123-09.R03 | generate the real catalog | as many features and modules as planning/modules.yaml lists, acyclic, defaults satisfy FLG-2, FUTURE modules off and unregistered, core F15 and F16 on, no spec missing in strict mode |
+| TEST-PS-123-09.T14 | a11y | PS-123-04.R04 | Settings > Features (vault) and Operator console > Modules scanned with axe | zero serious issues; dependency text is real list text; each list shows only its surface |
 | TEST-PS-123-09.T15 | integration | PS-123-10.R01, PS-123-10.R02, PS-123-10.R03 | export, import and release rollback | registry not part of any export; older release regenerates its own registry; no data migration |
+| TEST-PS-123-09.T16 | unit | PS-123-02.R04, PS-123-06.R03 | fixture catalog where module X has no spec and module Y (default on) depends on X; generate in normal and strict mode | X has dependsOnKnown false, defaultState off, registered false; Y fails V04 with PLATFORM_FEATURE_DEFAULT_VIOLATION until it defaults off; strict mode fails with PLATFORM_FEATURE_SPEC_MISSING |
+| TEST-PS-123-09.T17 | integration | PS-123-01.R02, PS-123-04.R04 | generate the real catalog, then list features with surface vault and surface relay and render both settings screens | F15.S03.M02 has surface relay and is absent from the vault list; F15.S01.M01 has surface vault and is absent from the operator console; packages modules appear in both |
 
 ## Acceptance criteria
 
-- All tests T01-T15 pass in CI.
+- All tests T01-T17 pass in CI.
 - The real catalog generates an acyclic registry with defaults that satisfy the dependency rule.
 - Adding a cycle or an unknown dependency to any module spec fails CI with a stable code and a readable path.
 - The registry works fully offline and cannot be modified at runtime.

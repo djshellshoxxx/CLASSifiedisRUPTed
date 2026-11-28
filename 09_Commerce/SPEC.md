@@ -1,31 +1,41 @@
 # F09 — Commerce and evidence
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** PROJECT.
+**Status:** SPECIFIED. **Parent:** [ClassRup](../PROJECT_SPEC.md). **Package slug:** `commerce`.
 
-## Purpose and business behavior
-Provide commerce and evidence as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Subfeatures
 
-## Scope
-- 01_payments
-- 02_settlement
-- 03_valuation
+- [F09.S01 01_payments](01_payments/SPEC.md) — 3 modules
+- [F09.S02 02_settlement](02_settlement/SPEC.md) — 3 modules
+- [F09.S03 03_valuation](03_valuation/SPEC.md) — 3 modules
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+The feature is enabled by flag `F09` (CTR-FLG-001); each module can be disabled independently when no enabled module depends on it. Upstream features: F07, F10, F11, F15, F16, F18.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Cross-subfeature and external events
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| commerce.dispute.opened | F09.S02.M02 | F09.S01.M01 | internal |
+| commerce.dispute.resolved | F09.S02.M02 | F09.S01.M01 | internal |
+| commerce.dispute.withdrawn | F09.S02.M02 | F09.S01.M01 | internal |
+| privacy.deletion.completed | F10.S01.M04 | F09.S01.M01 | external |
+| bazaar.inventory.conflict_detected | F01.S03.M01 | F09.S01.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F09.S01.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F09.S01.M03 | external |
+| commerce.payment.acknowledged | F09.S01.M01 | F09.S02.M01 | internal |
+| commerce.payment.finalized | F09.S01.M03 | F09.S02.M01 | internal |
+| identity.device_key.revoked | F07.S01.M01 | F09.S02.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F09.S02.M01 | external |
+| commerce.payment.disputed | F09.S01.M01 | F09.S02.M02 | internal |
+| services.dispute.opened | F03.S02.M03 | F09.S02.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F09.S02.M02 | external |
+| commerce.deal.completed | F09.S01.M01 | F09.S02.M03 | internal |
+| commerce.payment.finalized | F09.S01.M03 | F09.S02.M03 | internal |
+| commerce.payment.reorged | F09.S01.M03 | F09.S02.M03 | internal |
+| commerce.payment.expired | F09.S01.M01 | F09.S02.M03 | internal |
+| commerce.payment.failed | F09.S01.M03 | F09.S02.M03 | internal |
+| privacy.deletion.completed | F10.S01.M04 | F09.S02.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F09.S03.M02 | external |

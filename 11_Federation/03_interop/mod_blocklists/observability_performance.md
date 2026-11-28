@@ -15,10 +15,11 @@
 **Metrics**
 - classrup_federation_block_rules{status}
 - classrup_federation_block_matches_total{ruleType, action}
+- classrup_federation_block_bypass_total{type}
 - classrup_federation_block_import_total{outcome=ok|too_large|invalid}
 
 **Logs**
-- info federation.block_rule.changed {ruleId, ruleType, change, correlationId} — value omitted for author rules.
+- info federation.block_rule.changed {ruleId, ruleType, action, change, correlationId} — value omitted for author rules.
 
 **Budgets**
 - evaluate p95 ≤ 0.5 ms with 100000 rules loaded.
@@ -31,8 +32,8 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-089-09.T13 | load | PS-089-08.R01, PS-089-08.R02, PS-089-08.R03 | evaluate 100000 envelopes against 100000 rules; import 10000 entries | p95 ≤ 0.5 ms and import ≤ 2 s |
+| TEST-PS-089-09.T13 | load | PS-089-08.R01, PS-089-08.R02, PS-089-08.R03 | evaluate 100000 envelopes against 100000 rules; import 10000 entries | p95 ≤ 0.5 ms, import ≤ 2 s, alert at 50 percent reject ratio |
 
 ## Dependencies
 
-Module depends on: F11.S01.M03, F07.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M03, F07.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

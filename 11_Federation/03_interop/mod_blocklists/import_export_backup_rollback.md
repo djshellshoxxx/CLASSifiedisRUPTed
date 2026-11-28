@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section federation.block_rules in classrup-export/v1, one line per BlockRule (schema classrup.federation.block_rule/v1); personal export only.
-- **import:** Local rules import as written after validation; imported-source rules import as pending_review; duplicates are skipped and counted.
+- **export:** Section federation.block_rules in classrup-export/v1 through the ExportSectionPort, one line per BlockRule (schema classrup.federation.block_rule/v1); personal export only.
+- **import:** Local and personal_block rules import as written after validation; imported-source rules import as pending_review; duplicates are skipped and counted.
 - **backup:** Vault export is the primary backup (IOX-6); relay rules are covered by relay SQLite backup (CTR-IOX-001 IOX-3).
-- **migration rollback:** Additive fields only in v1; rollback is safe because unknown optional fields are ignored and active rules stay active.
+- **migration rollback:** Additive fields only in v1 (source personal_block, status created, blob form of content_hash); rollback is safe because unknown optional fields are ignored and active rules stay active.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F11.S01.M03, F07.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M01, F11.S01.M03, F07.S02.M02, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-OBS-001, CTR-IOX-001, CTR-PRV-001. Predecessor: [domain_schema.md](domain_schema.md).

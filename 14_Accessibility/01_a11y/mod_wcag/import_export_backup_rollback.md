@@ -15,7 +15,7 @@
 - **export:** The report (json and html), checklist and statement draft are attached to each release as artifacts; no user data.
 - **import:** Nothing is imported; fixtures are generated from seeds in the repository.
 - **backup:** Artifacts live in version control and the CI artifact store; no separate backup is needed.
-- **migration rollback:** Pins: @axe-core/playwright 4.14.0 with a matching axe-core version; to upgrade, run the trial, review new findings, change the pin; rollback is a pin revert with the previous baseline report.
+- **migration rollback:** Pins: @axe-core/playwright 4.14.0 with a matching axe-core version; to upgrade, run the trial, review new findings, change the pin; rollback is a pin revert with the previous baseline report. Waiver files written before the target field are migrated by converting route to target.route.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F14.S01.M01, F14.S01.M02, F14.S02.M01, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F14.S01.M01, F14.S01.M02, F14.S02.M01, F16.S02.M01, F07.S01.M03, CTR-UX-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -1,31 +1,24 @@
-# F15.S03 — operations
+# F15.S03 — 03_operations
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F15.
+**Status:** SPECIFIED. **Parent:** [F15](../SPEC.md).
 
-## Purpose and business behavior
-Provide operations as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_observability
-- mod_backups
-- mod_recovery
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F15.S03.M01 | [Observability](mod_observability/SPEC.md) | SPECIFIED | Structured logger with redaction, metrics registry and /metrics, health endpoints (CTR-OBS-001). |
+| F15.S03.M02 | [Backups](mod_backups/SPEC.md) | SPECIFIED | Scheduled SQLite online backups, encryption, retention rotation, restore verification command. |
+| F15.S03.M03 | [Disaster recovery](mod_recovery/SPEC.md) | SPECIFIED | Restore runbook and tooling, RPO 6 h/RTO 4 h targets, event replay from outbox archive, dead-letter replay. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/platform` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| platform.backup.completed | F15.S03.M02 | F15.S03.M03 | internal |
+| platform.backup.failed | F15.S03.M02 | F15.S03.M03 | internal |

@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-142-06.R01** The vault upgrade is idempotent: running it twice leaves identical data, and an interrupted upgrade resumes without duplicating records.
-- **PS-142-06.R02** Rollback of the app to N-1 after upgrade is tested for additive-only changes: N-1 code reads N vault data, ignoring unknown optional fields.
+- **PS-142-06.R02** Rollback of the app to N-1 follows one explicit rule: the IndexedDB database version is bumped only for object-store or index changes, and record-level additive changes go through lazy SCH-4 migrations without a bump, so the N-1 read test (N-1 code opens and reads N vault data) applies to releases without a bump; for a release with a bump, N keeps a pre-upgrade export or snapshot, N-1 code catches VersionError and offers restore from it, and the test asserts zero record loss and no partial open (CTR-IOX-001 IOX-4, never a destructive in-place downgrade).
 - **PS-142-06.R03** The matrix runner retries a cell once for infrastructure failure only.
 
 ## Specification
@@ -24,10 +24,10 @@ Baseline per [CTR-IDM-001](../../../planning/contracts/CTR-IDM-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-142-09.T02 | integration | PS-142-02.R01, PS-142-06.R02 | upgrade the N-1 vault and validate all records and signatures; open N vault with N-1 code | all records valid and signatures verify; N-1 ignores unknown optional fields |
+| TEST-PS-142-09.T02 | integration | PS-142-02.R01, PS-142-06.R02 | upgrade the N-1 vault and validate all records and signatures; then open the N vault with N-1 code for the pair without an IndexedDB version bump and for the pair with a bump | all records valid and signatures verify; without a bump N-1 opens and reads N data; with a bump N-1 gets VersionError, catches it and offers restore from the pre-upgrade export, with zero record loss and no partial open |
 | TEST-PS-142-09.T05 | chaos | PS-142-03.R01, PS-142-06.R01 | interrupt vault upgrade at each step, then restart | resumes or rolls back; zero lost and zero duplicated records; second upgrade identical |
 | TEST-PS-142-09.T09 | unit | PS-142-06.R03 | force an infrastructure failure on one cell | retried once; assertion failure not retried |
 
 ## Dependencies
 
-Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: CTR-SCH-001, CTR-ERR-001, CTR-FED-001, CTR-IOX-001, CTR-TST-001, CTR-OBS-001, F17.S01.M01, F15.S02.M03, F11.S01.M02, F11.S01.M03, F10.S01.M03. Predecessor: [domain_schema.md](domain_schema.md).

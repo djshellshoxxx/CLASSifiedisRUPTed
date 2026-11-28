@@ -16,7 +16,7 @@
 |---|---|---|
 | platform.metrics.read | relay operator (relay policy, CAP-9) | actor authenticated with a relay access token; no vault capability exists because the PWA exports no metrics |
 
-Default deny; evaluation and audit per [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
+Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
 ## Verification
 

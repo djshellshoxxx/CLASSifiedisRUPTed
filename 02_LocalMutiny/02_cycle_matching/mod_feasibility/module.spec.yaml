@@ -77,14 +77,14 @@ processes:
   validation_rules:
     requirements:
       - Each feasibility check is a rule with a stable code and maps to one module error code returned to callers.
-      - The tolerance rule implements MNY-5 exactly, toleranceBps of the larger side or the absolute minimum (the profile's reference amount, 5.00 EUR by default, converted to the settlement currency with the subject's pinned barter_normalization quote, MNY-4 HALF_EVEN), whichever is greater, with the effective length profile read from this module's registry.
+      - The tolerance rule implements MNY-5 exactly, toleranceBps of the larger side or the absolute minimum (the profile's reference amount, 5.00 EUR by default, converted to the settlement currency with the subject's pinned barter_normalization quote or, when none covers EUR, the toleranceRef rate sealed in the head snapshot, MNY-4 HALF_EVEN), whichever is greater, with the effective length profile read from this module's registry.
       - Checks never read another party's private records; they use own vault data, signed projections and statement contents only.
     rules:
       - "V01 | C01 all participant DIDs distinct (participant uniqueness) | MUTINY_PARTICIPANT_DUPLICATE"
       - "V02 | C02 all inventory items distinct across legs | MUTINY_ITEM_DUPLICATE"
       - "V03 | C03 each own item is owned by the principal in the local inventory and each peer item's listing projection is authored by the giver DID | MUTINY_ITEM_NOT_OWNED"
       - "V04 | C04 each own item has available quantity ≥ leg quantity, not reserved elsewhere; each peer item is listed as published and unexpired | MUTINY_ITEM_UNAVAILABLE"
-      - "V05 | C05 for each participant gap = absolute difference of given and received ≤ max(toleranceBps × larger side, absoluteMinRef converted to the settlement currency) (MNY-5) unless a sealed compensation leg or an acceptedImbalances entry of the signed head snapshot naming that participant covers the excess; only signed sources (the revision snapshot) are read, never an unsigned local input | MUTINY_VALUE_OUT_OF_TOLERANCE"
+      - "V05 | C05 for each participant gap = absolute difference of given and received ≤ max(toleranceBps × larger side, absoluteMinRef converted to the settlement currency with the pinned quote or the snapshot toleranceRef) (MNY-5) unless a sealed compensation leg or an acceptedImbalances entry of the signed head snapshot naming that participant covers the excess; only signed sources (the revision snapshot) are read, never an unsigned local input | MUTINY_VALUE_OUT_OF_TOLERANCE"
       - "V06 | C06 every pinned FX quote is unexpired; less than 30 minutes left gives status warn and an expired quote gives fail | MUTINY_QUOTE_STALE"
       - "V07 | C07 every adjacent pair distance bucket ≤ the length-profile maxPairBucket and both participants' maxDistanceBucket, as integer ordinals of the F02.S02.M04 mapping (lt5=0 … gt50=4); the pair bucket is bucketBetween of the giver's listing cell and the receiver's want cell (both ≤ L2, assertPublicCell), and an L1-only cell counts as at least 3 | MUTINY_DISTANCE_EXCEEDED"
       - "V08 | C08 no participant is in another participant's local block list known to this vault | BLOCKED_PARTY"

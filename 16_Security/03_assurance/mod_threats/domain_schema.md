@@ -19,7 +19,8 @@
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-133-09.T01 | unit | PS-133-01.R01, PS-133-01.R02, PS-133-02.R01 | parse the valid fixture register | 42 rows parsed with all required fields; boundaries B1–B6, X1, X2 recognized |
-| TEST-PS-133-09.T03 | unit | PS-133-01.R03, PS-133-02.R01 | boundary with all STRIDE letters, and one with a not-applicable reason of 10 characters | accepted for the full set; reason under 20 characters rejected |
+| TEST-PS-133-09.T15 | integration | PS-133-01.R03, PS-133-03.R01, PS-133-07.R02 | tag the reviewed model at a release; run the gate when the last tagged review is older than the previous release; inspect repository history | release tag present and older versions retained in history; gate fails with the review date |
+| TEST-PS-133-09.T18 | integration | PS-133-02.R04, PS-133-01.R02 | relay inventory generated from the module specs compared with B3 rows; remove the bid entity from row T16 | all relay-held P2 and P3 entities named; SECURITY_THREATMODEL_COVERAGE_GAP naming F04.S01.M02 Bid |
 
 ## Dependencies
 

@@ -16,7 +16,7 @@
 - classrup_auctions_results_total{outcome=won|unsold|voided,state} (host)
 - classrup_auctions_close_lag_ms (host histogram: close commit minus currentEndsAt)
 - classrup_auctions_close_lease_conflicts_total (host)
-- classrup_auctions_nonpayment_total (vault local counter)
+- classrup_auctions_nonpayment_total and classrup_auctions_void_after_payment_total (vault local counters)
 
 **Logs**
 - info auction.closed {auctionId, resultId, outcome, correlationId} on the host - no bidder keys or prices.
@@ -31,8 +31,9 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-034-09.T13 | load | PS-034-08.R01, PS-034-08.R02, PS-034-08.R03 | 1 000 auctions end in the same minute; 5 000 entry ledger verify | close lag p95 ≤ 2 s, p99 ≤ 5 s; verify ≤ 300 ms |
+| TEST-PS-034-09.T13 | load | PS-034-08.R02, PS-034-08.R03 | 1 000 auctions end in the same minute; 5 000 entry ledger verify | close lag p95 ≤ 2 s, p99 ≤ 5 s; verify ≤ 300 ms |
+| TEST-PS-034-09.T18 | e2e | PS-034-08.R01 | network capture of the PWA through result, settlement, void notice and second-chance screens | zero telemetry or analytics requests |
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F04.S01.M02, F09.S01.M01, F07.S01.M01, F11.S01.M03, F09.S03.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F04.S01.M02, F09.S01.M01, F07.S01.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F09.S03.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, F12.S03.M03, F13.S02.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-MNY-001, CTR-COM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

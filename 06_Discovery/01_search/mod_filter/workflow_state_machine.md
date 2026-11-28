@@ -22,7 +22,7 @@ _None._
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-044-09.T04 | unit | PS-044-01.R02, PS-044-03.R01 | compile each key alone and all together | SQL text and params equal golden fixtures |
+| TEST-PS-044-09.T04 | unit | PS-044-01.R02, PS-044-03.R01, PS-044-01.R04 | compile each key alone and all together, including distanceKm 5, 10, 25, 50 and 100 around u4pru and condition poor | SQL text and params equal golden fixtures; 25 km has the L1 prefix branch, 50 and 100 km use d.geo_cell4 IN (...) |
 | TEST-PS-044-09.T05 | property | PS-044-03.R02, PS-044-03.R03 | 200 runs of the same filter with the same clock | identical SQL and params; compile never reads the system clock |
 
 ## Dependencies

@@ -15,7 +15,7 @@
 - **export:** Section auctions.shill_checks in the host operator export (classrup-export/v1, operator scope); excluded from every user export.
 - **import:** Checks import as read-only history with status preserved; open checks import as flagged and are re-linked to reviews by review id.
 - **backup:** Host relay SQLite backup (IOX-3, IOX-7); no vault backup exists for this module.
-- **migration rollback:** Additive optional fields only in v1; thresholds are versioned constants so rollback restores the earlier thresholds with the earlier code.
+- **migration rollback:** Additive optional fields only in v1; the scoring table is a versioned constant (shill-v1) so rollback restores the earlier table with the earlier code.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F04.S01.M01, F07.S01.M01, F07.S02.M01, F07.S03.M02, F11.S01.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F04.S01.M01, F07.S01.M01, F07.S01.M02, F07.S02.M01, F07.S03.M02, F11.S01.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001. Predecessor: [domain_schema.md](domain_schema.md).

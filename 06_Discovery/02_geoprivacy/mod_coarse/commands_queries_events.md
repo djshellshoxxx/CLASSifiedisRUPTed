@@ -34,7 +34,8 @@ _None._
 |---|---|---|---|
 | DISCOVERY_COORD_INVALID | 422 | no | latitude or longitude is not a finite value in range |
 | DISCOVERY_PRECISION_FORBIDDEN | 422 | no | cell is finer than L2 and may not appear in a public payload |
-| DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below 5 km or not an allowed value |
+| DISCOVERY_RADIUS_TOO_SMALL | 422 | no | radius below the 5 km minimum |
+| DISCOVERY_RADIUS_NOT_ALLOWED | 422 | no | radius is at least 5 km but not one of 5, 10, 25, 50, 100 |
 | DISCOVERY_RADIUS_TOO_LARGE | 422 | no | radius would need more than 512 cells |
 
 Common codes per [CTR-ERR-001](../../../planning/contracts/CTR-ERR-001.md).
@@ -48,7 +49,10 @@ encode(42.6, -5.6, 5)            -> "ezs42"
 encode(57.64911, 10.40744, 5)    -> "u4pru"
 snap(57.64911, 10.40744, "L2")   -> "u4pru"
 bucketBetween("u4pru", "u4prv")  -> "lt5"
-cellsForRadius("u4pru", 10)      -> ["u4prg", "u4prs", "u4pru", …]  (sorted, at most 512)
+cellsForRadius("u4pru", 10)      -> ["u4prg", "u4prs", "u4pru", …]  (precision 5, sorted, at most 512)
+cellsForRadius("u4pru", 100)     -> ["u4nz", "u4pr", "u4px", …]  (precision 4, sorted)
+bucketBetween("u4pru", "u4pr")   -> "lt5" (from the L1 cell center)
+cellsForRadius("u4pru", 200)     -> error DISCOVERY_RADIUS_NOT_ALLOWED
 assertPublicCell("u4pruy")       -> error DISCOVERY_PRECISION_FORBIDDEN
 ```
 

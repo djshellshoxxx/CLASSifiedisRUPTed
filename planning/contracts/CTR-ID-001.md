@@ -19,3 +19,7 @@
 ```
 ## Tests
 Property: generated IDs are unique (1e6 sample) and monotonic per generator within a millisecond (RFC 9562 §6.2 method 1 counter). Contract: parser rejects uppercase, braces, v4 IDs where v7 required.
+
+## ADR-0016 amendment (review pass, 2026-11-11)
+- **ID-8** Records whose IDs appear in public projections (P0) use UUIDv7 with the embedded timestamp floored to the hour (the remaining bits random), matching the public timestamp coarsening of F10.S02.M03; the monotonicity property of ID-1 applies only to the unfloored generator used for private records. Private records keep millisecond UUIDv7.
+- **ID-9** ID-3 is superseded by CTR-FED-001 FED-7: `cid = "sha256-" + base64url(SHA-256(JCS(envelope minus sig and cid)))`.

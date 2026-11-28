@@ -8,16 +8,17 @@
 
 - **PS-112-08.R01** CI reports golden-string and property test results; production builds send no metrics.
 - **PS-112-08.R02** Formatting one amount takes 0.05 ms or less at p95 after the formatter cache is warm.
-- **PS-112-08.R03** The module adds at most 3 KiB gzip to the initial bundle beyond the browser's built-in Intl.
+- **PS-112-08.R03** The module adds at most 3 KiB gzip to the initial bundle beyond the browser's built-in Intl and the F09.S03.M03 package.
 
 ## Specification
 
 **Metrics**
-- ci_i18n_money_golden_mismatch_total{locale} (CI artifact)
+- ci_i18n_money_golden_mismatch_total{locale, engine} (CI artifact)
 - ci_i18n_money_property_runs_total (CI artifact)
 
 **Logs**
 - dev-only console.warn i18n.money.fallback {currency, reason} — no amounts; removed from production builds.
+- dev-only console.warn i18n.money.selftest_disagreement {sample index} — no amounts; the BigInt path stays active for the session.
 
 **Budgets**
 - formatMoney p95 ≤ 0.05 ms warm, ≤ 1 ms cold; parseMoneyInput p95 ≤ 0.05 ms.
@@ -34,4 +35,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F14.S02.M01, CTR-MNY-001, CTR-UX-001, CTR-COM-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F14.S02.M01, F09.S03.M01, F09.S03.M02, F09.S03.M03, CTR-MNY-001, CTR-UX-001, CTR-COM-001, CTR-TST-001, CTR-OBS-001, CTR-ERR-001. Predecessor: [domain_schema.md](domain_schema.md).

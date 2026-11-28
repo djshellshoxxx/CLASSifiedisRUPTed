@@ -12,7 +12,7 @@
 
 ## Specification
 
-- **export:** Nothing of its own; profile version p3.1 is carried in exported CycleSuggestion records of F02.S02.M03.
+- **export:** Nothing of its own; profile version p3.2 is carried in exported CycleSuggestion records of F02.S02.M03.
 - **import:** No import; imported suggestions are re-verified with the local effective profile on first open.
 - **backup:** No data to back up; tenant overrides are part of tenant settings backups (F15.S04.M03).
 - **migration rollback:** Profile constants ship with the release; rollback restores the previous constants and previously generated suggestions keep their recorded version.
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F02.S02.M03, F02.S02.M04, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M03, F02.S02.M04, F02.S02.M05, F02.S04.M02, F09.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

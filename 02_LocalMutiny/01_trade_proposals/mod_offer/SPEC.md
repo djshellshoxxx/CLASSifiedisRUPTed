@@ -13,6 +13,7 @@ A TradeLeg says that one giver hands a defined set of items to one receiver as p
 - Define legs from item references with ownership and availability verification through the InventoryPort for the principal's own items and through signed listing projections for others' items.
 - Keep each leg immutable once defined; replace it by defining a new leg, and mark legs referenced by a sealed revision so they cannot be voided.
 - Void unreferenced legs after 24 hours and enforce the limits of 8 legs per subject, 5 items per direct leg and quantity 1..99 per item.
+- Own the error codes MUTINY_ITEM_DUPLICATE, MUTINY_ITEM_NOT_OWNED and MUTINY_ITEM_UNAVAILABLE (N1), which F02.S02.M05 references, and register export, deletion and retention handlers with F10 (N6).
 
 ## Not responsible for
 
@@ -55,11 +56,11 @@ A TradeLeg says that one giver hands a defined set of items to one receiver as p
 - Commands: `mutiny.leg.define`, `mutiny.leg.void`
 - Queries: `mutiny.leg.get`, `mutiny.leg.list_for_subject`
 - Emits: `mutiny.leg.defined`
-- Consumes: `mutiny.proposal.revised`, `bazaar.listing.edited`, `bazaar.listing.unpublished`
+- Consumes: `mutiny.proposal.revised`, `bazaar.listing.edited`, `bazaar.listing.unpublished`, `privacy.deletion.completed`
 
 ## Dependencies
 
-F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
+F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001
 
 ## Process specifications and aggregation
 
@@ -71,15 +72,15 @@ F01.S03.M01, F01.S01.M01, F02.S04.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR
 | PS-013-04 | [Commands, queries and events](commands_queries_events.md) | 3 |
 | PS-013-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-013-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-013-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-013-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-013-08 | [Observability and performance](observability_performance.md) | 3 |
 | PS-013-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
 | PS-013-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
 
-Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 exposes those transitions as commands/queries/events through the kernel command bus, guarded by the capabilities in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/mutiny/src/trade_proposals/offer/index.ts`.
+Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 defines the declared operations or local library interface, constrained by the authority rules in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/mutiny/src/trade_proposals/offer/index.ts`.
 
 ## Acceptance criteria
 
-- All tests T01–T16 pass in CI.
+- All tests T01–T17 pass in CI.
 - A leg never presents a peer's availability claim as locally verified.
 - Items occur at most once per subject and cycle legs carry exactly one item with quantity 1.

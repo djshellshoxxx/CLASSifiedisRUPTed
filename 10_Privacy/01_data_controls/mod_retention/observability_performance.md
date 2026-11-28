@@ -21,6 +21,7 @@
 **Logs**
 - info retention.purged {runId, kind, class, count, correlationId} — counts only.
 - audit legal_hold.transition {holdId, from, to, actorDid} — no subject contents.
+- info retention.policy_refreshed {scopeKind, class, profileRef, profileVersion, fallback, clamped, looser, correlationId} — local diagnostics in the vault, relay logs on the relay.
 
 **Budgets**
 - Relay sweep purges 50 000 rows in ≤ 60 s; vault sweep of 20 000 rows ≤ 10 s in chunks that never block the main thread over 50 ms.
@@ -36,4 +37,4 @@ Conventions per [CTR-OBS-001](../../../planning/contracts/CTR-OBS-001.md).
 
 ## Dependencies
 
-Module depends on: F18.S01.M01, F16.S01.M01, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F18.S01.M01, F16.S01.M01, F15.S02.M02, F10.S02.M02, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-IOX-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -22,8 +22,9 @@ _None._
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-082-09.T04 | unit | PS-082-03.R01, PS-082-03.R02 | retire a threat without reason, then with reason; delete an entry | retire without reason fails; deletion detected by diff check and fails |
-| TEST-PS-082-09.T05 | unit | PS-082-03.R03, PS-082-02.R03 | residual risk accepted without reviewer or date | check fails |
+| TEST-PS-082-09.T04 | unit | PS-082-03.R01 | retire a threat without reason, then with reason; delete an entry | retire without reason fails; deletion detected by diff check and fails |
+| TEST-PS-082-09.T05 | unit | PS-082-03.R03 | residual risk accepted without reviewer or date | check fails |
+| TEST-PS-082-09.T15 | unit | PS-082-03.R02, PS-082-06.R03 | run privacy-threat-check --release-candidate on the fixture history, then rebuild the same release candidate | a review task listing the modules changed since the last review is generated once; the rebuild does not duplicate it |
 
 ## Dependencies
 

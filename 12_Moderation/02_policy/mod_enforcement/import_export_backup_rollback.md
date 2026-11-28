@@ -12,10 +12,10 @@
 
 ## Specification
 
-- **export:** Section moderation.actions in classrup-export/v1 (vault): signed statements of reasons and reversals received by the user; relay operator export: cases and actions as JSON lines without notes.
+- **export:** Section moderation.actions in classrup-export/v1 (vault, ExportSectionPort): signed statements of reasons and reversals received by the user; relay operator export: cases and actions as JSON lines without notes.
 - **import:** Statements import after signature verification as read-only history; relay import restores cases and actions with original IDs and re-arms expiry; conflicting IDs are rejected.
 - **backup:** Covered by relay SQLite backup (CTR-IOX-001 IOX-3); restoring recomputes active restrictions before accepting traffic.
-- **migration rollback:** Additive fields only in v1; rollback is safe because new optional fields are ignored by older readers, and new action kinds fall back to warn display.
+- **migration rollback:** Additive fields only in v1 (targetType, targetId, reasonsIssuedAt, noticeState, advisoryCid, replacesActionId, actionIds, proposerKey, caseSource, hostRef); targetRef changes from the optional cid string to the object { type, id, cid? } by an expand step that builds it from targetType, targetId and the stored cid, with caseSource taken from the case source; readers of the earlier draft read targetRef.cid; rollback is safe because new optional fields are ignored by older readers (reviewFlags included); the action kind and origin enums are frozen within v1 because F18.S02.M02 binds them, so a new kind needs a v2 event schema, and older readers show a v2 kind they cannot read as warn.
 
 Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
@@ -27,4 +27,4 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 ## Dependencies
 
-Module depends on: F12.S02.M03, F12.S01.M02, F16.S01.M01, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S02.M03, F12.S01.M01, F12.S01.M02, F12.S03.M03, F06.S01.M01, F08.S01.M01, F07.S02.M01, F11.S01.M01, F16.S01.M01, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

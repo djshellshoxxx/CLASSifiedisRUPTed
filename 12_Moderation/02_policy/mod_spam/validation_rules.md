@@ -15,16 +15,17 @@
 | Rule | Check | Error |
 |---|---|---|
 | V01 | text is valid UTF-8 and at most 20000 code points after NFKC normalization | PAYLOAD_TOO_LARGE |
-| V02 | thresholds are within allowed ranges (duplicate window 1..30 days, link density 0.05..0.50, velocity 3..100 per 10 minutes) | VALIDATION_FAILED |
-| V03 | caller supplies a key hash (not a raw key) and a receipt time from the store clock | VALIDATION_FAILED |
+| V02 | thresholds are within allowed ranges (duplicate window 1..30 days, link density 0.05..0.50, velocity 3..100 per 10 minutes, new-key window 1..14 days) | VALIDATION_FAILED |
+| V03 | the caller supplies mode, the subject did:key and the store's receipt time; a claimed createdAt is optional and only feeds backdated_claim | VALIDATION_FAILED |
+| V04 | mode author_presign is accepted only in the local principal's vault for the principal's own key, and relay_intake only from the relay index-intake hook | FORBIDDEN |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-097-09.T01 | unit | PS-097-01.R03, PS-097-02.R01, PS-097-02.R02 | oversized text; out-of-range thresholds | PAYLOAD_TOO_LARGE; VALIDATION_FAILED; operator cannot set all heuristics off |
-| TEST-PS-097-09.T04 | unit | PS-097-02.R03, PS-097-04.R02 | link density on zero-length and unspaced scripts; score 49 and 50 | no division by zero; event only at score ≥ 50 |
+| TEST-PS-097-09.T01 | unit | PS-097-02.R01, PS-097-02.R02 | oversized text; out-of-range thresholds; operator config that would disable every heuristic | PAYLOAD_TOO_LARGE without truncation; VALIDATION_FAILED; values clamped to minimums so heuristics stay active |
+| TEST-PS-097-09.T03 | property | PS-097-01.R01, PS-097-01.R03, PS-097-02.R03, PS-097-03.R01, PS-097-06.R01 | random and hostile texts evaluated twice with the same index snapshot | identical output including rulesVersion and thresholds; no exceptions; score within 0..100; bounded runtime |
 
 ## Dependencies
 
-Module depends on: F12.S03.M02, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F12.S03.M03, F16.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

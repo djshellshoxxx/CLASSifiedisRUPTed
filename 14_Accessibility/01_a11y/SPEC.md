@@ -1,31 +1,21 @@
-# F14.S01 — a11y
+# F14.S01 — 01_a11y
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** F14.
+**Status:** SPECIFIED. **Parent:** [F14](../SPEC.md).
 
-## Purpose and business behavior
-Provide a11y as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Modules
 
-## Scope
-- mod_keyboard
-- mod_screenreader
-- mod_wcag
+| Module | Name | Status | Responsibility |
+|---|---|---|---|
+| F14.S01.M01 | [Keyboard operability](mod_keyboard/SPEC.md) | SPECIFIED | All interactions keyboard-operable, visible focus, skip link, focus management on route change and dialogs, no traps. |
+| F14.S01.M02 | [Screen reader support](mod_screenreader/SPEC.md) | SPECIFIED | Semantic landmarks, labels, live regions for async state, accessible names for money/distance values. |
+| F14.S01.M03 | [WCAG 2.2 AA conformance](mod_wcag/SPEC.md) | SPECIFIED | axe-core automated checks per screen in CI, manual checklist for criteria not automatable, contrast tokens ≥ 4.5:1. |
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+Modules in this subfeature share the feature package `packages/i18n` (or the app path in each module) and integrate only through the events and ports below; no module reads another module's tables.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Event dependencies
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+_None._

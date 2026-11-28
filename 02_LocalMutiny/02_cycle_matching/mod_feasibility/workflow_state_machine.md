@@ -24,7 +24,8 @@
 |---|---|---|---|---|
 | TEST-PS-016-09.T06 | unit | PS-016-03.R01, PS-016-03.R02 | report older than 10 minutes used for consent | MUTINY_FEASIBILITY_STALE |
 | TEST-PS-016-09.T12 | integration | PS-016-03.R03, PS-016-07.R03 | report cited by a signed revision, 30 days later | standalone report purged, cited hash retained in revision evidence |
+| TEST-PS-016-09.T19 | unit | PS-016-02.R01, PS-016-03.R02 | C11 at revision time with a 30 h cross-currency deadline and a 14 d plus 23 d window; C11 at consent time 40 minutes before a 10-day trade proposal deadline; C06 with 20 minutes left and expired | MUTINY_DEADLINE_INVALID twice; consent allowed; warn then fail |
 
 ## Dependencies
 
-Module depends on: F02.S02.M04, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F02.S02.M04, F02.S01.M02, F02.S01.M03, F02.S04.M02, F02.S04.M03, F01.S03.M01, F01.S01.M01, F06.S02.M01, F07.S02.M02, F09.S03.M02, F09.S03.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-FED-001, CTR-IDM-001, CTR-MNY-001, CTR-PRV-001, CTR-SCH-001. Predecessor: [domain_schema.md](domain_schema.md).

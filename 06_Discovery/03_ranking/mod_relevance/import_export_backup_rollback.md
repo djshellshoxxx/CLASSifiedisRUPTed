@@ -13,7 +13,7 @@
 ## Specification
 
 - **export:** No vault export section; a relay operator can export the version history as JSON Lines of classrup.discovery.ranking_config/v1 for transparency.
-- **import:** A relay operator import re-validates every version and rejects gaps in numbering or invalid parameters; a vault never imports relay configs.
+- **import:** A relay operator import re-validates every version and rejects gaps in numbering or invalid parameters; a vault never imports relay configs into discovery_ranking_config and only caches verified fetched configs for display.
 - **backup:** Relay backup per CTR-IOX-001 IOX-3 and IOX-7 includes the table; losing a relay loses no user-owned data.
 - **migration rollback:** Additive parameters only within v1 with defaults; rollback is a new version copying an older one, and releases roll back by redeploying the previous version.
 
@@ -23,8 +23,8 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-051-09.T14 | integration | PS-051-10.R01, PS-051-10.R02, PS-051-10.R03 | restore relay from backup and import a config statement into a vault | active version preserved; vault ignores relay config for local ranking |
+| TEST-PS-051-09.T14 | integration | PS-051-10.R01, PS-051-10.R02, PS-051-10.R03 | restore relay from backup; vault fetches the relay's config with get_active | relay active version and numbering preserved; in the vault the config lands only in discovery_ranking_config_cache keyed by relay and version, the bundled row is unchanged and local ranking ignores it |
 
 ## Dependencies
 
-Module depends on: F06.S02.M01, F06.S01.M01, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F06.S02.M01, F06.S01.M01, F11.S01.M01, F11.S01.M03, F12.S03.M03, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-SCH-001, CTR-OBS-001, CTR-FLG-001. Predecessor: [domain_schema.md](domain_schema.md).

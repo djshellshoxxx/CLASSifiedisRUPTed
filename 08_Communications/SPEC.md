@@ -1,31 +1,65 @@
 # F08 — Communications
 
-**Status:** PLANNED. **Owner:** Unassigned. **Parent:** PROJECT.
+**Status:** SPECIFIED. **Parent:** [ClassRup](../PROJECT_SPEC.md). **Package slug:** `comms`.
 
-## Purpose and business behavior
-Provide communications as an independently configurable responsibility in ClassRup. All transitions must be explicit, authorized, auditable and recoverable; no implied transaction completion.
+> Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-## User stories
-- As a participant, I can use this capability with a pseudonym and without revealing my home address.
-- As an operator, I can configure, disable and observe it without breaking unrelated capabilities.
-- As a participant, I receive actionable explanations for invalid, expired, offline, rejected and disputed states.
+## Subfeatures
 
-## Scope
-- 01_messaging
-- 02_negotiation
-- 03_meetups
+- [F08.S01 01_messaging](01_messaging/SPEC.md) — 3 modules
+- [F08.S02 02_negotiation](02_negotiation/SPEC.md) — 2 modules
+- [F08.S03 03_meetups](03_meetups/SPEC.md) — 3 modules
 
-## Public interfaces
-Versioned commands, queries, domain events and error schemas; exact contracts to be specified in module process specs. Stable IDs and idempotency keys for state-changing commands.
+## Aggregation
 
-## Relationships, dependencies and integration
-Upstream: identity/authorization, consent, configuration and validation. Downstream: notifications, evidence, moderation and observability. Reference shared services by ID rather than duplicating ownership. Integration requires contract tests and explicit timeout/retry behavior.
+The feature is enabled by flag `F08` (CTR-FLG-001); each module can be disabled independently when no enabled module depends on it. Upstream features: F01, F02, F06, F07, F09, F10, F11, F12, F15, F16.
 
-## Data ownership
-This directory owns only its domain records and lifecycle; identity credentials, messages, payment evidence and geolocation precision remain owned by their respective shared features. Export and deletion follow retention and legal-hold policies.
+### Cross-subfeature and external events
 
-## Risk considerations
-Privacy leakage, abuse, concurrency, replay, partial failure, fraud and accessibility regressions. No platform custody of money. Pseudonyms do not guarantee anonymity.
-
-## Completion criteria
-All child SPEC/TODO chains exist; every process spec is implemented and tested in later phases; privacy/security review, error handling and traceability pass.
+| Event | Producer | Consumer | Scope |
+|---|---|---|---|
+| identity.portable_doc.published | F07.S02.M01 | F08.S01.M01 | external |
+| identity.device_key.added | F07.S01.M01 | F08.S01.M01 | external |
+| identity.device_key.revoked | F07.S01.M01 | F08.S01.M01 | external |
+| identity.block.added | F07.S02.M02 | F08.S01.M01 | external |
+| privacy.deletion.completed | F10.S01.M04 | F08.S01.M01 | external |
+| mutiny.party.joined | F02.S01.M02 | F08.S01.M02 | external |
+| mutiny.party.left | F02.S01.M02 | F08.S01.M02 | external |
+| mutiny.cycle.cancelled | F02.S03.M03 | F08.S01.M02 | external |
+| mutiny.cycle.completed | F02.S03.M04 | F08.S01.M02 | external |
+| services.booking.cancelled | F03.S02.M01 | F08.S01.M02 | external |
+| services.booking.completed | F03.S02.M02 | F08.S01.M02 | external |
+| rentals.rental.closed | F05.S02.M02 | F08.S01.M02 | external |
+| bazaar.listing.archived | F01.S01.M04 | F08.S01.M02 | external |
+| identity.block.added | F07.S02.M02 | F08.S01.M02 | external |
+| federation.delivery.failed | F11.S02.M01 | F08.S01.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F08.S01.M03 | external |
+| bazaar.offer.accepted | F01.S04.M01 | F08.S02.M01 | external |
+| bazaar.offer.rejected | F01.S04.M01 | F08.S02.M01 | external |
+| bazaar.offer.withdrawn | F01.S04.M01 | F08.S02.M01 | external |
+| bazaar.offer.expired | F01.S04.M01 | F08.S02.M01 | external |
+| bazaar.negotiation.countered | F01.S04.M02 | F08.S02.M01 | external |
+| bazaar.negotiation.closed | F01.S04.M02 | F08.S02.M01 | external |
+| mutiny.proposal.revised | F02.S01.M04 | F08.S02.M01 | external |
+| mutiny.proposal.accepted | F02.S01.M01 | F08.S02.M01 | external |
+| mutiny.proposal.rejected | F02.S01.M01 | F08.S02.M01 | external |
+| mutiny.proposal.expired | F02.S01.M01 | F08.S02.M01 | external |
+| mutiny.proposal.withdrawn | F02.S01.M01 | F08.S02.M01 | external |
+| mutiny.revision.forked | F02.S01.M04 | F08.S02.M01 | external |
+| comms.thread.archived | F08.S01.M02 | F08.S02.M01 | internal |
+| identity.portable_doc.published | F07.S02.M01 | F08.S02.M02 | external |
+| identity.device_key.added | F07.S01.M01 | F08.S02.M02 | external |
+| identity.device_key.revoked | F07.S01.M01 | F08.S02.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F08.S02.M02 | external |
+| security.role.assigned | F16.S01.M01 | F08.S03.M01 | external |
+| security.role.revoked | F16.S01.M01 | F08.S03.M01 | external |
+| identity.block.added | F07.S02.M02 | F08.S03.M02 | external |
+| privacy.deletion.completed | F10.S01.M04 | F08.S03.M02 | external |
+| comms.consent.received | F08.S02.M02 | F08.S03.M03 | internal |
+| comms.consent.revoked | F08.S02.M02 | F08.S03.M03 | internal |
+| comms.thread.archived | F08.S01.M02 | F08.S03.M03 | internal |
+| identity.block.added | F07.S02.M02 | F08.S03.M03 | external |
+| mutiny.cycle.cancelled | F02.S03.M03 | F08.S03.M03 | external |
+| services.booking.cancelled | F03.S02.M01 | F08.S03.M03 | external |
+| rentals.reservation.cancelled | F05.S01.M01 | F08.S03.M03 | external |
+| privacy.deletion.completed | F10.S01.M04 | F08.S03.M03 | external |

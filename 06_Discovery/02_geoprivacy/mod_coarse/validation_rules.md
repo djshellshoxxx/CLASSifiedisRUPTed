@@ -17,16 +17,18 @@
 | V01 | latitude is a finite number in -90..90 and longitude in -180..180 | DISCOVERY_COORD_INVALID |
 | V02 | precision is 4, 5 or 6 and a cell string uses only the 32 geohash characters in lowercase | VALIDATION_FAILED |
 | V03 | assertPublicCell accepts only cells of length 0 (none), 4 or 5 | DISCOVERY_PRECISION_FORBIDDEN |
-| V04 | radiusKm is one of 5, 10, 25, 50, 100 | DISCOVERY_RADIUS_TOO_SMALL |
+| V04 | radiusKm is at least 5 km | DISCOVERY_RADIUS_TOO_SMALL |
 | V05 | cellsForRadius result has at most 512 cells | DISCOVERY_RADIUS_TOO_LARGE |
+| V06 | radiusKm is one of the allowed radii 5, 10, 25, 50, 100 | DISCOVERY_RADIUS_NOT_ALLOWED |
+| V07 | cellsForRadius center has 4 or 5 characters and bucketBetween cells have 4 to 6 characters | VALIDATION_FAILED |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-047-09.T04 | unit | PS-047-02.R01, PS-047-02.R03 | NaN, 91, -181, uppercase or invalid-letter cells, precision 7 | the documented error code each time and no result |
-| TEST-PS-047-09.T05 | unit | PS-047-01.R03, PS-047-02.R02 | assertPublicCell with 4, 5, 6 and 11 characters and empty string | accepted for 0, 4, 5; DISCOVERY_PRECISION_FORBIDDEN for 6 and 11 |
-| TEST-PS-047-09.T06 | unit | PS-047-02.R03 | radius 1, 3, 7, 100, 200 km | DISCOVERY_RADIUS_TOO_SMALL for 1, 3, 7 and 200; 100 accepted with at most 512 cells |
+| TEST-PS-047-09.T04 | unit | PS-047-02.R01, PS-047-02.R03, PS-047-06.R02 | NaN, 91, -181, uppercase or invalid-letter cells, precision 7 | the documented error code each time and no clamped, rounded or partial result |
+| TEST-PS-047-09.T05 | unit | PS-047-02.R02, PS-047-07.R02 | assertPublicCell with 4, 5, 6 and 11 characters and empty string | accepted for 0, 4, 5; DISCOVERY_PRECISION_FORBIDDEN for 6 and 11 |
+| TEST-PS-047-09.T06 | unit | PS-047-02.R03 | radius 1, 3, 7, 100, 200 km | DISCOVERY_RADIUS_TOO_SMALL for 1 and 3; DISCOVERY_RADIUS_NOT_ALLOWED for 7 and 200; 100 accepted with at most 512 precision-4 cells |
 
 ## Dependencies
 

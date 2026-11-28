@@ -23,10 +23,10 @@
 
 | ID | Threat | Control |
 |---|---|---|
-| T01 | Device thief exports everything | fresh unlock within 5 minutes required, 3 exports per 24 h, local notification record, bundle encrypted at rest and deleted in 7 days |
-| T02 | Bundle tampered after export | manifest per-section SHA-256 and Ed25519 signature; import verifies (IOX-2) |
-| T03 | Export leaks other users' private content | schema-level exclusion and validation V06; sections must declare classification per field (F10.S02.M02) and CI rejects unclassified fields |
-| T04 | Private keys exfiltrated through export | P4 fields excluded by the classification model; test scans bundles for key material patterns |
+| T01 | Device thief exports everything | fresh unlock within 5 minutes required, 3 exports per 24 h, persistent in-app export notice, bundle encrypted at rest and deleted in 7 days |
+| T02 | Bundle tampered after export | manifest per-section SHA-256 and Ed25519 signature; import verifies (IOX-2); parts of a set are linked by setId and the part-1 manifest hash |
+| T03 | Export leaks other users' private content | redactForExport on every record (F10.S02.M02) and validation V06; sections declare classification per field and CI rejects unclassified fields |
+| T04 | Private keys or unclassified secrets exfiltrated through export | P4 and unclassified paths dropped by redactForExport; test scans bundles for key material patterns |
 
 **Abuse controls**
 - 3 requests per 24 hours per vault, one active job, and one open_download per minute.
@@ -38,8 +38,9 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-078-09.T12 | abuse | PS-078-07.R01, PS-078-07.R03 | 4th export in 24 h; bundle scanned for another user's P2 content and private key patterns | 4th RATE_LIMITED; scan finds none |
-| TEST-PS-078-09.T13 | integration | PS-078-07.R02, PS-078-02.R02 | bundle scanned for P4 fields and other users' private content | none present; user's own shared copies present |
+| TEST-PS-078-09.T13 | integration | PS-078-07.R02, PS-078-02.R02 | bundle scanned for P4 fields, unclassified fields and other users' private content | none present; user's own shared copies present |
+| TEST-PS-078-09.T20 | e2e | PS-078-07.R03 | start an export and navigate across screens; reload the PWA | the in-app export notice is shown on every screen until dismissed and is announced politely; it survives reload |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F10.S01.M01, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F07.S01.M01, F10.S02.M02, F10.S01.M02, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-FED-001, CTR-OBS-001. Predecessor: [domain_schema.md](domain_schema.md).

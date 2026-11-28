@@ -4,7 +4,25 @@ This register accompanies the [comprehensive branch consolidation](BRANCH_CONSOL
 It is based on the current runtime, retained unique branch changes, actual test
 coverage and existing contracts. Specifications and generated source-path counts
 do not establish completion. The owner has authorized continued incomplete-
-feature work and successive independent audits. See the [current handoff](cycles/20261124-combined-vault-recovery/HANDOFF.md).
+feature work and successive independent audits. See the [current continuation
+checkpoint](cycles/20261127-feature-continuation/CHECKPOINT.md).
+
+## Current continuation — November 27, 2026
+
+The current inspected main is `39cb2c7e35778ea74d8c30935f9a07b41a483262`,
+after normal integration of record-incarnation #162 and blocked-open #163.
+The [current PR census](cycles/20261127-feature-continuation/CURRENT_PR_CENSUS.json)
+finds 97 open PRs: 89 exact heads already in main, six qualification candidates,
+one paused reference (#8), and one rehearsal (#167). Historical pending-gate
+statements below are dated evidence, not the current integration queue.
+
+The active sequence is main-push verification of #163, synchronized BlindMatch
+page lifecycle #171, terminal transaction settlement #164, shared close #165,
+writer-lease release #166, failed-unlock/native invalidation #172, and checkout
+version reporting #173. Each candidate preserves its own reviewed source and
+test history. Continue normal integration only after the relevant current-source
+checks and the preceding actual main checks pass. The remaining-work tables
+describe broader product work; this sequence does not complete every feature.
 
 ## Completed slices to preserve
 
@@ -125,7 +143,10 @@ separately from the 51 open historical planning/security-readiness findings;
 those findings require evidence reconciliation and are not 51 newly confirmed
 runtime vulnerabilities. No release or deployment was performed.
 
-## Recommended next bounded milestone
+## Historical recommendation — November 20, 2026
+
+The following recommendations are retained for provenance. Use the current
+continuation above and the source-specific census for today's integration queue.
 
 The current continuation is [draft PR #72](https://github.com/djshellshoxxx/CLASSifiedisRUPTed/pull/72), combining PR #70's explicit PWA attachment diagnostic and PR #71's
 persisted restore-rejection proof. Both histories and their contributed source

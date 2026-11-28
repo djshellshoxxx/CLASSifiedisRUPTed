@@ -44,7 +44,7 @@ Schema `classrup.services.milestone/v1` · storage **device** · privacy **P2** 
 | updatedAt | timestamp — RFC 3339 UTC |
 
 **Invariants**
-- status settled implies payment.proof is acknowledged (cash or external) or final (chain) per CTR-COM-001 COM-4.
+- status settled implies the provider-signed payment_ack for the milestone's Deal was received (verification source counterparty, or chain for crypto) per CTR-COM-001 COM-8 and N30; proof final per the local verifier alone never implies settled.
 - approvalCid refers to the latest submission cid of this milestone.
 - Sum of amounts over the non-cancelled milestones of a booking equals the booking total.
 - dealId is set if and only if the milestone was approved; payment events are matched only through dealId.

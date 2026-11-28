@@ -51,7 +51,7 @@ ux:
 processes:
   domain_schema:
     requirements:
-      - A CycleSuggestion stores an ordered ring of legs (giver, receiver, item, satisfied want), its cycleKey, score tuple, mode, expiry and status; it is advice and contains no consent, reservation or signature of any participant.
+      - A CycleSuggestion stores an ordered ring of legs (giver, receiver, item, satisfied want), its cycleKey, score tuple, mode, expiry and status; it is advice and contains no consent, reservation or signature of any participant. Items are referenced across vaults as {listingId, listingCid, variantId?} (N29), the identity of the signed listing projection, because inventoryItemId is vault-local; inventoryItemId may be added only to the principal's own legs, resolved locally with bazaar.inventory.check, and never appears in a relay suggestion or a graph edge of a relay run.
       - The cycleKey is sha256 over the RFC 8785 JCS bytes of the ring rotated so the smallest giver DID is first, so the same cycle yields the same key in every vault and on every relay.
       - A CompatibilityGraph is a derived, short-lived cache of nodes and edges plus run statistics (expansions, duration, truncation) and an inputHash used to prove determinism; it is never exported and is purged after 24 h.
       - Edge, node and result caps are fixed numbers, at most 2000 nodes, 20000 edges, 8 legs per cycle and 500 suggestions per run.
@@ -68,7 +68,7 @@ processes:
           - "runId: uuidv7 — run that produced or last confirmed it"
           - "mode: enum — local_rooted | relay_global | relay_imported"
           - "length: int — 2..8"
-          - "legs: array — 2..8 items {position, giverId did, receiverId did, inventoryItemId uuidv7, listingCid cid, wantCid cid, indicativeValue Money, distanceBucket int 0..4 (F02.S02.M04 ordinal of bucketBetween(giver listing cell, receiver want cell))}"
+          - "legs: array — 2..8 items {position, giverId did, receiverId did, listingId uuidv7, listingCid cid, variantId? uuidv7, inventoryItemId? uuidv7 (principal's own legs only, N29), wantCid cid, indicativeValue Money, distanceBucket int 0..4 (F02.S02.M04 ordinal of bucketBetween(giver listing cell, receiver want cell))}"
           - "settlementCurrency: string — registered currency code (F09.S03.M01)"
           - "score: object — {participants int, imbalancePermille int 0..1000, maxDistanceBucket 0..4, oldestWantAgeDays int}"
           - "needsCompensation: boolean — true when some gap exceeds the profile tolerance but is within 250 permille and all participants accept compensation"
@@ -87,8 +87,8 @@ processes:
           - "createdAt: timestamp — RFC 3339 UTC"
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
-          - Every legs[i].receiverId equals legs[i+1 mod length].giverId, all giverIds are distinct and all inventoryItemIds are distinct.
-          - A participant DID and an inventory item appear in at most one suggestion with status suggested per vault.
+          - Every legs[i].receiverId equals legs[i+1 mod length].giverId, all giverIds are distinct and all (giverId, listingId, variantId?) are distinct.
+          - A participant DID and a (listingId, variantId?) item appear in at most one suggestion with status suggested per vault.
           - length equals legs.length and is at most 8; a relay_global suggestion is at most the computing relay tenant's maxCycleLength.
       - name: CompatibilityGraph
         schema: classrup.mutiny.compatibility_graph/v1
@@ -103,7 +103,7 @@ processes:
           - "inputHash: cid — sha256 of JCS(sorted nodes, sorted edges, parameters); equal inputHash must give equal output"
           - "nodeCount: int — 0..2000"
           - "edgeCount: int — 0..20000"
-          - "edges: array — sorted by (from, to) items {from did, to did, inventoryItemId, wantCid, valueMinor string, distanceBucket int 0..4 (cell to cell from L2 cells), wantCreatedAt timestamp}"
+          - "edges: array — sorted by (from, to) items {from did, to did, listingId, listingCid, variantId?, wantCid, valueMinor string, distanceBucket int 0..4 (cell to cell from L2 cells), wantCreatedAt timestamp}"
           - "lmax: int — 2..8"
           - "expansions: int — 0..100000"
           - "durationMs: int — wall time of enumeration"
@@ -162,7 +162,7 @@ processes:
       - Every command is idempotent per CTR-IDM-001 and emits its events in the same IndexedDB transaction as the state change (EVT-8).
       - Runs are serialized per vault with a Web Locks mutex so at most one run executes at a time, and the relay serializes runs per tenant.
       - The engine consumes want, listing, profile, valuation, block and cycle events only to mark the graph dirty or to change suggestion status; it never acts on another party's behalf.
-      - "classrup.mutiny.cycle_suggestion/v1 envelopes are registered with the F11.S01.M01 statement registry with signer role 'relay that computed it' (evidence of a relay assertion only); this module is their single ingest owner, and a relay run calls the relay platform hook notify.notification.dispatch for a content-free push after each mailbox put (N17), with no build dependency because the hook is provided by the relay runtime."
+      - "classrup.mutiny.cycle_suggestion/v1 envelopes are registered with the F11.S01.M01 statement registry with signer role 'relay that computed it' (evidence of a relay assertion only); this module is their single ingest owner and registers the type with the F11.S01.M02 StatementIngestPort at vault composition (N26, inverted registration, no new dependency edge and no federation.record.accepted consumption), so that mailbox envelopes unsealed by F11.S01.M02 federation.record.receive reach mutiny.suggestion.import inside the receive transaction; a relay publishes the suggestion to the participants through F11.S01.M02 federation.record.publish (relay-key signer, audience participants, recipients = the ring participants' {did, relayId, mailboxId} from their verified projections, N25), and a relay run calls the relay platform hook notify.notification.dispatch for a content-free push after each mailbox put (N17), with no build dependency because the hook is provided by the relay runtime."
     commands:
       - name: mutiny.suggestion.generate
         capability: mutiny.suggestion.generate
@@ -173,7 +173,7 @@ processes:
         idempotent: true
       - name: mutiny.suggestion.import
         capability: mutiny.suggestion.import
-        input: "{ envelope: classrup.mutiny.cycle_suggestion/v1 signed by a relay, received via mailbox }"
+        input: "{ envelope: classrup.mutiny.cycle_suggestion/v1 signed by a relay, received via mailbox } — invoked by the F11.S01.M02 StatementIngestPort (N26) after signature and signer-role verification, in the same transaction"
         output: "{ suggestionId, verifiedLocally, status }"
         errors: [MUTINY_SUGGESTION_UNVERIFIED, VALIDATION_FAILED, UNSUPPORTED_SCHEMA_VERSION]
         emits: [mutiny.cycle.suggested]
@@ -187,7 +187,7 @@ processes:
         idempotent: true
       - name: mutiny.suggestion.compute_public
         capability: mutiny.suggestion.compute_public
-        input: "{ partition?: l1 geohash4, lmax? (2..TenantPort.limits(tenantId).maxCycleLength, default that limit), scheduledAt } — relay command; reads the tenant limit from F15.S04.M03 TenantPort before the search; delivers each suggestion as an end-to-end encrypted envelope to the participants' mailboxes, calls notify.notification.dispatch for a content-free push, keeps computed rings RET-EPHEMERAL and never logs them"
+        input: "{ partition?: l1 geohash4, lmax? (2..TenantPort.limits(tenantId).maxCycleLength, default that limit), scheduledAt } — relay command; reads the tenant limit from F15.S04.M03 TenantPort before the search; delivers each suggestion as an end-to-end encrypted envelope to the participants' mailboxes through F11.S01.M02 federation.record.publish (N25), calls notify.notification.dispatch for a content-free push, keeps computed rings RET-EPHEMERAL and never logs them"
         output: "{ runId, stats, deliveredEnvelopes: int }"
         errors: [MUTINY_LMAX_INVALID, MUTINY_GRAPH_TOO_LARGE, MUTINY_RUN_IN_PROGRESS, FEATURE_DISABLED, DEPENDENCY_UNAVAILABLE]
         emits: [mutiny.matching.run_completed]
@@ -216,7 +216,7 @@ processes:
       - {type: bazaar.want.withdrawn, effect: "supersede active suggestions whose legs reference the want"}
       - {type: bazaar.listing.unpublished, effect: "supersede active suggestions containing an item of that listing"}
       - {type: bazaar.listing.expired, effect: "supersede active suggestions containing an item of that listing"}
-      - {type: bazaar.inventory.depleted, effect: "supersede active suggestions containing that inventory item"}
+      - {type: bazaar.inventory.depleted, effect: "supersede active suggestions whose own leg names that inventory item or whose own leg has the same listingId and variantId"}
       - {type: mutiny.matching_profile.updated, effect: "mark graph dirty; supersede suggestions whose participant opted out, paused or narrowed maxCycleLength or distance"}
       - {type: mutiny.valuation.declared, effect: "mark graph dirty; supersede suggestions whose value gap changed beyond the profile tolerance"}
       - {type: identity.block.added, effect: "supersede active suggestions containing the blocked DID; no notification names the block"}
@@ -358,8 +358,10 @@ processes:
       - "T25 | integration | 07.R05 | F10 export, deletion and retention sweep | section mutiny.suggestions exported; erased principal's suggestions and graphs deleted; graph caches purged at 24 h"
       - "T26 | unit | 02.R05,02.R02 | own want from list_open and peer want projection with minCondition good against items in like_new, good and fair; a want with budgetVisible false whose private maxBudget is below the item value; the same want with budgetVisible true | edges for like_new and good only; the private budget is ignored and the edge is built in vault and relay mode alike; with budgetVisible true the edge is refused with reason MUTINY_EDGE_INVALID"
       - "T27 | contract | 02.R04,02.R01 | relay tenant with maxCycleLength 3 and default 5; compute_public with lmax 4, without lmax, and with a TenantPort stub that fails; vault generate with lmax 8 | lmax 4 refused with MUTINY_LMAX_INVALID; without lmax the run uses lmax 3 and returns no 4-cycle, and with the default limit it uses lmax 5; failing TenantPort gives DEPENDENCY_UNAVAILABLE and no run; vault run with lmax 8 allowed"
+      - "T28 | unit | 01.R01,02.R02,01.R03 | relay_global run over peer projections carrying only listingId, listingCid and variantId, and a vault run for the principal's own leg | relay suggestion legs and graph edges are keyed by {listingId, listingCid, variantId?} with no inventoryItemId; the principal's own leg in the vault run carries inventoryItemId resolved with bazaar.inventory.check; two rings using the same (giverId, listingId, variantId) are not both suggested"
+      - "T29 | integration | 04.R05,02.R03 | a relay-signed classrup.mutiny.cycle_suggestion/v1 delivered to a mailbox and unsealed by F11.S01.M02 federation.record.receive, with a registered and an unregistered type fixture | the registered port calls mutiny.suggestion.import in the receive transaction and stores the suggestion verified or unverified; no federation.record.accepted consumer is involved; relay compute_public calls federation.record.publish with recipients for every ring participant"
     acceptance:
-      - All tests T01–T27 pass in CI with seeds recorded.
+      - All tests T01–T29 pass in CI with seeds recorded.
       - No suggestion is ever created as a proposal, reservation, consent or signed statement by the engine.
       - Same inputHash and parameters produce identical suggestions on two different devices.
   import_export_backup_rollback:

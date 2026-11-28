@@ -18,6 +18,8 @@
 | privacy.export.cancel | local-principal | job requested or collecting |
 | privacy.export.download | local-principal | vault unlocked within 5 minutes; job ready and not expired |
 | privacy.export.read | local-principal | vault unlocked |
+| privacy.import.preview | local-principal | vault unlocked within 5 minutes; a local bundle handle the user chose |
+| privacy.import.commit | local-principal | vault unlocked within 5 minutes; preview younger than 30 minutes and verified |
 
 Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 

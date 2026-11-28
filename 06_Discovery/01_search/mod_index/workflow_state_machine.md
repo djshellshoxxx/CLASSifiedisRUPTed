@@ -37,7 +37,7 @@ stateDiagram-v2
 ### Timeouts and scheduled transitions
 
 - Expiry sweep every 60 s removes active documents past their effective expiry min(expiresAt, firstSeenAt + 120 d) (reason expired).
-- Relay promotion sweep every 60 s clears promotedUntil and promotionClaimId when promotedUntil <= now and emits op upsert.
+- Relay promotion sweep every 60 s clears promotedUntil and promotionClaimId when promotedUntil <= now, signs classrup.bazaar.promotion/v1 with state withdrawn and reason expired in the same transaction, and emits op upsert.
 - Relay moderation expiry sweep every 60 s reactivates hosting_policy removals whose removedUntil <= now.
 - Purge sweep every 6 h, registered as a RetentionPurgePort with F10.S01.M02, deletes removed documents with removedAt older than 30 days and writes their stubs.
 - Stub sweep daily deletes discovery_doc_stub rows whose until (180 days) has passed.

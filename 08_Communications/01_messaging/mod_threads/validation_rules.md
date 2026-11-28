@@ -10,6 +10,7 @@
 - **PS-061-02.R02** Roster changes are validated against the participant cap and the owning context's own membership.
 - **PS-061-02.R03** Every violation maps to one stable error code.
 - **PS-061-02.R04** Limits enforced only in the creator's vault are UX guards; receiving vaults enforce their own caps on pending message requests (5 per unknown DID, 100 in total), so a modified client cannot flood an inbox.
+- **PS-061-02.R05** Reply mailboxes are validated on create, on thread-open intake and on refresh; a statement whose creator entry lacks valid replyMailboxes is rejected, and only the author of a verified statement may change its own stored mailboxes.
 
 ## Specification
 
@@ -27,16 +28,19 @@
 | V10 | receiving vault cap: at most 5 pending requests per unknown DID and 100 in total; excess statements are dropped silently | RATE_LIMITED |
 | V11 | accept_request and decline_request target a thread in status request | CONFLICT_STATE |
 | V12 | an inbound classrup.privacy.deletion_notice/v1 is applied only when its payload holds exactly the F10.S01.M04 allowlist of its kind (departure - requestId, signedAt, kind, effectiveAt, recourse none) with no DID or thread ID, and ext.signerKey is a device key of the envelope author that F16.S02.M02 reports active at receipt or revoked with reason account_deleted with the notice cid in finalCids (finalListed true); the departing DID is always the envelope author (CTR-FED-001 FED-7) | VALIDATION_FAILED |
+| V13 | thread_open replyMailboxes: the entry of createdBy holds 1..3 items with distinct canonical relayId and a 128-bit base64url mailboxId, other entries hold none or valid ones; create has at least one mailbox for every other participant | COMMS_THREAD_OPEN_REJECTED |
+| V14 | refresh_reply_mailboxes: the author did is a current participant of the thread and the statement that carried the mailboxes was verified | FORBIDDEN |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-061-09.T01 | unit | PS-061-01.R01, PS-061-01.R02, PS-061-01.R03, PS-061-02.R01 | create a listing thread between B and A | Thread stored with contextType listing, participants 2, origin local, derived threadId, thread-open statement signed |
-| TEST-PS-061-09.T02 | unit | PS-061-02.R02, PS-061-02.R03 | each rule V01 to V12 violated in turn | the documented error code returned and nothing stored |
+| TEST-PS-061-09.T02 | unit | PS-061-02.R02, PS-061-02.R03 | each rule V01 to V14 violated in turn | the documented error code returned and nothing stored |
 | TEST-PS-061-09.T12 | abuse | PS-061-07.R03, PS-061-02.R01 | 31st thread creation in a day; buyer B (not the listing author) opens a thread about A's listing; D (outside the cycle roster) opens a cycle thread | RATE_LIMITED as UX guard; B's thread is accepted in A's vault (request while B is unknown, active after accept); COMMS_THREAD_OPEN_REJECTED and quarantine for D |
 | TEST-PS-061-09.T19 | abuse | PS-061-02.R04, PS-061-07.R04 | 50 unknown DIDs send 6 thread-open statements each to A | 5 per DID kept until the total of 100 pending requests, the rest dropped silently; no reply sent |
+| TEST-PS-061-09.T22 | integration | PS-061-01.R06, PS-061-04.R06, PS-061-04.R07, PS-061-02.R05 | buyer B opens a thread from seller A's listing with no projection of B in A's vault; A's vault receives it through federation.record.receive; A replies; B then rotates its mailbox and sends a message | the thread_open is published with ext.recipients from the listing mailboxHints and stream thr:<threadId>; A's vault creates a request thread through comms.thread.receive_open, stores B's replyMailboxes, comms.thread.recipients returns B's mailbox, the reply is addressed to it, and the rotated mailbox replaces the stored one only from B's verified message; a thread_open whose creator entry has no replyMailboxes is rejected with COMMS_THREAD_OPEN_REJECTED |
 
 ## Dependencies
 
-Module depends on: F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M02, F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

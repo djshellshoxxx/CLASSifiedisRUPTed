@@ -9,7 +9,7 @@
 - **PS-010-03.R01** Negotiation follows the declared machine; rejected, withdrawn and expired are terminal, accepted is left only through a late timeout close or a hold-fork freeze in the seller vault, and any other transition is refused with CONFLICT_STATE.
 - **PS-010-03.R02** Agreement is reached only when the seller's vault has taken the hold, opened the Deal handoff and signed the confirmation; a buyer's acceptance alone leaves the chain in accept_sent.
 - **PS-010-03.R03** Two different signed statements for the same round number, or an acceptance and a counter for the same round, freeze the chain; frozen chains are never resolved automatically and leave only by discard, by an explicit keep after a hold fork, or at the hard deadline.
-- **PS-010-03.R04** A vault waiting for the other side's decision on its own round or acceptance applies a verified confirmation or acceptance until expiresAt + 24 h; after that grace it sends a signed timeout close, and a seller vault that had confirmed cancels the Deal (commerce.deal.cancel) so the hold is released.
+- **PS-010-03.R04** A vault waiting for the other side's decision on its own round or acceptance applies a verified confirmation or acceptance until expiresAt + 24 h; after that grace it sends a signed timeout close, and a seller vault that had confirmed cancels the Deal through DealPort.cancel in mode unilateral with reason buyer_timeout so the hold is released.
 - **PS-010-03.R05** The first seller counter moves the root offer to rejected with reason countered through bazaar.offer.reject in the same transaction (N10); a buyer vault that receives round 1 for a root offer it already withdrew closes the chain as withdrawn with a signed close.
 
 ## Specification
@@ -31,9 +31,9 @@ Initial **open**; terminal **rejected**, **withdrawn**, **expired**.
 | open -> expired | round expiresAt passes (the proposer waiting on its own round keeps it until graceUntil) or hardDeadline passes | emits bazaar.negotiation.closed (expired) |
 | open -> frozen | conflicting signed statements detected, federation.conflict.detected whose freezeScope names consent:bazaar_negotiation:<negotiationId>, or comms.consent.verify returns conflicted | frozenReason conflicting_rounds; no further commands except discard |
 | accepted -> frozen | seller vault: bazaar.inventory.conflict_detected names this chain's hold (acceptance on a forked device) | frozenReason hold_fork; the Deal does not proceed |
-| accepted -> expired | seller vault: verified timeout close from the buyer bound to the accepted round (the confirmation arrived after the buyer's grace) | commerce.deal.cancel in the same transaction; hold released by F01.S03.M01; emits bazaar.negotiation.closed (expired) |
+| accepted -> expired | seller vault: verified timeout close from the buyer bound to the accepted round (the confirmation arrived after the buyer's grace) | DealPort.cancel in mode unilateral with reason buyer_timeout in the same transaction; hold released by F01.S03.M01; emits bazaar.negotiation.closed (expired) |
 | frozen -> accepted | bazaar.negotiation.keep_frozen by the seller for a hold_fork chain | the competing holder is dropped by its owner module; hold active again |
-| frozen -> rejected | either party discards the chain, or federation.conflict.resolved with decision drop_all | emits bazaar.negotiation.closed (frozen_discarded); for hold_fork commerce.deal.cancel and a signed close to the buyer; a new offer is needed |
+| frozen -> rejected | either party discards the chain, or federation.conflict.resolved with decision drop_all | emits bazaar.negotiation.closed (frozen_discarded); for hold_fork DealPort.cancel (unilateral, conflict_resolved) and a signed close to the buyer; a new offer is needed |
 | frozen -> expired | hardDeadline reached, or for hold_fork the frozen hold's maxExpiresAt | emits bazaar.negotiation.closed (expired) |
 
 ```mermaid
@@ -74,7 +74,7 @@ stateDiagram-v2
 | TEST-PS-010-09.T06 | integration | PS-010-03.R03, PS-010-06.R03 | S and B counter simultaneously | both vaults freeze on exchange, no hold taken, discard needed to continue |
 | TEST-PS-010-09.T07 | integration | PS-010-03.R02, PS-010-02.R03 | last unit held for B2 while B's acceptance is in transit | S sends signed close superseded; B shows rejected superseded; no double hold |
 | TEST-PS-010-09.T13 | integration | PS-010-03.R03 | a frozen chain without any decision until the hard deadline; a hold_fork chain kept with keep_frozen | first expires at hardDeadline with bazaar.negotiation.closed (expired); second returns to accepted |
-| TEST-PS-010-09.T22 | integration | PS-010-03.R04 | two vaults with clocks skewed +10 and -10 min; S confirms 5 min before expiry and delivery is delayed 3 h, then a second chain with delivery delayed 25 h | first: B applies the confirmation inside the grace and both show accepted; second: B expires, sends a timeout close, S moves accepted to expired and calls commerce.deal.cancel, and the hold is released |
+| TEST-PS-010-09.T22 | integration | PS-010-03.R04 | two vaults with clocks skewed +10 and -10 min; S confirms 5 min before expiry and delivery is delayed 3 h, then a second chain with delivery delayed 25 h | first: B applies the confirmation inside the grace and both show accepted; second: B expires, sends a timeout close, S moves accepted to expired and calls DealPort.cancel (unilateral, buyer_timeout), and the hold is released |
 | TEST-PS-010-09.T23 | integration | PS-010-03.R05 | S counters B's offer; separately B withdraws the root offer while round 1 is in transit | root offer rejected countered in the counter transaction; in the crossing case B closes the chain as withdrawn and S closes it on the signed close |
 
 ## Dependencies

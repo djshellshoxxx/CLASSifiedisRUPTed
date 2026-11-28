@@ -17,11 +17,13 @@ Conversation threads bound to a context (listing, proposal, cycle, booking, rent
 - Store per-participant mute settings (off, 1 h, 8 h, 24 h, until unmuted) that notification routing reads.
 - Produce and verify the signed thread-open statement classrup.comms.thread_open/v1, check the signer's entitlement per context type, and hold statements from unknown senders as message requests with status request until the user accepts or declines them.
 - Apply a remote participant's departure from a verified classrup.privacy.deletion_notice/v1 statement of kind departure, taking the departing DID from the envelope author (CTR-FED-001 FED-7) and never from the payload, and register the F10 privacy ports for the local user's own threads (N6).
+- Keep in each Thread.participants entry the latest verified replyMailboxes (1..3 { relayId, mailboxId }) of that participant, learned from thread_open statements and from the messages F08.S01.M01 receives, and expose the other participants' { did, relayId, mailboxId } through the query comms.thread.recipients (N27).
+- Register comms.thread.receive_open for classrup.comms.thread_open/v1 in the F11.S01.M02 StatementIngestPort at vault composition (N26) and publish own thread-open statements through the StatementPublisherPort (federation.record.publish, N25).
 
 ## Not responsible for
 
 - Message storage, encryption and delivery (F08.S01.M01).
-- The context records themselves (listings in F01, proposals and cycles in F02, bookings in F03, rentals in F05); each context owner registers a ThreadContextPort {exists, isParty, roster, isClosed} for its context type, and F03.S02.M01, F05.S01.M01 and F05.S02.M02 are not listed in depends_on because they already depend on this module through F08.S01.M01 (port registration avoids the cycle).
+- The context records themselves (listings in F01, proposals and cycles in F02, bookings in F03, rentals in F05); each context owner registers a ThreadContextPort {exists, isParty, roster, isClosed, recipients} for its context type, and F03.S02.M01, F05.S01.M01 and F05.S02.M02 are not listed in depends_on because they already depend on this module through F08.S01.M01 (port registration avoids the cycle).
 - Blocking itself (F07.S02.M02 owns block lists; this module only enforces the local principal's own blocks).
 - Notification delivery (F13); mute is data that F13.S02.M04 and F13.S01.M03 read through the thread query.
 - Producing the deletion notice (F10.S01.M04 owns classrup.privacy.deletion_notice/v1); this module only applies a verified one.
@@ -64,23 +66,23 @@ Conversation threads bound to a context (listing, proposal, cycle, booking, rent
 
 ## Interfaces
 
-- Commands: `comms.thread.create`, `comms.thread.archive`, `comms.thread.mute`, `comms.thread.accept_request`, `comms.thread.decline_request`
-- Queries: `comms.thread.list_mine`, `comms.thread.get`
+- Commands: `comms.thread.create`, `comms.thread.archive`, `comms.thread.mute`, `comms.thread.accept_request`, `comms.thread.decline_request`, `comms.thread.receive_open`, `comms.thread.refresh_reply_mailboxes`
+- Queries: `comms.thread.list_mine`, `comms.thread.get`, `comms.thread.recipients`
 - Emits: `comms.thread.created`, `comms.thread.archived`
 - Consumes: `mutiny.party.joined`, `mutiny.party.left`, `mutiny.cycle.cancelled`, `mutiny.cycle.completed`, `services.booking.cancelled`, `services.booking.completed`, `rentals.rental.closed`, `bazaar.listing.archived`, `identity.block.added`
 
 ## Dependencies
 
-F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001
+F11.S01.M02, F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-061-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-061-02 | [Validation rules](validation_rules.md) | 4 |
+| PS-061-01 | [Domain schema](domain_schema.md) | 6 |
+| PS-061-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-061-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-061-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-061-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-061-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-061-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-061-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -92,6 +94,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T21 pass in CI.
+- All tests T01 to T22 pass in CI.
 - A blocked party can never learn from any response or state in its own vault that a block exists.
 - Roster after arbitrary event replay equals the roster after ordered replay, and every vault derives the same threadId for the same context.

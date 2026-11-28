@@ -79,7 +79,7 @@ F08.S01.M01, F08.S01.M02, F08.S02.M02, F08.S03.M01, F06.S02.M01, F07.S02.M02, F1
 | PS-064-01 | [Domain schema](domain_schema.md) | 5 |
 | PS-064-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-064-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-064-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
+| PS-064-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-064-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-064-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-064-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -91,6 +91,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T22 pass in CI.
+- All tests T01 to T23 pass in CI.
 - A meetup is shown as agreed only when every party's consent, the proposer's included, verifies for the current proposal hash.
 - No meetup field or event ever contains an exact address or live location.

@@ -57,7 +57,7 @@
 | `federation.tombstone.applied` | buyer vault: a tombstone of the chain's listing projection marks the listing unavailable; the chain waits for the seller's close or expiry |
 | `comms.consent.received` | for subjectType bazaar_negotiation and this negotiationId: echo the received consent statement to the other participant first; seller vault then verifies the buyer's acceptance with comms.consent.verify and runs the accept transaction; buyer vault records the seller's consent next to the confirmation; conflicted freezes the chain |
 | `federation.conflict.detected` | both vaults: freezeScope naming consent:bazaar_negotiation:<negotiationId> moves an open, accept_sent or accepted chain to frozen with frozenReason conflicting_rounds |
-| `federation.conflict.resolved` | both vaults: drop_all moves the frozen chain to rejected (frozen_discarded) with commerce.deal.cancel where a Deal exists; superseded by a consent both parties signed keeps the chain frozen until keep_frozen or discard |
+| `federation.conflict.resolved` | both vaults: drop_all moves the frozen chain to rejected (frozen_discarded) with DealPort.cancel (unilateral, conflict_resolved) where a Deal exists; superseded by a consent both parties signed keeps the chain frozen until keep_frozen or discard |
 | `commerce.deal.cancelled` | a frozen hold_fork chain whose dealId matches moves to expired |
 | `privacy.deletion.completed` | replace the deleted principal's DID with the payload pseudonym in chains and rounds retained under RET-EVIDENCE and purge notes of non-evidence chains |
 

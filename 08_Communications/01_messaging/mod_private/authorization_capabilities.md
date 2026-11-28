@@ -25,6 +25,9 @@
 | comms.mailbox.fetch | mailbox owner | relay policy; request signed by a device key registered for the mailbox |
 | comms.mailbox.ack | mailbox owner | relay policy; request signed by a device key registered for the mailbox |
 | comms.mailbox.read_own | local principal | vault policy; in-process query over the local principal's own mailbox rows; no network |
+| comms.message.receive | local principal | internal; invoked only through the F11.S01.M02 StatementIngestPort registration; statement verified before storage |
+| comms.mailbox.deliver_relay_statement | operator | relay-local in-process; not routable over HTTP; the envelope must be signed by this relay's identity key |
+| comms.mailbox.list_relay_statements | owner of ownerDid | relay policy; RFC 9421 request signed by a key of ownerDid; returns only statements addressed to ownerDid |
 
 Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 

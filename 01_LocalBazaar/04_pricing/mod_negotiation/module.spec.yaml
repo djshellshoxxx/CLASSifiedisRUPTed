@@ -94,7 +94,7 @@ processes:
           - "listingRevision: int — listing revision bound in the latest round"
           - "closeOutcome?: enum — accepted | rejected | withdrawn | expired | superseded | listing_unavailable | blocked | frozen_discarded | timeout"
           - "acceptanceConsentCid?: string — consent statement (comms.consent.sign) accepting the latest round"
-          - "dealId?: uuidv7 — ref F09.S01.M01 Deal, deterministic from contextRef {offer, rootOfferId}, set on acceptance"
+          - "dealId?: uuid — UUIDv8 per F09.S01.M01 01.R01 from {contextRef {offer, rootOfferId}, contextCid = accepted round cid}, set on acceptance"
           - "holdId?: uuidv7 — ref F01.S03.M01 InventoryHold, set on acceptance (seller vault)"
           - "confirmationCid?: string — sha256- of the seller's signed confirmation"
           - "expiresAt: timestamp — expiry of the latest round, claim of the proposer"
@@ -173,7 +173,7 @@ processes:
       - "Negotiation follows the declared machine; rejected, withdrawn and expired are terminal, accepted is left only through a late timeout close or a hold-fork freeze in the seller vault, and any other transition is refused with CONFLICT_STATE."
       - "Agreement is reached only when the seller's vault has taken the hold, opened the Deal handoff and signed the confirmation; a buyer's acceptance alone leaves the chain in accept_sent."
       - "Two different signed statements for the same round number, or an acceptance and a counter for the same round, freeze the chain; frozen chains are never resolved automatically and leave only by discard, by an explicit keep after a hold fork, or at the hard deadline."
-      - "A vault waiting for the other side's decision on its own round or acceptance applies a verified confirmation or acceptance until expiresAt + 24 h; after that grace it sends a signed timeout close, and a seller vault that had confirmed cancels the Deal (commerce.deal.cancel) so the hold is released."
+      - "A vault waiting for the other side's decision on its own round or acceptance applies a verified confirmation or acceptance until expiresAt + 24 h; after that grace it sends a signed timeout close, and a seller vault that had confirmed cancels the Deal through DealPort.cancel in mode unilateral with reason buyer_timeout so the hold is released."
       - "The first seller counter moves the root offer to rejected with reason countered through bazaar.offer.reject in the same transaction (N10); a buyer vault that receives round 1 for a root offer it already withdrew closes the chain as withdrawn with a signed close."
     machines:
       - entity: Negotiation
@@ -191,9 +191,9 @@ processes:
           - "open -> expired | round expiresAt passes (the proposer waiting on its own round keeps it until graceUntil) or hardDeadline passes | emits bazaar.negotiation.closed (expired)"
           - "open -> frozen | conflicting signed statements detected, federation.conflict.detected whose freezeScope names consent:bazaar_negotiation:<negotiationId>, or comms.consent.verify returns conflicted | frozenReason conflicting_rounds; no further commands except discard"
           - "accepted -> frozen | seller vault: bazaar.inventory.conflict_detected names this chain's hold (acceptance on a forked device) | frozenReason hold_fork; the Deal does not proceed"
-          - "accepted -> expired | seller vault: verified timeout close from the buyer bound to the accepted round (the confirmation arrived after the buyer's grace) | commerce.deal.cancel in the same transaction; hold released by F01.S03.M01; emits bazaar.negotiation.closed (expired)"
+          - "accepted -> expired | seller vault: verified timeout close from the buyer bound to the accepted round (the confirmation arrived after the buyer's grace) | DealPort.cancel in mode unilateral with reason buyer_timeout in the same transaction; hold released by F01.S03.M01; emits bazaar.negotiation.closed (expired)"
           - "frozen -> accepted | bazaar.negotiation.keep_frozen by the seller for a hold_fork chain | the competing holder is dropped by its owner module; hold active again"
-          - "frozen -> rejected | either party discards the chain, or federation.conflict.resolved with decision drop_all | emits bazaar.negotiation.closed (frozen_discarded); for hold_fork commerce.deal.cancel and a signed close to the buyer; a new offer is needed"
+          - "frozen -> rejected | either party discards the chain, or federation.conflict.resolved with decision drop_all | emits bazaar.negotiation.closed (frozen_discarded); for hold_fork DealPort.cancel (unilateral, conflict_resolved) and a signed close to the buyer; a new offer is needed"
           - "frozen -> expired | hardDeadline reached, or for hold_fork the frozen hold's maxExpiresAt | emits bazaar.negotiation.closed (expired)"
     timeouts:
       - "Sweep every 60 s while the app is open and at app start: open chains whose latest round expiresAt <= now become expired, except that the proposer of that round keeps it until graceUntil; accept_sent chains expire at graceUntil and queue a signed timeout close."
@@ -302,7 +302,7 @@ processes:
       - {type: federation.tombstone.applied, effect: "buyer vault: a tombstone of the chain's listing projection marks the listing unavailable; the chain waits for the seller's close or expiry"}
       - {type: comms.consent.received, effect: "for subjectType bazaar_negotiation and this negotiationId: echo the received consent statement to the other participant first; seller vault then verifies the buyer's acceptance with comms.consent.verify and runs the accept transaction; buyer vault records the seller's consent next to the confirmation; conflicted freezes the chain"}
       - {type: federation.conflict.detected, effect: "both vaults: freezeScope naming consent:bazaar_negotiation:<negotiationId> moves an open, accept_sent or accepted chain to frozen with frozenReason conflicting_rounds"}
-      - {type: federation.conflict.resolved, effect: "both vaults: drop_all moves the frozen chain to rejected (frozen_discarded) with commerce.deal.cancel where a Deal exists; superseded by a consent both parties signed keeps the chain frozen until keep_frozen or discard"}
+      - {type: federation.conflict.resolved, effect: "both vaults: drop_all moves the frozen chain to rejected (frozen_discarded) with DealPort.cancel (unilateral, conflict_resolved) where a Deal exists; superseded by a consent both parties signed keeps the chain frozen until keep_frozen or discard"}
       - {type: commerce.deal.cancelled, effect: "a frozen hold_fork chain whose dealId matches moves to expired"}
       - {type: privacy.deletion.completed, effect: "replace the deleted principal's DID with the payload pseudonym in chains and rounds retained under RET-EVIDENCE and purge notes of non-evidence chains"}
     errors:
@@ -407,7 +407,7 @@ processes:
       - "T19 | a11y | 09.R04 | axe run on negotiation card and accept dialog | zero serious or critical issues; keyboard-only counter works"
       - "T20 | abuse | 07.R03 | a round note containing a URL is shown in both vaults, then reported | URL rendered as plain text without a link; the report stores the signed round statements and their cids as evidence"
       - "T21 | unit | 01.R04,02.R04 | EUR root offer, then a USD counter, then a EUR counter with quantity 2 | both refused with VALIDATION_FAILED; chain currency and quantity unchanged"
-      - "T22 | integration | 03.R04 | two vaults with clocks skewed +10 and -10 min; S confirms 5 min before expiry and delivery is delayed 3 h, then a second chain with delivery delayed 25 h | first: B applies the confirmation inside the grace and both show accepted; second: B expires, sends a timeout close, S moves accepted to expired and calls commerce.deal.cancel, and the hold is released"
+      - "T22 | integration | 03.R04 | two vaults with clocks skewed +10 and -10 min; S confirms 5 min before expiry and delivery is delayed 3 h, then a second chain with delivery delayed 25 h | first: B applies the confirmation inside the grace and both show accepted; second: B expires, sends a timeout close, S moves accepted to expired and calls DealPort.cancel (unilateral, buyer_timeout), and the hold is released"
       - "T23 | integration | 03.R05 | S counters B's offer; separately B withdraws the root offer while round 1 is in transit | root offer rejected countered in the counter transaction; in the crossing case B closes the chain as withdrawn and S closes it on the signed close"
       - "T24 | integration | 04.R05 | accept in both directions and a conflicted consent | consents signed with subjectType bazaar_negotiation, statementKey consent.bazaar.negotiation.accept.v1, statementLocale and subjectRevisionHash equal to the round statementCid (ID-3 cid) through the registered ConsentSubjectPort, which passes the F08.S02.M02 conformance suite; the receiving vault echoes each received consent before committing; verified with comms.consent.verify; conflicted freezes the chain"
       - "T25 | contract | 01.R05,04.R04 | inspect stored records and the F11.S01.M01 registry | records validate as classrup.bazaar.negotiation/v1 and classrup.bazaar.negotiation_round_record/v1; statements as negotiation_round/v1, negotiation_close/v1 and negotiation_confirm/v1 with registered signer roles; negotiation_accept/v1 resolves to the consent statement"

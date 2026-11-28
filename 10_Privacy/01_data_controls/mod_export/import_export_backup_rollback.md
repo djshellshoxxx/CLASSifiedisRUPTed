@@ -9,11 +9,12 @@
 - **PS-078-10.R01** This module's own output format is classrup-export/v1; the module contributes a section privacy.exports listing past export jobs' metadata only.
 - **PS-078-10.R02** Import of a bundle is performed by the vault restore flow, which verifies the manifest signature and section hashes produced here before committing any record.
 - **PS-078-10.R03** The format follows expand/contract; a new major version keeps the previous major readable for 180 days.
+- **PS-078-10.R04** Importing a bundle is owned here - preview verifies and reports, commit applies after the deletion ledger check; the sections' own collision and upgrade rules run behind ExportSectionPort.importLines.
 
 ## Specification
 
 - **export:** Section privacy.exports in classrup-export/v1: ExportJob metadata of the last 30 days (schema classrup.privacy.export_job/v1), no bundle content. Manifest fields sectionExportedAt and part {setId, index, total, mediaFrom, mediaTo, part1ManifestSha256} are additive in v1.
-- **import:** Past export job metadata imports as read-only history with status expired; bundles are never imported as jobs. A multi-part set is imported by the restore flow only when every part verifies and all share setId and the part-1 manifest hash (IOX-2).
+- **import:** Vault import is owned here (IOX-2) - privacy.import.preview verifies the bundle or set and returns the dry-run report, privacy.import.commit applies it after the ImportGuardPort deletion ledger check, all or nothing, with per-section collision handling by importLines. Past export job metadata imports as read-only history with status expired; bundles are never imported as jobs. A multi-part set is imported by the restore flow only when every part verifies and all share setId and the part-1 manifest hash (IOX-2).
 - **backup:** The export bundle is the user's primary backup (IOX-6); the PWA warns when the last export is older than 30 days. Backups of bundles are the user's responsibility.
 - **migration rollback:** Section list and manifest fields are additive in v1; older readers ignore unknown sections and fields; a rollback never changes bundles already written.
 
@@ -24,6 +25,7 @@ Baseline per [CTR-IOX-001](../../../planning/contracts/CTR-IOX-001.md).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-078-09.T16 | e2e | PS-078-10.R01, PS-078-10.R02, PS-078-10.R03 | export, import into a fresh vault via IOX-2 dry-run and commit, roll back one release | all sections round-trip with identical counts; v1 bundle readable by the previous release; axe zero serious issues on export screens |
+| TEST-PS-078-09.T26 | integration | PS-078-02.R04, PS-078-04.R07, PS-078-07.R04, PS-078-10.R04 | commit after the ledger check for a deleted did, with and without newIdentityOverride; a multi-part set missing part 3, with a part from another setId, and a complete set; bundle with another user's P2 records | deleted did PRECONDITION_FAILED then imported as a new principal; incomplete or mixed set fails whole; complete set imports; foreign records counted rejectedForeign and never written; commit is all or nothing |
 
 ## Dependencies
 

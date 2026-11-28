@@ -46,10 +46,11 @@ See the module test table below (all processes).
 | TEST-PS-090-09.T24 | unit | PS-090-07.R04 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone | migration section exported; deletion plan returned; the pseudonymize step replaces the DID in retained records with exactly that pseudonym and a second run changes nothing; privacy.deletion.completed changes no record |
 | TEST-PS-090-09.T25 | integration | PS-090-02.R01 | K1 revoked in a newer portable document after the move was announced but before V3's effectiveAt | the promotion re-check cancels the move; no account.moved emitted |
 | TEST-PS-090-09.T26 | integration | PS-090-07.R05, PS-090-03.R01 | privacy.deletion.requested with a prepared own migration, then privacy.deletion.cancelled; a second request with an announced own move, then execution | copy and announce refused with PRIVACY_DELETION_PENDING while pending and nothing signed, cancelled or sent; after cancel copy and announce succeed; at execution the DeletionPort sign step cancels the move and signs move_cancel before the revoke_keys step |
+| TEST-PS-090-09.T27 | integration | PS-090-04.R05, PS-090-04.R04 | register receive_move with the F11.S01.M02 StatementIngestPort stub; a verified move and a move_cancel are received and redelivered | each reaches receive_move exactly once with firstReceivedAt = receivedAt and oldRelayReceipt = the relay receipt; the redelivery dispatches nothing and the first firstReceivedAt is kept |
 
 ## Acceptance criteria
 
-- All tests T01–T26 pass in CI.
+- All tests T01–T27 pass in CI.
 - A stolen-key move, including one with a backdated announcedAt, is cancelled by a second device key within the veto window (abuse tests T04 and T22).
 - The did and every local record are unchanged by a move, and no relay becomes authoritative for the principal's records.
 - Bridge documents exist and are marked Future.

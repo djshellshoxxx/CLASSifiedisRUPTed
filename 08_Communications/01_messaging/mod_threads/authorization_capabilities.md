@@ -19,6 +19,7 @@
 | comms.thread.mute | local principal | participant(thread) |
 | comms.thread.manage_request | local principal | thread in status request addressed to the local principal |
 | comms.thread.read_own | local principal | participant(thread) |
+| comms.thread.receive_open | local principal | internal; invoked only through the F11.S01.M02 StatementIngestPort registration and by F08.S01.M01 after it verified a message; the statement is verified before any roster change |
 
 Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 
@@ -30,4 +31,4 @@ Default deny. For declared command-bus capabilities, evaluation and audit follow
 
 ## Dependencies
 
-Module depends on: F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M02, F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

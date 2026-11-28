@@ -15,7 +15,7 @@ Builds a full-text (SQLite FTS5) search index over signed public projections of 
 - Apply publication, edit, renewal, inventory, expiry, archive, auction, tombstone, moderation and deletion events idempotently, ignoring events whose source revision is not newer, and keep removals for hosting policy and tombstones sticky against republishing.
 - Rank-time hygiene - store the local first-seen time of each document and of each author, and use the author's claimed time clamped by it (min(claim, firstSeenAt)) as the recency anchor, so post-dating gains nothing; preserve both across rebuild and restore.
 - Provide a rebuild that swaps in a freshly built index atomically, enforce storage caps (5 000 retained documents in the vault; on a relay the tenant limit maxIndexedListingsPerPublisher active documents per author, read through F15.S04.M03 TenantPort.limits(tenantId), default 100 matching the F01.S01.M03 relay quota of 100 projections per key), and on a relay serve the public L1 cell feed used by vault pulls.
-- On a relay only, set and clear relay-sold promotion (promotedUntil) from an operator command bound to a final or operator-acknowledged payment claim (FLOW-01 steps 3 and 4).
+- On a relay only, set and clear relay-sold promotion (promotedUntil) from an operator command bound to the operator-signed payment acknowledgement envelope and its Deal envelope, and in the same relay transaction sign classrup.bazaar.promotion/v1 (state active or withdrawn) with the relay key through the StatementPublisherPort (relay-local publish) and serve it through the public query list_promotions (FLOW-01 steps 3 and 4).
 - On a relay only, refuse a projection any of whose currency codes is outside the tenant allowedCurrencies (F15.S04.M03 TenantPort, the same code set F11.S01.M02 V19 checks at intake), and serve with each cell-feed item the ReceiptPort.issue receipt that F11.S01.M02 federation.record.ingest returned for that envelope; the index signs no receipt, index acceptance or acknowledgement of its own.
 - Index barterAcceptable, inStock and want.minCondition from the verified listing projection as typed filter columns, and keep the highest offering version per offeringId (services payload seq, FED-3; rentals payload revision) for enrichment.
 - On a relay only, evaluate every listing projection admitted to the relay index in-process with F18.S01.M02 governance.prohibited_rule.evaluate against the relay's own operator pack applied through governance.prohibited_rule.relay_upload, refuse it on a block verdict (relay hosting policy, CAP-9, ADR-0016 decision 8) and never evaluate in a vault.
@@ -27,14 +27,14 @@ Builds a full-text (SQLite FTS5) search index over signed public projections of 
 - Scoring and re-ranking (F06.S03.M01, F06.S03.M02).
 - Producing or signing listing projections (F01), offering projections (F03, F05), auction statements (F04) and transporting, verifying and storing envelopes between vaults and relays (F11.S01.M02).
 - Local hides and advisory-feed hides in a vault (F12.S01.M01); they are applied at query time by F06.S01.M02 through the F12.S01.M01 local hide read port and never remove index documents.
-- Payment claims and their finality (F09.S01.M01, F09.S01.M03); this module only reads the claim state.
+- Payment claims, acknowledgements and their finality (F09.S01.M01, F09.S01.M03) and the operator's mailbox handling; the relay holds no claim and this module only verifies the signed envelopes the operator presents.
 - Future: semantic or vector search, typo-tolerant trigram fallback, private-set matching of saved searches against a relay without revealing the query.
 
 ## User stories
 
 - As a buyer, I can search listings I have retained, fetched or imported while offline, because the index lives in my vault.
 - As a seller using a relay, my published listing becomes searchable on that relay within 5 seconds, and disappears from its index within 5 seconds of my signed tombstone.
-- As a relay operator, I can rebuild the relay index after a tokenizer change without search downtime, and mark a listing Promoted only after its payment claim is final or acknowledged.
+- As a relay operator, I can rebuild the relay index after a tokenizer change without search downtime, and mark a listing Promoted only after the operator's signed payment acknowledgement for it verifies.
 - As a privacy-conscious seller, I am never findable by anything more precise than the area I chose to publish (L1 about 39 km or L2 about 5 km), and choosing L1 keeps my listing searchable.
 - As a seller, a relay's hosting decision about my listing never removes it from my own vault or from relays that did not make that decision.
 
@@ -75,9 +75,9 @@ Builds a full-text (SQLite FTS5) search index over signed public projections of 
 ## Interfaces
 
 - Commands: `discovery.search_document.rebuild`, `discovery.search_document.set_promotion`, `discovery.search_document.clear_promotion`
-- Queries: `discovery.search_document.stats`, `discovery.search_document.list_by_cell`
+- Queries: `discovery.search_document.list_promotions`, `discovery.search_document.stats`, `discovery.search_document.list_by_cell`
 - Emits: `discovery.index.updated`
-- Consumes: `bazaar.listing.published`, `federation.record.accepted`, `bazaar.listing.edited`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `bazaar.listing.archived`, `bazaar.listing.closed`, `bazaar.listing.restored`, `bazaar.publication.renewed`, `bazaar.sell_terms.set`, `bazaar.variant.changed`, `bazaar.inventory.depleted`, `bazaar.inventory.released`, `bazaar.inventory.restocked`, `services.offering.published`, `services.offering.withdrawn`, `rentals.offering.published`, `auctions.auction.scheduled`, `auctions.auction.opened`, `auctions.auction.extended`, `auctions.auction.closed`, `auctions.auction.cancelled`, `federation.tombstone.applied`, `moderation.action.applied`, `moderation.action.reverted`, `commerce.payment.reorged`, `commerce.payment.expired`, `privacy.deletion.completed`
+- Consumes: `bazaar.listing.published`, `federation.record.accepted`, `bazaar.listing.edited`, `bazaar.listing.unpublished`, `bazaar.listing.expired`, `bazaar.listing.archived`, `bazaar.listing.closed`, `bazaar.listing.restored`, `bazaar.publication.renewed`, `bazaar.sell_terms.set`, `bazaar.variant.changed`, `bazaar.inventory.depleted`, `bazaar.inventory.released`, `bazaar.inventory.restocked`, `services.offering.published`, `services.offering.withdrawn`, `rentals.offering.published`, `auctions.auction.scheduled`, `auctions.auction.opened`, `auctions.auction.extended`, `auctions.auction.closed`, `auctions.auction.cancelled`, `federation.tombstone.applied`, `moderation.action.applied`, `moderation.action.reverted`, `privacy.deletion.completed`
 
 ## Dependencies
 
@@ -102,7 +102,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T36 pass in CI.
+- All tests T01-T37 pass in CI.
 - A newly published listing is searchable on a relay within 5 seconds p95 and a tombstoned one is gone within 5 seconds p95.
 - No indexed row contains a geohash longer than 5 characters, an unsigned projection or any P1-P4 field (privacy suite).
 - A relay decision never removes an own or imported document from a vault (abuse suite).

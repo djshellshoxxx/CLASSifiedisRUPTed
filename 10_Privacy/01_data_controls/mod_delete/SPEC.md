@@ -15,6 +15,7 @@ The user can delete their identity and data on this device; the PWA's Erase vaul
 - Produce the signed statements classrup.privacy.deletion_statement/v1 for relays and classrup.privacy.deletion_notice/v1, end-to-end encrypted, for counterparties of open commitments and for every thread counterparty listed by the F08 DeletionPort plans, each signed once at execution and valid for the whole 30-day delivery window.
 - Orchestrate, not produce, federation tombstones by running the F11.S01.M02 DeletionPort sign step at execution, never during grace.
 - Pseudonymize the principal in retained RET-EVIDENCE records with a per-deletion pseudonym, destroy the pseudonymization salt at completion, and never keep the did and the pseudonym in the same retained record.
+- Register the ImportGuardPort declared by F10.S01.M03 at vault composition (inverted registration, this module depends on F10.S01.M03) so that privacy.import.commit calls privacy.deletion.ledger_check for the bundle did before any record is written.
 - Keep a deletion ledger keyed by a salted hash of the did in the per-origin residue store for 180 days so restores into this browser profile never resurrect deleted data.
 - Handle relay-side application of a verified deletion statement as the relay command privacy.deletion.relay_apply, which calls privacy.legal_hold.check and the relay purge path of F10.S01.M02.
 - Expose the in-process guard privacy.deletion.assert_not_pending that every publishing and commitment module calls, and emit privacy.deletion.cancelled when a request is cancelled.
@@ -85,7 +86,7 @@ F10.S01.M02, F10.S01.M03, F07.S01.M01, F16.S02.M02, F11.S01.M01, F15.S01.M01, F1
 | PS-077-01 | [Domain schema](domain_schema.md) | 6 |
 | PS-077-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-077-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-077-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
+| PS-077-04 | [Commands, queries and events](commands_queries_events.md) | 9 |
 | PS-077-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-077-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-077-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |

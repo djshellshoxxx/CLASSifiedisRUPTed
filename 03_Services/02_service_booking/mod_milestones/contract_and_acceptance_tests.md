@@ -24,7 +24,7 @@ See the module test table below (all processes).
 | TEST-PS-031-09.T02 | unit | PS-031-01.R03, PS-031-02.R02, PS-031-02.R03 | each rule V01–V10 violated in turn | documented code returned and nothing stored, bad statements quarantined |
 | TEST-PS-031-09.T03 | property | PS-031-03.R01 | random statement and event sequences on one milestone | only declared transitions succeed; settled and cancelled never change |
 | TEST-PS-031-09.T04 | integration | PS-031-03.R02 | approval naming an older submission cid, then the latest | first SERVICES_SUBMISSION_STALE; second approved |
-| TEST-PS-031-09.T05 | integration | PS-031-03.R03, PS-031-03.R06, PS-031-04.R03 | payment claimed, confirming, confirmed, reorged, confirming, finalized; then claimed, failed; then claimed, expired; then acknowledged | proof labels follow COM-4; after the reorg proof is reorged and the milestone stays approved; settled only at acknowledged or final; booking completes only after both completion statements |
+| TEST-PS-031-09.T05 | integration | PS-031-03.R03, PS-031-03.R06, PS-031-04.R03 | payment claimed, confirming, confirmed, reorged, confirming, finalized; then claimed, failed; then claimed, expired; then acknowledged | proof labels follow COM-4; after the reorg proof is reorged and the milestone stays approved; settled only on the payee-signed payment_ack; booking completes only after both completion statements |
 | TEST-PS-031-09.T06 | contract | PS-031-04.R01, PS-031-04.R02, PS-031-09.R02 | each command, statement and event, and the commerce.deal.open call | payloads, signatures and the Deal request (contextRef service_milestone, contextCid approvalCid, parties, obligation) validate against the registry and F09 schemas |
 | TEST-PS-031-09.T07 | abuse | PS-031-05.R01, PS-031-05.R02, PS-031-05.R03 | approval signed by provider key; submission signed by client; payment event with the dealId of another context | all quarantined or ignored; no state change |
 | TEST-PS-031-09.T08 | integration | PS-031-06.R01, PS-031-06.R02, PS-031-09.R03 | relay duplicates, drops and reorders; two forked provider devices sign different submissions | duplicates skipped; fork freezes the milestone for renegotiation |
@@ -41,10 +41,11 @@ See the module test table below (all processes).
 | TEST-PS-031-09.T19 | abuse | PS-031-07.R04, PS-031-02.R02 | submission with a 6 MiB image, a PDF as attachment, and a PDF as external_hash | first two VALIDATION_FAILED; external hash accepted and verified locally |
 | TEST-PS-031-09.T20 | abuse | PS-031-01.R04 | booking.confirmed whose plan changes one amount relative to the client-signed quote | no milestone created from the altered plan; mismatch logged and the upstream confirmation quarantined |
 | TEST-PS-031-09.T21 | integration | PS-031-07.R05 | statements from a blocked DID; privacy.deletion.completed for the counterparty; export | dropped silently; counterparty pseudonymized; export section services.milestones present |
+| TEST-PS-031-09.T22 | integration | PS-031-03.R03, PS-031-03.R06, PS-031-04.R03 | the client verifier reaches final for an approved milestone while no payee payment_ack has arrived; then the provider-signed payment_ack with verification source chain arrives | the milestone stays approved with the label final per your verifier; payee has not confirmed, no services.milestone.settled and no completion; after the ack it settles in both vaults |
 
 ## Acceptance criteria
 
-- All tests T01–T21 pass in CI.
+- All tests T01–T22 pass in CI.
 - A milestone is never shown settled on a claim alone, never shows a stronger proof than the claim reached, and the proof level is always displayed.
 - Duplicated, reordered or replayed statements never advance a milestone twice, and a booking completes only with both completion signatures.
 

@@ -33,6 +33,7 @@
 | V15 | a LocalSettings patch sets a11yMotion only to system or reduced and moneyDisplay only to symbol, code or name (an import replaces any other value with the default instead) | VALIDATION_FAILED |
 | V16 | an adminKey or breakGlassReason reaches RoleBootstrapPort.bootstrap only from the local relay CLI; the port refuses an admin key while an active relay admin exists unless breakGlassReason has 20..500 code points | SECURITY_BOOTSTRAP_REFUSED |
 | V17 | platform.tenant.create over HTTP by an admin carries no adminKey or breakGlassReason; admin grants use security.roleassignment.propose and approve | VALIDATION_FAILED |
+| V18 | promotion, when present, has operatorDid equal to a did:key in the derived operatorKeys of this tenant, an operatorMailbox of this relay, 1..2 distinct tiers with positive Money prices in an allowed currency and methods within crypto and external | VALIDATION_FAILED |
 
 ## Verification
 
@@ -43,6 +44,7 @@
 | TEST-PS-125-09.T29 | unit | PS-125-01.R06, PS-125-02.R05, PS-125-10.R03 | get on a new vault; update with a11yMotion reduced and moneyDisplay code; update with a11yMotion fast; import a record with moneyDisplay emoji and a11yMotion reduced | defaults system and symbol; the values stored and returned; VALIDATION_FAILED for fast; the import keeps reduced and replaces emoji with symbol |
 | TEST-PS-125-09.T30 | integration | PS-125-02.R04, PS-125-03.R01, PS-125-06.R02 | bootstrap a fresh relay with --admin and --operator; bootstrap a second tenant with --admin; again with --break-glass and a 10 code point reason, then a 30 code point reason; HTTP create by admin A1 with adminKey; assign_operator by A1 | first creates tenant, operator and admin in one transaction; second SECURITY_BOOTSTRAP_REFUSED with nothing created; 10 code points refused, 30 accepted as break_glass; HTTP create VALIDATION_FAILED; assign_operator calls security.roleassignment.assign with role operator and scope tenant:<id> and grants no admin |
 | TEST-PS-125-09.T31 | contract | PS-125-01.R07, PS-125-02.R01, PS-125-04.R01 | create T1 without jurisdictionProfile, configure { code: eu_de }, then { publisherId: did:key KP, code: eu_de }; then a plain string eu_de, { code: EU }, { publisherId: notakey, code: eu_de } and { code: eu_de, version: 2 } | defaults to { code: generic } and the F18.S01.M01 resolve stub returns the bundled generic profile; both valid references are stored, signed in tenant_config and carried in platform.tenant.configured unchanged; the four invalid values are refused with VALIDATION_FAILED and their field paths |
+| TEST-PS-125-09.T33 | contract | PS-125-01.R08, PS-125-02.R01 | create a tenant with a promotion section, then configure it with an operatorDid outside operatorKeys, a price in a currency the tenant does not allow and a method cash | the valid section is stored and appears in the signed tenant_config and the configured event; the three invalid patches are refused with VALIDATION_FAILED and the field path |
 
 ## Dependencies
 

@@ -144,6 +144,7 @@ processes:
       - Each command states whether it is vault-local, produces a signed statement or is a relay command, and emits its events in the same transaction.
       - Only a verified move that became effective on this receiver emits federation.account.moved, and observers act on it only after their own verification.
       - "Move statements and signer roles are registered with F11.S01.M01 (N2): classrup.federation.move/v1 signed by a device key of the subject (relay moves by the pinned relay key) and classrup.federation.move_cancel/v1 signed by a device key of the subject, a veto by a key other than the move signer; both are signed through F11.S01.M02 publish."
+      - "federation.migration.receive_move is registered at vault and relay composition with the F11.S01.M02 StatementIngestPort for classrup.federation.move/v1 and move_cancel/v1 (inverted registration, N26), so every accepted move or veto reaches it exactly once inside the receive transaction with firstReceivedAt equal to the record's receivedAt and oldRelayReceipt equal to the stored relay receipt of the old relay, and the module does not consume federation.record.accepted for these types."
     commands:
       - name: federation.migration.prepare
         capability: federation.migration.prepare
@@ -175,7 +176,7 @@ processes:
         idempotent: true
       - name: federation.migration.receive_move
         capability: federation.migration.receive
-        input: "[vault-local or relay command; consumes statements classrup.federation.move/v1 and move_cancel/v1 accepted by F11.S01.M02, with the receipt context { firstReceivedAt, source, oldRelayReceipt? }] { statement: Envelope }"
+        input: "[vault-local or relay command, registered with the F11.S01.M02 StatementIngestPort for classrup.federation.move/v1 and move_cancel/v1 and called by federation.record.receive for each accepted statement, with the receipt context { firstReceivedAt = receivedAt, source, oldRelayReceipt = the relay receipt of the old relay } from the ingest provenance] { statement: Envelope }"
         output: "{ migrationId, status, effectiveAt, conflictId? }"
         errors: [FED_SIGNATURE_INVALID, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_VETO_INVALID, FEDERATION_KEY_MISMATCH, VALIDATION_FAILED]
         emits: [federation.account.moved]
@@ -308,8 +309,9 @@ processes:
       - "T24 | unit | 07.R04 | export, deletion and retention ports called by F10 (plan, execute in step order, pseudonymize with a given pseudonym, twice); privacy.deletion.completed delivered alone | migration section exported; deletion plan returned; the pseudonymize step replaces the DID in retained records with exactly that pseudonym and a second run changes nothing; privacy.deletion.completed changes no record"
       - "T25 | integration | 02.R01 | K1 revoked in a newer portable document after the move was announced but before V3's effectiveAt | the promotion re-check cancels the move; no account.moved emitted"
       - "T26 | integration | 07.R05,03.R01 | privacy.deletion.requested with a prepared own migration, then privacy.deletion.cancelled; a second request with an announced own move, then execution | copy and announce refused with PRIVACY_DELETION_PENDING while pending and nothing signed, cancelled or sent; after cancel copy and announce succeed; at execution the DeletionPort sign step cancels the move and signs move_cancel before the revoke_keys step"
+      - "T27 | integration | 04.R05,04.R04 | register receive_move with the F11.S01.M02 StatementIngestPort stub; a verified move and a move_cancel are received and redelivered | each reaches receive_move exactly once with firstReceivedAt = receivedAt and oldRelayReceipt = the relay receipt; the redelivery dispatches nothing and the first firstReceivedAt is kept"
     acceptance:
-      - All tests T01–T26 pass in CI.
+      - All tests T01–T27 pass in CI.
       - A stolen-key move, including one with a backdated announcedAt, is cancelled by a second device key within the veto window (abuse tests T04 and T22).
       - The did and every local record are unchanged by a move, and no relay becomes authoritative for the principal's records.
       - Bridge documents exist and are marked Future.

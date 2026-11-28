@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Builds the user's complete data export from their vault. The orchestrator asks every module that owns user data for its export section through the ExportSectionPort defined here, passes every record through redactForExport of the F10.S02.M02 classification model, streams them into a classrup-export/v1 JSON Lines bundle, writes a manifest as the first line with counts, a SHA-256 and an exportedAt time per section, and signs the manifest with the user's device Ed25519 key. Vaults whose media exceed the 2 GiB bundle limit export a linked multi-part set split by media date. The finished bundle is stored encrypted in the browser's private file storage and can be downloaded for 7 days, after which it is deleted and its key shredded. The vault export is the primary backup (IOX-6), and nothing leaves the device unless the user saves the file somewhere.
+Builds the user's complete data export from their vault. The orchestrator asks every module that owns user data for its export section through the ExportSectionPort defined here, passes every record through redactForExport of the F10.S02.M02 classification model, streams them into a classrup-export/v1 JSON Lines bundle, writes a manifest as the first line with counts, a SHA-256 and an exportedAt time per section, and signs the manifest with the user's device Ed25519 key. The same module imports such a bundle on another device or after a restore through a verified dry run (preview) and a commit. Vaults whose media exceed the 2 GiB bundle limit export a linked multi-part set split by media date. The finished bundle is stored encrypted in the browser's private file storage and can be downloaded for 7 days, after which it is deleted and its key shredded. The vault export is the primary backup (IOX-6), and nothing leaves the device unless the user saves the file somewhere.
 
 ## Responsibilities
 
@@ -17,11 +17,12 @@ Builds the user's complete data export from their vault. The orchestrator asks e
 - Store the bundle encrypted with a per-job key, serve it for 7 days, and delete it and shred the key at expiry, on user cancel or in the deletion shred step.
 - Include all P0 to P3 data the user owns and exclude other users' P2 and higher content except the user's own copies of shared messages and consents (IOX-1), by calling redactForExport (F10.S02.M02) on every record, which also drops every P4 and unclassified path.
 - Split an export whose media would exceed 2 GiB into a linked set of up to 8 parts by media date.
+- Own vault export import (IOX-2) end to end - privacy.import.preview verifies a bundle or multi-part set and produces the dry-run report, and privacy.import.commit applies it through each section's importLines after the ImportGuardPort deletion ledger check, never importing another user's P2 or higher data.
 
 ## Not responsible for
 
 - Defining each module's section content; the module that owns a record owns its section (IOX-5).
-- Importing bundles; the vault restore flow validates, dry-runs and commits (IOX-2), including multi-part sets.
+- The content of each section's import rules (collision identity, schema upgrades), which each owning module implements behind ExportSectionPort.importLines; the deletion ledger lookup itself (F10.S01.M04, which registers the ImportGuardPort); and new-identity creation offered on a ledger match (F07.S01.M01).
 - Relay backups (F15.S03.M02) and deletion (F10.S01.M04), which calls this module's DeletionPort directly.
 - Consent records (F10.S01.M01), which contribute the section privacy.consents through ExportSectionPort and are never called by this module.
 - Future: scheduled automatic exports to a user-selected encrypted location and partial exports by module selection.
@@ -65,7 +66,7 @@ Builds the user's complete data export from their vault. The orchestrator asks e
 
 ## Interfaces
 
-- Commands: `privacy.export.request`, `privacy.export.cancel`, `privacy.export.open_download`
+- Commands: `privacy.export.request`, `privacy.export.cancel`, `privacy.export.open_download`, `privacy.import.preview`, `privacy.import.commit`
 - Queries: `privacy.export.get`, `privacy.export.list_mine`
 - Emits: `privacy.export.ready`, `privacy.export.failed`, `privacy.export.expired`
 - Consumes: `privacy.deletion.requested`, `privacy.deletion.completed`, `identity.device_key.revoked`
@@ -79,21 +80,21 @@ F07.S01.M01, F10.S02.M02, F10.S01.M02, CTR-IOX-001, CTR-PRV-001, CTR-ID-001, CTR
 | ID | Process | Requirements |
 |---|---|---|
 | PS-078-01 | [Domain schema](domain_schema.md) | 4 |
-| PS-078-02 | [Validation rules](validation_rules.md) | 3 |
+| PS-078-02 | [Validation rules](validation_rules.md) | 4 |
 | PS-078-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-078-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
+| PS-078-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-078-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-078-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
-| PS-078-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 3 |
+| PS-078-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
 | PS-078-08 | [Observability and performance](observability_performance.md) | 3 |
-| PS-078-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 3 |
-| PS-078-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 3 |
+| PS-078-09 | [Contract and acceptance tests](contract_and_acceptance_tests.md) | 4 |
+| PS-078-10 | [Import, export, backup and rollback](import_export_backup_rollback.md) | 4 |
 
 Aggregation: the domain schema (01) defines the records validated by 02 and transitioned by the state machine (03); 04 defines the declared operations or local library interface, constrained by the authority rules in 05 and the idempotency/concurrency rules in 06; 07 and 08 constrain every path; 09 verifies all requirements; 10 defines how data leaves, returns and survives failure. The module's public API is `packages/privacy/src/data_controls/export/index.ts`.
 
 ## Acceptance criteria
 
-- All tests T01 to T24 pass in CI.
+- All tests T01 to T26 pass in CI.
 - A bundle from a seeded vault imports into a fresh vault with identical record counts and a verifying signature.
 - No bundle contains P4 secrets, unclassified fields or other users' private content.
 - A ready bundle is unreachable after 7 days and its key is gone.

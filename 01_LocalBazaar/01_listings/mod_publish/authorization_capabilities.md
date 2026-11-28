@@ -24,7 +24,7 @@
 | bazaar.publication.receive_relay_notice | peer (relay) | vault policy: statement signed by the pinned key of the relay of that delivery and targeting this vault's own publication; otherwise quarantined (CAP-8) |
 | bazaar.publication.relay_index_write | relay-member | relay policy: request signed by a registered device key, within the relay's published quota (default 100 projections per key) |
 | bazaar.publication.relay_remove | relay-moderator | relay policy: removal from that relay's index only, with a signed classrup.federation.relay_removal/v1 advisory carrying the statement of reasons (FED-9), issued through F11.S01.M02 federation.tombstone.issue |
-| bazaar.publication.relay_promote | relay-operator | relay policy: signs classrup.bazaar.promotion/v1 for its own index after acknowledging the payment claim or seeing it final; may withdraw it with a signed statement |
+| bazaar.publication.relay_promote | relay-operator | reserved name with no command in this module: the relay signs classrup.bazaar.promotion/v1 (active and withdrawn) only through F06.S01.M01 discovery.search_document.set_promotion and clear_promotion, and this module only receives the statements |
 
 Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 

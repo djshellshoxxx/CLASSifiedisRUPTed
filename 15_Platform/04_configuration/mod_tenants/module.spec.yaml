@@ -77,6 +77,7 @@ processes:
       - Tenant limits hold the relay discovery settings read by F06.S02.M03 - anonymousAllowed (default true), anonymousMinRadiusKm (25, 50 or 100, default 25), anonymousCenterLevel (L1, the only public level coarse enough for anonymous callers) and maxDepth (1..500, default 500) - and they appear in every signed configuration statement.
       - LocalSettings holds the optional display preferences a11yMotion (system or reduced, default system) and moneyDisplay (symbol, code or name, default symbol), returned with their defaults by platform.local_settings.get and changed only through platform.local_settings.update.
       - The tenant jurisdictionProfile is a ProfileRef {publisherId?, code} of F18.S01.M01 - code matching ^[a-z0-9_-]{2,40}$, publisherId an optional did:key Ed25519 publisher key - with default code generic and no publisherId, which resolves to the bundled generic profile of F18.S01.M01; it appears in the Tenant, in every signed configuration statement and in the platform.tenant.created and platform.tenant.configured payloads, and this module never resolves it.
+      - "The optional promotion section {operatorDid, operatorMailbox, tiers with prices, methods} names the operator principal that acts from its own vault for listing_fee Deals, the mailbox on this relay that receives the promotion claims, the tier prices and the allowed payment methods; it is validated on create and configure and appears in every signed tenant_config statement."
     entities:
       - name: Tenant
         schema: classrup.platform.tenant/v1
@@ -92,6 +93,7 @@ processes:
           - "jurisdictionProfile: ProfileRef — { publisherId?: did:key (Ed25519 publisher key), code: ^[a-z0-9_-]{2,40}$ } of F18.S01.M01, default { code: 'generic' }, which resolves to the bundled generic profile of F18.S01.M01; a reference without publisherId is resolved by F18.S01.M01 (pinned profiles publisher, then the bundled project publisher)"
           - "defaultLocale: string — BCP 47 tag matching ^[a-z]{2,3}(-[A-Z]{2})?$, default 'en'"
           - "limits: json — { maxIndexedListingsPerPublisher 1..1000 default 100 (F06.S01.M01 index write), maxUploadBytes 65536..5242880 default 5242880 (F15.S02.M01 media upload), maxMailboxBytesPerRecipient 1048576..1073741824 default 52428800 (F08.S01.M01), maxEnvelopeBytes 4096..262144 default 262144 (F08.S01.M01), maxCycleLength 3..6 default 5 (F02.S02.M03 relay matching), anonymousAllowed boolean default true, anonymousMinRadiusKm 25 | 50 | 100 default 25, anonymousCenterLevel L1 default L1, maxDepth 1..500 default 500 (the four relay discovery settings of F06.S02.M03 proximity queries) }"
+          - "promotion?: json — { operatorDid: did:key, operatorMailbox: { relayId, mailboxId }, tiers: 1..2 of { tier: boost_7d|boost_14d, days: 7|14, price: Money }, methods: crypto|external subset }; absent when the relay sells no promotion; operatorDid must be in the derived operatorKeys; read by F06.S01.M01 (set_promotion V09 and relay ranking), F01.S01.M03 and F09.S01.M01 (listing_fee Deals)"
           - "operatorKeys: derived string[] — did:key subjects of active F16.S01.M01 RoleAssignments with role operator and scope tenant:<id>; read through F16, never stored here; published in every classrup.platform.tenant_config/v1 statement, where F18.S02.M02 receivers verify transparency compiler and reviewer keys"
           - "suspendedReason?: string — ≤ 200 characters, shown to clients"
           - "suspendedAt?: timestamp — RFC 3339 UTC"
@@ -159,6 +161,7 @@ processes:
       - "V15 | a LocalSettings patch sets a11yMotion only to system or reduced and moneyDisplay only to symbol, code or name (an import replaces any other value with the default instead) | VALIDATION_FAILED"
       - "V16 | an adminKey or breakGlassReason reaches RoleBootstrapPort.bootstrap only from the local relay CLI; the port refuses an admin key while an active relay admin exists unless breakGlassReason has 20..500 code points | SECURITY_BOOTSTRAP_REFUSED"
       - "V17 | platform.tenant.create over HTTP by an admin carries no adminKey or breakGlassReason; admin grants use security.roleassignment.propose and approve | VALIDATION_FAILED"
+      - "V18 | promotion, when present, has operatorDid equal to a did:key in the derived operatorKeys of this tenant, an operatorMailbox of this relay, 1..2 distinct tiers with positive Money prices in an allowed currency and methods within crypto and external | VALIDATION_FAILED"
   workflow_state_machine:
     requirements:
       - A tenant is created directly in active within one transaction that also creates its first operator and admin role assignments through F16 RoleBootstrapPort.bootstrap({ adminKey?, operatorKeys, tenantId, breakGlassReason?, osUser }) and its first signed configuration statement, so no partially provisioned tenant exists (a SECURITY_BOOTSTRAP_REFUSED answer rolls everything back), and any transition not listed is refused with CONFLICT_STATE.
@@ -186,14 +189,14 @@ processes:
     commands:
       - name: platform.tenant.create
         capability: platform.tenant.create
-        input: "{ slug, displayName, allowedCurrencies, jurisdictionProfile?: ProfileRef { publisherId?, code } (default { code: generic }), defaultLocale?, limits?, operatorKeys (1..10), adminKey? (local CLI bootstrap only), breakGlassReason? (local CLI only, 20..500 code points) } — relay command, admin over HTTP (no adminKey) or local CLI bootstrap; first assignments created through F16 RoleBootstrapPort.bootstrap({ adminKey?, operatorKeys, tenantId, breakGlassReason?, osUser }) in the same transaction"
+        input: "{ slug, displayName, allowedCurrencies, jurisdictionProfile?: ProfileRef { publisherId?, code } (default { code: generic }), defaultLocale?, limits?, promotion?: { operatorDid, operatorMailbox: { relayId, mailboxId }, tiers: [{ tier: boost_7d|boost_14d, days, price: Money }], methods: crypto|external subset }, operatorKeys (1..10), adminKey? (local CLI bootstrap only), breakGlassReason? (local CLI only, 20..500 code points) } — relay command, admin over HTTP (no adminKey) or local CLI bootstrap; first assignments created through F16 RoleBootstrapPort.bootstrap({ adminKey?, operatorKeys, tenantId, breakGlassReason?, osUser }) in the same transaction"
         output: "{ tenantId, revision: 1, status: active, configStatementCid, roleAssignmentIds }"
         errors: [FORBIDDEN, VALIDATION_FAILED, PLATFORM_TENANT_SLUG_TAKEN, PLATFORM_TENANT_LIMIT, SECURITY_BOOTSTRAP_REFUSED]
         emits: [platform.tenant.created, platform.tenant.configured]
         idempotent: true
       - name: platform.tenant.configure
         capability: platform.tenant.configure
-        input: "{ tenantId, expectedRevision, patch: { displayName?, allowedCurrencies?, jurisdictionProfile?: ProfileRef { publisherId?, code }, defaultLocale?, limits? } } — relay command, tenant operator or admin"
+        input: "{ tenantId, expectedRevision, patch: { displayName?, allowedCurrencies?, jurisdictionProfile?: ProfileRef { publisherId?, code }, defaultLocale?, limits?, promotion?: { operatorDid, operatorMailbox: { relayId, mailboxId }, tiers: [{ tier: boost_7d|boost_14d, days, price: Money }], methods: crypto|external subset } } } — relay command, tenant operator or admin"
         output: "{ tenantId, revision, changed: string[], configStatementCid }"
         errors: [FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, CONFLICT_REVISION, PLATFORM_TENANT_SUSPENDED]
         emits: [platform.tenant.configured]
@@ -223,7 +226,7 @@ processes:
       - name: platform.tenant.get
         capability: platform.tenant.read_public
         input: "{ tenantId? | slug?, revision? } — relay query, public; defaults to the relay's only tenant and the current revision"
-        output: "{ statement: classrup.platform.tenant_config/v1 { relayId, tenantId, slug, displayName, revision, status, suspendedReason?, allowedCurrencies, jurisdictionProfile: ProfileRef { publisherId?, code }, defaultLocale, limits, operatorKeys (derived did:key[], verified by F18.S02.M02 receivers), issuedAt, keyId, sig } }"
+        output: "{ statement: classrup.platform.tenant_config/v1 { relayId, tenantId, slug, displayName, revision, status, suspendedReason?, allowedCurrencies, jurisdictionProfile: ProfileRef { publisherId?, code }, defaultLocale, limits, promotion? (verified by F06.S01.M01 set_promotion and by vaults for listing_fee Deals), operatorKeys (derived did:key[], verified by F18.S02.M02 receivers), issuedAt, keyId, sig } }"
         errors: [NOT_FOUND]
       - name: platform.tenant.list
         capability: platform.tenant.list
@@ -236,8 +239,8 @@ processes:
         output: "{ vaultId, defaultLocale, preferredCurrencies, localLimits, a11yMotion (default system), moneyDisplay (default symbol), knownRelayConfigs?, revision }"
         errors: []
     events_produced:
-      - {type: platform.tenant.created, privacy: P0, payload: "{ tenantId, slug, revision, allowedCurrencies, defaultLocale, jurisdictionProfile: ProfileRef { publisherId?, code }, limits, operatorKeys, configStatementCid }"}
-      - {type: platform.tenant.configured, privacy: P0, payload: "{ tenantId, revision, changed: string[], status, allowedCurrencies, removedCurrencies, jurisdictionProfile: ProfileRef { publisherId?, code }, defaultLocale, limits, operatorKeys, configStatementCid } (full snapshot on every revision, including revision 1 at creation)"}
+      - {type: platform.tenant.created, privacy: P0, payload: "{ tenantId, slug, revision, allowedCurrencies, defaultLocale, jurisdictionProfile: ProfileRef { publisherId?, code }, limits, promotion?, operatorKeys, configStatementCid }"}
+      - {type: platform.tenant.configured, privacy: P0, payload: "{ tenantId, revision, changed: string[], status, allowedCurrencies, removedCurrencies, jurisdictionProfile: ProfileRef { publisherId?, code }, defaultLocale, limits, promotion?, operatorKeys, configStatementCid } (full snapshot on every revision, including revision 1 at creation)"}
       - {type: platform.tenant.status_changed, privacy: P0, payload: "{ tenantId, from, to, reason?, revision, configStatementCid }"}
     events_consumed:
       - {type: security.role.assigned, effect: "when the assignment's scope is tenant:<id> with role operator, re-issue that tenant's signed configuration with the derived operatorKeys and emit platform.tenant.configured with changed [operatorKeys]"}
@@ -363,8 +366,9 @@ processes:
       - "T30 | integration | 02.R04,03.R01,06.R02 | bootstrap a fresh relay with --admin and --operator; bootstrap a second tenant with --admin; again with --break-glass and a 10 code point reason, then a 30 code point reason; HTTP create by admin A1 with adminKey; assign_operator by A1 | first creates tenant, operator and admin in one transaction; second SECURITY_BOOTSTRAP_REFUSED with nothing created; 10 code points refused, 30 accepted as break_glass; HTTP create VALIDATION_FAILED; assign_operator calls security.roleassignment.assign with role operator and scope tenant:<id> and grants no admin"
       - "T31 | contract | 01.R07,02.R01,04.R01 | create T1 without jurisdictionProfile, configure { code: eu_de }, then { publisherId: did:key KP, code: eu_de }; then a plain string eu_de, { code: EU }, { publisherId: notakey, code: eu_de } and { code: eu_de, version: 2 } | defaults to { code: generic } and the F18.S01.M01 resolve stub returns the bundled generic profile; both valid references are stored, signed in tenant_config and carried in platform.tenant.configured unchanged; the four invalid values are refused with VALIDATION_FAILED and their field paths"
       - "T32 | integration | 04.R06,01.R07 | V1 stores the verified tenant_config of relay R listing O1 and O2; the F18.S02.M02 receive stub checks a report compiled by O1 and reviewed by O2, one reviewed by X, and one for a relay V1 holds no statement for; A1 revokes O2, V1 re-fetches and the O1-O2 report is checked again | the resolver returns [O1, O2], roleFor accepts the first report and resolves no role for X or for the unknown relay; after the revocation the resolver returns [O1] from the new verified statement and the reviewer role of O2 is no longer resolved"
+      - "T33 | contract | 01.R08,02.R01 | create a tenant with a promotion section, then configure it with an operatorDid outside operatorKeys, a price in a currency the tenant does not allow and a method cash | the valid section is stored and appears in the signed tenant_config and the configured event; the three invalid patches are refused with VALIDATION_FAILED and the field path"
     acceptance:
-      - All tests T01-T32 pass in CI.
+      - All tests T01-T33 pass in CI.
       - A relay can bootstrap from the CLI and host several tenants with separate currencies, locales and limits, and every limit is enforced by its named module.
       - Operator changes are made only through F16 role assignments by admins, are validated, audited and visible to clients as signed configuration; the last operator can never be removed.
       - The jurisdiction profile is stored and signed only as a ProfileRef {publisherId?, code} that F18.S01.M01 resolves, and transparency receivers resolve operator keys only from the relay-signed operatorKeys through the registered resolver.

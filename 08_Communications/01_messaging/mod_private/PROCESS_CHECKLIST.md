@@ -2,10 +2,10 @@
 
 **Status:** SPECIFIED. > Generated from `module.spec.yaml` by `tools/specgen`. Edit the YAML, then run `pnpm spec:render`.
 
-- [x] [PS-060-01 Domain schema](domain_schema.md) — 8 requirements, tests mapped
-- [x] [PS-060-02 Validation rules](validation_rules.md) — 7 requirements, tests mapped
+- [x] [PS-060-01 Domain schema](domain_schema.md) — 9 requirements, tests mapped
+- [x] [PS-060-02 Validation rules](validation_rules.md) — 8 requirements, tests mapped
 - [x] [PS-060-03 Workflow state machine](workflow_state_machine.md) — 4 requirements, tests mapped
-- [x] [PS-060-04 Commands, queries and events](commands_queries_events.md) — 8 requirements, tests mapped
+- [x] [PS-060-04 Commands, queries and events](commands_queries_events.md) — 11 requirements, tests mapped
 - [x] [PS-060-05 Authorization and capabilities](authorization_capabilities.md) — 3 requirements, tests mapped
 - [x] [PS-060-06 Failure recovery and idempotency](failure_recovery_idempotency.md) — 5 requirements, tests mapped
 - [x] [PS-060-07 Privacy, retention and abuse](privacy_retention_abuse.md) — 5 requirements, tests mapped

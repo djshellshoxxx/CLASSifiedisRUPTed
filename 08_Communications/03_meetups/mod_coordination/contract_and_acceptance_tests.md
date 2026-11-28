@@ -43,10 +43,11 @@ See the module test table below (all processes).
 | TEST-PS-064-09.T20 | integration | PS-064-01.R04, PS-064-07.R04 | archive and purge thread TH after an agreed meetup, then re-verify; delete B's account | meetup, proposal statements and consents remain and re-verify; B's own vault pseudonymizes B's DID in its kept evidence while A's copy is unchanged |
 | TEST-PS-064-09.T21 | contract | PS-064-04.R04, PS-064-04.R05 | registry entries for meetup and meetup_cancel; payloads of proposed, agreed and cancelled in TC | signer role party; every payload carries partyDids so notifications reach the other parties |
 | TEST-PS-064-09.T22 | integration | PS-064-04.R06 | account deletion with open and elapsed meetups | DeletionPort plan pseudonymizes kept proposal statements and purges open meetups; export section comms.meetups present beforehand |
+| TEST-PS-064-09.T23 | integration | PS-064-04.R07 | B proposes a meetup in a listing thread with S and S agrees; B revokes before windowStart | the consent statements are published with recipients from the thread roster and stream thr:<threadId>, S's vault accepts them through comms.consent.accept and the meetup reaches agreed in both vaults |
 
 ## Acceptance criteria
 
-- All tests T01 to T22 pass in CI.
+- All tests T01 to T23 pass in CI.
 - A meetup is shown as agreed only when every party's consent, the proposer's included, verifies for the current proposal hash.
 - No meetup field or event ever contains an exact address or live location.
 

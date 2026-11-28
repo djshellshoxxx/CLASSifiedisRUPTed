@@ -23,7 +23,7 @@ See the module test table below (all processes).
 | TEST-PS-040-09.T01 | unit | PS-040-01.R01, PS-040-01.R02, PS-040-01.R03, PS-040-02.R03 | propose, supersede with new terms, agree on old cid | second proposal supersedes; agreement on old cid RENTALS_DEPOSIT_TERMS_STALE; amounts immutable |
 | TEST-PS-040-09.T02 | unit | PS-040-02.R02, PS-040-02.R03 | each rule V01–V12 violated in turn with every other check passing | the documented code is returned and nothing stored; bad statements quarantined with that code |
 | TEST-PS-040-09.T03 | property | PS-040-03.R01, PS-040-03.R07 | random statement and event sequences including forks | only declared transitions succeed; terminal states never change; frozen leaves only through renegotiation, dispute or expiry |
-| TEST-PS-040-09.T04 | integration | PS-040-03.R02, PS-040-04.R03 | payment claimed only, confirming only, expired, then acknowledged | funded only at acknowledged or final; proof labels follow COM-4 |
+| TEST-PS-040-09.T04 | integration | PS-040-03.R02, PS-040-04.R03 | payment claimed only, confirming only, expired, then acknowledged | funded only on the payee-signed payment_ack; proof labels follow COM-4 |
 | TEST-PS-040-09.T05 | property | PS-040-01.R02, PS-040-03.R02, PS-040-09.R02 | random partial forfeits, forfeits claimed below the deposit and accepted in full, releases, and two damage claims | retained plus released equals funded; an accepted forfeit below the funded amount goes to release_pending with funded − amount, never forfeited; at most one forfeit per damage claim; integer minor units |
 | TEST-PS-040-09.T06 | integration | PS-040-03.R03 | forfeit claim unanswered past respondBy plus 72 h; owner silent for 7 days after return | escalation_due with a prefilled draft case in the owner vault and no case opened; overdue decision banner, no auto release or forfeit; after 30 days in escalation_due back to funded with decisionOverdue |
 | TEST-PS-040-09.T07 | integration | PS-040-04.R01, PS-040-04.R02, PS-040-06.R01, PS-040-09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on released with identical cids; duplicates skipped |
@@ -45,10 +45,11 @@ See the module test table below (all processes).
 | TEST-PS-040-09.T23 | integration | PS-040-07.R04 | privacy.deletion.completed for the renter; export; retention purge after RET-EVIDENCE | DIDs replaced by the pseudonym with signatures intact; section rentals.deposits exported; purge removes terminal records |
 | TEST-PS-040-09.T24 | abuse | PS-040-07.R05 | owner blocks the renter after funding, then the renter's forfeit response and release acknowledgement arrive | both verified and stored, notifications suppressed; the deposit reaches released |
 | TEST-PS-040-09.T25 | integration | PS-040-04.R06, PS-040-03.R01 | comms.consent.revoked whose revokedIds[] holds the agreementCid of an agreed deposit with afterCommit false; the same for a funded deposit with afterCommit true; one naming an unrelated consent; the first revocationId replayed | the agreed deposit frozen with frozenFrom agreed and agreementRevocationId set after comms.consent.verify returns revoked; the funded deposit keeps its state with the revocation recorded; the unrelated and replayed cases change nothing |
+| TEST-PS-040-09.T26 | integration | PS-040-03.R02, PS-040-04.R03 | the payer verifier reaches final for the funding payment and, later, for the release payment while the payee has no verifier and has signed no payment_ack | the deposit stays agreed, then release_pending; it moves to funded or released only when the payee-signed payment_ack arrives |
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI.
+- All tests T01–T26 pass in CI.
 - No state shows a deposit as funded, released or forfeited on a payment claim alone, silence never settles money and no case is ever opened without a party's explicit action.
 - No code path in the platform or a relay moves or holds deposit funds.
 

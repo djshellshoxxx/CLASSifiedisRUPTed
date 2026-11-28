@@ -6,13 +6,14 @@
 
 ## Purpose
 
-Moves signed statements (CTR-FED-001 envelopes) to their destinations and tells the truth about how far each one got. On a relay it owns PeerOutbox, the relay-to-relay push of public records accepted from devices the relay hosts to allowlisted peers (one hop, never re-forwarding what came from a peer), behind flag F11. In the vault it routes each locally authored statement into the F15.S01.M01 sync outbox, which owns the vault-side states and limits, and provides the transport adapter that outbox calls: batching to the user's selected relays over POST /fed/v1/inbox with RFC 9421 device-key signatures, delivery of participant statements as sealed wrappers through the MailboxPort backed by F08.S01.M01 comms.mailbox.put (with a sender put proof), fetch and ack, and verification of classrup.platform.relay_receipt/v1 receipts and of recipients' signed acknowledgements. Public statements end at the relay that received them (F15.S01.M01 state completed, shown with the shared catalog key sync.state.completed); only a verified recipient acknowledgement reaches peer_accepted (sync.state.peer_accepted), and this module has no wording of its own. Batches hold at most 100 envelopes and 4 MiB, retries use exponential backoff with full jitter, and pull catch-up uses a cursor. Delivery is never claimed beyond the state actually reached.
+Moves signed statements (CTR-FED-001 envelopes) to their destinations and tells the truth about how far each one got. On a relay it owns PeerOutbox, the relay-to-relay push of public records accepted from devices the relay hosts to allowlisted peers (one hop, never re-forwarding what came from a peer), behind flag F11. In the vault it routes each locally authored statement into the F15.S01.M01 sync outbox, which owns the vault-side states and limits, and provides the transport adapter that outbox calls: batching to the user's selected relays over POST /fed/v1/inbox with RFC 9421 device-key signatures, delivery of participant statements as sealed wrappers through the MailboxPort backed by F08.S01.M01 comms.mailbox.put (signed by the sender's per-relay request key), fetch and ack, and verification of classrup.platform.relay_receipt/v1 receipts and of recipients' signed acknowledgements. Public statements end at the relay that received them (F15.S01.M01 state completed, shown with the shared catalog key sync.state.completed); only a verified recipient acknowledgement reaches peer_accepted (sync.state.peer_accepted), and this module has no wording of its own. Batches hold at most 100 envelopes and 4 MiB, retries use exponential backoff with full jitter, and pull catch-up uses a cursor. Delivery is never claimed beyond the state actually reached.
 
 ## Responsibilities
 
-- Own relay-side PeerOutbox entries, limited to relay-to-relay forwarding (destinationKind peer_relay), one per (envelope cid, canonical F15.S02.M01 relayId of the peer), created when the relay accepts a public record or author tombstone from a hosted device key, flag F11 is on and F10.S01.M01 privacy.consent.relay_check grants the author's federation_publish consent for public records.
+- Own relay-side PeerOutbox entries, limited to relay-to-relay forwarding (destinationKind peer_relay), one per (envelope cid, canonical F15.S02.M01 relayId of the peer), created when the relay accepts a public record or author tombstone from a hosted device key, flag F11 is on and, for public records, the record's forwarding opt-in is true (payload.federationOptIn for classrup.bazaar.listing/v1; portable types without such a member are never forwarded) and F10.S01.M01 privacy.consent.relay_check grants the author's federation_publish consent.
+- Keep the payload-free delivery index {cid, destinationId, deliveredAt|pulledAt} that survives PeerOutbox retention, so an author tombstone reaches every peer that obtained the target by push or by pull.
 - Route each statement authored in the vault into F15.S01.M01 outbox entries per destination (selected relays for public statements, recipient mailboxes for participant statements), after privacy.consent.check(federation_publish) for public ones.
-- Provide the FederationTransportPort adapter used by F15.S01.M01 platform.outbox.deliver (batching, RFC 9421 request signing with tag classrup/relay-request/v1, classrup.platform.relay_receipt/v1 verification) and the MailboxPort {put, fetch, ack} route for recipient mailboxes and the user's own mailboxes, which F08.S01.M01 implements with comms.mailbox.put (with a sender put proof signed by this device's key), comms.mailbox.fetch and comms.mailbox.ack, bound at composition because F08.S01.M01 depends on this module.
+- Provide the FederationTransportPort adapter used by F15.S01.M01 platform.outbox.deliver (batching, RFC 9421 request signing with tag classrup/relay-request/v1, classrup.platform.relay_receipt/v1 verification) and the MailboxPort {put, fetch, ack} route for recipient mailboxes and the user's own mailboxes, which F08.S01.M01 implements with comms.mailbox.put (an RFC 9421 signature by the sender's per-relay request key that carries no device key, message ID or sender DID), comms.mailbox.fetch and comms.mailbox.ack, bound at composition because F08.S01.M01 depends on this module.
 - Verify relay receipts and recipients' signed acknowledgements (classrup.federation.ack/v1, signed by F11.S01.M02 receive in the recipient's vault) and report them to F15.S01.M01 platform.outbox.record_peer_ack with the verification facts {signerDid, keyId, keyStatus, checkedAt} that F11.S01.M02 recorded.
 - Retry PeerOutbox entries with CTR-IDM-001 IDM-4 backoff and scheduled rounds, pause and resume them with peer and flag events and the F16.S03.M03 federation_off containment sentinel, resend them when a verified relay restore announcement covers their receipt, and emit federation.delivery.failed when a relay or vault federation entry fails or expires.
 - Provide cursor-based pull catch-up so a vault or relay that was offline fetches public envelopes it missed from the relays listed in an author's portable identity document.
@@ -81,10 +82,10 @@ F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S03.M01, F11.S03.M02, F07.S02.M01, F1
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-088-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-088-02 | [Validation rules](validation_rules.md) | 7 |
+| PS-088-01 | [Domain schema](domain_schema.md) | 6 |
+| PS-088-02 | [Validation rules](validation_rules.md) | 8 |
 | PS-088-03 | [Workflow state machine](workflow_state_machine.md) | 5 |
-| PS-088-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
+| PS-088-04 | [Commands, queries and events](commands_queries_events.md) | 9 |
 | PS-088-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-088-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-088-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -96,6 +97,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T31 pass in CI.
+- All tests T01–T34 pass in CI.
 - The UI never shows a delivery state beyond the one recorded, renders delivery text only from the sync.state.<value> catalog keys, and a public statement never shows sync.state.peer_accepted (e2e and unit tests).
 - A relay cannot cause peer_accepted without a recipient's signature, and every PeerOutbox entry is terminal by its expiresAt (abuse and property tests).

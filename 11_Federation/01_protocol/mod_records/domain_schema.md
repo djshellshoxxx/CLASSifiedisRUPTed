@@ -14,6 +14,7 @@
 - **PS-084-01.R06** A receiver with no head for a chain anchors at the first verified envelope at any seq and records chainAnchor and anchoredAt; the chain then detects equivocation and orders delivery but never gates acceptance.
 - **PS-084-01.R07** Commitment statements are indexed by subject key and digest (FederatedRecord.subjectKey and promiseDigest); this promise index, owned here, is what F11.S02.M03 conflict detection reads.
 - **PS-084-01.R08** Supersession of portable records uses the registry version member of the type (listingRevision, offering seq, rental offering revision) and otherwise the per-chain seq, never createdAt; a newer version of an already mirrored record is stored as a new FederatedRecord, the older one gets supersededBy, and federation.record.accepted fires for the newer one with recordKey, version and supersededRecordId.
+- **PS-084-01.R09** Recipients are stored as [{did, relayId, mailboxId}] because mailbox ids are unique only per relay, a record keeps one verified relay receipt per destination relay in relayReceipts, and the pending buffer and the signer-document buffer reuse the buffered status with the reasons subject_unknown and signer_doc_unknown and their own deadlines.
 
 ## Specification
 
@@ -27,7 +28,7 @@ Schema `classrup.federation.record/v1` · storage **relay+device** · privacy **
 | tenantId | uuidv7 — tenant scope (vault id in the browser vault) |
 | cid | string — cid as defined by F11.S01.M03 (sha256- over JCS of the envelope without sig and cid); unique per tenant |
 | audience | enum — public \| participants; participants rows exist only in vaults and are never sent relay to relay |
-| recipients? | json — participants only: [{did, mailboxId}] from ext.recipients, 1..20 entries |
+| recipients? | json — participants only: [{did, relayId (canonical F15.S02.M01), mailboxId}] from ext.recipients, 1..20 entries |
 | type | string — envelope type registered in F11.S01.M01, e.g. classrup.bazaar.listing/v1 |
 | author | string — did:key of the principal (user statements) or of the relay (relay statements); Ed25519 only |
 | signerKey | string — did:key that produced the signature: ext.signerKey (a device key of the author) or the author itself |
@@ -48,16 +49,18 @@ Schema `classrup.federation.record/v1` · storage **relay+device** · privacy **
 | via | string[] — relays seen delivering this cid, display only, ≤ 5 |
 | verifiedAt | timestamp — local clock when signature, cid and role verification succeeded |
 | claimedAt | timestamp — createdAt from the envelope; a claim of the signer, not evidence |
-| relayReceipt? | json — classrup.platform.relay_receipt/v1 {relayId, keyId, destination, digest, cid?, receivedAt, epoch, seq, sig} from F15.S02.M01 ReceiptPort.issue; evidence only of that relay's clock |
+| relayReceipts? | json[] — one verified classrup.platform.relay_receipt/v1 {relayId, keyId, destination, digest, cid?, receivedAt, epoch, seq, sig} per destination relay, from F15.S02.M01 ReceiptPort.issue (relay side) or copied from F15.S01.M01 when verified (vault side); evidence only of each relay's clock; the first entry's receivedAt is the oldRelayReceipt context of a move |
+| subjectRef? | string — pending buffer key part: the subject the owner reported unknown |
+| ingestedAt? | timestamp — when the registered StatementIngestPort owner returned ok; a record that is accepted with signerRole set and has no ingestedAt is dispatched again at least once, idempotently by cid |
 | verification? | json — {signerDid, keyId, keyStatus, checkedAt}: F07.S02.M01 key_status fact recorded when authorizeStatement accepted the statement, passed on to F15.S01.M01 record_peer_ack for acks |
 | signerKeyMarker? | enum — signed_during_claimed_compromise (first received inside [revocationEffectiveFrom, arrival of the revocation]) \| signer_later_revoked (first received before revocationEffectiveFrom) |
 | signerRole? | string — role the signer was verified to hold for this type, e.g. listing_author, recipient, hosting_relay |
 | status | enum — received \| buffered \| held_on_fork \| accepted \| hidden \| quarantined \| rejected \| dropped \| tombstoned |
-| statusReason? | enum — chain_gap \| fork \| commitment_conflict \| signer_role_invalid \| signer_key_revoked \| blocked \| blocked_party \| hidden_by_rule \| peer_suspended \| conflict_limit \| tombstoned \| superseded \| operator_dropped \| discarded \| quarantine_expired |
+| statusReason? | enum — chain_gap \| fork \| commitment_conflict \| signer_role_invalid \| signer_key_revoked \| signer_doc_unknown \| subject_unknown \| unregistered_type \| owner_refused \| blocked \| blocked_party \| hidden_by_rule \| peer_suspended \| conflict_limit \| tombstoned \| superseded \| operator_dropped \| discarded \| quarantine_expired |
 | hiddenByRuleIds? | uuidv7[] — hide rules of F11.S03.M02 currently matching; empty means not hidden by a rule |
 | relayRemovals? | json — [{relayId, tombstoneCid, reasonCode}] advisories seen for this record; display only |
 | ackCid? | string — cid of the ack this vault signed for a participants statement addressed to it |
-| bufferedUntil? | timestamp — receivedAt + 24 h while status buffered |
+| bufferedUntil? | timestamp — receivedAt + 24 h while status buffered for chain_gap or signer_doc_unknown, receivedAt + 7 days for subject_unknown |
 | supersededBy? | uuidv7 — newer FederatedRecord of the same author and recordKey with a higher seq |
 | purgedAt? | timestamp — content removed after an author tombstone, a reject rule or an operator drop |
 | revision | int — CTR-ID-001 ID-4 |
@@ -70,7 +73,7 @@ Schema `classrup.federation.record/v1` · storage **relay+device** · privacy **
 - status accepted implies chainAnchor, chainGap, or prev refers to an accepted, hidden or purged-stub record of the same chain at seq - 1.
 - status tombstoned implies envelope is null and purgedAt is set; status hidden keeps the envelope and is reversible.
 - A public-audience FederatedRecord is P0 and never contains location finer than geohash 5; a relay never stores a participants-audience row.
-- A statement is acted on by domain modules only when status is accepted and signerRole is set; receivedFromRelay never influences acceptance.
+- A statement is acted on by domain modules only when status is accepted and signerRole is set, and it reaches them only through the StatementIngestPort registration of its type; receivedFromRelay never influences acceptance.
 - Field classes are annotated per F10.S02.M02 (public rows P0, participants rows P2, provenance P1).
 
 ### Tombstone
@@ -146,6 +149,10 @@ CREATE INDEX fed_tombstone_key ON fed_tombstone(tenant_id, author, target_record
 | TEST-PS-084-09.T38 | integration | PS-084-01.R06, PS-084-01.R04 | vault V2 joins after author X has published 200 public records, some older than 180 days but within maxAge and some tombstoned | V2 anchors at the first record it receives, tombstone stubs satisfy chain continuity, every live record is accepted and the final state equals V1's |
 | TEST-PS-084-09.T39 | unit | PS-084-01.R04 | purge an accepted record after an author tombstone | the stored row keeps only cid, recordKey, author, chain key, seq and purgedAt; envelope null |
 | TEST-PS-084-09.T43 | contract | PS-084-04.R06, PS-084-01.R08 | buyer vault mirrors listingRevision 3, then receives revision 4 at seq n+1, then revision 5 from the seller's second device with a lower chain seq; an ack accepted for an outbox entry | three federation.record.accepted events with recordKey, version and supersededRecordId; older rows supersededBy by version only; the ack event carries verification {signerDid, keyId, keyStatus, checkedAt} |
+| TEST-PS-084-09.T48 | integration | PS-084-04.R09, PS-084-01.R09 | register stub owners for commerce, move, comms and moderation types; receive a payment_claim, a payment_ack, a move, a message and a thread_open, then redeliver them; an fx_quote_revocation; a registry type without a registered owner | each type reaches its owner exactly once (commerce.statement.ingest, commerce.fx_quote.ingest_revocation, federation.migration.receive_move with firstReceivedAt = receivedAt and oldRelayReceipt, comms.message.receive, comms.thread.receive_open); the redelivery is a duplicate and dispatches nothing; the type without an owner is quarantined unregistered_type |
+| TEST-PS-084-09.T49 | contract | PS-084-04.R09, PS-084-01.R09 | one registration contract case for each owner type named in the routes (F08.S01.M01, F08.S01.M02, F12.S01.M01, F12.S01.M03, F12.S02.M01 relay statements) | each registration receives a verified envelope with provenance {recordId, cid, receivedAt, sourceKind, relayReceipts, verification} inside the receive transaction and before MailboxPort.ack |
+| TEST-PS-084-09.T50 | integration | PS-084-03.R07, PS-084-01.R09 | a proposal_revision r2 arrives before revision 1; revision 1 is then accepted and its owner calls releasePending; 501 pending statements by one author; a held statement for 7 days | r2 is held with subject_unknown and not acked; after revision 1 it is ingested in seq order; the 501st is refused with RATE_LIMITED; the 7-day statement is dropped with reason subject_unknown |
+| TEST-PS-084-09.T53 | integration | PS-084-01.R09, PS-084-04.R10 | a listing published to relays R1 and R3 and a participants offer to a recipient with relayId; the recipients field and receipts | the record keeps one verified receipt per destination in relayReceipts; recipients carry {did, relayId, mailboxId}; publish creates the outbox entry in the caller's transaction |
 
 ## Dependencies
 

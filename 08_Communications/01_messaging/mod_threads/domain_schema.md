@@ -11,6 +11,7 @@
 - **PS-061-01.R03** Participant timestamps in a received thread-open statement are claims; the vault stores its own receivedAt separately.
 - **PS-061-01.R04** The context binding is immutable after creation; a different context needs a new thread.
 - **PS-061-01.R05** The threadId is derived, never random: UUIDv8 from the first 122 bits of SHA-256('classrup.comms.thread.v1' || 0x00 || JCS([contextTenantId, contextType, contextId, sortedPair, generation])), where contextTenantId is the tenantId named in the context's signed statement, sortedPair is present only for one-to-one contexts (listing, proposal, direct) and generation starts at 1 and increases only when a new thread replaces a locally archived one with the same key.
+- **PS-061-01.R06** Reply mailboxes (N27): the participants[] entries of classrup.comms.thread_open/v1 are { did, role, replyMailboxes? }; the entry of createdBy carries replyMailboxes, 1..3 { relayId (canonical F15.S02.M01), mailboxId } taken from comms.mailbox.list_own, so a buyer who opens a thread from a listing is addressable by the seller without any projection. A receiving vault stores them in Thread.participants, and replaces a participant's stored set only with the replyMailboxes of a later verified statement authored by that participant (a thread_open or a message handed over by F08.S01.M01 through comms.thread.refresh_reply_mailboxes), never with a hint from a relay or from another participant.
 
 ## Specification
 
@@ -27,7 +28,7 @@ Schema `classrup.comms.thread/v1` · storage **device** · privacy **P2** · ret
 | contextId? | uuidv7 — ref to the owning context record; absent only for direct |
 | generation | int — 1.. ; increments only when a new thread replaces a locally archived thread with the same derivation key |
 | threadKeyHash | string — SHA-256 hex of the derivation key without generation; indexed |
-| participants | array — 2..12 items { did, role: owner\|member, joinedAtClaim, leftAt?, departedByNotice? (cid of the verified departure notice whose envelope author is this did); the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean } |
+| participants | array — 2..12 items { did, role: owner\|member, joinedAtClaim, replyMailboxes? (1..3 { relayId, mailboxId }, the latest verified set of this participant), leftAt?, departedByNotice? (cid of the verified departure notice whose envelope author is this did); the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean } |
 | openStatementCid? | string — sha256 cid of the signed thread-open statement that created or mirrored this thread |
 | origin | enum — local \| mirrored |
 | receivedAt? | timestamp — local clock when a mirrored thread was accepted |
@@ -56,7 +57,8 @@ Schema `classrup.comms.thread/v1` · storage **device** · privacy **P2** · ret
 | TEST-PS-061-09.T08 | integration | PS-061-06.R01, PS-061-01.R05 | create twice and concurrent creates from vaults A and B for one pair while offline | both derive the same threadId and generation, one thread after exchange, nothing superseded, existing true on repeat |
 | TEST-PS-061-09.T17 | integration | PS-061-01.R05, PS-061-04.R03 | three vaults A, B, C receive mutiny.party.joined for cycle X in different orders and then exchange messages | all derive the same threadId; C verifies and decrypts A's message bound to that threadId |
 | TEST-PS-061-09.T21 | unit | PS-061-01.R04 | attempt to change contextType, contextId or generation of a stored thread, and accept a thread-open whose threadId does not match its derivation | CONFLICT_STATE for the change; COMMS_THREAD_OPEN_REJECTED for the mismatch |
+| TEST-PS-061-09.T22 | integration | PS-061-01.R06, PS-061-04.R06, PS-061-04.R07, PS-061-02.R05 | buyer B opens a thread from seller A's listing with no projection of B in A's vault; A's vault receives it through federation.record.receive; A replies; B then rotates its mailbox and sends a message | the thread_open is published with ext.recipients from the listing mailboxHints and stream thr:<threadId>; A's vault creates a request thread through comms.thread.receive_open, stores B's replyMailboxes, comms.thread.recipients returns B's mailbox, the reply is addressed to it, and the rotated mailbox replaces the stored one only from B's verified message; a thread_open whose creator entry has no replyMailboxes is rejected with COMMS_THREAD_OPEN_REJECTED |
 
 ## Dependencies
 
-Module depends on: F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F11.S01.M02, F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [module SPEC](SPEC.md).

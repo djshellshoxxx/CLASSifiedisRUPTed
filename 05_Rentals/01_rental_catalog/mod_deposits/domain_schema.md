@@ -33,7 +33,7 @@ Schema `classrup.rentals.deposit_terms/v1` · storage **device** · privacy **P2
 | withdrawalCid? | string — cid of a deposit_withdrawal (owner withdrawal or renter decline) |
 | fundingDealId? | uuid — UUIDv8 per F09.S01.M01 (explicit CTR-ID-001 ID-1 exception, derived from contextRef and contextCid); F09 Deal for contextRef {rental_deposit, depositId} |
 | fundingClaimId? | uuidv7 — ref F09 PaymentClaim for the deposit payment |
-| fundedAt? | timestamp — local time when proof became acknowledged or final |
+| fundedAt? | timestamp — local time when the payee-signed payment_ack was received |
 | returnAttestedAtClaim? | timestamp — signed attestation time from rentals.return.attested |
 | overdueSince? | timestamp — detectedAt of rentals.rental.overdue |
 | damageClaims | object[] — 0..3 {claimId, kind} recorded from rentals.damage.claimed, with resolvedAt, outcome and agreedAmount? from rentals.damage.resolved |
@@ -56,7 +56,7 @@ Schema `classrup.rentals.deposit_terms/v1` · storage **device** · privacy **P2
 | revision | int — CTR-ID-001 ID-4 |
 
 **Invariants**
-- state funded or later implies agreementCid is set and funding proof under fundingDealId was acknowledged or final.
+- state funded or later implies agreementCid is set and the owner-signed payment_ack for fundingDealId was received.
 - retainedAmount plus releaseAmount equals the funded amount whenever both are set.
 - forfeit.amount is at most the funded amount, and at most one forfeit references any damage claim.
 - state forfeited implies the renter's signed acceptance of retaining the full funded amount (a forfeit_response or a both-accepted dispute outcome), never silence or a mediator-only outcome.

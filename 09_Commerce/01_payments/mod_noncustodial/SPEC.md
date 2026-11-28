@@ -12,11 +12,11 @@ A Deal records what two or more parties owe each other for something agreed else
 
 - Provide the generic command commerce.deal.open and the in-process DealPort {open, cancel, unfreeze} that context modules call with contextRef {type, id}, contextCid, parties and obligations; derive dealId as a UUIDv8 from contextRef and contextCid so every vault converges.
 - Own Deal and PaymentClaim and the COM-3 status machine in each vault, including the 14-day no-progress expiry, open dispute case tracking and partial-coverage expiry.
-- Produce and verify the signed statements classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1, classrup.commerce.payment_ack/v1, classrup.commerce.payment_dispute/v1, classrup.commerce.deal_cancel/v1 and classrup.commerce.deal_completion/v1, each with the signer role registered in F11.S01.M01.
-- Ingest incoming statements, check signer role and context terms, order them by the per-author seq and prev chain (FED-3), store with provenance, quarantine invalid ones within a bounded quarantine, dispatch the method modules' statement types to their StatementHandlerPort handlers, and freeze a claim only on a true fork.
+- Produce and verify the signed statements classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1, classrup.commerce.payment_ack/v1, classrup.commerce.payment_dispute/v1, classrup.commerce.deal_cancel/v1 and classrup.commerce.deal_completion/v1, each with the signer role registered in F11.S01.M01; every one is produced only through the StatementPublisherPort (F11.S01.M02 federation.record.publish, audience participants, sealed ciphertext of at most 12288 bytes, N25), with the recipients stored on the Deal and the Deal stream, and this module never signs, allocates seq and prev, or queues an envelope itself.
+- Ingest incoming statements through the F11.S01.M02 StatementIngestPort registration (N26), check signer role and context terms, check chain position against the F11.S01.M02 per-(author, signerKey, stream) seq and prev chain (FED-3), store with provenance, quarantine invalid ones within a bounded quarantine, dispatch the method modules' statement types to their StatementHandlerPort handlers, and freeze a claim only on a true fork.
 - Expose the MethodRulePort so cash (F09.S01.M02), crypto (F09.S01.M03) and external methods plug in their rules, hold claims the method rule has not cleared, and track peer sync state without claiming more certainty than reached.
 - Mark a Deal completed only when every obligation is covered by payee-acknowledged claims, sign the completion body and emit commerce.deal.completed with its completionCid.
-- Support MVP listing_fee Deals whose payee is a relay operator named in that relay's signed policy document, acknowledged through a relay command under relay policy.
+- Support MVP listing_fee Deals whose payee is the operator principal named by promotion.operatorDid in the verified F15.S04.M03 tenant_config; the operator acts from the operator's own vault with the ordinary vault commands (it fetches its mailbox on the relay, acknowledges external claims with commerce.payment.acknowledge and, for crypto, issues commerce.crypto_request.create and signs the chain payment_ack from its own verifier); no relay holds a Deal, a claim, a key or a payment acknowledgement.
 - Freeze a Deal named in bazaar.inventory.conflict_detected linkedDealIds until the context owner resolves the inventory fork, and apply the rentals block exception (N7a) that ContextTermsPort.blockExempt reports.
 - Let a party export the all-party signed deal_completion/v1 proof without amounts or obligations for voluntary submission to a relay (F12.S03.M04 moderation.accountlimit.submit_completion).
 
@@ -36,7 +36,7 @@ A Deal records what two or more parties owe each other for something agreed else
 - As a participant in a barter cycle with a compensation leg, I see the money obligation as a Deal and know the platform does not hold the money.
 - As any party, I can see how far each statement has travelled (saved here, prepared, relay received, peer accepted) and never see more certainty than that.
 - As a seller whose buyer withdrew before my acceptance arrived, my offer module voids the Deal on its own and the buyer's vault shows the cancellation as one-sided.
-- As a seller promoting a listing on a relay, I pay the relay operator through a listing_fee Deal and see the operator's signed acknowledgement, never a paid flag.
+- As a seller promoting a listing on a relay, I pay the operator through a listing_fee Deal and see the operator's signed acknowledgement, never a paid flag.
 
 ## Edge cases
 
@@ -83,16 +83,16 @@ A Deal records what two or more parties owe each other for something agreed else
 
 ## Dependencies
 
-F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001
+F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-069-01 | [Domain schema](domain_schema.md) | 5 |
+| PS-069-01 | [Domain schema](domain_schema.md) | 6 |
 | PS-069-02 | [Validation rules](validation_rules.md) | 7 |
 | PS-069-03 | [Workflow state machine](workflow_state_machine.md) | 10 |
-| PS-069-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
+| PS-069-04 | [Commands, queries and events](commands_queries_events.md) | 7 |
 | PS-069-05 | [Authorization and capabilities](authorization_capabilities.md) | 4 |
 | PS-069-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-069-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 6 |
@@ -104,7 +104,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T38 pass in CI.
+- All tests T01 to T39 pass in CI.
 - No state or label ever shows a payment as completed on the strength of a payer claim alone.
 - Two independent vaults converge on the same Deal status and on the statement-driven claim statuses (cash and external claims and the claim, acknowledgement and dispute chain) after exchanging the same signed statements in any order; crypto observation statuses are per vault and labelled according to your verifier, and crypto-driven completion converges through the payee's signed chain acknowledgement.
 - A forked claim is frozen and never silently resolved.

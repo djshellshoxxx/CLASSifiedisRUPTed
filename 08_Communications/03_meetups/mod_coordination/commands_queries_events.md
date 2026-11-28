@@ -12,6 +12,7 @@
 - **PS-064-04.R04** Statements are registered with F11.S01.M01 (N2): classrup.comms.meetup/v1 { meetupId, threadId, proposalRevision, window, place with spotCid, partyDids } and classrup.comms.meetup_cancel/v1 { meetupId, reason }, each signed by a device key of a party; agreements are classrup.comms.consent/v1 statements of F08.S02.M02.
 - **PS-064-04.R05** Event payloads carry the party DIDs needed for notification routing (N4) - comms.meetup.proposed, comms.meetup.agreed and comms.meetup.cancelled all include partyDids.
 - **PS-064-04.R06** The module registers ExportSectionPort (section comms.meetups with the signed proposal statements), DeletionPort (plan, execute, pseudonymize - proposal and cancellation statements kept as evidence get the deleted party's DID replaced by the deletion pseudonym) and RetentionPurgePort (RET-EVIDENCE, independent of the thread purge) with F10 (N6).
+- **PS-064-04.R07** The SubjectCanonicalizerPort that this module registers for comms_meetup also implements recipients(meetupId), which returns the { did, relayId, mailboxId } of every other partyDid from the F08.S01.M02 comms.thread.recipients roster of the meetup's thread (N27); propose, reschedule and agree pass that thread's stream thr:<threadId> to comms.consent.sign so the consent is published through the F11.S01.M02 path to the other parties.
 
 ## Specification
 
@@ -79,6 +80,7 @@ vault command comms.meetup.propose
 | TEST-PS-064-09.T06 | integration | PS-064-04.R03 | thread archived, block added by the local principal, cycle cancelled events | open meetups cancelled; blocker side silent |
 | TEST-PS-064-09.T21 | contract | PS-064-04.R04, PS-064-04.R05 | registry entries for meetup and meetup_cancel; payloads of proposed, agreed and cancelled in TC | signer role party; every payload carries partyDids so notifications reach the other parties |
 | TEST-PS-064-09.T22 | integration | PS-064-04.R06 | account deletion with open and elapsed meetups | DeletionPort plan pseudonymizes kept proposal statements and purges open meetups; export section comms.meetups present beforehand |
+| TEST-PS-064-09.T23 | integration | PS-064-04.R07 | B proposes a meetup in a listing thread with S and S agrees; B revokes before windowStart | the consent statements are published with recipients from the thread roster and stream thr:<threadId>, S's vault accepts them through comms.consent.accept and the meetup reaches agreed in both vaults |
 
 ## Dependencies
 

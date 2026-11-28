@@ -13,6 +13,7 @@
 - **PS-088-02.R05** Participant statements leave the vault only through the MailboxPort as sealed wrappers, and recipient mailbox routes are re-resolved after a recipient moves.
 - **PS-088-02.R06** Relay forwarding of a hosted author's public records is gated by F10.S01.M01 privacy.consent.relay_check, while tombstones, move and move_cancel are always forwarded so withdrawals propagate.
 - **PS-088-02.R07** Outbound relay-to-relay delivery honours the F16.S03.M03 containment sentinel federation_off by pausing peer entries, which stay queued for at most 7 days; vault-to-relay delivery is unaffected and the sentinel is not a feature flag, so CTR-FLG-001 FLG-2 does not apply.
+- **PS-088-02.R08** Relay forwarding also requires the per-record forwarding opt-in carried in the signed payload (federationOptIn, default false), so a listing indexed on the relay without that opt-in gets no PeerOutbox entry whatever the author's relay consent says (FED-1); a recipient mailbox put is authenticated by the per-relay request key only, so the relay learns no sender DID, device key or message ID.
 
 ## Specification
 
@@ -29,10 +30,10 @@
 | V09 | vault: privacy.consent.check(federation_publish, relayId) is granted before a public statement is routed and again before it is dispatched; when the check service is unavailable the step fails closed with DEPENDENCY_UNAVAILABLE | FEDERATION_NOT_OPTED_IN |
 | V10 | a recipient mailbox route resolves; after a recipient move it is re-resolved from the updated portable document or mailbox hint and the entry waits while none is found | FEDERATION_RECIPIENT_UNRESOLVED |
 | V11 | participants envelopes are handed to the MailboxPort only, as a sealed wrapper {v, mailboxId, ciphertext, size, sentAt} with no author, type or seq in cleartext, and never to POST /fed/v1/inbox | FEDERATION_DESTINATION_INVALID |
-| V12 | relay forwarding of a hosted author's public record (not tombstones, move or move_cancel): F10.S01.M01 privacy.consent.relay_check {authorDid, recordKind} returns granted before a PeerOutbox entry is created; otherwise no entry is created | FEDERATION_NOT_OPTED_IN |
+| V12 | relay forwarding of a hosted author's public record (not tombstones, move or move_cancel): the record's forwarding opt-in is true (payload.federationOptIn for classrup.bazaar.listing/v1; portable types without such a member are never forwarded) and F10.S01.M01 privacy.consent.relay_check {authorDid, recordKind} returns granted, otherwise no PeerOutbox entry is created | FEDERATION_NOT_OPTED_IN |
 | V13 | relay-to-relay dispatch: the F16.S03.M03 containment sentinel federation_off is absent (read through ContainmentPort before every batch); while it exists entries are paused with pausedReason federation_killed and nothing is sent to peers | FEATURE_DISABLED |
 | V14 | a restore announcement classrup.platform.relay_restore/v1 of the destination peer is applied only when signed under context classrup-relay-restore:v1 by a non-revoked key of the same relayId in its pinned key history | FEDERATION_RECEIPT_INVALID |
-| V15 | a recipient mailbox put carries a put proof {keyId, nonce, signedAt, sig} signed by this device's key under tag classrup/relay-request/v1 (F11.S01.M03) over (mailboxId, messageId, SHA-256 of blob, nonce), with a fresh nonce | FEDERATION_DESTINATION_INVALID |
+| V15 | a recipient mailbox put carries an RFC 9421 signature by the sender's per-relay request key (F08.S01.M01 V11, tag classrup/relay-request/v1, F11.S01.M03) covering @method, @target-uri, content-digest of the sealed wrapper, created, keyid and nonce, with a fresh nonce; it carries no device key, messageId or sender DID | FEDERATION_DESTINATION_INVALID |
 
 ## Verification
 
@@ -45,6 +46,7 @@
 | TEST-PS-088-09.T25 | contract | PS-088-01.R05, PS-088-02.R02 | peer returns a classrup.platform.relay_receipt/v1 with matching digest and cid; one with a wrong digest; one signed by a key outside the pinned history; one with another destination | first stored and the entry advances; the others FEDERATION_RECEIPT_INVALID and the state does not advance; destinationId uses the canonical relayId |
 | TEST-PS-088-09.T27 | integration | PS-088-02.R06 | hosted author without registered federation_publish consent publishes a listing and later a tombstone; consent registered later | no PeerOutbox entry for the listing (FEDERATION_NOT_OPTED_IN counted); the tombstone is forwarded; after registration the next record is forwarded |
 | TEST-PS-088-09.T28 | integration | PS-088-02.R07 | containment sentinel federation_off created with 300 prepared entries; vault delivery to the relay meanwhile; sentinel kept for 8 days on a second fixture | entries paused federation_killed and nothing reaches peers; vault deliveries unaffected; after removal they resume; on the second fixture they are cancelled at expiresAt with federation.delivery.failed reason expired |
+| TEST-PS-088-09.T32 | integration | PS-088-02.R08, PS-088-01.R01 | relay R1 indexes a hosted listing with federationOptIn false and one with true while relay_check is granted | the false one is indexed and gets no PeerOutbox entry (FEDERATION_NOT_OPTED_IN counted); the true one is forwarded to R2; a profile record is never forwarded |
 
 ## Dependencies
 

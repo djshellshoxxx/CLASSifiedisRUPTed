@@ -24,7 +24,8 @@ user_stories:
   - As a proposer, I am told exactly why a cycle cannot be proposed, for example that one item is no longer available or the value gap of one participant exceeds the tolerance.
   - As a member, I see the cheapest fix offered by the system, such as adding a compensation leg of a stated amount.
 edge_cases:
-  - Two legs name the same inventory item; the report fails check C02 and names both legs.
+  - Two legs name the same item, identified across vaults by (giverId, listingId, variantId?); the report fails check C02 and names both legs, and peer items without any local inventory id are compared the same way.
+  - A direct trade_proposal to a member who published no matching profile and no want projection; C07, C09 and C10 are recorded as pass with params notApplicable true and the report is feasible when the other checks pass.
   - A pinned FX quote expires 20 minutes from now; the check warns because it has less than 30 minutes left, and fails when expired.
   - A participant's projection says they accept cycles of at most 3 but the subject has 4 participants; check C10 fails for that participant only.
   - Item quantity is 1 and a local reservation for another cycle holds it; the check fails with item_reserved_elsewhere without revealing the other cycle.
@@ -72,6 +73,7 @@ processes:
           - "updatedAt: timestamp — RFC 3339 UTC"
         invariants:
           - overall is infeasible iff at least one check has status fail, and feasible only if no check has status warn or basis unverifiable.
+          - For subjectType trade_proposal the checks C07, C09 and C10 are always present with status pass, basis local and params {notApplicable: true}; they apply to suggestion and cycle only.
           - checks contains each of C01..C13 exactly once per participant or leg scope it applies to, in ascending code order.
           - staleAt equals evaluatedAt plus 10 minutes.
   validation_rules:
@@ -79,22 +81,24 @@ processes:
       - Each feasibility check is a rule with a stable code and maps to one module error code returned to callers.
       - The tolerance rule implements MNY-5 exactly, toleranceBps of the larger side or the absolute minimum (the profile's reference amount, 5.00 EUR by default, converted to the settlement currency with the subject's pinned barter_normalization quote or, when none covers EUR, the toleranceRef rate sealed in the head snapshot, MNY-4 HALF_EVEN), whichever is greater, with the effective length profile read from this module's registry.
       - Checks never read another party's private records; they use own vault data, signed projections and statement contents only.
+      - "The matching-specific checks are scoped by subjectType: C07 (distance from the receiver's want cell), C09 (opt-in and pause per matching_profile projection) and C10 (maxCycleLength from the matching profile) apply to suggestion and cycle, and for trade_proposal they are recorded as notApplicable passes so that a direct proposal to a member without a matching profile is never infeasible for that reason (V16)."
     rules:
       - "V01 | C01 all participant DIDs distinct (participant uniqueness) | MUTINY_PARTICIPANT_DUPLICATE"
-      - "V02 | C02 all inventory items distinct across legs | MUTINY_ITEM_DUPLICATE"
-      - "V03 | C03 each own item is owned by the principal in the local inventory and each peer item's listing projection is authored by the giver DID | MUTINY_ITEM_NOT_OWNED"
+      - "V02 | C02 all items distinct across legs by (giverId, listingId, variantId?) (N29); inventoryItemId is used only as an additional own-item key and is never required | MUTINY_ITEM_DUPLICATE"
+      - "V03 | C03 each own item is owned by the principal in the local inventory, resolved with bazaar.inventory.check from listingId and variantId, and each peer item's listing projection (listingCid) is authored by the giver DID | MUTINY_ITEM_NOT_OWNED"
       - "V04 | C04 each own item has available quantity ≥ leg quantity, not reserved elsewhere; each peer item is listed as published and unexpired | MUTINY_ITEM_UNAVAILABLE"
       - "V05 | C05 for each participant gap = absolute difference of given and received ≤ max(toleranceBps × larger side, absoluteMinRef converted to the settlement currency with the pinned quote or the snapshot toleranceRef) (MNY-5) unless a sealed compensation leg or an acceptedImbalances entry of the signed head snapshot naming that participant covers the excess; only signed sources (the revision snapshot) are read, never an unsigned local input | MUTINY_VALUE_OUT_OF_TOLERANCE"
       - "V06 | C06 every pinned FX quote is unexpired; less than 30 minutes left gives status warn and an expired quote gives fail | MUTINY_QUOTE_STALE"
-      - "V07 | C07 every adjacent pair distance bucket ≤ the length-profile maxPairBucket and both participants' maxDistanceBucket, as integer ordinals of the F02.S02.M04 mapping (lt5=0 … gt50=4); the pair bucket is bucketBetween of the giver's listing cell and the receiver's want cell (both ≤ L2, assertPublicCell), and an L1-only cell counts as at least 3 | MUTINY_DISTANCE_EXCEEDED"
+      - "V07 | C07 applies to subjectType suggestion and cycle only; every adjacent pair distance bucket ≤ the length-profile maxPairBucket and both participants' maxDistanceBucket, as integer ordinals of the F02.S02.M04 mapping (lt5=0 … gt50=4); the pair bucket is bucketBetween of the giver's listing cell and the receiver's want cell (both ≤ L2, assertPublicCell), and an L1-only cell counts as at least 3 | MUTINY_DISTANCE_EXCEEDED"
       - "V08 | C08 no participant is in another participant's local block list known to this vault | BLOCKED_PARTY"
-      - "V09 | C09 each participant is opted in and not paused per projection | MUTINY_PARTICIPANT_INELIGIBLE"
-      - "V10 | C10 cycle length ≤ every participant's maxCycleLength and ≤ tenant Lmax | MUTINY_CYCLE_TOO_LONG"
+      - "V09 | C09 applies to subjectType suggestion and cycle only; each participant is opted in and not paused per projection | MUTINY_PARTICIPANT_INELIGIBLE"
+      - "V10 | C10 applies to subjectType suggestion and cycle only; cycle length ≤ every participant's maxCycleLength and ≤ tenant Lmax | MUTINY_CYCLE_TOO_LONG"
       - "V11 | C11 at propose or revision time: consentDeadline is between now + 1 h and now + 14 d for trade_proposal or now + 7 d for cycle, at most now + 24 h and ≤ earliestQuoteExpiry when the subject has more than one currency (N16), executionWindow between 1 d and 23 d, and (consentDeadline − now) + executionWindow ≤ 30 d | MUTINY_DEADLINE_INVALID"
       - "V12 | C12 no item has an unacknowledged automatic plausibility flag, and no open peer flag was raised on the item within this subject (F02.S04.M03) | MUTINY_VALUATION_DISPUTED"
       - "V13 | C13 the report used for a commit decision has evaluatedAt within the last 10 minutes | MUTINY_FEASIBILITY_STALE"
       - "V14 | C11 at consent or commit time checks only that the local clock is before consentDeadline; the range is not re-validated | EXPIRED"
       - "V15 | a LengthProfile registered for length L is returned only for subjects of length L, and the explanation or check of another length is refused | MUTINY_PROFILE_LENGTH_MISMATCH"
+      - "V16 | for subjectType trade_proposal C07, C09 and C10 are not evaluated: each is recorded with status pass, basis local and params {notApplicable: true}, because a direct proposal needs only ownership, MNY-5 tolerance and block checks and the counterparty may have published no matching profile or want projection | MUTINY_PARTICIPANT_INELIGIBLE"
   workflow_state_machine:
     machines: []
     note: "FeasibilityReport is immutable derived output with no lifecycle; staleness is computed from staleAt at read time. Subject state machines live in F02.S01.M01 and F02.S03.M01."
@@ -233,8 +237,10 @@ processes:
       - "T20 | unit | 01.R01,04.R02 | registry with profiles 3 and 4 registered, get(5), explicit effectiveProfile, explanation of a 4-party suggestion with the 3-party profile | engine default for 5; explicit profile used; MUTINY_PROFILE_LENGTH_MISMATCH"
       - "T21 | integration | 07.R04 | F10 export, deletion and retention sweep | section mutiny.feasibility declared excluded; erased principal's reports purged; reports purged after 30 days"
       - "T22 | unit | 02.R03,07.R03 | gap above tolerance with an unsigned local acceptance, then with an acceptedImbalances entry in the signed snapshot | first fails C05; second passes C05 with basis signed_projection"
+      - "T23 | unit | 02.R04,01.R03 | trade_proposal to a counterparty with no matching_profile projection and no want projection, with C01-C06, C08 and C11-C13 passing; then the same pair as a 3-party cycle | trade_proposal feasible with C07, C09 and C10 recorded pass, basis local and params notApplicable; mutiny.proposal.create is not refused with MUTINY_PROPOSAL_INFEASIBLE; the cycle fails C09 with MUTINY_PARTICIPANT_INELIGIBLE"
+      - "T24 | unit | 02.R01,01.R03 | peer legs without any inventoryItemId, the same (giverId, listingId, variantId) twice, and two variants of one listing | C02 fails only for the duplicate and names both legs; the variant pair passes; C03 and C04 read the listing projection of listingCid for peer items and bazaar.inventory.check for own items"
     acceptance:
-      - All tests T01–T22 pass in CI.
+      - All tests T01–T24 pass in CI.
       - No peer claim is ever presented as verified and overall feasible is impossible with any unverifiable or peer_claim basis.
       - MNY-5 tolerance is exact at the boundary for bigint amounts.
   import_export_backup_rollback:

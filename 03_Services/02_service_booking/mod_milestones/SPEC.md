@@ -6,7 +6,7 @@
 
 ## Purpose
 
-When a booking is confirmed, each party's vault creates the milestones of the plan the client signed in the accepted quote (identified by quoteCid), with milestoneId = uuid(sha256(bookingId + ':' + seq)) so both vaults agree without the provider assigning ids. The provider submits a milestone with deliverable references and hashes as a signed statement; the client approves the exact submission by signing its cid or requests changes. Approval opens one Deal in F09.S01.M01 per milestone (contextRef {type: service_milestone, id: milestoneId}, contextCid = approvalCid) in the same vault transaction; payment is a claim recorded through F09 (CTR-COM-001), never a platform transfer, and claim events are matched through the milestone's dealId. A milestone is settled only when the payee acknowledged the claim or a chain verifier reports finality; reorgs and failures lower the proof shown. When every non-cancelled milestone is settled, both parties sign a booking completion statement and only then does the booking complete.
+When a booking is confirmed, each party's vault creates the milestones of the plan the client signed in the accepted quote (identified by quoteCid), with milestoneId = uuid(sha256(bookingId + ':' + seq)) so both vaults agree without the provider assigning ids. The provider submits a milestone with deliverable references and hashes as a signed statement; the client approves the exact submission by signing its cid or requests changes. Approval opens one Deal in F09.S01.M01 per milestone (contextRef {type: service_milestone, id: milestoneId}, contextCid = approvalCid) in the same vault transaction; payment is a claim recorded through F09 (CTR-COM-001), never a platform transfer, and claim events are matched through the milestone's dealId. A milestone is settled only on the provider-signed payment_ack (N30: verification source counterparty for cash or external, chain for crypto); the client's own verifier reaching final only labels the proof and never settles; reorgs and failures lower the proof shown. When every non-cancelled milestone is settled, both parties sign a booking completion statement and only then does the booking complete.
 
 ## Responsibilities
 
@@ -89,6 +89,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T21 pass in CI.
+- All tests T01–T22 pass in CI.
 - A milestone is never shown settled on a claim alone, never shows a stronger proof than the claim reached, and the proof level is always displayed.
 - Duplicated, reordered or replayed statements never advance a milestone twice, and a booking completes only with both completion signatures.

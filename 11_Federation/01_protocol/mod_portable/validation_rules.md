@@ -11,6 +11,7 @@
 - **PS-083-02.R03** Every rejection returns a stable code that the calling module surfaces without echoing field values.
 - **PS-083-02.R04** Location precision is enforced on both paths through F06.S02.M01 assertPublicCell; outbound cells are snapped to L2 before the check (PRV-1) and inbound payloads with a cell longer than 5 characters or with coordinate members are rejected.
 - **PS-083-02.R05** Outbound portable drafts carry no timestamp finer than the UTC hour, checked with F10.S02.M03 assertCoarseTime over the draft's declared timestamp members and createdAt after publicTime has floored them.
+- **PS-083-02.R06** The classrup.bazaar.listing/v1 allowlist is the F01.S01.M03 closed key set copied verbatim (media entries {ref, alt?, decorative?} and tenantId included, no mediaRefs), so an unmodified F01.S01.M03 projection passes buildDraft and validateInbound and a payload using a renamed member is rejected with FEDERATION_PAYLOAD_INVALID.
 
 ## Specification
 
@@ -46,6 +47,7 @@
 | TEST-PS-083-09.T23 | unit | PS-083-01.R08, PS-083-02.R05 | listing published at 10:47:12.345 with expiresAt 2026-12-04T10:47:12.345Z; busy block 10:20-11:40; two listing revisions inside one hour; a draft with an undeclared fine timestamp member | createdAt and publishedAt 10:00:00.000Z, expiresAt 2026-12-04T10:00:00.000Z; busy block 10:00-12:00; assertCoarseTime passes; revisions ordered by listingRevision and seq; the undeclared member refused with FEDERATION_EXPORT_FORBIDDEN_FIELD |
 | TEST-PS-083-09.T26 | unit | PS-083-01.R02, PS-083-02.R01 | build drafts for a listing with every kind subset and variants, a service offering with credential evidence, a rental offering and a busy-blocks summary | payload keys equal the closed key sets of the note; offering keeps providerTimeZone, seq, prev and publishedAt and drops evidenceAttachmentId; maxBudget only when budgetVisible; busy blocks carry intervals and unit counts only |
 | TEST-PS-083-09.T29 | unit | PS-083-01.R12, PS-083-01.R04, PS-083-02.R03, PS-083-04.R04 | roleFor for F18 rows with delegations and operatorKeys resolver stubs: policy_decision by a decider first listed 15 d and 10 d before the proposal receipt, by the publisher's own key, and with no delegations resolver registered; policy_cosign by a listed cosigner and by an unlisted key; transparency_report by a second operator key, by the embedded draft's compiler and by a key outside operatorKeys; rule_pack by its publisher | the 15 d decider, the listed cosigner, the second operator and the publisher resolve; every other case yields a rule that makes the receiving path quarantine with FEDERATION_SIGNER_ROLE_INVALID |
+| TEST-PS-083-09.T31 | contract | PS-083-02.R06, PS-083-02.R02 | buildDraft and validateInbound over the F01.S01.M03 example projection (media with alt and decorative, tenantId, federationOptIn) and over a copy that uses mediaRefs | the example is accepted and its key set equals the allowlist; the mediaRefs copy is rejected with FEDERATION_PAYLOAD_INVALID |
 
 ## Dependencies
 

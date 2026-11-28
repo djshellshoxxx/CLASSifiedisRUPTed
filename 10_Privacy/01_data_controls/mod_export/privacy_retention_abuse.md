@@ -9,6 +9,7 @@
 - **PS-078-07.R01** The bundle contains P3 data and is encrypted at rest with a per-job key; the key is deleted at expiry, and the UI warns that the downloaded file is plain JSON Lines that the user must protect.
 - **PS-078-07.R02** The export excludes other users' P2 and higher content and all P4 secrets; device private keys are never exported, and recovery material is exported only as the user's own recovery hints (P3) and never as keys.
 - **PS-078-07.R03** Export abuse by someone with brief access to an unlocked device is limited by the fresh-unlock requirement, rate limit and an on-screen notification of every export.
+- **PS-078-07.R04** Import never writes another user's P2 or higher content, never writes keys other than the encrypted key bundle section, and rejects a bundle for another principal unless the vault is empty; foreign records found in a bundle are counted as rejectedForeign and skipped.
 
 ## Specification
 
@@ -40,6 +41,7 @@ Classes per [CTR-PRV-001](../../../planning/contracts/CTR-PRV-001.md).
 | TEST-PS-078-09.T12 | abuse | PS-078-07.R01, PS-078-07.R03 | 4th export in 24 h; bundle scanned for another user's P2 content and private key patterns | 4th RATE_LIMITED; scan finds none |
 | TEST-PS-078-09.T13 | integration | PS-078-07.R02, PS-078-02.R02 | bundle scanned for P4 fields, unclassified fields and other users' private content | none present; user's own shared copies present |
 | TEST-PS-078-09.T20 | e2e | PS-078-07.R03 | start an export and navigate across screens; reload the PWA | the in-app export notice is shown on every screen until dismissed and is announced politely; it survives reload |
+| TEST-PS-078-09.T26 | integration | PS-078-02.R04, PS-078-04.R07, PS-078-07.R04, PS-078-10.R04 | commit after the ledger check for a deleted did, with and without newIdentityOverride; a multi-part set missing part 3, with a part from another setId, and a complete set; bundle with another user's P2 records | deleted did PRECONDITION_FAILED then imported as a new principal; incomplete or mixed set fails whole; complete set imports; foreign records counted rejectedForeign and never written; commit is all or nothing |
 
 ## Dependencies
 

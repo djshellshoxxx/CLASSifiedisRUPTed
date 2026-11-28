@@ -38,7 +38,7 @@ Schema `classrup.bazaar.negotiation/v1` · storage **device** · privacy **P2** 
 | listingRevision | int — listing revision bound in the latest round |
 | closeOutcome? | enum — accepted \| rejected \| withdrawn \| expired \| superseded \| listing_unavailable \| blocked \| frozen_discarded \| timeout |
 | acceptanceConsentCid? | string — consent statement (comms.consent.sign) accepting the latest round |
-| dealId? | uuidv7 — ref F09.S01.M01 Deal, deterministic from contextRef {offer, rootOfferId}, set on acceptance |
+| dealId? | uuid — UUIDv8 per F09.S01.M01 01.R01 from {contextRef {offer, rootOfferId}, contextCid = accepted round cid}, set on acceptance |
 | holdId? | uuidv7 — ref F01.S03.M01 InventoryHold, set on acceptance (seller vault) |
 | confirmationCid? | string — sha256- of the seller's signed confirmation |
 | expiresAt | timestamp — expiry of the latest round, claim of the proposer |

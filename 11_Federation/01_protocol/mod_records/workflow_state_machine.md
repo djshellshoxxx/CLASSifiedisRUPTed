@@ -12,6 +12,7 @@
 - **PS-084-03.R04** Every non-terminal state has an exit; buffered records are released (with chainGap when predecessors never arrive), held_on_fork records follow the conflict resolution, and quarantined records are discarded, released, resolved or dropped after 30 days unless an open conflict holds them.
 - **PS-084-03.R05** A pending tombstone is never applied without checking its issuer against the arriving target; a tombstone whose issuer does not match is rejected and the target accepted.
 - **PS-084-03.R06** Accepted statements this vault first received inside [revocationEffectiveFrom, arrival of the revocation] move to quarantined with signerKeyMarker signed_during_claimed_compromise, and for commitment statements F11.S02.M03 opens a key_compromise conflict that freezes the dependent coordination in the same transaction.
+- **PS-084-03.R07** A buffered record never reaches a domain module before its buffer reason is resolved: signer_doc_unknown ends at the document fetch or after 24 h in quarantine, subject_unknown ends when the subject-creating statement is accepted or after 7 days in a drop, and every record that reaches accepted with signerRole set is dispatched to its registered owner at least once and idempotently by cid.
 
 ## Specification
 
@@ -21,15 +22,20 @@ Initial **received**; terminal **rejected**, **dropped**, **tombstoned**.
 
 | Transition | Trigger | Guard / effect |
 |---|---|---|
-| received -> accepted | all validation passes and F11.S02.M02 decides anchor (no head for the chain), next (seq = head+1, prev = head cid) or reanchor (gap over 100) | stores row with signerRole; emits federation.record.accepted; vault: signs an ack when audience participants and the principal is in recipients |
+| received -> accepted | all validation passes, F11.S02.M02 decides anchor (no head for the chain), next (seq = head+1, prev = head cid) or reanchor (gap over 100), and the registered StatementIngestPort owner returns ok inside the receive transaction | stores row with signerRole and ingestedAt; emits federation.record.accepted; vault: signs an ack only when audience participants, the principal is in recipients and the registry acknowledger of the type is counterparty |
 | received -> hidden | validation passes and F11.S03.M02 evaluate returns hide | stored with hiddenByRuleIds, not served, no record.accepted until unhidden |
 | received -> buffered | F11.S02.M02 decides buffer (anchored chain, gap of 1..100 within per-source caps) | bufferedUntil = receivedAt + 24 h |
+| received -> buffered | an audience public envelope whose author key status is unknown (V14) | statusReason signer_doc_unknown, bufferedUntil = receivedAt + 24 h; the portable document is fetched from receivedFromRelay and the relays in via and passed to identity.portable_doc.receive |
+| received -> buffered | the registered owner returns pending{subjectRef} because the subject is unknown to this vault (N28) | statusReason subject_unknown, subjectRef set, bufferedUntil = receivedAt + 7 days, at most 500 per author (V24) |
+| received -> quarantined | the type is in the registry but no StatementIngestPort owner is registered in this vault (N26), or the owner returns refused{code} | statusReason unregistered_type or owner_refused; result code FEDERATION_SIGNER_ROLE_INVALID or the owner's code; no ack |
 | received -> held_on_fork | prev names a candidate of an open ConflictRecord for this chain, or the chain head is quarantined as a fork | held without the 24 h drop until the conflict is resolved |
 | received -> quarantined | authorizeStatement returns Quarantine(signer_role_invalid) (V14) or Quarantine(signer_key_revoked) (V15) | statusReason signer_role_invalid or signer_key_revoked; result code FEDERATION_SIGNER_ROLE_INVALID; not acted on; principal or operator may discard |
 | received -> quarantined | fork (same chain key and seq, different cid) or commitment conflict (same subject key, different digest) | federation.conflict.detect in the same transaction; every candidate quarantined in that transaction; dependent coordination frozen |
 | received -> rejected | any rejecting rule fails (V03, V05, V07, V08, V09, V10, V11, and at relay intake from a hosted vault key V18 to V21) | cid stub only; emits federation.record.rejected |
 | received -> dropped | author blocked in either direction (V16) | silent: no ack, no event, generic outcome; statusReason blocked_party |
-| buffered -> accepted | missing predecessors arrive (drain), or bufferedUntil passed after one catch-up fetch (chainGap = true) | emits federation.record.accepted for each released record in seq order |
+| buffered -> accepted | missing predecessors arrive (drain), or bufferedUntil passed after one catch-up fetch (chainGap = true) for chain_gap; the portable document arrives and V14 passes for signer_doc_unknown; the subject-creating statement is accepted and the owner ingests the record for subject_unknown | emits federation.record.accepted for each released record in seq order after the owner returned ok |
+| buffered -> quarantined | bufferedUntil passed with reason signer_doc_unknown and the key status still unknown | statusReason signer_role_invalid; result code FEDERATION_SIGNER_ROLE_INVALID |
+| buffered -> dropped | bufferedUntil passed with reason subject_unknown | purges content; statusReason subject_unknown; no ack and no event |
 | buffered -> held_on_fork | a predecessor turns out to be a fork candidate | waits for the conflict resolution |
 | held_on_fork -> accepted | conflict resolved keeping the candidate it chains from, or resolved drop_all or superseded (re-anchored with chainGap = true; subject freezes still apply) | emits federation.record.accepted |
 | held_on_fork -> dropped | conflict resolved keeping a different candidate, so it chains from a dropped branch | purges content; statusReason superseded |
@@ -46,15 +52,20 @@ Initial **received**; terminal **rejected**, **dropped**, **tombstoned**.
 ```mermaid
 stateDiagram-v2
   [*] --> received
-  received --> accepted: all validation passes and F11.S02.M02 decides anchor (no head for the chain), next (seq = head+1, prev = head cid) or reanchor (gap over 100)
+  received --> accepted: all validation passes, F11.S02.M02 decides anchor (no head for the chain), next (seq = head+1, prev = head cid) or reanchor (gap over 100), and the registered StatementIngestPort owner returns ok inside the receive transaction
   received --> hidden: validation passes and F11.S03.M02 evaluate returns hide
   received --> buffered: F11.S02.M02 decides buffer (anchored chain, gap of 1..100 within per-source caps)
+  received --> buffered: an audience public envelope whose author key status is unknown (V14)
+  received --> buffered: the registered owner returns pending{subjectRef} because the subject is unknown to this vault (N28)
+  received --> quarantined: the type is in the registry but no StatementIngestPort owner is registered in this vault (N26), or the owner returns refused{code}
   received --> held_on_fork: prev names a candidate of an open ConflictRecord for this chain, or the chain head is quarantined as a fork
   received --> quarantined: authorizeStatement returns Quarantine(signer_role_invalid) (V14) or Quarantine(signer_key_revoked) (V15)
   received --> quarantined: fork (same chain key and seq, different cid) or commitment conflict (same subject key, different digest)
   received --> rejected: any rejecting rule fails (V03, V05, V07, V08, V09, V10, V11, and at relay intake from a hosted vault key V18 to V21)
   received --> dropped: author blocked in either direction (V16)
-  buffered --> accepted: missing predecessors arrive (drain), or bufferedUntil passed after one catch-up fetch (chainGap = true)
+  buffered --> accepted: missing predecessors arrive (drain), or bufferedUntil passed after one catch-up fetch (chainGap = true) for chain_gap  the portable document arrives and V14 passes for signer_doc_unknown  the subject-creating statement is accepted and the owner ingests the record for subject_unknown
+  buffered --> quarantined: bufferedUntil passed with reason signer_doc_unknown and the key status still unknown
+  buffered --> dropped: bufferedUntil passed with reason subject_unknown
   buffered --> held_on_fork: a predecessor turns out to be a fork candidate
   held_on_fork --> accepted: conflict resolved keeping the candidate it chains from, or resolved drop_all or superseded (re-anchored with chainGap = true  subject freezes still apply)
   held_on_fork --> dropped: conflict resolved keeping a different candidate, so it chains from a dropped branch
@@ -106,7 +117,7 @@ stateDiagram-v2
 
 ### Timeouts and scheduled transitions
 
-- Gap-buffer sweep every 5 min: buffered records with bufferedUntil ≤ now get one catch-up fetch from the relays in the author's portable document and are then accepted with chainGap = true; nothing is dropped for a gap.
+- Gap-buffer sweep every 5 min: buffered records with reason chain_gap and bufferedUntil ≤ now get one catch-up fetch from the relays in the author's portable document and are then accepted with chainGap = true; nothing is dropped for a gap. Records with reason signer_doc_unknown past bufferedUntil are quarantined with signer_role_invalid, and records with reason subject_unknown past bufferedUntil are dropped with subject_unknown.
 - Pending tombstone sweep daily: pending_target tombstones with pendingUntil ≤ now become expired.
 - Quarantine sweep daily: quarantined records older than 30 days that no open ConflictRecord holds move to dropped (quarantine_expired).
 - Purge sweep every 5 min removes content for records whose author tombstone, reject rule or operator drop is older than 1 h; any item older than 24 h raises alert classrup_federation_purge_overdue_total.
@@ -128,6 +139,9 @@ stateDiagram-v2
 | TEST-PS-084-09.T29 | abuse | PS-084-07.R03, PS-084-03.R03 | relay R1's operator issues relay_removal (moderation_removed) with a statement of reasons for X's listing that R2 and vault V1 also hold | R1's index drops it; R2's mirror stays accepted and only enters R2's review queue; V1 keeps it with a removal notice; X's own vault ignores it and X republishes on another relay without FEDERATION_TOMBSTONED |
 | TEST-PS-084-09.T35 | integration | PS-084-03.R02, PS-084-03.R03 | personal hide rule on author Z then undo; reject rule on author Z; peer reject rule on relay B for records whose only provenance is B | hidden then accepted with envelope intact; reject purges to dropped; only B-only records dropped |
 | TEST-PS-084-09.T37 | integration | PS-084-02.R06, PS-084-03.R06 | statement signed by a revoked key with a backdated createdAt received after the revocation; revocation with effectiveFrom 3 days back learned after acceptance of a consent first received 2 days ago and one received 4 days ago; a revocation whose claim F16.S02.M02 clamped | first refused FEDERATION_SIGNER_ROLE_INVALID and listed in the quarantine list with reason signer_key_revoked; the 2-day consent re-marked signed_during_claimed_compromise, quarantined and its proposal frozen by a key_compromise conflict in the same transaction; the 4-day one stays accepted with signer_later_revoked; the clamped effectiveFrom is used as reported, never earlier |
+| TEST-PS-084-09.T47 | integration | PS-084-04.R04, PS-084-03.R07 | vault receives a comms.message/v1 with message receipts off and a classrup.mutiny.proposal_revision/v1 addressed to the principal | the message is ingested by the registered owner and no ack is signed; the revision (acknowledger counterparty) is ingested and acked after the owner returned ok |
+| TEST-PS-084-09.T50 | integration | PS-084-03.R07, PS-084-01.R09 | a proposal_revision r2 arrives before revision 1; revision 1 is then accepted and its owner calls releasePending; 501 pending statements by one author; a held statement for 7 days | r2 is held with subject_unknown and not acked; after revision 1 it is ingested in seq order; the 501st is refused with RATE_LIMITED; the 7-day statement is dropped with reason subject_unknown |
+| TEST-PS-084-09.T51 | integration | PS-084-02.R09, PS-084-03.R07 | relay R2 receives R1's batch of a listing before it holds the author's portable document; the document is then fetched from receivedFromRelay and handed to identity.portable_doc.receive; a second batch whose document never arrives | the first listing is buffered with signer_doc_unknown, then accepted and mirrored after the fetch; the second is quarantined with signer_role_invalid only at bufferedUntil |
 
 ## Dependencies
 

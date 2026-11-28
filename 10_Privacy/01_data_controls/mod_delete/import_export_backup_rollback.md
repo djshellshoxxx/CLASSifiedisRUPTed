@@ -13,7 +13,7 @@
 ## Specification
 
 - **export:** Section privacy.deletion in classrup-export/v1: the active DeletionRequest metadata without salt (schema classrup.privacy.deletion_request/v1). After completion the principal vault is erased and the residue store is not exportable, except that a pseudonymized evidence-only vault kept with keepEvidence true exports only its pseudonymized evidence under the pseudonym.
-- **import:** The restore flow calls privacy.deletion.ledger_check; a bundle whose did matches a ledger entry of this browser profile is refused with a clear message; override creates a new did and imports content as a new principal.
+- **import:** F10.S01.M03 privacy.import.commit calls privacy.deletion.ledger_check through the ImportGuardPort that this module registers; a bundle whose did matches a ledger entry of this browser profile is refused with a clear message; override creates a new did and imports content as a new principal.
 - **backup:** User-held exports, the recovery kit, other devices and encrypted backups are outside this device's deletion and are not erased; the UI says so. Relay backups follow CTR-IOX-001 IOX-3 and after a restore the relay replays its applied deletion statements before serving.
 - **migration rollback:** Additive fields only; rollback is safe because the ledger is append-only and older readers ignore unknown fields.
 

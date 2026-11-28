@@ -80,8 +80,8 @@ F06.S02.M01, F10.S02.M02, F10.S02.M03, F16.S01.M01, CTR-FED-001, CTR-PRV-001, CT
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-083-01 | [Domain schema](domain_schema.md) | 12 |
-| PS-083-02 | [Validation rules](validation_rules.md) | 5 |
+| PS-083-01 | [Domain schema](domain_schema.md) | 14 |
+| PS-083-02 | [Validation rules](validation_rules.md) | 6 |
 | PS-083-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-083-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
 | PS-083-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
@@ -95,6 +95,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T30 pass in CI, including the signer-role tests T16, T19, T28 and T29.
+- All tests T01–T33 pass in CI, including the signer-role tests T16, T19, T28 and T29.
 - No P1-P4 field, exact coordinate or home address appears in any draft, and no inbound cell finer than L2 is accepted (privacy suite on fixtures).
 - A public record whose owner has not opted in can never produce a signed statement.

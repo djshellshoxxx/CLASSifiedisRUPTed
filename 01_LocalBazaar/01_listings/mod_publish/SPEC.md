@@ -105,7 +105,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T30 pass in CI.
+- All tests T01-T31 pass in CI.
 - No projection contains data beyond the P0 allowlist or a region finer than L2, and no projection is published with a photo that lacks both alt text and a decorative mark.
 - No UI or API reports transport_acknowledged or Promoted without a verified signed receipt or relay statement, no publication delivery is ever shown as peer_accepted, no relay notice changes the owner's Listing, and no text claims global removal.
 - A rule pack or category change never unpublishes, ends or tombstones a publication without its owner's confirmation; it only holds it in policy_attention with a reminder after at least 7 days.

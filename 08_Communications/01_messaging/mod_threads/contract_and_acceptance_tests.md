@@ -22,7 +22,7 @@ See the module test table below (all processes).
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-061-09.T01 | unit | PS-061-01.R01, PS-061-01.R02, PS-061-01.R03, PS-061-02.R01 | create a listing thread between B and A | Thread stored with contextType listing, participants 2, origin local, derived threadId, thread-open statement signed |
-| TEST-PS-061-09.T02 | unit | PS-061-02.R02, PS-061-02.R03 | each rule V01 to V12 violated in turn | the documented error code returned and nothing stored |
+| TEST-PS-061-09.T02 | unit | PS-061-02.R02, PS-061-02.R03 | each rule V01 to V14 violated in turn | the documented error code returned and nothing stored |
 | TEST-PS-061-09.T03 | property | PS-061-03.R01, PS-061-03.R02 | random sequences of create, archive, mute, join, leave, request accept and decline | archived never leaves archived; roster never exceeds 12; at most one non-archived thread per derivation key |
 | TEST-PS-061-09.T04 | integration | PS-061-03.R03, PS-061-06.R03 | archive thread | one comms.thread.archived event and purge schedule exist in the same transaction |
 | TEST-PS-061-09.T05 | contract | PS-061-04.R01, PS-061-04.R02, PS-061-09.R02 | each command and query executes | outputs and event payloads validate against registry schemas |
@@ -42,13 +42,14 @@ See the module test table below (all processes).
 | TEST-PS-061-09.T19 | abuse | PS-061-02.R04, PS-061-07.R04 | 50 unknown DIDs send 6 thread-open statements each to A | 5 per DID kept until the total of 100 pending requests, the rest dropped silently; no reply sent |
 | TEST-PS-061-09.T20 | integration | PS-061-04.R04, PS-061-04.R05, PS-061-07.R04 | A's account deletion runs DeletionPort.plan and execute; later B's departure notice (envelope author B, payload without any DID) reaches C once signed by an active key of B and once after B's account_deleted revocation listing its cid in finalCids; a notice correctly signed by B whose payload adds a did field; a commitment-kind notice from B | A's plan lists A's thread counterparties as noticeRecipients and A's threads are archived account_deleted before keys are destroyed; C sets leftAt and departedByNotice for B, read from the envelope author, on every thread where B is a current participant, with a deleted-member label, for both deliveries; the notice with a did field is rejected VALIDATION_FAILED; the commitment notice changes no thread; registry lists thread_open with signer role |
 | TEST-PS-061-09.T21 | unit | PS-061-01.R04 | attempt to change contextType, contextId or generation of a stored thread, and accept a thread-open whose threadId does not match its derivation | CONFLICT_STATE for the change; COMMS_THREAD_OPEN_REJECTED for the mismatch |
+| TEST-PS-061-09.T22 | integration | PS-061-01.R06, PS-061-04.R06, PS-061-04.R07, PS-061-02.R05 | buyer B opens a thread from seller A's listing with no projection of B in A's vault; A's vault receives it through federation.record.receive; A replies; B then rotates its mailbox and sends a message | the thread_open is published with ext.recipients from the listing mailboxHints and stream thr:<threadId>; A's vault creates a request thread through comms.thread.receive_open, stores B's replyMailboxes, comms.thread.recipients returns B's mailbox, the reply is addressed to it, and the rotated mailbox replaces the stored one only from B's verified message; a thread_open whose creator entry has no replyMailboxes is rejected with COMMS_THREAD_OPEN_REJECTED |
 
 ## Acceptance criteria
 
-- All tests T01 to T21 pass in CI.
+- All tests T01 to T22 pass in CI.
 - A blocked party can never learn from any response or state in its own vault that a block exists.
 - Roster after arbitrary event replay equals the roster after ordered replay, and every vault derives the same threadId for the same context.
 
 ## Dependencies
 
-Module depends on: F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M02, F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

@@ -80,7 +80,7 @@ F11.S01.M01, F11.S01.M02, F11.S01.M03, F11.S02.M01, F11.S02.M03, F11.S03.M01, F0
 | PS-090-01 | [Domain schema](domain_schema.md) | 3 |
 | PS-090-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-090-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-090-04 | [Commands, queries and events](commands_queries_events.md) | 4 |
+| PS-090-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
 | PS-090-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-090-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 3 |
 | PS-090-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -92,7 +92,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T26 pass in CI.
+- All tests T01–T27 pass in CI.
 - A stolen-key move, including one with a backdated announcedAt, is cancelled by a second device key within the veto window (abuse tests T04 and T22).
 - The did and every local record are unchanged by a move, and no relay becomes authoritative for the principal's records.
 - Bridge documents exist and are marked Future.

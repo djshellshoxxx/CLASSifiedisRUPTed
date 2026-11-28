@@ -26,6 +26,7 @@ responsibilities:
   - Produce the signed statements classrup.privacy.deletion_statement/v1 for relays and classrup.privacy.deletion_notice/v1, end-to-end encrypted, for counterparties of open commitments and for every thread counterparty listed by the F08 DeletionPort plans, each signed once at execution and valid for the whole 30-day delivery window.
   - Orchestrate, not produce, federation tombstones by running the F11.S01.M02 DeletionPort sign step at execution, never during grace.
   - Pseudonymize the principal in retained RET-EVIDENCE records with a per-deletion pseudonym, destroy the pseudonymization salt at completion, and never keep the did and the pseudonym in the same retained record.
+  - Register the ImportGuardPort declared by F10.S01.M03 at vault composition (inverted registration, this module depends on F10.S01.M03) so that privacy.import.commit calls privacy.deletion.ledger_check for the bundle did before any record is written.
   - Keep a deletion ledger keyed by a salted hash of the did in the per-origin residue store for 180 days so restores into this browser profile never resurrect deleted data.
   - Handle relay-side application of a verified deletion statement as the relay command privacy.deletion.relay_apply, which calls privacy.legal_hold.check and the relay purge path of F10.S01.M02.
   - Expose the in-process guard privacy.deletion.assert_not_pending that every publishing and commitment module calls, and emit privacy.deletion.cancelled when a request is cancelled.
@@ -173,6 +174,7 @@ processes:
       - DeletionPort registrations are discovered through the kernel port registry at vault composition, by inverted registration for modules that cannot list this module in depends_on without closing a cycle (F07.S01.M01, F15.S01.M01 platform.outbox, F15.S04.M03 platform.local_settings); a module registered twice fails composition and every registrant takes part in the fixed step order.
       - The sign step runs every registered sign implementation before revoke_keys and destroy_keys, including F07.S01.M01 signed handle releases, the tombstone of its own identity document and session revocations on relays, the F08 signed message and attachment deletes and mailbox closes, and this module's departure notice to the thread counterparties that the F08 plans list.
       - F18.S02.M01 and F18.S01.M01 register their DeletionPorts from the vault composition root by inverted registration, because each sits on the path F10.S01.M02 -> F18.S01.M01 -> F18.S02.M01 - the F18.S02.M01 sign step signs a classrup.federation.tombstone/v1 (format owned by F11.S01.M02) for each of the principal's own policy comments, and the F18.S01.M01 port deletes the ProfileSelection and the age declaration in the purge step.
+      - The ImportGuardPort of F10.S01.M03 is registered here and answers from privacy.deletion.ledger_check, so the IOX-2 import commit refuses a did found in this browser profile's ledger.
     commands:
       - name: privacy.deletion.request
         capability: privacy.deletion.request
@@ -301,7 +303,7 @@ processes:
       - "privacy.deletion.relay_apply | signed-statement | statement signed by a registered key of the did; relay rate limit 60 batches per hour per did; handler runs as relay-system"
       - "privacy.deletion.read | local-principal | vault unlocked"
       - "privacy.deletion.guard | local-principal | in-process call from publishing and commitment modules of the unlocked vault"
-      - "privacy.deletion.ledger_check | local-principal | in-process call from the vault restore flow (IOX-2) before any record commits"
+      - "privacy.deletion.ledger_check | local-principal | in-process call through the ImportGuardPort from F10.S01.M03 privacy.import.commit (IOX-2) before any record commits"
   failure_recovery_idempotency:
     requirements:
       - Request and cancel are idempotent per CTR-IDM-001 using vault command IDs and expectedRevision.
@@ -365,7 +367,7 @@ processes:
       - "T08 | abuse | 02.R03,05.R01,05.R02,05.R03 | relay_apply with a statement signed by another did; operator tries to start deletion; suspended on a relay; user reads the relay result | rejected or FORBIDDEN; deletion by owner still allowed; result carries someRetained without a count"
       - "T09 | integration | 06.R01 | replay same command ID; offline execution with an offline relay | original result; completion with relay shown prepared"
       - "T10 | integration | 01.R02,07.R02 | after completion inspect storage and UI summary | content gone, salt destroyed, did removed, pseudonym recorded, this-device-only notice, recovery-kit warning, cannot-recall notice and relay-hold notice displayed"
-      - "T11 | chaos | 01.R03 | restore an old export into this browser profile after completion and inspect the ledger | restore flow refuses the deleted principal via privacy.deletion.ledger_check unless the user overrides with a new identity; the ledger entry holds only ledgerKey and ledgerUntil"
+      - "T11 | chaos | 01.R03,04.R09 | restore an old export into this browser profile after completion and inspect the ledger | restore flow refuses the deleted principal via privacy.deletion.ledger_check unless the user overrides with a new identity; the ledger entry holds only ledgerKey and ledgerUntil"
       - "T12 | abuse | 02.R04 | publish a listing, open a deal, commit a cycle, book a service and reserve a rental during grace through module doubles that call the guard | each refused with PRIVACY_DELETION_PENDING"
       - "T13 | load | 08.R01,08.R02,08.R03 | 10 000 records and 200 MB blobs; 100-tombstone relay batch | ≤ 120 s; relay p95 ≤ 500 ms; main-thread block ≤ 50 ms; no telemetry sent"
       - "T14 | unit | 09.R01,09.R03,02.R02,04.R04 | traceability tool run and the DeletionPort CI conformance check with a module without a port and one whose execute differs between runs | every PS-077 requirement maps to a passing test; build fails for a module without a plan or with non-idempotent steps"
@@ -394,6 +396,6 @@ processes:
       - A restore or import into this browser profile consults the deletion ledger before committing and never resurrects a completed deletion without the user's explicit override that creates a new identity; restores on other devices or profiles are outside this guarantee and the UI says so.
       - Schema changes follow expand/contract and keep v1 readable for 180 days; the ledger format is stable for at least 180 days.
     export: "Section privacy.deletion in classrup-export/v1: the active DeletionRequest metadata without salt (schema classrup.privacy.deletion_request/v1). After completion the principal vault is erased and the residue store is not exportable, except that a pseudonymized evidence-only vault kept with keepEvidence true exports only its pseudonymized evidence under the pseudonym."
-    import: "The restore flow calls privacy.deletion.ledger_check; a bundle whose did matches a ledger entry of this browser profile is refused with a clear message; override creates a new did and imports content as a new principal."
+    import: "F10.S01.M03 privacy.import.commit calls privacy.deletion.ledger_check through the ImportGuardPort that this module registers; a bundle whose did matches a ledger entry of this browser profile is refused with a clear message; override creates a new did and imports content as a new principal."
     backup: "User-held exports, the recovery kit, other devices and encrypted backups are outside this device's deletion and are not erased; the UI says so. Relay backups follow CTR-IOX-001 IOX-3 and after a restore the relay replays its applied deletion statements before serving."
     migration_rollback: "Additive fields only; rollback is safe because the ledger is append-only and older readers ignore unknown fields."

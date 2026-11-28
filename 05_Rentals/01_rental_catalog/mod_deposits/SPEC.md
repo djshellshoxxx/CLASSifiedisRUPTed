@@ -12,7 +12,7 @@ Noncustodial rental deposits (ADR-0012). The owner proposes deposit terms for a 
 
 - Own DepositTerms in both vaults and the statements deposit_terms, deposit_withdrawal, deposit_release_attestation, forfeit_claim, forfeit_response, deposit_dispute_notice and deposit_renegotiation (classrup.rentals.*/v1), each registered with its signer role in F11.S01.M01; the renter's agreement is a comms.consent statement with key consent.rentals.deposit.agree.v1.
 - Bind the terms to one reservation, one currency and an exact amount no higher than the declared item value bound in the signed rental request, and require agreement on the exact terms cid.
-- Open one noncustodial Deal per obligation through commerce.deal.open from the owner vault (opener role owner through this module's ContextTermsPort) - funding {rental_deposit, depositId} from renter to owner with contextCid agreementCid, and release {rental_deposit_release, depositId} from owner to renter with contextCid the release attestation cid - and derive funded and released only from acknowledged or final payment per CTR-COM-001 and forfeited only from the renter's signed acceptance.
+- Open one noncustodial Deal per obligation through commerce.deal.open from the owner vault (opener role owner through this module's ContextTermsPort) - funding {rental_deposit, depositId} from renter to owner with contextCid agreementCid, and release {rental_deposit_release, depositId} from owner to renter with contextCid the release attestation cid - and derive funded and released only from the payee-signed payment_ack (N30) per CTR-COM-001 and forfeited only from the renter's signed acceptance.
 - Enforce the decision clock - 7 days after the signed return attestation is the soft clock after which the deposit shows decision overdue and the renter can dispute; the hard forfeit limit is V06; releases are never time-barred; a forfeit claim unanswered by its signed respondBy moves to escalation_due with a prefilled draft of the F09 case, held in this vault, rather than acceptance.
 
 ## Not responsible for
@@ -91,6 +91,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T25 pass in CI.
+- All tests T01–T26 pass in CI.
 - No state shows a deposit as funded, released or forfeited on a payment claim alone, silence never settles money and no case is ever opened without a party's explicit action.
 - No code path in the platform or a relay moves or holds deposit funds.

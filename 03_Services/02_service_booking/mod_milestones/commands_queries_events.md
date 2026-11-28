@@ -47,10 +47,10 @@
 | `services.booking.confirmed` | create the Milestone records from the plan of the client-signed quote identified by quoteCid (one implicit milestone with seq 1 for the full total when the plan is empty), with ids uuid(sha256(bookingId + ':' + seq)); a plan in the event that differs is refused and no milestone is created |
 | `services.booking.cancelled` | cancel pending, submitted and changes_requested milestones (and disputed ones whose preDisputeStatus is submitted when the reason is mutual); approved ones keep their Deal and payment obligation |
 | `commerce.payment.claimed` | for the milestone whose dealId matches, add claimId and set proof claimed (unverified) |
-| `commerce.payment.acknowledged` | for the milestone whose dealId matches, set proof acknowledged and settle the milestone |
+| `commerce.payment.acknowledged` | for the milestone whose dealId matches and whose verificationSource is counterparty or chain (the provider-signed payment_ack), set proof acknowledged and settle the milestone |
 | `commerce.payment.confirming` | for the milestone whose dealId matches, set proof confirming with confirmations N of M |
 | `commerce.payment.confirmed` | for the milestone whose dealId matches, set proof confirmed with the confirmation count; the milestone stays approved until final |
-| `commerce.payment.finalized` | for the milestone whose dealId matches, set proof final and settle the milestone |
+| `commerce.payment.finalized` | for the milestone whose dealId matches, set proof final as a label only (final per your verifier; payee has not confirmed) without settling; settlement waits for the payee-signed payment_ack |
 | `commerce.payment.reorged` | for the milestone whose dealId matches, set proof reorged (shown as back to waiting, below confirming); the milestone stays approved |
 | `commerce.payment.failed` | for the milestone whose dealId matches, set proof failed; the milestone stays approved and the client is prompted to claim again |
 | `commerce.payment.disputed` | for the milestone whose dealId matches, set proof disputed and prompt the dispute flow |
@@ -91,10 +91,11 @@ client vault services.milestone.approve { "milestoneId": "5f0c2a9e-…", "expect
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-031-09.T01 | integration | PS-031-01.R01, PS-031-01.R02, PS-031-01.R04, PS-031-04.R03 | booking.confirmed event delivered twice with a 3-milestone plan | exactly 3 milestones per vault with ids uuid(sha256(bookingId:seq)), plan taken from the client-signed quote; sum equals total |
-| TEST-PS-031-09.T05 | integration | PS-031-03.R03, PS-031-03.R06, PS-031-04.R03 | payment claimed, confirming, confirmed, reorged, confirming, finalized; then claimed, failed; then claimed, expired; then acknowledged | proof labels follow COM-4; after the reorg proof is reorged and the milestone stays approved; settled only at acknowledged or final; booking completes only after both completion statements |
+| TEST-PS-031-09.T05 | integration | PS-031-03.R03, PS-031-03.R06, PS-031-04.R03 | payment claimed, confirming, confirmed, reorged, confirming, finalized; then claimed, failed; then claimed, expired; then acknowledged | proof labels follow COM-4; after the reorg proof is reorged and the milestone stays approved; settled only on the payee-signed payment_ack; booking completes only after both completion statements |
 | TEST-PS-031-09.T06 | contract | PS-031-04.R01, PS-031-04.R02, PS-031-09.R02 | each command, statement and event, and the commerce.deal.open call | payloads, signatures and the Deal request (contextRef service_milestone, contextCid approvalCid, parties, obligation) validate against the registry and F09 schemas |
 | TEST-PS-031-09.T14 | e2e | PS-031-01.R01, PS-031-04.R01 | mobile provider submits, client approves and records payment claim, provider acknowledges, both sign completion | milestone settled in both vaults; booking completed; axe zero serious issues |
 | TEST-PS-031-09.T18 | contract | PS-031-04.R04 | services.booking.completed and milestone events against the F07.S03.M01 and F13.S01.M03 consumers | N3 fields present; completed emitted only after both completion statements; clientId and providerId present |
+| TEST-PS-031-09.T22 | integration | PS-031-03.R03, PS-031-03.R06, PS-031-04.R03 | the client verifier reaches final for an approved milestone while no payee payment_ack has arrived; then the provider-signed payment_ack with verification source chain arrives | the milestone stays approved with the label final per your verifier; payee has not confirmed, no services.milestone.settled and no completion; after the ack it settles in both vaults |
 
 ## Dependencies
 

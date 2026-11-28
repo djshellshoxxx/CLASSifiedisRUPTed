@@ -6,7 +6,7 @@
 
 ## Purpose
 
-The shared signed consent record used by bazaar offers and negotiations, mutiny proposals and cycles, service bookings, rental reservations and deposits, and meetups. A ConsentStatement binds a signer (did:key) and signer key, a subject reference, the CTR-ID-001 ID-3 cid of the exact subject revision, a statement key and locale naming the displayed wording, and a signing time claim. It is signed as a hash-only F16.S02.M03 envelope with ctx classrup/consent/v1, whose signature covers JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash the sha256-<base64url> of SHA-256 over the JCS bytes of the signed field set, produced in the signer's vault, sent as a signed statement through any transport, verified by every receiving vault and kept as evidence. Each owning module registers a SubjectCanonicalizerPort for its subject type, so this module can check the current revision, the signer's role and whether the subject is committed. Duplicates resolve to the same record in every vault, a revocation that arrives after an owning module committed makes verify return conflicted so the parties freeze instead of diverging, and validity after a device-key revocation is judged by first-seen time. A consent evidences that a key holder asserted agreement with that exact revision; it is not evidence of delivery, payment or that the other party will perform. Revocation is a second signed statement and never rewrites history.
+The shared signed consent record used by bazaar offers and negotiations, mutiny proposals and cycles, service bookings, rental reservations and deposits, and meetups. A ConsentStatement binds a signer (did:key) and signer key, a subject reference, the CTR-ID-001 ID-3 cid of the exact subject revision, a statement key and locale naming the displayed wording, and a signing time claim. It is signed as a hash-only F16.S02.M03 envelope with ctx classrup/consent/v1, whose signature covers JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash the sha256-<base64url> of SHA-256 over the JCS bytes of the signed field set, produced in the signer's vault, published as a sealed participants statement through the F11.S01.M02 publish path (N25), verified by every receiving vault and kept as evidence. Each owning module registers a SubjectCanonicalizerPort for its subject type, so this module can check the current revision, the signer's role and whether the subject is committed. Duplicates resolve to the same record in every vault, a revocation that arrives after an owning module committed makes verify return conflicted so the parties freeze instead of diverging, and validity after a device-key revocation is judged by first-seen time. A consent evidences that a key holder asserted agreement with that exact revision; it is not evidence of delivery, payment or that the other party will perform. Revocation is a second signed statement and never rewrites history.
 
 ## Responsibilities
 
@@ -15,8 +15,10 @@ The shared signed consent record used by bazaar offers and negotiations, mutiny 
 - Accept inbound consent statements through comms.consent.accept, verify signer key status, signature, subject hash and role, and store them with provenance and first-seen time or quarantine them with a reason.
 - Provide comms.consent.revoke which signs a revocation statement targeting a consent or its dedupe tuple, and report conflicts (consent and decline, or a revocation that arrived after the owning module committed, for one subject hash) so owning modules freeze instead of resolving by timestamp.
 - Maintain the registry of statement keys with versions, locales and text hashes so the wording the signer saw can be proven later; v1 registers the keys of every owning feature (bazaar, mutiny, services, rentals, meetups) with subjectType, subjectRef kind, signer role, owning port and wording.
-- Define the SubjectCanonicalizerPort {canonicalBytes(ref, rev), currentRevision(ref), partyRole(ref, did), isCommitted(ref)} that each owning module registers for its subjectType by inverted registration (owners depend on this module, never the reverse) - F01.S04.M01 bazaar_offer, F01.S04.M02 bazaar_negotiation, the F02 mutiny modules for mutiny_proposal and mutiny_cycle with F02.S01.M04 canonicalBytes, F03.S02.M01 services_booking, F05.S01.M01 rentals_reservation, F05.S01.M02 rentals_deposit and F08.S03.M03 comms_meetup.
+- Define the SubjectCanonicalizerPort {canonicalBytes(ref, rev), currentRevision(ref), partyRole(ref, did), isCommitted(ref), recipients(ref)} where recipients(ref) -> [{did, relayId (canonical F15.S02.M01), mailboxId}] lists the other parties only (at most 20) from verified data (N27) that each owning module registers for its subjectType by inverted registration (owners depend on this module, never the reverse) - F01.S04.M01 bazaar_offer, F01.S04.M02 bazaar_negotiation, the F02 mutiny modules for mutiny_proposal and mutiny_cycle with F02.S01.M04 canonicalBytes, F03.S02.M01 services_booking, F05.S01.M01 rentals_reservation, F05.S01.M02 rentals_deposit and F08.S03.M03 comms_meetup.
 - Resolve duplicates deterministically (lowest cid kept in every vault, others stored as aliases) and register the F10 privacy ports, pseudonymizing signerDid in kept consents on principal deletion (N6).
+- Publish every signed consent, decline and revocation to the other parties through the F11.S01.M01 StatementPublisherPort (federation.record.publish, type classrup.comms.consent/v1, audience participants, recipients, stream) in the signing transaction, so the statement has an addressable delivery path and its outbox entry reaches peer_accepted when each recipient vault acknowledges it.
+- Register comms.consent.accept for classrup.comms.consent/v1 in the F11.S01.M02 StatementIngestPort at vault composition (N26) so federation.record.receive hands each verified consent, decline or revocation to this module inside the receive transaction.
 
 ## Not responsible for
 
@@ -25,6 +27,7 @@ The shared signed consent record used by bazaar offers and negotiations, mutiny 
 - Key generation and storage (F07.S01.M01, F16.S02.M01), key validity (F07.S02.M01 KeyStatusPort) read through one F16.S02.M02 security.keyrecord.get_status call with freshness, and the signature envelope and context registry (F16.S02.M03).
 - Message transport (F08.S01.M01), delivery and outbox states (F11.S02.M01 on F15.S01.M01) and relay forwarding (F11 federation).
 - Future: threshold and multi-device co-signing, time-stamping authority anchoring, hardware-key attestation of the signing device.
+- Knowing who the other parties of a subject are and where their mailboxes are; each owning module answers SubjectCanonicalizerPort.recipients from its verified roster (N27), and signing, sealing, routing and acknowledgement of the record are the F11.S01.M02 and F11.S02.M01 paths.
 
 ## User stories
 
@@ -70,16 +73,16 @@ The shared signed consent record used by bazaar offers and negotiations, mutiny 
 
 ## Dependencies
 
-F07.S01.M01, F07.S02.M02, F07.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001
+F11.S01.M02, F07.S01.M01, F07.S02.M02, F07.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001
 
 ## Process specifications and aggregation
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-062-01 | [Domain schema](domain_schema.md) | 5 |
-| PS-062-02 | [Validation rules](validation_rules.md) | 6 |
+| PS-062-01 | [Domain schema](domain_schema.md) | 6 |
+| PS-062-02 | [Validation rules](validation_rules.md) | 7 |
 | PS-062-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
-| PS-062-04 | [Commands, queries and events](commands_queries_events.md) | 5 |
+| PS-062-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
 | PS-062-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-062-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 4 |
 | PS-062-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 4 |
@@ -91,7 +94,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T25 pass in CI.
+- All tests T01 to T28 pass in CI.
 - Regenerated header-form known-answer vectors (JCS of {v, ctx, kid, alg, signedAt, payloadHash} and Ed25519 signatures under classrup/consent/v1) pass on all supported browsers and Node, equal the F16.S02.M03 consent vectors, and the header bytes and payload hashes are published.
 - No code path orders consent against revocation or decline by claimed time.
 - The sign sheet states that consent evidences assertion, not delivery or payment, and that pseudonymity is not anonymity.

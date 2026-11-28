@@ -13,11 +13,11 @@ summary: >-
 responsibilities:
   - Provide the generic command commerce.deal.open and the in-process DealPort {open, cancel, unfreeze} that context modules call with contextRef {type, id}, contextCid, parties and obligations; derive dealId as a UUIDv8 from contextRef and contextCid so every vault converges.
   - Own Deal and PaymentClaim and the COM-3 status machine in each vault, including the 14-day no-progress expiry, open dispute case tracking and partial-coverage expiry.
-  - Produce and verify the signed statements classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1, classrup.commerce.payment_ack/v1, classrup.commerce.payment_dispute/v1, classrup.commerce.deal_cancel/v1 and classrup.commerce.deal_completion/v1, each with the signer role registered in F11.S01.M01.
-  - Ingest incoming statements, check signer role and context terms, order them by the per-author seq and prev chain (FED-3), store with provenance, quarantine invalid ones within a bounded quarantine, dispatch the method modules' statement types to their StatementHandlerPort handlers, and freeze a claim only on a true fork.
+  - Produce and verify the signed statements classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1, classrup.commerce.payment_ack/v1, classrup.commerce.payment_dispute/v1, classrup.commerce.deal_cancel/v1 and classrup.commerce.deal_completion/v1, each with the signer role registered in F11.S01.M01; every one is produced only through the StatementPublisherPort (F11.S01.M02 federation.record.publish, audience participants, sealed ciphertext of at most 12288 bytes, N25), with the recipients stored on the Deal and the Deal stream, and this module never signs, allocates seq and prev, or queues an envelope itself.
+  - Ingest incoming statements through the F11.S01.M02 StatementIngestPort registration (N26), check signer role and context terms, check chain position against the F11.S01.M02 per-(author, signerKey, stream) seq and prev chain (FED-3), store with provenance, quarantine invalid ones within a bounded quarantine, dispatch the method modules' statement types to their StatementHandlerPort handlers, and freeze a claim only on a true fork.
   - Expose the MethodRulePort so cash (F09.S01.M02), crypto (F09.S01.M03) and external methods plug in their rules, hold claims the method rule has not cleared, and track peer sync state without claiming more certainty than reached.
   - Mark a Deal completed only when every obligation is covered by payee-acknowledged claims, sign the completion body and emit commerce.deal.completed with its completionCid.
-  - Support MVP listing_fee Deals whose payee is a relay operator named in that relay's signed policy document, acknowledged through a relay command under relay policy.
+  - Support MVP listing_fee Deals whose payee is the operator principal named by promotion.operatorDid in the verified F15.S04.M03 tenant_config; the operator acts from the operator's own vault with the ordinary vault commands (it fetches its mailbox on the relay, acknowledges external claims with commerce.payment.acknowledge and, for crypto, issues commerce.crypto_request.create and signs the chain payment_ack from its own verifier); no relay holds a Deal, a claim, a key or a payment acknowledgement.
   - Freeze a Deal named in bazaar.inventory.conflict_detected linkedDealIds until the context owner resolves the inventory fork, and apply the rentals block exception (N7a) that ContextTermsPort.blockExempt reports.
   - Let a party export the all-party signed deal_completion/v1 proof without amounts or obligations for voluntary submission to a relay (F12.S03.M04 moderation.accountlimit.submit_completion).
 non_responsibilities:
@@ -27,14 +27,14 @@ non_responsibilities:
   - Issuing or requiring reputation review tickets (F07.S03.M01 signs them on commerce.deal.opened and commerce.deal.completed).
   - Moving, escrowing, converting or refunding money; refunds are new obligations the parties settle themselves.
   - "Future: multi-currency obligations settled through a pinned FX quote and split payments across more than 10 claims per obligation."
-depends_on: [F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
+depends_on: [F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001]
 user_stories:
   - As a buyer, I mark that I paid and the seller sees a claim labelled claimed (unverified) until they acknowledge it.
   - As a seller, I acknowledge a payment I received, or dispute a claim that I did not receive, and the buyer sees my signed answer.
   - As a participant in a barter cycle with a compensation leg, I see the money obligation as a Deal and know the platform does not hold the money.
   - As any party, I can see how far each statement has travelled (saved here, prepared, relay received, peer accepted) and never see more certainty than that.
   - As a seller whose buyer withdrew before my acceptance arrived, my offer module voids the Deal on its own and the buyer's vault shows the cancellation as one-sided.
-  - As a seller promoting a listing on a relay, I pay the relay operator through a listing_fee Deal and see the operator's signed acknowledgement, never a paid flag.
+  - As a seller promoting a listing on a relay, I pay the operator through a listing_fee Deal and see the operator's signed acknowledgement, never a paid flag.
 edge_cases:
   - commerce.deal.open is called twice for the same contextRef and contextCid from two tabs or devices; the UUIDv8 dealId and unique index make the second call return the existing Deal.
   - An auction second-chance offer opens a Deal for the same auction result; its new contextCid yields a different dealId, so it never collides with the original winner's Deal.
@@ -69,21 +69,23 @@ processes:
     requirements:
       - "A Deal stores contextRef {type, id}, the context statement cid, parties with roles, 1 to 10 obligations (payer, payee, Money amount, purpose), status, open case ids, expiry and revision; its dealId is a UUIDv8 (RFC 9562 section 5.8) made from the first 16 bytes of sha256 over JCS {contextRef, contextCid} with version and variant bits set, an explicit exception to CTR-ID-001 ID-1, so every vault derives the same ID and a new context statement such as an auction second-chance offer yields a new Deal."
       - A PaymentClaim stores exactly the COM-2 fields plus dealId, obligationId, the method reference signed into the claim (cash termsCid or crypto request cid), verification per COM-4, statement cids and local receivedAt; there is no paid boolean anywhere in the schema.
-      - Deals and claims are P2 (parties only), kept by each party (a vault, or the relay for a listing_fee Deal whose payee is that relay's operator) as RET-EVIDENCE, and travel only as end-to-end encrypted signed envelopes between the parties (PRV-5).
+      - Deals and claims are P2 (parties only), kept by each party's vault (the operator's own vault for a listing_fee Deal) as RET-EVIDENCE and never by a relay, and travel only as end-to-end encrypted signed envelopes between the parties (PRV-5).
       - "dealCid is the cid of JCS {contextRef, contextCid, parties, obligations}, so independent opens of the same terms converge on one dealCid, and completionCid is the cid of the completion body {dealId, dealCid, outcome: completed} that every party signs as classrup.commerce.deal_completion/v1."
       - Money in a Deal or claim whose currency is crypto or outside the bundled ISO snapshot carries the F09.S03.M01 asset descriptor {code, chainId, contract, decimals, digest}, so every vault reads the same minor units.
+      - "A Deal stores the recipients [{did, mailboxId}] of its other parties and derives its statement stream thr:<base64url(sha256(dealId))[0..22]>, so the F11.S01.M02 chainKey of every statement is the per-Deal chain; PaymentClaim.seq and prev are read from that chainKey and never allocated by this module."
     entities:
       - name: Deal
         schema: classrup.commerce.deal/v1
-        storage: relay+device
+        storage: device
         privacy: P2
         retention: RET-EVIDENCE
         fields:
           - "id: uuid — UUIDv8 (RFC 9562 §5.8) from sha256(JCS {contextRef, contextCid}); explicit CTR-ID-001 ID-1 exception; primary key"
-          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot); the relay instance id for a relay-held listing_fee Deal"
+          - "vaultId: uuidv7 — local vault scope (CTR-ID-001 tenant slot)"
           - "contextRef: object — {type, id: uuid}; type is a registered context type: core N5 types offer (id offerId; the root offerId for a Deal negotiated through F01.S04.M02) | auction_result (id the auction result id; for a second-chance Deal the id F04.S01.M03 derives as the first 16 bytes of sha256(second_chance_offer cid) formatted as a UUID) | cycle_compensation (id the cycle id, or recoveryCaseId for a recovery compensation) | service_milestone (id milestoneId) | rental_deposit (id depositId) | rental_damage (id claimId) | listing_fee (id publicationId), plus types a context module registers through ContextTermsPort (N5a: rental_reservation {id reservationId} and rental_cancellation_fee {id reservationId} by F05.S01.M01, rental_deposit_release {id depositId} by F05.S01.M02, rental_late_fee {id returnId} by F05.S02.M02); rental_deposit is implemented by F05.S01.M02 and rental_damage by F05.S02.M03"
           - "contextCid: string — sha256 cid of the signed context statement: offerCid (offer), auction result or, for a second-chance Deal, the second_chance_response cid (auction_result), committed cycle revision or the accepting classrup.mutiny.recovery_action/v1 cid (cycle_compensation), milestone approvalCid (service_milestone), reservation requestCid (rental_reservation), the renter's cancellation cid (rental_cancellation_fee), deposit agreementCid (rental_deposit), release attestation cid (rental_deposit_release), return attestation or receipt cid (rental_late_fee), damage acceptance, counter acceptance or F09.S02.M02 dispute outcomeCid (rental_damage), publication statementCid (listing_fee)"
           - "parties: array — 2..20 entries {did (principal DID), role: payer|payee|both}"
+          - "recipients: array — 1..20 entries {did, mailboxId} naming the other parties' mailboxes, supplied by the context module through DealPort.open (for an offer the buyer's buyerMailboxHint and the seller's projection mailboxHints) or read from ext.recipients of the received deal statement; reused for every claim, ack, cancel and completion statement of the Deal"
           - "openerRole: string — role in the context that signs the deal statement, resolved by ContextTermsPort.openerRole (for example listing author for offer)"
           - "obligations: array — 1..10 entries {obligationId, payerId, payeeId, amount: Money, asset?: AssetDescriptor (F09.S03.M01), purpose: goods|service|deposit|compensation|rent|damage|listing_fee|other, allowedMethods: cash|crypto|external subset}"
           - "status: enum — open | disputed | completed | cancelled | expired"
@@ -104,11 +106,11 @@ processes:
           - payerId differs from payeeId in every obligation and both are parties.
           - status completed implies every obligation is covered by claims holding a payee-signed acknowledgement (source counterparty for cash or external, source chain for crypto) summing to at least its amount, and completion.completionCid is set.
           - id equals the UUIDv8 derivation of (contextRef, contextCid); one Deal per (vaultId, contextRef, contextCid), and a later Deal for the same contextRef needs a new context statement.
-          - A relay holds a Deal only for a listing_fee context whose payee is that relay's operator DID.
+          - A relay never holds a Deal or a claim; for a listing_fee context the payee is the operator principal acting from the operator's own vault.
           - A Deal with frozen set is never completed and no acknowledgement is signed for its claims in this vault until DealPort.unfreeze clears the flag or the Deal is cancelled.
       - name: PaymentClaim
         schema: classrup.commerce.payment_claim/v1
-        storage: relay+device
+        storage: device
         privacy: P2
         retention: RET-EVIDENCE
         fields:
@@ -134,8 +136,8 @@ processes:
           - "claimCid?: string — sha256 of the signed claim statement; absent while sendHold is set"
           - "ackCid?: string — cid of the payee-signed payment_ack (verification.source counterparty for cash or external, chain for crypto)"
           - "disputeCid?: string — cid of the payee dispute statement"
-          - "seq: int — author's sequence number on this Deal, starting at 1 (FED-3)"
-          - "prev?: string — cid of the author's previous statement on this Deal (per-author seq and prev chain, FED-3)"
+          - "seq: int — read from the F11.S01.M02 chainKey {author, signerKey, stream = the Deal stream} of the claim statement, never allocated here (FED-3)"
+          - "prev?: string — cid of the author's previous statement on the Deal stream, read from the F11.S01.M02 chainKey"
           - "forkDetected: boolean — true when two different statements by the same author share the same prev or seq; claim is frozen"
           - "peerSync: string — local_committed | prepared | transport_acknowledged | peer_accepted"
           - "revision: int — CTR-ID-001 ID-4"
@@ -160,7 +162,7 @@ processes:
       - Incoming signed statements are verified for envelope shape, Ed25519 signature over JCS bytes (FED-2), signer role and chain position before any state change.
       - Every violation maps to exactly one stable error code with a localized message key.
       - Deal statements are checked against the signed context - ContextTermsPort recomputes parties and obligations from the verified context statement, the signer must hold the opener role the context type requires, and any mismatch is quarantined with COMMERCE_DEAL_CONTEXT_CONFLICT.
-      - Ordering follows the per-author seq and prev chain (FED-3); an unknown prev is buffered for up to 24 h, and only two different statements by the same author with the same prev or seq count as a fork, so reordered delivery and sequential partial claims are never frozen.
+      - Ordering follows the F11.S01.M02 per-(author, signerKey, stream) seq and prev chain (FED-3) on the Deal stream; an unknown prev is buffered for up to 24 h, and only two different statements by the same author with the same prev or seq count as a fork, so reordered delivery and sequential partial claims are never frozen.
       - Statements whose Money uses a crypto or non-snapshot currency are accepted only when the embedded asset descriptor equals the local CurrencyDef; a mismatch is quarantined with COMMERCE_CURRENCY_MISMATCH.
       - "Block filtering follows N7 and the N7a rentals exception - for a Deal whose context ContextTermsPort.blockExempt(contextRef, contextCid, blockedDid) reports exempt (a rentals context whose reservation was confirmed before the block), commerce.deal.open and commerce.payment.claim are not refused with BLOCKED_PARTY and its statements are verified and stored with notifications suppressed, never dropped, and the reason blocked is never sent."
     rules:
@@ -172,13 +174,13 @@ processes:
       - "V06 | method rule from the MethodRulePort passes (cash terms in force, crypto request open with the txid found by a verifier or attested by the payer, external reference format) | COMMERCE_CLAIM_METHOD_RULE"
       - "V07 | actor is the obligation payer for claim and the payee for acknowledge or dispute; acknowledge applies to cash and external claims only | FORBIDDEN"
       - "V08 | statement signature is valid under FED-2 (F11.S01.M03), the signing device key is active in the signer's portable identity document at local receipt time (KeyStatusPort, F07.S02.M01), and the signer holds the role the F11.S01.M01 registry names for the statement type | COMMERCE_STATEMENT_INVALID"
-      - "V09 | statement seq and prev continue the author's chain on this Deal; an unknown prev is buffered up to 24 h, and two different statements by the same author with the same prev or seq are a fork | COMMERCE_STATEMENT_FORK"
+      - "V09 | statement seq and prev, read from the F11.S01.M02 chainKey on the Deal stream thr:<base64url(sha256(dealId))[0..22]>, continue the author's chain on this Deal; an unknown prev is buffered up to 24 h, and two different statements by the same author with the same prev or seq are a fork | COMMERCE_STATEMENT_FORK"
       - "V10 | neither party has blocked the other (F07.S02.M02 isBlockedEither); commands return BLOCKED_PARTY and ingest drops statements from a blocked did silently unless they belong to a Deal with an open dispute case or a Deal that ContextTermsPort.blockExempt reports exempt (N7a rentals exception: reservation confirmed before the block), which are stored with notifications suppressed | BLOCKED_PARTY"
       - "V11 | Deal is open and not expired when a claim is made | CONFLICT_STATE"
       - "V12 | ContextTermsPort.verify(contextRef, contextCid, parties, obligations) confirms the parties, roles and obligations equal those derived from the verified context statement, on open and on ingest | COMMERCE_DEAL_CONTEXT_CONFLICT"
       - "V13 | a deal statement is signed by the opener role of its context type, a unilateral deal_cancel by the context owner role, and a deal_completion by a party | COMMERCE_STATEMENT_INVALID"
       - "V14 | a unilateral cancel happens only while no claim of the Deal is acknowledged or final and names reason context_voided, withdrawn_before_accept, non_payment, buyer_timeout or conflict_resolved | CONFLICT_STATE"
-      - "V15 | a listing_fee Deal names as payee the operator DID in the relay's signed policy document for that relay and allows only crypto or external methods | COMMERCE_DEAL_PARTY_INVALID"
+      - "V15 | a listing_fee Deal names as payee the promotion.operatorDid of the latest verified relay-signed F15.S04.M03 tenant_config held for the relay of the context, that DID is in its operatorKeys, and the Deal allows only crypto or external methods | COMMERCE_DEAL_PARTY_INVALID"
       - "V16 | every crypto or non-snapshot currency carries an asset descriptor equal to the local CurrencyDef (F09.S03.M01) | COMMERCE_CURRENCY_MISMATCH"
       - "V17 | the Deal is not frozen by an inventory fork when this vault claims or acknowledges a payment, signs a chain acknowledgement or evaluates completion; ingested claims for a frozen Deal are stored and wait | COMMERCE_DEAL_FROZEN"
   workflow_state_machine:
@@ -237,16 +239,17 @@ processes:
       - "A frozen Deal keeps its expiresAt; the Deal expiry sweep expires it like any open Deal, so no Deal stays frozen forever."
   commands_queries_events:
     requirements:
-      - Commands are vault commands run locally with the unlocked principal as actor; those marked statement also produce a signed envelope for the other parties; the only relay command is commerce.payment.acknowledge run by a relay operator for a listing_fee Deal whose payee is that operator.
+      - Commands are vault commands run locally with the unlocked principal as actor; those marked statement also produce a signed envelope for the other parties through the StatementPublisherPort; no command runs on a relay, and for a listing_fee Deal the payee runs the same vault commands from the operator's own vault.
       - Every command emits its events into the vault outbox in the same IndexedDB transaction as the state change (EVT-8).
       - The module consumes crypto, dispute (opened, resolved, withdrawn) and deletion events to drive claim and deal status and never accepts a crypto status from user input.
-      - "Event payloads carry contextRef and the party DIDs consumers route on (N3, N4, N5) - payment events contextRef, obligationId, payerId, payeeId and parties, commerce.payment.acknowledged also acknowledgedBy (the DID whose key signed payment_ack, the relay operator for listing_fee), commerce.deal.opened and commerce.deal.cancelled contextCid and parties, and commerce.deal.completed { dealId, contextRef, contextId (= dealId), completionCid, parties, completedAt }."
+      - "Event payloads carry contextRef and the party DIDs consumers route on (N3, N4, N5) - payment events contextRef, obligationId, payerId, payeeId and parties, commerce.payment.acknowledged also acknowledgedBy (the DID whose key signed payment_ack, the operator DID for listing_fee), commerce.deal.opened and commerce.deal.cancelled contextCid and parties, and commerce.deal.completed { dealId, contextRef, contextId (= dealId), completionCid, parties, completedAt }."
       - commerce.statement.ingest dispatches every commerce envelope type to the handler registered through StatementHandlerPort (this module's own types, F09.S01.M02 cash terms, F09.S01.M03 crypto requests, F09.S02.M01 receipts and F09.S02.M02 dispute statements), each with the signer role listed in the note, cid deduplication and quarantine reasons.
       - Context modules use DealPort {open, cancel, unfreeze} in-process and implement ContextTermsPort {verify, openerRole, ownerRole, blockExempt}; a claim the method rule holds (txid not yet found or not attested) stays local, unsigned and unsent until the method module releases it.
+      - "Every statement of this module (deal, payment_claim, payment_ack, payment_dispute, deal_cancel and deal_completion) is published only through the StatementPublisherPort (F11.S01.M02 federation.record.publish, audience participants, sealed ciphertext of at most 12288 bytes) with recipients taken from the Deal and the stream thr:<base64url(sha256(dealId))[0..22]>; seq and prev come from the F11.S01.M02 chainKey, and the module registers its statement types with the F11.S01.M02 StatementIngestPort (N26)."
     commands:
       - name: commerce.deal.open
         capability: commerce.deal.open
-        input: "[vault command, produces signed statement classrup.commerce.deal/v1; reached through DealPort.open] { contextRef: {type, id}, contextCid, parties[{did, role}], obligations[], expiresInDays? (default 30, 1..90) }"
+        input: "[vault command, produces signed statement classrup.commerce.deal/v1; reached through DealPort.open] { contextRef: {type, id}, contextCid, parties[{did, role}], obligations[], recipients[{did, mailboxId}] (1..20, the other parties' mailboxes), expiresInDays? (default 30, 1..90) }"
         output: "{ dealId, revision, dealCid, peerSync }"
         errors: [VALIDATION_FAILED, COMMERCE_CONTEXT_UNKNOWN, COMMERCE_DEAL_PARTY_INVALID, COMMERCE_DEAL_CONTEXT_CONFLICT, COMMERCE_CURRENCY_MISMATCH, BLOCKED_PARTY]
         emits: [commerce.deal.opened]
@@ -267,7 +270,7 @@ processes:
         idempotent: true
       - name: commerce.payment.acknowledge
         capability: commerce.payment.acknowledge
-        input: "[vault command; relay command for a listing_fee Deal whose payee is that relay's operator; produces signed statement classrup.commerce.payment_ack/v1 with verification.source counterparty] { claimId, expectedRevision, note? }"
+        input: "[vault command; produces signed statement classrup.commerce.payment_ack/v1 with verification.source counterparty] { claimId, expectedRevision, note? }"
         output: "{ claimId, revision, status: acknowledged, dealStatus }"
         errors: [NOT_FOUND, FORBIDDEN, CONFLICT_REVISION, CONFLICT_STATE, COMMERCE_CLAIM_METHOD_NOT_ALLOWED, COMMERCE_STATEMENT_FORK, COMMERCE_DEAL_FROZEN]
         emits: [commerce.payment.acknowledged, commerce.deal.completed]
@@ -281,7 +284,7 @@ processes:
         idempotent: true
       - name: commerce.statement.ingest
         capability: commerce.statement.ingest
-        input: "[vault command, internal, consumes a signed statement received from a mailbox or direct channel; on a relay only for listing_fee Deals whose payee is its operator] { envelope }"
+        input: "[vault command, internal, consumes a signed statement received from a mailbox or direct channel] { envelope }"
         output: "{ outcome: applied|dispatched|buffered|quarantined|duplicate|dropped, handler?, reason? }"
         errors: [VALIDATION_FAILED, COMMERCE_STATEMENT_INVALID, COMMERCE_STATEMENT_FORK, COMMERCE_CONTEXT_UNKNOWN, COMMERCE_DEAL_CONTEXT_CONFLICT, COMMERCE_CURRENCY_MISMATCH, UNSUPPORTED_SCHEMA_VERSION]
         emits: [commerce.deal.opened, commerce.payment.claimed, commerce.payment.acknowledged, commerce.payment.disputed, commerce.deal.completed, commerce.deal.cancelled]
@@ -327,14 +330,14 @@ processes:
       each party for mode mutual, the context owner role for mode unilateral; classrup.commerce.deal_completion/v1 - each party,
       all over the same completion body {dealId, dealCid, outcome: completed}, exportable with every party's signature through
       commerce.deal.export_completion; classrup.commerce.payment_claim/v1 - obligation payer; classrup.commerce.payment_ack/v1
-      - obligation payee (the relay operator DID for listing_fee; source chain only from the payee's own verifier);
+      - obligation payee (the promotion.operatorDid for listing_fee; source chain only from the payee's own verifier);
       classrup.commerce.payment_dispute/v1 - obligation payee. Handlers registered through StatementHandlerPort:
       classrup.commerce.cash_terms/v1 payee, classrup.commerce.cash_terms_accept/v1 and classrup.commerce.cash_terms_decline/v1
       payer (F09.S01.M02); classrup.commerce.crypto_request/v1 and classrup.commerce.crypto_request_cancel/v1 payee
       (F09.S01.M03); classrup.commerce.receipt/v1 claim payer or payee by statement type (F09.S02.M01 commerce.receipt.ingest);
       classrup.commerce.dispute*/v1 case parties or the active mediator (F09.S02.M02 commerce.dispute.ingest); an unregistered
       commerce type is quarantined with reason type_unregistered. classrup.commerce.fx_quote_revocation/v1 is not Deal-scoped and
-      is routed by the vault mailbox router to F09.S03.M02 commerce.fx_quote.ingest_revocation, never to this dispatcher. Ports - DealPort {open(input)
+      is routed by the vault mailbox router to F09.S03.M02 commerce.fx_quote.ingest_revocation, never to this dispatcher. Ports - DealPort {open(input incl. recipients[{did, mailboxId}])
       -> {dealId, dealCid}, cancel(dealId, reason), unfreeze(dealId) - the context owner keeps a Deal frozen by
       bazaar.inventory.conflict_detected}; ContextTermsPort {verify(contextRef, contextCid, parties, obligations) ->
       ok or conflict, openerRole(type), ownerRole(type), blockExempt(contextRef, contextCid, blockedDid) -> boolean (true only
@@ -343,13 +346,18 @@ processes:
       -> pass, fail(code) or hold(reason)} with the callbacks release(claimId) and discard(claimId) this module gives the method
       module; StatementHandlerPort {types[], signerRole(type), apply(envelope) -> applied, quarantined(reason) or duplicate}. The
       deal and payment_claim resolvers of the F09.S02.M02 DisputeContextPort read this module through commerce.deal.get.
-      listing_fee - the payee is the operator DID published in the relay's signed policy document; claims are delivered end-to-end
-      encrypted to the operator's mailbox on that relay, and the operator acknowledges with the relay command
-      commerce.payment.acknowledge under relay policy.
+      listing_fee - the payee is the operator principal named by promotion.operatorDid in the verified F15.S04.M03 tenant_config of
+      the relay; claims are delivered end-to-end encrypted to promotion.operatorMailbox, and the operator acts from the operator's
+      own vault: it fetches that mailbox on the relay, acknowledges external claims with commerce.payment.acknowledge and, for crypto,
+      issues commerce.crypto_request.create and signs the chain payment_ack from its own verifier; no relay command exists.
+      Publication (N25): every statement of this module is created with federation.record.publish {type, audience participants,
+      payload sealed ciphertext of at most 12288 bytes, recipients = Deal.recipients, stream = thr:<base64url(sha256(dealId))[0..22]>},
+      so the F11.S01.M02 chainKey is the per-Deal chain that V09 checks; the receiving vault's F11.S01.M02 dispatches the types this
+      module registers with the StatementIngestPort (N26).
     events_produced:
       - {type: commerce.deal.opened, privacy: P2, payload: "{ dealId, contextRef, contextCid, dealCid, parties[{did, role}], obligationCount, expiresAt }"}
       - {type: commerce.payment.claimed, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, method, amount, payerId, payeeId, parties[{did, role}], txRef?, cryptoRequestId?, methodRef? }"}
-      - {type: commerce.payment.acknowledged, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, method, payerId, payeeId, acknowledgedBy (did that signed payment_ack; the relay operator DID for listing_fee), parties[{did, role}], verificationSource: counterparty|chain, ackCid }"}
+      - {type: commerce.payment.acknowledged, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, method, payerId, payeeId, acknowledgedBy (did that signed payment_ack; the operator DID for listing_fee), parties[{did, role}], verificationSource: counterparty|chain, ackCid }"}
       - {type: commerce.payment.disputed, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, payerId, payeeId, parties[{did, role}], reason }"}
       - {type: commerce.payment.expired, privacy: P2, payload: "{ claimId, dealId, contextRef, obligationId, payerId, payeeId, parties[{did, role}], lastStatus }"}
       - {type: commerce.deal.completed, privacy: P2, payload: "{ dealId, contextRef, contextId (= dealId), completionCid, parties[{did, role}], completedAt }"}
@@ -367,7 +375,7 @@ processes:
       - {type: bazaar.inventory.conflict_detected, effect: "set frozen {reason inventory_conflict, holdIds} on every non-terminal Deal of this vault whose dealId is in linkedDealIds; no status change and no statement sent; the flag clears only through DealPort.unfreeze by the context owner or when the Deal becomes terminal"}
     errors:
       - "COMMERCE_CONTEXT_UNKNOWN | 422 | no | context type is not registered or the context statement is not known to this vault"
-      - "COMMERCE_DEAL_PARTY_INVALID | 422 | no | payer and payee are equal, are not listed parties, or a listing_fee payee is not the relay operator"
+      - "COMMERCE_DEAL_PARTY_INVALID | 422 | no | payer and payee are equal, are not listed parties, or a listing_fee payee is not the tenant_config promotion.operatorDid"
       - "COMMERCE_DEAL_CONTEXT_CONFLICT | 409 | no | Deal terms differ from the signed context or from an existing Deal for this contextRef and contextCid"
       - "COMMERCE_CLAIM_METHOD_NOT_ALLOWED | 422 | no | method or currency is not allowed by the obligation, or acknowledge was used on a crypto claim"
       - "COMMERCE_CLAIM_METHOD_RULE | 422 | no | the method module rejected the claim input"
@@ -392,15 +400,15 @@ processes:
     requirements:
       - Under vault policy (CAP-8) only the unlocked local principal mutates its vault; payer-only and payee-only commands also check the role recorded in the Deal.
       - Incoming statements are accepted only if signed by the key of the party named in the Deal for that role; otherwise they are quarantined with a reason.
-      - No relay role grants any capability over other parties' Deals or claims; relays carry encrypted envelopes and see only routing metadata, and the one relay-side capability is the operator acknowledging claims on listing_fee Deals where that relay's operator is the payee.
+      - No relay role grants any capability over other parties' Deals or claims; relays carry encrypted envelopes and see only routing metadata, and no relay-side capability exists over Deals or claims; the payee of a listing_fee Deal acts from the operator's own vault.
       - Unilateral cancellation is allowed only to the context owner role that ContextTermsPort names for the context type, and receiving vaults verify that role before applying it.
     capabilities:
       - "commerce.deal.open | local-principal | vault unlocked; principal is a party of the obligations; invoked through DealPort by a context module on the principal's behalf; principal holds the opener role of the context type"
       - "commerce.deal.cancel | local-principal | principal is a party of the Deal; mode mutual needs all parties' cancel statements; mode unilateral only for the context owner role while no claim is acknowledged or final"
       - "commerce.payment.claim | local-principal | principal is the obligation payer; Deal open"
-      - "commerce.payment.acknowledge | local-principal, operator | vault - principal is the payee of a cash or external claim; relay - operator role of a relay whose operator DID is the payee of the listing_fee Deal, under relay policy"
+      - "commerce.payment.acknowledge | local-principal | principal is the payee of a cash or external claim, including the operator principal acting from the operator's own vault for a listing_fee Deal"
       - "commerce.payment.dispute | local-principal | principal is the claim payee"
-      - "commerce.statement.ingest | local-principal | internal ingest pipeline of the unlocked vault (or of a relay for its own listing_fee Deals); statement signer authorized by Deal role"
+      - "commerce.statement.ingest | local-principal | internal ingest pipeline of the unlocked vault; statement signer authorized by Deal role"
       - "commerce.deal.read | local-principal | principal is a party of the Deal"
       - "commerce.deal.export | local-principal | principal is a party of a completed Deal whose completion statements from every party are held; the user confirmed the disclosure preview"
   failure_recovery_idempotency:
@@ -409,7 +417,7 @@ processes:
       - Statement delivery uses the sync outbox with states prepared, transport_acknowledged and peer_accepted; the UI shows only the state reached (IDM-7).
       - Conflicting signed statements are detected, frozen and surfaced; there is no last-writer-wins for money or consent.
     idempotency: "Vault command ID recorded in the inbox for 24 h; replay returns the original result. Statements are deduplicated by cid, so redelivery is a no-op. dealId is the UUIDv8 of (contextRef, contextCid) and dealCid the cid of the canonical terms, so repeated or independent opens converge; the completion body is deterministic so every party signs the same completionCid."
-    concurrency: "expectedRevision on acknowledge, dispute and cancel; unique index on (vault, context type, context id, context cid); multi-tab writers serialize through a Web Lock named commerce-deal. Cross-vault there is no lock: statements are ordered by the per-author seq and prev chain, unknown parents are buffered 24 h, and only two different statements by one author with the same prev or seq freeze the claim."
+    concurrency: "expectedRevision on acknowledge, dispute and cancel; unique index on (vault, context type, context id, context cid); multi-tab writers serialize through a Web Lock named commerce-deal. Cross-vault there is no lock: statements are ordered by the F11.S01.M02 per-(author, signerKey, stream) seq and prev chain on the Deal stream, unknown parents are buffered 24 h, and only two different statements by one author with the same prev or seq freeze the claim."
     retries: "Sync outbox retries delivery with backoff 5 s, 30 s, 5 min, 1 h, then every 6 h until the claim expires; receivers dedupe by cid. Held claims are never retried by the outbox because they are not in it."
     offline: "All commands commit locally while offline and show pending; statements wait in the sync outbox. Acknowledgement is allowed offline but the UI says the payer has not seen it until peer_accepted. A crypto claim made offline with a verifier configured stays held until the txid lookup succeeds."
     partial_failure: "Local commit and outbox insert are one IndexedDB transaction, so no statement is prepared without its state change. If transport fails the state stays prepared and is retried; no automatic rollback of a signed statement. A ContextTermsPort failure on open stores nothing; on ingest it buffers the statement for 24 h."
@@ -497,7 +505,7 @@ processes:
       - "T26 | unit | 02.R05 | dispute and acknowledgement delivered in reverse order; two sequential partial claims by the payer | reversed delivery buffered then applied in order; both partial claims applied; no fork reported"
       - "T27 | integration | 04.R05 | ingest cash_terms, crypto_request, receipt and dispute statements, an fx_quote_revocation and an unregistered commerce statement type | the first four dispatched to their registered handlers with signer-role checks; the revocation is not handled here; unregistered type quarantined with reason type_unregistered"
       - "T28 | integration | 04.R06 | crypto claim whose txid the verifier has not found; crypto claim without a verifier and without txidAttested | first stays local with sendHold txid_lookup_pending, no claimCid and no outbox row until released; second refused with COMMERCE_CLAIM_METHOD_RULE"
-      - "T29 | integration | 05.R03,04.R01 | listing_fee Deal on relay R - claim delivered to the operator mailbox, operator acknowledges through the relay command, then a moderator of R and the operator of another relay try | ack signed by the operator DID from R's signed policy document and applied in the seller vault; the other attempts FORBIDDEN"
+      - "T29 | integration | 05.R03,04.R01 | listing_fee Deal with payee promotion.operatorDid from R's verified tenant_config - the claim is delivered to the operator's mailbox on R and fetched by the operator's own vault, which acknowledges an external claim with the vault command and, for crypto, issues the crypto request and signs the chain ack from its own verifier; a moderator of R and the operator of another relay try the same | the ack is signed by the operator vault key for promotion.operatorDid and applied in the seller vault; R holds no Deal, claim, key or command; the other attempts FORBIDDEN"
       - "T30 | abuse | 07.R05 | 10 000 fresh dids each send one statement to vault B | quarantine never exceeds 500 entries or 5 MiB; oldest evicted first; once full, statements from non-parties are dropped; known parties' statements still applied"
       - "T31 | integration | 07.R04 | export, deletion and retention purge driven by F10 | section commerce.deals exported; DeletionPort plan pseudonymizes the principal; RetentionPurgePort purges records past RET-EVIDENCE; every field carries an F10.S02.M02 class"
       - "T32 | integration | 08.R03 | quarantined, buffered and forked statements produced, then diagnostics opened | commerce.statement.diagnostics and the diagnostics screen show counts by reason"
@@ -507,8 +515,9 @@ processes:
       - "T36 | integration | 02.R07,07.R06 | the renter blocks the owner after confirmation; the owner opens the rental_deposit_release Deal and claims, and the renter's vault ingests the claim; then a blocked did sends a claim on an offer Deal | ContextTermsPort.blockExempt returns true for the rental Deal - open and claim not refused, claim stored with notification suppressed and no blocked reason sent; the offer Deal claim is dropped silently"
       - "T37 | contract | 10.R04,07.R01 | export the completion proof of a completed two-party Deal, of a Deal missing the counterparty's completion statement, and submit the first to an F12.S03.M04 relay double | first returns dealId, dealCid, completionCid, outcome and both signed envelopes with no amount, obligation or contextRef field and verifies at the double; second CONFLICT_STATE; nothing is exported without the preview confirmation"
       - "T38 | integration | 02.R04,04.R06 | open Deals for a second-chance auction result (id from the second_chance_offer cid, contextCid the response cid), a recovery compensation {cycle_compensation, recoveryCaseId}, a service_milestone with expiresInDays 90, a negotiated offer {offer, rootOfferId}, each of the six rentals types and rental_damage with an outcomeCid contextCid, using context-module stubs | each passes V01 and V12 with the opener role in the note; none is rejected with COMMERCE_CONTEXT_UNKNOWN; the second-chance dealId differs from the winner's"
+      - "T39 | contract | 04.R07,01.R06,02.R05 | open a Deal from vault A with recipients, claim, acknowledge, cancel and complete through a StatementPublisherPort double, then ingest in vault B | every statement is created by federation.record.publish with audience participants, the stored recipients and stream thr:<base64url(sha256(dealId))[0..22]>, ciphertext at most 12288 bytes; seq and prev equal the F11.S01.M02 chainKey values and the module allocates none; both vaults compute the same dealCid"
     acceptance:
-      - All tests T01 to T38 pass in CI.
+      - All tests T01 to T39 pass in CI.
       - No state or label ever shows a payment as completed on the strength of a payer claim alone.
       - Two independent vaults converge on the same Deal status and on the statement-driven claim statuses (cash and external claims and the claim, acknowledgement and dispute chain) after exchanging the same signed statements in any order; crypto observation statuses are per vault and labelled according to your verifier, and crypto-driven completion converges through the payee's signed chain acknowledgement.
       - A forked claim is frozen and never silently resolved.
@@ -521,5 +530,5 @@ processes:
       - A party can export the completion proof of a completed Deal as classrup-deal-completion/v1 - the deal_completion/v1 body {dealId, dealCid, outcome}, its completionCid and every party's signed completion envelope, without amounts, obligations or contextRef - for voluntary submission to a relay through F12.S03.M04 moderation.accountlimit.submit_completion.
     export: "ExportSectionPort section commerce.deals in classrup-export/v1; one line per Deal and per PaymentClaim with the signed statement envelopes (schemas classrup.commerce.deal/v1, classrup.commerce.payment_claim/v1, payment_ack/v1, deal_cancel/v1, deal_completion/v1). Held claims and quarantined statements are not exported. Completion proofs leave the vault only as classrup-deal-completion/v1 files produced by commerce.deal.export_completion on explicit user action."
     import: "Terminal records import as read-only evidence; open Deals import as open but sync state is reset to local_committed and statements are re-sent only if the user chooses; claims past 14 days of no progress import as expired; imported Deals are re-checked through ContextTermsPort when the context statement is present."
-    backup: "The vault export is the primary backup (IOX-6); no relay holds plaintext Deals other than a relay's own listing_fee Deals as payee."
+    backup: "The vault export is the primary backup (IOX-6); no relay holds plaintext Deals, claims or acknowledgements."
     migration_rollback: "Additive fields only in v1; rollback to the previous release is safe because new optional fields are ignored by older readers. Signed statement bytes are never rewritten by a migration."

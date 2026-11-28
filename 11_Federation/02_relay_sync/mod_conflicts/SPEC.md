@@ -38,7 +38,7 @@ Detects forked or equivocating signed statements, quarantines them and drives re
 - Both fork candidates arrive in one batch; one ConflictRecord is opened containing both cids, not two.
 - A third candidate for the same chain key and seq arrives later; it is appended to the same open record (maximum 5 candidates).
 - Author legitimately re-signs a corrected record with a new seq that supersedes both and names their cids in ext.supersedes; the public_projection conflict becomes superseded.
-- Commitment conflict where a consent was signed twice with different proposal digests; frozen, never auto-resolved even after 30 days, and resolve with keep is refused.
+- Commitment conflict where one signer signs a consent twice on the same subjectRevision number with different subjectRevisionHash values (equivocation), or a consent and a decline over one hash; frozen, never auto-resolved even after 30 days, and resolve with keep is refused. The same signer's consents on r1 and on r2 of one revision chain (a counter, quote_refresh or cycle revision) are not a conflict and are never passed to detect.
 - A party tries to settle a commitment conflict alone by superseding with a statement only it signed; refused with FEDERATION_CONFLICT_NOT_AUTO_RESOLVABLE until every required signer has signed the new digest.
 - A relay operator tries to resolve a commitment conflict; refused with FORBIDDEN (relays hold public projections only).
 - The author publishes a new portable document listing a different relay while a public conflict is open; the listed relays used by origin-wins are recomputed before the 7-day decision.

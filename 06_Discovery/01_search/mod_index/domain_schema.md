@@ -52,7 +52,9 @@ Schema `classrup.discovery.search_document/v1` · storage **relay+device** · pr
 | expiresAt | timestamp — claimed expiry of the latest renewal; document removed at or after min(expiresAt, firstSeenAt + 120 d) |
 | endsAt? | timestamp — host-signed auction end (scheduled, opened or extended) |
 | promotedUntil? | timestamp — relay-local promotion end set only by discovery.search_document.set_promotion; always null in a vault index |
-| promotionClaimId? | uuidv7 — relay-local payment claim (F09.S01.M01) that justifies promotedUntil |
+| promotionClaimId? | string — relay-local cid of the verified classrup.commerce.payment_ack/v1 that justifies promotedUntil (the field and column keep their historic name) |
+| promotionStatementCid? | string — cid of the latest relay-signed classrup.bazaar.promotion/v1 for this document (state active or withdrawn); a withdrawn statement stays served by list_promotions for 30 days |
+| promotionRef? | object — relay-local {publicationId, statementCid, tier} of the verified Deal (contextRef.id, contextCid, tier) needed to sign the withdrawal |
 | status | enum — active \| removed \| purged |
 | removedReason? | enum — unpublished \| expired \| archived \| sold_out \| held \| tombstoned \| hosting_policy \| deleted \| auction_closed \| auction_cancelled \| withdrawn \| evicted \| author_cap |
 | removedByActionId? | uuidv7 — relay-local moderation action that removed the document (reason hosting_policy) |
@@ -67,7 +69,7 @@ Schema `classrup.discovery.search_document/v1` · storage **relay+device** · pr
 - status active implies the stored projection signature verified against authorDid, the signer held the author role and title is non-null.
 - status removed or purged implies title and body are null and no discovery_fts row exists for the document.
 - At most one document exists per (tenantId, sourceKind, sourceId, authorDid); enrichment never creates a second document for the same listing.
-- promotedUntil is null in every vault index and, on a relay, is set only while promotionClaimId refers to a final or operator-acknowledged claim.
+- promotedUntil is null in every vault index and, on a relay, is set only while promotionClaimId names the verified operator-signed payment acknowledgement and a relay-signed active promotion statement exists for it.
 - origin own or imported documents are never removed by a relay_removal advisory or a relay moderation action.
 - inStock and wantMinCondition equal the values of the latest applied listing projection, and wantMinCondition is null unless listingKind is wanted.
 - offeringRef.version never decreases for an offeringId, and geoCell of a service listing enriched by an offering equals its 5-character serviceAreaCell.

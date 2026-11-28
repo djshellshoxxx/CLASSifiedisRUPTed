@@ -50,8 +50,8 @@
 | Type | Effect |
 |---|---|
 | `commerce.payment.claimed` | for contextRef {rental_deposit, depositId} or {rental_deposit_release, depositId} show proof claimed (unverified) |
-| `commerce.payment.acknowledged` | for contextRef.type rental_deposit move agreed to funded; for rental_deposit_release move release_pending to released |
-| `commerce.payment.finalized` | same as acknowledged for crypto payments with chain finality (F09.S01.M03) |
+| `commerce.payment.acknowledged` | only when verificationSource is counterparty or chain (the payee-signed payment_ack): for contextRef.type rental_deposit move agreed to funded; for rental_deposit_release move release_pending to released |
+| `commerce.payment.finalized` | record proof final per your verifier (F09.S01.M03); no state change, the deposit moves only on the payee-signed payment_ack |
 | `commerce.payment.expired` | show proof expired; funding stays unfunded; the release stays pending and can be disputed by the renter |
 | `commerce.deal.cancelled` | for the funding Deal of a withdrawn deposit, record the cancellation as complete |
 | `commerce.dispute.opened` | for contextRef exactly {rental_deposit, depositId}, link the case and move escalated_pending to disputed |
@@ -95,13 +95,14 @@ after return: owner rentals.deposit.attest_release { "releaseAmount": { "amount"
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
-| TEST-PS-040-09.T04 | integration | PS-040-03.R02, PS-040-04.R03 | payment claimed only, confirming only, expired, then acknowledged | funded only at acknowledged or final; proof labels follow COM-4 |
+| TEST-PS-040-09.T04 | integration | PS-040-03.R02, PS-040-04.R03 | payment claimed only, confirming only, expired, then acknowledged | funded only on the payee-signed payment_ack; proof labels follow COM-4 |
 | TEST-PS-040-09.T07 | integration | PS-040-04.R01, PS-040-04.R02, PS-040-06.R01, PS-040-09.R03 | full flow with relay that duplicates, drops and reorders | both vaults converge on released with identical cids; duplicates skipped |
 | TEST-PS-040-09.T08 | contract | PS-040-04.R01, PS-040-04.R02, PS-040-04.R04 | each command, statement, consent, Deal call and event | payloads and signatures validate against registry schemas and signer roles; funding and release Deals are opened by the owner vault and carry contextRef {rental_deposit, depositId} with contextCid agreementCid and {rental_deposit_release, depositId} with the attestation cid; fundingDealId and releaseDealId are stored as the UUIDv8 values F09.S01.M01 derives; the renter vault derives the same fundingDealId before the Deal arrives and its ContextTermsPort.verify accepts both Deals |
 | TEST-PS-040-09.T12 | integration | PS-040-03.R05, PS-040-04.R03 | reservation cancelled after funding, owner attests on day 40 | deposit moves to release_pending with the full amount and no release Deal; attest_release allowed without return attestation and after day 30; released after the renter acknowledges |
 | TEST-PS-040-09.T16 | e2e | PS-040-01.R01, PS-040-04.R01 | mobile owner proposes, renter agrees and pays, owner acknowledges, release after return | funded then released in both vaults; non-custody wording shown and signed; axe zero serious issues |
 | TEST-PS-040-09.T22 | integration | PS-040-04.R05 | owner withdraws the terms while the renter agrees concurrently | both vaults end withdrawn; the agreement fails with CONFLICT_STATE in both; rentals.deposit.released with not_funded emitted once per vault |
 | TEST-PS-040-09.T25 | integration | PS-040-04.R06, PS-040-03.R01 | comms.consent.revoked whose revokedIds[] holds the agreementCid of an agreed deposit with afterCommit false; the same for a funded deposit with afterCommit true; one naming an unrelated consent; the first revocationId replayed | the agreed deposit frozen with frozenFrom agreed and agreementRevocationId set after comms.consent.verify returns revoked; the funded deposit keeps its state with the revocation recorded; the unrelated and replayed cases change nothing |
+| TEST-PS-040-09.T26 | integration | PS-040-03.R02, PS-040-04.R03 | the payer verifier reaches final for the funding payment and, later, for the release payment while the payee has no verifier and has signed no payment_ack | the deposit stays agreed, then release_pending; it moves to funded or released only when the payee-signed payment_ack arrives |
 
 ## Dependencies
 

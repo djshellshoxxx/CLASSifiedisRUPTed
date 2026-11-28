@@ -19,14 +19,16 @@ responsibilities:
   - Store per-participant mute settings (off, 1 h, 8 h, 24 h, until unmuted) that notification routing reads.
   - Produce and verify the signed thread-open statement classrup.comms.thread_open/v1, check the signer's entitlement per context type, and hold statements from unknown senders as message requests with status request until the user accepts or declines them.
   - Apply a remote participant's departure from a verified classrup.privacy.deletion_notice/v1 statement of kind departure, taking the departing DID from the envelope author (CTR-FED-001 FED-7) and never from the payload, and register the F10 privacy ports for the local user's own threads (N6).
+  - "Keep in each Thread.participants entry the latest verified replyMailboxes (1..3 { relayId, mailboxId }) of that participant, learned from thread_open statements and from the messages F08.S01.M01 receives, and expose the other participants' { did, relayId, mailboxId } through the query comms.thread.recipients (N27)."
+  - "Register comms.thread.receive_open for classrup.comms.thread_open/v1 in the F11.S01.M02 StatementIngestPort at vault composition (N26) and publish own thread-open statements through the StatementPublisherPort (federation.record.publish, N25)."
 non_responsibilities:
   - Message storage, encryption and delivery (F08.S01.M01).
-  - The context records themselves (listings in F01, proposals and cycles in F02, bookings in F03, rentals in F05); each context owner registers a ThreadContextPort {exists, isParty, roster, isClosed} for its context type, and F03.S02.M01, F05.S01.M01 and F05.S02.M02 are not listed in depends_on because they already depend on this module through F08.S01.M01 (port registration avoids the cycle).
+  - The context records themselves (listings in F01, proposals and cycles in F02, bookings in F03, rentals in F05); each context owner registers a ThreadContextPort {exists, isParty, roster, isClosed, recipients} for its context type, and F03.S02.M01, F05.S01.M01 and F05.S02.M02 are not listed in depends_on because they already depend on this module through F08.S01.M01 (port registration avoids the cycle).
   - Blocking itself (F07.S02.M02 owns block lists; this module only enforces the local principal's own blocks).
   - Notification delivery (F13); mute is data that F13.S02.M04 and F13.S01.M03 read through the thread query.
   - Producing the deletion notice (F10.S01.M04 owns classrup.privacy.deletion_notice/v1); this module only applies a verified one.
   - "Future: threads spanning federated peers, thread-level retention overrides, message pinning."
-depends_on: [F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001]
+depends_on: [F11.S01.M02, F07.S02.M02, F07.S01.M01, F01.S01.M01, F02.S01.M01, F02.S01.M02, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-UX-001]
 user_stories:
   - As a buyer, I can start a conversation from a listing and the seller sees it in their inbox bound to that listing.
   - As a participant of a cycle, I am automatically added to the cycle thread and removed when I leave the cycle.
@@ -62,6 +64,7 @@ processes:
       - Participant timestamps in a received thread-open statement are claims; the vault stores its own receivedAt separately.
       - The context binding is immutable after creation; a different context needs a new thread.
       - "The threadId is derived, never random: UUIDv8 from the first 122 bits of SHA-256('classrup.comms.thread.v1' || 0x00 || JCS([contextTenantId, contextType, contextId, sortedPair, generation])), where contextTenantId is the tenantId named in the context's signed statement, sortedPair is present only for one-to-one contexts (listing, proposal, direct) and generation starts at 1 and increases only when a new thread replaces a locally archived one with the same key."
+      - "Reply mailboxes (N27): the participants[] entries of classrup.comms.thread_open/v1 are { did, role, replyMailboxes? }; the entry of createdBy carries replyMailboxes, 1..3 { relayId (canonical F15.S02.M01), mailboxId } taken from comms.mailbox.list_own, so a buyer who opens a thread from a listing is addressable by the seller without any projection. A receiving vault stores them in Thread.participants, and replaces a participant's stored set only with the replyMailboxes of a later verified statement authored by that participant (a thread_open or a message handed over by F08.S01.M01 through comms.thread.refresh_reply_mailboxes), never with a hint from a relay or from another participant."
     entities:
       - name: Thread
         schema: classrup.comms.thread/v1
@@ -76,7 +79,7 @@ processes:
           - "contextId?: uuidv7 — ref to the owning context record; absent only for direct"
           - "generation: int — 1.. ; increments only when a new thread replaces a locally archived thread with the same derivation key"
           - "threadKeyHash: string — SHA-256 hex of the derivation key without generation; indexed"
-          - "participants: array — 2..12 items { did, role: owner|member, joinedAtClaim, leftAt?, departedByNotice? (cid of the verified departure notice whose envelope author is this did); the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean }"
+          - "participants: array — 2..12 items { did, role: owner|member, joinedAtClaim, replyMailboxes? (1..3 { relayId, mailboxId }, the latest verified set of this participant), leftAt?, departedByNotice? (cid of the verified departure notice whose envelope author is this did); the local principal's entry also holds mutedUntil?: timestamp and muteForever: boolean }"
           - "openStatementCid?: string — sha256 cid of the signed thread-open statement that created or mirrored this thread"
           - "origin: enum — local | mirrored"
           - "receivedAt?: timestamp — local clock when a mirrored thread was accepted"
@@ -101,6 +104,7 @@ processes:
       - Roster changes are validated against the participant cap and the owning context's own membership.
       - Every violation maps to one stable error code.
       - Limits enforced only in the creator's vault are UX guards; receiving vaults enforce their own caps on pending message requests (5 per unknown DID, 100 in total), so a modified client cannot flood an inbox.
+      - "Reply mailboxes are validated on create, on thread-open intake and on refresh; a statement whose creator entry lacks valid replyMailboxes is rejected, and only the author of a verified statement may change its own stored mailboxes."
     rules:
       - "V01 | contextType is one of the enum values and contextId exists, is visible to the creator and is not closed, checked through the ThreadContextPort of the owning module | VALIDATION_FAILED"
       - "V02 | the creator has not blocked any other participant in its own block list (F07.S02.M02 isBlockedEither over local data); BLOCKED_PARTY is returned only when the actor blocked the other party, and whether the creator is blocked by someone else is unknown to its vault and never checked | BLOCKED_PARTY"
@@ -114,6 +118,8 @@ processes:
       - "V10 | receiving vault cap: at most 5 pending requests per unknown DID and 100 in total; excess statements are dropped silently | RATE_LIMITED"
       - "V11 | accept_request and decline_request target a thread in status request | CONFLICT_STATE"
       - "V12 | an inbound classrup.privacy.deletion_notice/v1 is applied only when its payload holds exactly the F10.S01.M04 allowlist of its kind (departure - requestId, signedAt, kind, effectiveAt, recourse none) with no DID or thread ID, and ext.signerKey is a device key of the envelope author that F16.S02.M02 reports active at receipt or revoked with reason account_deleted with the notice cid in finalCids (finalListed true); the departing DID is always the envelope author (CTR-FED-001 FED-7) | VALIDATION_FAILED"
+      - "V13 | thread_open replyMailboxes: the entry of createdBy holds 1..3 items with distinct canonical relayId and a 128-bit base64url mailboxId, other entries hold none or valid ones; create has at least one mailbox for every other participant | COMMS_THREAD_OPEN_REJECTED"
+      - "V14 | refresh_reply_mailboxes: the author did is a current participant of the thread and the statement that carried the mailboxes was verified | FORBIDDEN"
   workflow_state_machine:
     requirements:
       - A Thread is active, or in request until the local user accepts it, until archived; archived is terminal and a new conversation after an archive is a new thread of the next generation.
@@ -140,15 +146,17 @@ processes:
       - "Superseded threads stop re-homing envelopes 7 days after archive."
   commands_queries_events:
     requirements:
-      - All commands are vault-local; create additionally produces the signed statement classrup.comms.thread_open/v1, and archive, mute, accept_request and decline_request never leave the device.
+      - All commands are vault-local; create additionally publishes the signed statement classrup.comms.thread_open/v1 through the StatementPublisherPort, and archive, mute, accept_request and decline_request never leave the device.
       - Roster changes made from context events are internal and are not a public command; they emit no extra events.
       - The module consumes context, block and identity events and applies verified classrup.privacy.deletion_notice/v1 statements to keep threads consistent.
       - "Statements are registered with F11.S01.M01 (N2): classrup.comms.thread_open/v1 { threadId, contextTenantId, contextType, contextId?, generation, participants[] } signed by a device key of createdBy; the module verifies classrup.privacy.deletion_notice/v1 owned by F10.S01.M04 (signer role principal: the envelope author is the departing DID per CTR-FED-001 FED-7 and ext.signerKey one of its device keys; the departure payload is exactly { requestId, signedAt, kind: departure, effectiveAt, recourse: none } and never repeats the DID), reads the departing DID only from the envelope author and applies a departure notice to every local thread in which that DID has an entry with leftAt unset, setting leftAt to the local receipt time and departedByNotice to the notice cid; a notice of kind commitment changes no thread."
       - The module registers ExportSectionPort (section comms.threads), DeletionPort (plan, execute, pseudonymize) and RetentionPurgePort with F10 (N6); DeletionPort.plan lists the counterparties of the local user's threads as noticeRecipients [{ did, mailboxId, relayId }] so F10.S01.M04 seals its single departure notice to each, DeletionPort.execute archives the user's threads with reason account_deleted and purges rosters while the keys still exist, and the module does not consume privacy.deletion.completed.
+      - "Publication and intake (N25, N26): comms.thread.create calls federation.record.publish { type classrup.comms.thread_open/v1, audience participants, payload, recipients, stream thr:<threadId> } in its transaction, with recipients the other participants' mailboxes from ThreadContextPort.recipients for the context (the verified projection mailboxHints of a listing author, the context roster of a cycle, booking or rental) or the participantMailboxes the caller passes for a direct thread; at least one mailbox is required per other participant. comms.thread.receive_open { envelope, provenance } is registered in the F11.S01.M02 StatementIngestPort for classrup.comms.thread_open/v1, runs V08 to V10 inside the receive transaction, creates the mirrored thread as active or request and stores the replyMailboxes; it returns ok for a request or an accepted thread and an error result for a rejected statement."
+      - "comms.thread.recipients { threadId } is an in-process vault query that returns [{ did, relayId, mailboxId }] for every participant with leftAt unset except the local principal, from the latest verified replyMailboxes, at most one mailbox per relay and at most 3 per participant; F08.S01.M01 uses it for ext.recipients and F08.S02.M02 and F08.S03.M03 for consent recipients."
     commands:
       - name: comms.thread.create
         capability: comms.thread.create
-        input: "[vault command; produces signed statement classrup.comms.thread_open/v1] { contextType, contextId?, participantDids[] (other participants) }"
+        input: "[vault command; publishes signed statement classrup.comms.thread_open/v1] { contextType, contextId?, participantDids[] (other participants), participantMailboxes?: [{ did, relayId, mailboxId }] (direct threads) }"
         output: "{ threadId (derived), generation, revision, existing: boolean }"
         errors: [VALIDATION_FAILED, BLOCKED_PARTY, COMMS_THREAD_PARTICIPANT_LIMIT, COMMS_THREAD_EXISTS, COMMS_THREAD_OPEN_REJECTED, RATE_LIMITED, NOT_FOUND]
         emits: [comms.thread.created]
@@ -181,6 +189,20 @@ processes:
         errors: [NOT_FOUND, CONFLICT_STATE, CONFLICT_REVISION]
         emits: [comms.thread.archived]
         idempotent: true
+      - name: comms.thread.receive_open
+        capability: comms.thread.receive_open
+        input: "[vault ingest command registered in the F11.S01.M02 StatementIngestPort for classrup.comms.thread_open/v1; called inside the federation.record.receive transaction] { envelope (verified statement), provenance }"
+        output: "{ threadId, status: active|request|archived, existing: boolean }"
+        errors: [VALIDATION_FAILED, COMMS_THREAD_OPEN_REJECTED, COMMS_THREAD_PARTICIPANT_LIMIT, RATE_LIMITED]
+        emits: [comms.thread.created]
+        idempotent: true
+      - name: comms.thread.refresh_reply_mailboxes
+        capability: comms.thread.receive_open
+        input: "[vault command, internal; called by F08.S01.M01 comms.message.receive for a verified message] { threadId, did (the envelope author), replyMailboxes (1..3), sourceCid }"
+        output: "{ threadId, did, replyMailboxes, revision }"
+        errors: [NOT_FOUND, FORBIDDEN, VALIDATION_FAILED]
+        emits: []
+        idempotent: true
     queries:
       - name: comms.thread.list_mine
         capability: comms.thread.read_own
@@ -191,6 +213,11 @@ processes:
         capability: comms.thread.read_own
         input: "[vault query] { threadId }"
         output: "{ thread: Thread }"
+        errors: [NOT_FOUND]
+      - name: comms.thread.recipients
+        capability: comms.thread.read_own
+        input: "[in-process vault query] { threadId }"
+        output: "{ items: [{ did, relayId, mailboxId }] } — participants with leftAt unset other than the local principal; at most 3 mailboxes per participant"
         errors: [NOT_FOUND]
     events_produced:
       - {type: comms.thread.created, privacy: P2, payload: "{ threadId, generation, contextType, contextId?, participantDids[], createdBy, origin }"}
@@ -225,6 +252,7 @@ processes:
       - "comms.thread.mute | local principal | participant(thread)"
       - "comms.thread.manage_request | local principal | thread in status request addressed to the local principal"
       - "comms.thread.read_own | local principal | participant(thread)"
+      - "comms.thread.receive_open | local principal | internal; invoked only through the F11.S01.M02 StatementIngestPort registration and by F08.S01.M01 after it verified a message; the statement is verified before any roster change"
   failure_recovery_idempotency:
     requirements:
       - Create is idempotent on the derived threadId, so a retry or a concurrent create on another vault returns the same thread with existing true; the signed thread-open statement is queued through F11.S02.M01 on the F15.S01.M01 outbox and goes through prepared, transport acknowledged and peer accepted.
@@ -281,7 +309,7 @@ processes:
     fixtures: "Tenant with members A, B, C, listing L owned by A, cycle context X with parties A, B, C, outsider D, fixed clock 2026-11-04T10:00:00Z, three vaults with in-memory relay."
     tests:
       - "T01 | unit | 01.R01,01.R02,01.R03,02.R01 | create a listing thread between B and A | Thread stored with contextType listing, participants 2, origin local, derived threadId, thread-open statement signed"
-      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V12 violated in turn | the documented error code returned and nothing stored"
+      - "T02 | unit | 02.R02,02.R03 | each rule V01 to V14 violated in turn | the documented error code returned and nothing stored"
       - "T03 | property | 03.R01,03.R02 | random sequences of create, archive, mute, join, leave, request accept and decline | archived never leaves archived; roster never exceeds 12; at most one non-archived thread per derivation key"
       - "T04 | integration | 03.R03,06.R03 | archive thread | one comms.thread.archived event and purge schedule exist in the same transaction"
       - "T05 | contract | 04.R01,04.R02,09.R02 | each command and query executes | outputs and event payloads validate against registry schemas"
@@ -301,8 +329,9 @@ processes:
       - "T19 | abuse | 02.R04,07.R04 | 50 unknown DIDs send 6 thread-open statements each to A | 5 per DID kept until the total of 100 pending requests, the rest dropped silently; no reply sent"
       - "T20 | integration | 04.R04,04.R05,07.R04 | A's account deletion runs DeletionPort.plan and execute; later B's departure notice (envelope author B, payload without any DID) reaches C once signed by an active key of B and once after B's account_deleted revocation listing its cid in finalCids; a notice correctly signed by B whose payload adds a did field; a commitment-kind notice from B | A's plan lists A's thread counterparties as noticeRecipients and A's threads are archived account_deleted before keys are destroyed; C sets leftAt and departedByNotice for B, read from the envelope author, on every thread where B is a current participant, with a deleted-member label, for both deliveries; the notice with a did field is rejected VALIDATION_FAILED; the commitment notice changes no thread; registry lists thread_open with signer role"
       - "T21 | unit | 01.R04 | attempt to change contextType, contextId or generation of a stored thread, and accept a thread-open whose threadId does not match its derivation | CONFLICT_STATE for the change; COMMS_THREAD_OPEN_REJECTED for the mismatch"
+      - "T22 | integration | 01.R06,04.R06,04.R07,02.R05 | buyer B opens a thread from seller A's listing with no projection of B in A's vault; A's vault receives it through federation.record.receive; A replies; B then rotates its mailbox and sends a message | the thread_open is published with ext.recipients from the listing mailboxHints and stream thr:<threadId>; A's vault creates a request thread through comms.thread.receive_open, stores B's replyMailboxes, comms.thread.recipients returns B's mailbox, the reply is addressed to it, and the rotated mailbox replaces the stored one only from B's verified message; a thread_open whose creator entry has no replyMailboxes is rejected with COMMS_THREAD_OPEN_REJECTED"
     acceptance:
-      - All tests T01 to T21 pass in CI.
+      - All tests T01 to T22 pass in CI.
       - A blocked party can never learn from any response or state in its own vault that a block exists.
       - Roster after arbitrary event replay equals the roster after ordered replay, and every vault derives the same threadId for the same context.
   import_export_backup_rollback:

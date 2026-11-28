@@ -156,6 +156,7 @@ processes:
       - "Statements are registered with F11.S01.M01 (N2): classrup.comms.meetup/v1 { meetupId, threadId, proposalRevision, window, place with spotCid, partyDids } and classrup.comms.meetup_cancel/v1 { meetupId, reason }, each signed by a device key of a party; agreements are classrup.comms.consent/v1 statements of F08.S02.M02."
       - Event payloads carry the party DIDs needed for notification routing (N4) - comms.meetup.proposed, comms.meetup.agreed and comms.meetup.cancelled all include partyDids.
       - The module registers ExportSectionPort (section comms.meetups with the signed proposal statements), DeletionPort (plan, execute, pseudonymize - proposal and cancellation statements kept as evidence get the deleted party's DID replaced by the deletion pseudonym) and RetentionPurgePort (RET-EVIDENCE, independent of the thread purge) with F10 (N6).
+      - "The SubjectCanonicalizerPort that this module registers for comms_meetup also implements recipients(meetupId), which returns the { did, relayId, mailboxId } of every other partyDid from the F08.S01.M02 comms.thread.recipients roster of the meetup's thread (N27); propose, reschedule and agree pass that thread's stream thr:<threadId> to comms.consent.sign so the consent is published through the F11.S01.M02 path to the other parties."
     commands:
       - name: comms.meetup.propose
         capability: comms.meetup.propose
@@ -301,8 +302,9 @@ processes:
       - "T20 | integration | 01.R04,07.R04 | archive and purge thread TH after an agreed meetup, then re-verify; delete B's account | meetup, proposal statements and consents remain and re-verify; B's own vault pseudonymizes B's DID in its kept evidence while A's copy is unchanged"
       - "T21 | contract | 04.R04,04.R05 | registry entries for meetup and meetup_cancel; payloads of proposed, agreed and cancelled in TC | signer role party; every payload carries partyDids so notifications reach the other parties"
       - "T22 | integration | 04.R06 | account deletion with open and elapsed meetups | DeletionPort plan pseudonymizes kept proposal statements and purges open meetups; export section comms.meetups present beforehand"
+      - "T23 | integration | 04.R07 | B proposes a meetup in a listing thread with S and S agrees; B revokes before windowStart | the consent statements are published with recipients from the thread roster and stream thr:<threadId>, S's vault accepts them through comms.consent.accept and the meetup reaches agreed in both vaults"
     acceptance:
-      - All tests T01 to T22 pass in CI.
+      - All tests T01 to T23 pass in CI.
       - A meetup is shown as agreed only when every party's consent, the proposer's included, verifies for the current proposal hash.
       - No meetup field or event ever contains an exact address or live location.
   import_export_backup_rollback:

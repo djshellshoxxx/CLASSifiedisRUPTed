@@ -26,7 +26,7 @@
 
 | ID | Threat | Control |
 |---|---|---|
-| T01 | Owner keeps the deposit and disappears | non-custody is stated in the registered consent wording before agreement, funded proof requires the owner's own acknowledgement, the signed acknowledgement is dispute evidence and can inform reputation locally; no guarantee of recovery is claimed |
+| T01 | Owner keeps the deposit and disappears | non-custody is stated in the registered consent wording before agreement, funded proof requires the owner-signed payment_ack, the signed acknowledgement is dispute evidence and can inform reputation locally; no guarantee of recovery is claimed |
 | T02 | Bogus forfeit claim | claim needs 1..10 evidence references, a damage-claim reference for damage, and an amount not above the funded deposit; renter can dispute; silence escalates to escalation_due and never to acceptance |
 | T03 | Renter claims payment that never happened | proof stays claimed (unverified) until the owner acknowledges or the chain is final; handoff UI warns when not funded |
 | T04 | Replay of an old agreement onto new terms | agreement consent signs the exact terms cid; mismatch returns RENTALS_DEPOSIT_TERMS_STALE |

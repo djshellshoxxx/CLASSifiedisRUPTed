@@ -14,13 +14,18 @@ Verifies, stores and quarantines signed statements in the CTR-FED-001 envelope f
 - Run the verification pipeline in fixed order: flag, containment sentinel or hosting policy, sender authentication and quota, request signature, size limits, block rules before storage, strict parse, signature and cid, F16.S01.M01 authorizeStatement (registry role through F11.S01.M01 roleFor and key status through F07.S02.M01, judged at this receiver's receipt time), record age per type, tombstone check, blocked-DID drop (vault), relay intake admission for hosted vault keys (consent relay_check, tenant currencies, account limit, spam evaluation), chain placement through F11.S02.M02, commitment conflict check through F11.S02.M03, payload check per audience, store.
 - Be the single signing path for the vault principal and the relay key; federation.record.publish and federation.tombstone.issue allocate seq and prev inside the transaction that stores the envelope, and producers (F01, F03, F07, F11.S03.*) call them through the StatementPublisherPort.
 - Apply author tombstones as binding deletion (purge within 1 h, deadline 24 h) only when the target's author principal signed them, refuse any classrup.federation.tombstone/v1 signed by a relay key, keep tombstone stubs at least max(180 days, the target type's maxAge), and store relay_removal statements as advisories that remove the item only from the issuing relay's index.
-- Sign a classrup.federation.ack/v1 over the exact cid of every accepted participants statement addressed to the local principal and hand incoming acks to F11.S02.M01 through federation.record.accepted.
+- Sign a classrup.federation.ack/v1 over the exact cid of an accepted participants statement addressed to the local principal only when the F11.S01.M01 registry acknowledger of its type is counterparty (so never for comms.message/v1, message_receipt/v1 or message_delete/v1) and after the registered owner ingested it, and hand incoming acks to F11.S02.M01 through federation.record.accepted.
 - Maintain the promise index (subject key and digest of commitment statements) and call federation.conflict.detect inside the receive transaction when two verified commitment statements share a subject with different digests.
 - Emit one record.accepted, record.rejected or tombstone.applied event per envelope outcome in the same local transaction as the state change; events stay on the device or relay (EVT-8) and only signed statements leave it (EVT-9).
 - Register the N6 privacy ports, sign account_deleted tombstones only in the DeletionPort sign step at deletion execution (N6a), call privacy.consent.check(federation_publish) before publishing public statements and drop statements from blocked DIDs silently (N7).
 - Never claim more than was reached; a locally published statement is local committed until F15.S01.M01 records a verified relay receipt or acknowledgement.
 - Return a classrup.platform.relay_receipt/v1 from F15.S02.M01 ReceiptPort.issue for every envelope the relay inbox accepts, and register a TombstoneSourcePort listSince(cursor) with the relay process for the F15.S03.M02 tombstone ledger.
 - Own quarantine storage, the quarantine list and its export; F16.S01.M01 authorizeStatement only returns Accept or Quarantine(reason) and stores nothing.
+- Own the in-process StatementIngestPort registry { types[], ingest(verifiedEnvelope, provenance) -> ok | pending{subjectRef} | refused{code} } (N26). Owner modules register their statement types at vault or relay composition (inverted registration, no depends_on edge); federation.record.receive verifies a statement and then calls the registered owner inside the same transaction, before MailboxPort.ack, and a type of the registry without a registered owner in a vault is quarantined with reason unregistered_type.
+- Own the pending buffer (N28): a verified statement whose ingest returns pending{subjectRef} is held keyed by (type, subjectRef) for at most 7 days and 500 entries per author, released to its owner when the subject-creating statement is accepted, or discarded with reason subject_unknown.
+- Buffer a public statement whose signer key status is unknown (the author's portable identity document is not held yet) for 24 h with reason signer_doc_unknown, fetch the classrup.identity.portable_doc/v1 from receivedFromRelay and the relays in via, hand it to identity.portable_doc.receive and re-run the role check when the document arrives, quarantining the statement only at the end of the 24 h.
+- Publish with named recipients (N25): federation.record.publish takes audience public, participants or relay and recipients [{did, relayId, mailboxId}], seals participants payloads to the recipients' agreement keys, assigns seq and prev, signs, stores and creates the F15.S01.M01 outbox entry in the caller's transaction, so modules never sign or queue cross-party envelopes themselves.
+- Run relay intake admission for hosted vault keys through the IntakeAdmissionPort that the relay's discovery module registers at relay composition (inverted registration): the port may refuse a projection before it is stored and before any receipt is issued.
 
 ## Not responsible for
 
@@ -100,10 +105,10 @@ F11.S01.M01, F11.S01.M03, F11.S02.M02, F11.S02.M03, F11.S03.M01, F11.S03.M02, F0
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-084-01 | [Domain schema](domain_schema.md) | 8 |
-| PS-084-02 | [Validation rules](validation_rules.md) | 8 |
-| PS-084-03 | [Workflow state machine](workflow_state_machine.md) | 6 |
-| PS-084-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
+| PS-084-01 | [Domain schema](domain_schema.md) | 9 |
+| PS-084-02 | [Validation rules](validation_rules.md) | 9 |
+| PS-084-03 | [Workflow state machine](workflow_state_machine.md) | 7 |
+| PS-084-04 | [Commands, queries and events](commands_queries_events.md) | 10 |
 | PS-084-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-084-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 5 |
 | PS-084-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -115,7 +120,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T46 pass in CI.
+- All tests T01–T54 pass in CI.
 - The adversarial suite shows forged provenance, author capture, replay, flood, fork, pre-emptive tombstones, cross-relay takedown and participant metadata leakage are each blocked.
 - No record above P0 or finer than L2 is ever stored or served by a relay (privacy suite), and no relay stores author, type or seq of participant traffic.
 - Tombstoned content is gone from reads within 1 h and from storage within 24 h in the chaos test.

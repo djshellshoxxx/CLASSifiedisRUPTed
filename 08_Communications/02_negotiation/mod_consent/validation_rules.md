@@ -12,6 +12,7 @@
 - **PS-062-02.R04** The commit guard V07 applies only to the local comms.consent.revoke command; inbound revocations are always stored, and verify returns conflicted when the owning module has already committed, so the parties freeze for renegotiation instead of diverging silently.
 - **PS-062-02.R05** Validity after a device-key revocation follows one rule: first-seen time is provenance.verifiedAt recorded at the first successful verification, kept through export and import in the signed manifest and never taken from signedAtClaim; a statement first seen after the key's revocationEffectiveFrom is rejected.
 - **PS-062-02.R06** Each owning module registers a SubjectCanonicalizerPort for its subjectType; signing and verification for a subjectType without a registered port are refused, and the shared conformance suite checks every registered port.
+- **PS-062-02.R07** Publication inputs are checked before any signature is made: explicit recipients must be 1..20 distinct parties of the subject other than the signer (SubjectCanonicalizerPort.partyRole), each with a canonical relayId and mailboxId, and when none are passed the port must return at least one; an inbound consent is accepted only when the author of its carrying record equals the statement's signerDid.
 
 ## Specification
 
@@ -27,20 +28,23 @@
 | V08 | receiving vault cap: at most 20 records per (signerDid, subjectRef) and 200 quarantined statements per vault are kept; UX guard in the signer vault: at most 60 signatures per hour | RATE_LIMITED |
 | V09 | the confirmation flag read is true in the sign request | VALIDATION_FAILED |
 | V10 | statements from DIDs the local principal blocked are dropped silently (F07.S02.M02 isBlockedEither over local data); a signer blocked by someone else sees no difference | BLOCKED_PARTY |
+| V11 | publication: recipients (explicit or from SubjectCanonicalizerPort.recipients) are 1..20 distinct parties of the subject other than the signer, each with canonical relayId and mailboxId | VALIDATION_FAILED |
+| V12 | inbound: the author of the carrying record equals the statement signerDid | FORBIDDEN |
 
 ## Verification
 
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-062-09.T01 | unit | PS-062-01.R01, PS-062-01.R02, PS-062-02.R01 | sign consent for cycle revision 3 hash-only and recompute independently JCS({v, ctx, kid, alg, signedAt, payloadHash}) with payloadHash over JCS of the signed field set | signature equals the regenerated header-form known-answer vector shared with F16.S02.M03, the published header bytes and payload hash match, and verify with the payload returns accepted; payload has exactly the listed fields |
-| TEST-PS-062-09.T02 | unit | PS-062-02.R02, PS-062-02.R03 | each rule V01 to V10 violated in turn | documented error code returned and nothing stored as valid |
+| TEST-PS-062-09.T02 | unit | PS-062-02.R02, PS-062-02.R03 | each rule V01 to V12 violated in turn | documented error code returned and nothing stored as valid |
 | TEST-PS-062-09.T15 | integration | PS-062-02.R04, PS-062-03.R03 | three vaults: P2 revokes after P1's owning module committed and before P3's committed | P1 stores it and verify returns conflicted so its module freezes; P3 verify returns revoked; a local revoke on the committed subject is refused with COMMS_CONSENT_NOT_REVOCABLE |
 | TEST-PS-062-09.T17 | integration | PS-062-02.R05, PS-062-10.R02 | key K of P1 revoked; a statement by K backdated before the revocation reaches P2 afterwards; P2 exports and re-imports after the revocation | the backdated statement is rejected; consents first seen before the revocation stay valid after import because firstSeenAt is restored from the manifest |
 | TEST-PS-062-09.T19 | unit | PS-062-02.R06 | sign and verify for a subjectType without a registered SubjectCanonicalizerPort; port reports isCommitted true; partyRole returns none | refused with VALIDATION_FAILED; local revoke refused; FORBIDDEN |
 | TEST-PS-062-09.T20 | unit | PS-062-02.R02 | inbound statement with a wording version newer than the registry, then the registry updates | quarantined with wording_unknown, then valid without being re-sent |
 | TEST-PS-062-09.T23 | contract | PS-062-01.R05, PS-062-02.R06 | load the v1 statement key registry and run sign and verify for each key against the stub port of its owner | every listed key exists with its subjectType, subjectRef kind, signer role, owning port and wording (decline wording for both mutiny keys and the booking cancel key; the deposit wording states that the owner, not ClassRup, holds the deposit); a mutiny_cycle subjectRevisionHash equals the F02.S01.M04 contentHash cid; a hex-encoded hash is refused with VALIDATION_FAILED; a partyRole other than the key's signer role is refused with FORBIDDEN |
 | TEST-PS-062-09.T24 | unit | PS-062-02.R02, PS-062-01.R02 | hash-only envelope verified without its payload, with the payload of another revision, with get_status reporting revoked before firstSeenAt, and accepted with freshness unknown | the first three are not accepted and never stored valid (COMMS_CONSENT_SIGNATURE_INVALID); exactly one security.keyrecord.get_status call with at = firstSeenAt per verification; the last is stored valid with the stale-key flag |
+| TEST-PS-062-09.T26 | integration | PS-062-04.R06, PS-062-04.R07, PS-062-02.R07 | cycle C4 with parties Alice, Bob, Carol and Dan; Bob signs the commit consent and then revokes it; one run passes explicit recipients | the published records carry type classrup.comms.consent/v1, audience participants, stream thr:<C4>, ext.recipients Alice, Carol and Dan; an outbox entry exists; each recipient vault acknowledges and the entry reaches peer_accepted; recipients that are not parties or duplicates are refused with VALIDATION_FAILED |
 
 ## Dependencies
 
-Module depends on: F07.S01.M01, F07.S02.M02, F07.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).
+Module depends on: F11.S01.M02, F07.S01.M01, F07.S02.M02, F07.S02.M01, F16.S02.M02, F16.S02.M03, F11.S01.M01, F11.S02.M01, F15.S01.M01, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-FED-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-PRV-001, CTR-IDM-001, CTR-OBS-001, CTR-COM-001, CTR-IOX-001, CTR-UX-001. Predecessor: [domain_schema.md](domain_schema.md).

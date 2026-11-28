@@ -5,7 +5,7 @@ summary: >-
   Builds the user's complete data export from their vault. The orchestrator asks every module that owns user data for its
   export section through the ExportSectionPort defined here, passes every record through redactForExport of the F10.S02.M02
   classification model, streams them into a classrup-export/v1 JSON Lines bundle, writes a manifest as the first line with
-  counts, a SHA-256 and an exportedAt time per section, and signs the manifest with the user's device Ed25519 key. Vaults whose
+  counts, a SHA-256 and an exportedAt time per section, and signs the manifest with the user's device Ed25519 key. The same module imports such a bundle on another device or after a restore through a verified dry run (preview) and a commit. Vaults whose
   media exceed the 2 GiB bundle limit export a linked multi-part set split by media date. The finished bundle is stored
   encrypted in the browser's private file storage and can be downloaded for 7 days, after which it is deleted and its key
   shredded. The vault export is the primary backup (IOX-6), and nothing leaves the device unless the user saves the file somewhere.
@@ -17,9 +17,10 @@ responsibilities:
   - Store the bundle encrypted with a per-job key, serve it for 7 days, and delete it and shred the key at expiry, on user cancel or in the deletion shred step.
   - Include all P0 to P3 data the user owns and exclude other users' P2 and higher content except the user's own copies of shared messages and consents (IOX-1), by calling redactForExport (F10.S02.M02) on every record, which also drops every P4 and unclassified path.
   - Split an export whose media would exceed 2 GiB into a linked set of up to 8 parts by media date.
+  - Own vault export import (IOX-2) end to end - privacy.import.preview verifies a bundle or multi-part set and produces the dry-run report, and privacy.import.commit applies it through each section's importLines after the ImportGuardPort deletion ledger check, never importing another user's P2 or higher data.
 non_responsibilities:
   - Defining each module's section content; the module that owns a record owns its section (IOX-5).
-  - Importing bundles; the vault restore flow validates, dry-runs and commits (IOX-2), including multi-part sets.
+  - The content of each section's import rules (collision identity, schema upgrades), which each owning module implements behind ExportSectionPort.importLines; the deletion ledger lookup itself (F10.S01.M04, which registers the ImportGuardPort); and new-identity creation offered on a ledger match (F07.S01.M01).
   - Relay backups (F15.S03.M02) and deletion (F10.S01.M04), which calls this module's DeletionPort directly.
   - Consent records (F10.S01.M01), which contribute the section privacy.consents through ExportSectionPort and are never called by this module.
   - "Future: scheduled automatic exports to a user-selected encrypted location and partial exports by module selection."
@@ -98,6 +99,7 @@ processes:
       - Requests are validated for recent unlock, limits and size estimate before collection starts.
       - Each module section is validated against its registered schema list and its own line format before it is accepted.
       - The manifest is validated and its signature verified before the job becomes ready.
+      - Import verification is a gate before any record is written - format classrup-export/v1, manifest Ed25519 signature against a device key linked to manifest.did, per-section sha256, schema major current or previous, setId and part-1 manifest hash linkage across parts, and the principal match.
     rules:
       - "V01 | principal unlocked the vault within the last 5 minutes | UNAUTHENTICATED"
       - "V02 | no job is requested or collecting in this vault; a new command ID while one is active returns params.activeJobId | PRECONDITION_FAILED"
@@ -108,6 +110,10 @@ processes:
       - "V07 | manifest sha256 per section matches the streamed bytes and the Ed25519 signature verifies | PRIVACY_EXPORT_SIGNATURE_INVALID"
       - "V08 | download requested while status ready and not past expiresAt | EXPIRED"
       - "V09 | part index is between 1 and total, total at most 8, and the media date range does not overlap another part of the same setId | VALIDATION_FAILED"
+      - "V10 | import bundle format is classrup-export/v1, every section line parses, every section sha256 equals the manifest value, and each section schema major is the current or the previous one | VALIDATION_FAILED"
+      - "V11 | import manifest Ed25519 signature verifies against a device key listed in the bundle's identity.device_keys section whose did:key derivation links to manifest.did, and for a multi-part set every part shares setId and the part-1 manifest hash | PRIVACY_IMPORT_SIGNATURE_INVALID"
+      - "V12 | import manifest.did equals the unlocked principal, or the vault holds no records of its own | PRIVACY_IMPORT_PRINCIPAL_MISMATCH"
+      - "V13 | import commit names a preview not older than 30 minutes, and the ImportGuardPort ledger check reports the manifest did as not deleted unless the user chose the new-identity override | PRECONDITION_FAILED"
   workflow_state_machine:
     requirements:
       - Export jobs follow the declared machine; any transition not listed is refused with CONFLICT_STATE.
@@ -137,6 +143,7 @@ processes:
       - ExportSectionPort is defined in the note with typed methods, error semantics and a CI conformance check, and DeletionPort and RetentionPurgePort are implemented for ExportJob and bundles.
       - Export sections are discovered through the kernel port registry at vault composition, by inverted registration for modules that cannot list this module in depends_on, a section name registered by two modules fails composition, and the registrants include identity.account and identity.device_keys (F07.S01.M01), platform.outbox (F15.S01.M01), platform.local_settings (F15.S04.M03) and the federation sections federation.records and federation.tombstones (F11.S01.M02), federation.routes (F11.S02.M01), federation.conflicts (F11.S02.M03), federation.peers (F11.S03.M01), federation.block_rules (F11.S03.M02) and federation.migrations (F11.S03.M03).
       - The governance sections are registered from the vault composition root by inverted registration, because F18.S01.M01 and F18.S02.M01 sit on the path F10.S01.M02 -> F18.S01.M01 -> F18.S02.M01 and cannot list this module in depends_on - governance.policy_comments, governance.trusted_publishers and governance.pending_statements, with governance.policy_proposals, from F18.S02.M01, and governance.profile_selection (including the age declaration, P3 for the owner only), with governance.jurisdiction_profiles, from F18.S01.M01.
+      - Vault import is two vault commands, privacy.import.preview (dry run, nothing written) and privacy.import.commit, which re-verifies the preview, calls the ImportGuardPort deletion ledger check and applies each section through ExportSectionPort.importLines in one all-or-nothing unit.
     commands:
       - name: privacy.export.request
         capability: privacy.export.request
@@ -157,6 +164,20 @@ processes:
         input: "[vault command, local] { jobId }"
         output: "{ jobId, fileName, sizeBytes, expiresAt, handle (in-app file handle), signatureFingerprint }"
         errors: [NOT_FOUND, EXPIRED, UNAUTHENTICATED, CONFLICT_STATE]
+        emits: []
+        idempotent: true
+      - name: privacy.import.preview
+        capability: privacy.import.preview
+        input: "[vault command, local, nothing is written] { bundles: handle[] (1..8 parts of one set) }"
+        output: "{ previewId, did, manifestVerified: boolean, parts: int, sections: [{name, moduleId, records, identical, conflicts, rejectedForeign, unknownSchema}] }"
+        errors: [UNAUTHENTICATED, VALIDATION_FAILED, PRIVACY_IMPORT_SIGNATURE_INVALID, PRIVACY_IMPORT_PRINCIPAL_MISMATCH]
+        emits: []
+        idempotent: true
+      - name: privacy.import.commit
+        capability: privacy.import.commit
+        input: "[vault command, local] { previewId, newIdentityOverride?: boolean }"
+        output: "{ previewId, imported, skippedIdentical, conflicts: int, sections: [{name, imported, skippedIdentical, conflicts}] }"
+        errors: [UNAUTHENTICATED, NOT_FOUND, PRECONDITION_FAILED, CONFLICT_STATE, PRIVACY_IMPORT_SIGNATURE_INVALID, PRIVACY_IMPORT_PRINCIPAL_MISMATCH]
         emits: []
         idempotent: true
     queries:
@@ -190,7 +211,21 @@ processes:
       governance.trusted_publishers, governance.pending_statements), the two governance modules registering from the vault
       composition root because F10.S01.M02 depends on F18.S01.M01, which depends on F18.S02.M01; the F11 modules register federation.records,
       federation.tombstones, federation.routes, federation.conflicts, federation.peers, federation.block_rules and
-      federation.migrations through the same registry. This module's own section
+      federation.migrations through the same registry. ExportSectionPort also carries the import side (IOX-2): importLines(lines: AsyncIterable<{schema, record}>, ctx{dryRun, ownerDid}) ->
+      {imported, skippedIdentical, conflicts[]}; the owning module decides identity (same id and same content is skippedIdentical, same id
+      with different content is a conflict that is reported and never overwritten), upgrades the previous schema major, skips unknown schemas
+      and writes nothing when ctx.dryRun is true. Import flow of this module - privacy.import.preview opens the bundle handles (1..8 parts),
+      verifies format classrup-export/v1, the manifest Ed25519 signature against a device key listed in the identity.device_keys section
+      whose DID derivation links to manifest.did, each section sha256, current or previous schema major and, for a set, the shared setId
+      and part-1 manifest hash (a missing or foreign part fails the whole set), then requires manifest.did to equal the unlocked principal
+      or the vault to hold no records, runs importLines with dryRun true per section and keeps the report under a previewId for 30 minutes
+      in memory only. privacy.import.commit re-verifies, calls the ImportGuardPort, then runs importLines with dryRun false per section
+      in one local transaction group, all or nothing. ImportGuardPort check(did) -> {deleted, ledgerUntil?} is declared here and
+      registered by F10.S01.M04 at vault composition (inverted registration, F10.S01.M04 depends on this module) over
+      privacy.deletion.ledger_check; on deleted true commit fails with PRECONDITION_FAILED params.reason deletion_ledger unless
+      newIdentityOverride is set, in which case a new identity is created through F07.S01.M01 first and the content is imported as that
+      new principal's own records through ctx.ownerDid. Records of other users at P2 or higher are counted as rejectedForeign and are
+      never written. This module's own section
       privacy.exports exports ExportJob metadata. DeletionPort (wired directly by F10.S01.M04, which depends on this module)
       plan {willDelete: export bundles and ExportJob rows, willPseudonymize: none, blockers: none} and step shred (delete every
       bundle file and its key) before the destroy_keys step. RetentionPurgePort (F10.S01.M02) kind privacy.export_job, class
@@ -208,6 +243,8 @@ processes:
       - "PRIVACY_EXPORT_SECTION_FAILED | 500 | yes | a module section failed validation or production after 3 attempts"
       - "PRIVACY_EXPORT_SIGNATURE_INVALID | 500 | no | manifest hashes or signature did not verify"
       - "PRIVACY_EXPORT_TIMEOUT | 504 | yes | the job exceeded 30 minutes of active collection time"
+      - "PRIVACY_IMPORT_SIGNATURE_INVALID | 422 | no | the bundle manifest signature, a section hash, the key-to-did link or the multi-part linkage did not verify"
+      - "PRIVACY_IMPORT_PRINCIPAL_MISMATCH | 409 | no | the bundle belongs to another did than the unlocked principal and the vault is not empty"
     example: |
       vault command privacy.export.request { "includeMedia": false }
       => { "jobId": "0192f3d0-…", "status": "requested", "estimatedBytes": 8420000, "sections": ["bazaar.listings", "commerce.deals", "privacy.consents", "…"] }
@@ -226,6 +263,8 @@ processes:
       - "privacy.export.cancel | local-principal | job requested or collecting"
       - "privacy.export.download | local-principal | vault unlocked within 5 minutes; job ready and not expired"
       - "privacy.export.read | local-principal | vault unlocked"
+      - "privacy.import.preview | local-principal | vault unlocked within 5 minutes; a local bundle handle the user chose"
+      - "privacy.import.commit | local-principal | vault unlocked within 5 minutes; preview younger than 30 minutes and verified"
   failure_recovery_idempotency:
     requirements:
       - Commands are idempotent per CTR-IDM-001 using vault command IDs; replaying the same command ID returns the stored result, and a new request while a job is active returns PRECONDITION_FAILED with params.activeJobId.
@@ -241,6 +280,7 @@ processes:
       - The bundle contains P3 data and is encrypted at rest with a per-job key; the key is deleted at expiry, and the UI warns that the downloaded file is plain JSON Lines that the user must protect.
       - The export excludes other users' P2 and higher content and all P4 secrets; device private keys are never exported, and recovery material is exported only as the user's own recovery hints (P3) and never as keys.
       - Export abuse by someone with brief access to an unlocked device is limited by the fresh-unlock requirement, rate limit and an on-screen notification of every export.
+      - Import never writes another user's P2 or higher content, never writes keys other than the encrypted key bundle section, and rejects a bundle for another principal unless the vault is empty; foreign records found in a bundle are counted as rejectedForeign and skipped.
     data:
       - "ExportJob: P3 metadata. Bundle: P0 to P3 user data, encrypted at rest for up to 7 days."
       - "The manifest signature proves integrity and origin device, not truth of content."
@@ -273,6 +313,7 @@ processes:
       - Every requirement is covered by at least one automated test.
       - Round-trip tests export a seeded vault and import it into a fresh one through the IOX-2 dry-run and commit path.
       - Tamper, missing-section and over-limit scenarios are covered deterministically.
+      - The import path is covered by tamper, wrong-principal, deleted-principal, collision, partial-set and round-trip tests.
     fixtures: "Seeded vault with records in every module section, 20 photos, two device keys; a media fixture of 2.5 GiB; ExportSectionPort stubs per module with an instrumented concurrency counter; fixed clock 2026-11-04T10:00:00Z."
     tests:
       - "T01 | unit | 01.R01,02.R01 | request an export with fresh and stale unlock | fresh creates job with sections; stale returns UNAUTHENTICATED"
@@ -299,8 +340,10 @@ processes:
       - "T22 | integration | 03.R04 | job requested and never started for 24 h; job collecting with the PWA closed for 25 h; job with 31 min of active collection time | first two fail with errorCode EXPIRED; third fails with PRIVACY_EXPORT_TIMEOUT; each emits privacy.export.failed and leaves no files"
       - "T23 | integration | 04.R05 | vault composition with the kernel port registry and stub registrants for F07.S01.M01, F15.S01.M01, F15.S04.M03 and the seven F11 sections, then a second registrant for federation.records, then F15.S01.M01 missing | the manifest lists identity.account, identity.device_keys, platform.outbox, platform.local_settings and every federation section with counts and hashes, and none of these modules needs a depends_on edge; the duplicate fails composition naming both modules; the missing registrant fails the job with PRIVACY_EXPORT_SECTION_FAILED naming F15.S01.M01"
       - "T24 | integration | 04.R06,04.R05 | vault composition with stub registrants for F18.S02.M01 (policy proposals, policy comments, trusted publishers, pending statements) and F18.S01.M01 (jurisdiction profiles, a profile selection with declaredAgeAtLeast 18), then a second registrant for governance.policy_comments | the manifest lists all six governance sections with counts and hashes, the selection line keeps the age declaration in the owner's bundle after redactForExport, neither module has a depends_on edge to this module and the depends_on graph stays acyclic; the duplicate fails composition naming both modules"
+      - "T25 | contract | 02.R04,04.R07,09.R04 | preview of a valid bundle, a bundle with one flipped byte, a bundle whose manifest key is not in identity.device_keys, and a bundle of another did into a non-empty vault | first returns the dry-run report with per-section records, identical, conflicts, rejectedForeign and unknownSchema and writes nothing; second and third PRIVACY_IMPORT_SIGNATURE_INVALID; fourth PRIVACY_IMPORT_PRINCIPAL_MISMATCH"
+      - "T26 | integration | 02.R04,04.R07,07.R04,10.R04 | commit after the ledger check for a deleted did, with and without newIdentityOverride; a multi-part set missing part 3, with a part from another setId, and a complete set; bundle with another user's P2 records | deleted did PRECONDITION_FAILED then imported as a new principal; incomplete or mixed set fails whole; complete set imports; foreign records counted rejectedForeign and never written; commit is all or nothing"
     acceptance:
-      - All tests T01 to T24 pass in CI.
+      - All tests T01 to T26 pass in CI.
       - A bundle from a seeded vault imports into a fresh vault with identical record counts and a verifying signature.
       - No bundle contains P4 secrets, unclassified fields or other users' private content.
       - A ready bundle is unreachable after 7 days and its key is gone.
@@ -310,7 +353,8 @@ processes:
       - This module's own output format is classrup-export/v1; the module contributes a section privacy.exports listing past export jobs' metadata only.
       - Import of a bundle is performed by the vault restore flow, which verifies the manifest signature and section hashes produced here before committing any record.
       - The format follows expand/contract; a new major version keeps the previous major readable for 180 days.
+      - Importing a bundle is owned here - preview verifies and reports, commit applies after the deletion ledger check; the sections' own collision and upgrade rules run behind ExportSectionPort.importLines.
     export: "Section privacy.exports in classrup-export/v1: ExportJob metadata of the last 30 days (schema classrup.privacy.export_job/v1), no bundle content. Manifest fields sectionExportedAt and part {setId, index, total, mediaFrom, mediaTo, part1ManifestSha256} are additive in v1."
-    import: "Past export job metadata imports as read-only history with status expired; bundles are never imported as jobs. A multi-part set is imported by the restore flow only when every part verifies and all share setId and the part-1 manifest hash (IOX-2)."
+    import: "Vault import is owned here (IOX-2) - privacy.import.preview verifies the bundle or set and returns the dry-run report, privacy.import.commit applies it after the ImportGuardPort deletion ledger check, all or nothing, with per-section collision handling by importLines. Past export job metadata imports as read-only history with status expired; bundles are never imported as jobs. A multi-part set is imported by the restore flow only when every part verifies and all share setId and the part-1 manifest hash (IOX-2)."
     backup: "The export bundle is the user's primary backup (IOX-6); the PWA warns when the last export is older than 30 days. Backups of bundles are the user's responsibility."
     migration_rollback: "Section list and manifest fields are additive in v1; older readers ignore unknown sections and fields; a rollback never changes bundles already written."

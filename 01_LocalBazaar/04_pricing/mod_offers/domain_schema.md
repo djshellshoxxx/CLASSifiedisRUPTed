@@ -42,7 +42,8 @@ Schema `classrup.bazaar.offer_record/v1` · storage **device** · privacy **P2**
 | consentCid? | string — acceptance consent statement (comms.consent.sign) signed by the listing author |
 | decisionCid? | string — signed decision statement |
 | withdrawalCid? | string — signed withdrawal or timeout statement |
-| dealId? | uuidv7 — ref F09.S01.M01 Deal, deterministic from contextRef {offer, offerId}, set on accept |
+| dealId? | uuid — UUIDv8 per F09.S01.M01 01.R01 from {contextRef {type: offer, id: offerId}, contextCid}, set on accept |
+| replyMailboxes | array — 1..3 {relayId, mailboxId} of the buyer from comms.mailbox.list_own, carried in the offer statement (N27); the seller vault uses them as the Deal recipients |
 | holdId? | uuidv7 — seller vault: ref F01.S03.M01 InventoryHold |
 | reservationCid? | string — signed reservation statement sent to the buyer |
 | revision | int — CTR-ID-001 ID-4 |

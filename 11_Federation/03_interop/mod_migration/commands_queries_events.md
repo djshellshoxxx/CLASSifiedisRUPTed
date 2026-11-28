@@ -10,6 +10,7 @@
 - **PS-090-04.R02** Each command states whether it is vault-local, produces a signed statement or is a relay command, and emits its events in the same transaction.
 - **PS-090-04.R03** Only a verified move that became effective on this receiver emits federation.account.moved, and observers act on it only after their own verification.
 - **PS-090-04.R04** Move statements and signer roles are registered with F11.S01.M01 (N2): classrup.federation.move/v1 signed by a device key of the subject (relay moves by the pinned relay key) and classrup.federation.move_cancel/v1 signed by a device key of the subject, a veto by a key other than the move signer; both are signed through F11.S01.M02 publish.
+- **PS-090-04.R05** federation.migration.receive_move is registered at vault and relay composition with the F11.S01.M02 StatementIngestPort for classrup.federation.move/v1 and move_cancel/v1 (inverted registration, N26), so every accepted move or veto reaches it exactly once inside the receive transaction with firstReceivedAt equal to the record's receivedAt and oldRelayReceipt equal to the stored relay receipt of the old relay, and the module does not consume federation.record.accepted for these types.
 
 ## Specification
 
@@ -21,7 +22,7 @@
 | `federation.migration.copy` | federation.migration.copy | [vault-local command; routes copies through F11.S02.M01 into the F15.S01.M01 sync outbox] { migrationId, expectedRevision } | { migrationId, revision, copyProgress } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, DEPENDENCY_UNAVAILABLE, PRIVACY_DELETION_PENDING |  | yes (Idempotency-Key) |
 | `federation.migration.announce` | federation.migration.announce | [vault-local command; produces signed statement classrup.federation.move/v1 through F11.S01.M02 publish] { migrationId, expectedRevision } | { migrationId, revision, moveCid, effectiveAt } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, PRECONDITION_FAILED, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_COOLDOWN, PRIVACY_DELETION_PENDING |  | yes (Idempotency-Key) |
 | `federation.migration.cancel` | federation.migration.cancel | [vault-local command; produces signed statement classrup.federation.move_cancel/v1 when announced] { migrationId, expectedRevision } | { migrationId, revision, status: cancelled } | NOT_FOUND, CONFLICT_REVISION, CONFLICT_STATE, FEDERATION_MOVE_VETO_INVALID |  | yes (Idempotency-Key) |
-| `federation.migration.receive_move` | federation.migration.receive | [vault-local or relay command; consumes statements classrup.federation.move/v1 and move_cancel/v1 accepted by F11.S01.M02, with the receipt context { firstReceivedAt, source, oldRelayReceipt? }] { statement: Envelope } | { migrationId, status, effectiveAt, conflictId? } | FED_SIGNATURE_INVALID, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_VETO_INVALID, FEDERATION_KEY_MISMATCH, VALIDATION_FAILED | federation.account.moved | yes (Idempotency-Key) |
+| `federation.migration.receive_move` | federation.migration.receive | [vault-local or relay command, registered with the F11.S01.M02 StatementIngestPort for classrup.federation.move/v1 and move_cancel/v1 and called by federation.record.receive for each accepted statement, with the receipt context { firstReceivedAt = receivedAt, source, oldRelayReceipt = the relay receipt of the old relay } from the ingest provenance] { statement: Envelope } | { migrationId, status, effectiveAt, conflictId? } | FED_SIGNATURE_INVALID, FEDERATION_MOVE_SIGNER_INVALID, FEDERATION_MOVE_VETO_INVALID, FEDERATION_KEY_MISMATCH, VALIDATION_FAILED | federation.account.moved | yes (Idempotency-Key) |
 
 ### Queries
 
@@ -81,6 +82,7 @@ GET /fed/v1/moved?author=did:key:z6Mk...  (after effectiveAt)
 | TEST-PS-090-09.T07 | contract | PS-090-04.R01, PS-090-04.R02, PS-090-04.R04, PS-090-09.R02 | each command, query and event | validate against registry schemas including statements move/v1 and move_cancel/v1 and their signer roles |
 | TEST-PS-090-09.T14 | integration | PS-090-02.R05, PS-090-04.R03 | relay move signed by the pinned key; relay move signed by a different key delivered by sender relay S with S's request signature | base URL updated on peers for the first; second dropped with FEDERATION_KEY_MISMATCH, counted against S only, and the named relay is not suspended |
 | TEST-PS-090-09.T23 | integration | PS-090-04.R04, PS-090-03.R04 | two moves for P with different targets reach V3 | federation.conflict.detect called with statementClass commitment and subjectRef move:P; both held with no redirect; a drop_all resolution cancels both |
+| TEST-PS-090-09.T27 | integration | PS-090-04.R05, PS-090-04.R04 | register receive_move with the F11.S01.M02 StatementIngestPort stub; a verified move and a move_cancel are received and redelivered | each reaches receive_move exactly once with firstReceivedAt = receivedAt and oldRelayReceipt = the relay receipt; the redelivery dispatches nothing and the first firstReceivedAt is kept |
 
 ## Dependencies
 

@@ -97,6 +97,6 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01–T31 pass in CI.
+- All tests T01–T33 pass in CI.
 - No offer data appears in public, search, relay index or federation payloads (privacy test suite).
 - Never two accepted offers for one unit within one vault; cross-device forks are detected and frozen, never resolved by timestamp; an offer below the private minimum is indistinguishable for the buyer from an unanswered one.

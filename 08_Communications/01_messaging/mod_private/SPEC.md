@@ -19,6 +19,9 @@ Private end-to-end encrypted messages between members, authored and stored in th
 - Register the F10 privacy ports (ExportSectionPort, DeletionPort, RetentionPurgePort) so that the DeletionPort sign step signs remote deletes and mailbox closes while the device keys still exist (N6a).
 - [object Object]
 - Keep the vault's own mailbox registrations with a distinct mailbox ID at every relay, rotate each one every 30 days (PT-15) and expose the current {relayId, mailboxId} pairs through the in-process vault query comms.mailbox.list_own for listing projection hints (N15, F01.S01.M03).
+- Carry the sender's replyMailboxes (1..3 { relayId, mailboxId } from comms.mailbox.list_own) inside every signed classrup.comms.message/v1 so rotations propagate, and fill ext.recipients [{ did, relayId, mailboxId }] of messages, receipts and deletes from the latest verified mailboxes in the F08.S01.M02 thread roster (N27).
+- Register comms.message.receive in the F11.S01.M02 StatementIngestPort for classrup.comms.message/v1, message_receipt/v1 and message_delete/v1 (N26) so each verified inbound statement drives the inbound machine inside the receive transaction.
+- On a relay, deliver relay-signed statements addressed to a principal through the relay-local command comms.mailbox.deliver_relay_statement and serve the signed public query comms.mailbox.list_relay_statements for principals without a mailbox there (N33), and emit the relay-local event comms.mailbox.envelopes_acknowledged on comms.mailbox.ack.
 
 ## Not responsible for
 
@@ -80,9 +83,9 @@ Private end-to-end encrypted messages between members, authored and stored in th
 
 ## Interfaces
 
-- Commands: `comms.message.send`, `comms.message.resend`, `comms.message.delete`, `comms.message.acknowledge`, `comms.mailbox.register`, `comms.mailbox.rotate`, `comms.mailbox.close`, `comms.mailbox.put`, `comms.mailbox.fetch`, `comms.mailbox.ack`
-- Queries: `comms.message.list_thread`, `comms.mailbox.list_own`
-- Emits: `comms.message.sent`, `comms.message.deleted`, `comms.message.received`
+- Commands: `comms.message.send`, `comms.message.resend`, `comms.message.delete`, `comms.message.acknowledge`, `comms.mailbox.register`, `comms.mailbox.rotate`, `comms.mailbox.close`, `comms.mailbox.put`, `comms.mailbox.fetch`, `comms.mailbox.ack`, `comms.message.receive`, `comms.mailbox.deliver_relay_statement`
+- Queries: `comms.message.list_thread`, `comms.mailbox.list_own`, `comms.mailbox.list_relay_statements`
+- Emits: `comms.message.sent`, `comms.message.deleted`, `comms.message.received`, `comms.mailbox.envelopes_acknowledged`
 - Consumes: `comms.thread.archived`, `identity.portable_doc.published`, `identity.device_key.added`, `identity.device_key.revoked`, `identity.block.added`, `privacy.deletion.completed`
 
 ## Dependencies
@@ -93,10 +96,10 @@ F08.S01.M02, F07.S01.M01, F07.S02.M01, F07.S02.M02, F16.S02.M01, F16.S02.M02, F1
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-060-01 | [Domain schema](domain_schema.md) | 8 |
-| PS-060-02 | [Validation rules](validation_rules.md) | 7 |
+| PS-060-01 | [Domain schema](domain_schema.md) | 9 |
+| PS-060-02 | [Validation rules](validation_rules.md) | 8 |
 | PS-060-03 | [Workflow state machine](workflow_state_machine.md) | 4 |
-| PS-060-04 | [Commands, queries and events](commands_queries_events.md) | 8 |
+| PS-060-04 | [Commands, queries and events](commands_queries_events.md) | 11 |
 | PS-060-05 | [Authorization and capabilities](authorization_capabilities.md) | 3 |
 | PS-060-06 | [Failure recovery and idempotency](failure_recovery_idempotency.md) | 5 |
 | PS-060-07 | [Privacy, retention and abuse](privacy_retention_abuse.md) | 5 |
@@ -108,7 +111,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01 to T32 pass in CI.
+- All tests T01 to T35 pass in CI.
 - A relay database and log dump after test traffic contains no plaintext, message keys or private keys, and no sender DID or request key next to any stored wrapper.
 - The sender UI never shows delivered or accepted before the matching relay receipt or a signed peer acknowledgement of the exact envelope cid exists for every recipient counted.
 - Documentation shown in the encryption info sheet states no forward secrecy, relay-visible metadata and that deletion cannot recall copies.

@@ -16,7 +16,8 @@
 |---|---|---|
 | discovery.search_document.rebuild | principal, operator | vault - unlocked local principal; relay - operator role of that relay and no rebuild running |
 | discovery.search_document.read_stats | principal, operator | vault - unlocked local principal; relay - operator role of that relay |
-| discovery.search_document.promote | operator | relay only - operator role of that relay; the claim is final or acknowledged with this relay operator's key (V09); never available in a vault |
+| discovery.search_document.promote | operator | relay only - operator role of that relay; the Deal and acknowledgement envelopes satisfy V09; never available in a vault |
+| discovery.search_document.read_promotions | principal, anonymous | relay only - public read of the relay-signed promotion statements of one document, under the F12.S03.M03 read.search rate class |
 | discovery.search_document.read_cell_feed | principal, anonymous | relay only - public read allowed by relay policy and consumed through RateLimitPort class read.search (F12.S03.M03) |
 
 Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).

@@ -9,6 +9,7 @@
 - **PS-078-09.R01** Every requirement is covered by at least one automated test.
 - **PS-078-09.R02** Round-trip tests export a seeded vault and import it into a fresh one through the IOX-2 dry-run and commit path.
 - **PS-078-09.R03** Tamper, missing-section and over-limit scenarios are covered deterministically.
+- **PS-078-09.R04** The import path is covered by tamper, wrong-principal, deleted-principal, collision, partial-set and round-trip tests.
 
 ## Specification
 
@@ -44,10 +45,12 @@ See the module test table below (all processes).
 | TEST-PS-078-09.T22 | integration | PS-078-03.R04 | job requested and never started for 24 h; job collecting with the PWA closed for 25 h; job with 31 min of active collection time | first two fail with errorCode EXPIRED; third fails with PRIVACY_EXPORT_TIMEOUT; each emits privacy.export.failed and leaves no files |
 | TEST-PS-078-09.T23 | integration | PS-078-04.R05 | vault composition with the kernel port registry and stub registrants for F07.S01.M01, F15.S01.M01, F15.S04.M03 and the seven F11 sections, then a second registrant for federation.records, then F15.S01.M01 missing | the manifest lists identity.account, identity.device_keys, platform.outbox, platform.local_settings and every federation section with counts and hashes, and none of these modules needs a depends_on edge; the duplicate fails composition naming both modules; the missing registrant fails the job with PRIVACY_EXPORT_SECTION_FAILED naming F15.S01.M01 |
 | TEST-PS-078-09.T24 | integration | PS-078-04.R06, PS-078-04.R05 | vault composition with stub registrants for F18.S02.M01 (policy proposals, policy comments, trusted publishers, pending statements) and F18.S01.M01 (jurisdiction profiles, a profile selection with declaredAgeAtLeast 18), then a second registrant for governance.policy_comments | the manifest lists all six governance sections with counts and hashes, the selection line keeps the age declaration in the owner's bundle after redactForExport, neither module has a depends_on edge to this module and the depends_on graph stays acyclic; the duplicate fails composition naming both modules |
+| TEST-PS-078-09.T25 | contract | PS-078-02.R04, PS-078-04.R07, PS-078-09.R04 | preview of a valid bundle, a bundle with one flipped byte, a bundle whose manifest key is not in identity.device_keys, and a bundle of another did into a non-empty vault | first returns the dry-run report with per-section records, identical, conflicts, rejectedForeign and unknownSchema and writes nothing; second and third PRIVACY_IMPORT_SIGNATURE_INVALID; fourth PRIVACY_IMPORT_PRINCIPAL_MISMATCH |
+| TEST-PS-078-09.T26 | integration | PS-078-02.R04, PS-078-04.R07, PS-078-07.R04, PS-078-10.R04 | commit after the ledger check for a deleted did, with and without newIdentityOverride; a multi-part set missing part 3, with a part from another setId, and a complete set; bundle with another user's P2 records | deleted did PRECONDITION_FAILED then imported as a new principal; incomplete or mixed set fails whole; complete set imports; foreign records counted rejectedForeign and never written; commit is all or nothing |
 
 ## Acceptance criteria
 
-- All tests T01 to T24 pass in CI.
+- All tests T01 to T26 pass in CI.
 - A bundle from a seeded vault imports into a fresh vault with identical record counts and a verifying signature.
 - No bundle contains P4 secrets, unclassified fields or other users' private content.
 - A ready bundle is unreachable after 7 days and its key is gone.

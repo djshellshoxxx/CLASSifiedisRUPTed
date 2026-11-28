@@ -32,7 +32,7 @@
 | T03 | Provider alters a file after submission | the signed submission carries SHA-256; a mismatch is shown as hash differs and approval is disabled for that file |
 | T04 | Replay of an old approval onto a new submission | approval names the exact submission cid; mismatch returns SERVICES_SUBMISSION_STALE |
 | T05 | Relay tampers with or reorders statements | signatures cover JCS bytes; reordering is harmless because each statement names its predecessor cid |
-| T06 | Proof shown stronger than reality after a reorg | commerce.payment.reorged and commerce.payment.failed lower the proof level; settlement only at acknowledged or final |
+| T06 | Proof shown stronger than reality after a reorg | commerce.payment.reorged and commerce.payment.failed lower the proof level; settlement only on the payee-signed payment_ack |
 | T07 | Provider changes amounts or titles after acceptance | milestones come only from the client-signed quote plan; ids are derived, never assigned |
 
 **Abuse controls**

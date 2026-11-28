@@ -89,7 +89,7 @@ F15.S02.M03, F15.S02.M01, F15.S04.M01, F16.S01.M01, F10.S02.M02, CTR-ID-001, CTR
 
 | ID | Process | Requirements |
 |---|---|---|
-| PS-125-01 | [Domain schema](domain_schema.md) | 7 |
+| PS-125-01 | [Domain schema](domain_schema.md) | 8 |
 | PS-125-02 | [Validation rules](validation_rules.md) | 5 |
 | PS-125-03 | [Workflow state machine](workflow_state_machine.md) | 3 |
 | PS-125-04 | [Commands, queries and events](commands_queries_events.md) | 6 |
@@ -104,7 +104,7 @@ Aggregation: the domain schema (01) defines the records validated by 02 and tran
 
 ## Acceptance criteria
 
-- All tests T01-T32 pass in CI.
+- All tests T01-T33 pass in CI.
 - A relay can bootstrap from the CLI and host several tenants with separate currencies, locales and limits, and every limit is enforced by its named module.
 - Operator changes are made only through F16 role assignments by admins, are validated, audited and visible to clients as signed configuration; the last operator can never be removed.
 - The jurisdiction profile is stored and signed only as a ProfileRef {publisherId?, code} that F18.S01.M01 resolves, and transparency receivers resolve operator keys only from the relay-signed operatorKeys through the registered resolver.

@@ -19,7 +19,7 @@
 | privacy.deletion.relay_apply | signed-statement | statement signed by a registered key of the did; relay rate limit 60 batches per hour per did; handler runs as relay-system |
 | privacy.deletion.read | local-principal | vault unlocked |
 | privacy.deletion.guard | local-principal | in-process call from publishing and commitment modules of the unlocked vault |
-| privacy.deletion.ledger_check | local-principal | in-process call from the vault restore flow (IOX-2) before any record commits |
+| privacy.deletion.ledger_check | local-principal | in-process call through the ImportGuardPort from F10.S01.M03 privacy.import.commit (IOX-2) before any record commits |
 
 Default deny. For declared command-bus capabilities, evaluation and audit follow [CTR-CAP-001](../../../planning/contracts/CTR-CAP-001.md).
 

@@ -7,7 +7,7 @@
 ## Requirements
 
 - **PS-040-03.R01** Deposits follow proposed, agreed, funded and then release or forfeit paths, with escalation_due, escalated_pending, disputed and frozen as holding states; released, forfeited, withdrawn and expired are terminal.
-- **PS-040-03.R02** Funded and released are reached only from acknowledged or final F09 payment proof, and forfeited only from the renter's signed acceptance of the full funded amount (a forfeit response or a both-accepted dispute outcome), never from a claim alone or a mediator-only outcome.
+- **PS-040-03.R02** Funded and released are reached only from the payee-signed payment_ack (N30), never from the payer's own verifier or a claim, and forfeited only from the renter's signed acceptance of the full funded amount (a forfeit response or a both-accepted dispute outcome), never from a claim alone or a mediator-only outcome.
 - **PS-040-03.R03** Silence never settles money - a forfeit claim unanswered by its signed respondBy moves to escalation_due with a prefilled draft case that the owner opens explicitly, and an owner who does not decide after return is visible as decision overdue and can be disputed by the renter.
 - **PS-040-03.R04** Dispute outcomes are mapped explicitly - refund_claimed or return_agreed accepted by both parties fix releaseAmount (the advisoryRefund, always read as the amount the owner returns to the renter whichever party opened the case, capped at the funded amount, or the full funded amount when absent); no_fault_close, enforcement_referral and lapsed return the deposit to funded with decisionOverdue set; commerce.dispute.withdrawn returns it to the state it was disputed from.
 - **PS-040-03.R05** Every path into release_pending fixes releaseAmount (full on cancellation or full release, funded minus the accepted forfeit, or the mapped dispute amount), and the owner can attest that release from release_pending while no release Deal exists, with no return or window condition.
@@ -26,7 +26,7 @@ Initial **proposed**; terminal **released**, **forfeited**, **withdrawn**, **exp
 | proposed -> withdrawn | rentals.deposit.withdraw by owner (withdrawal) or renter (decline) | signed deposit_withdrawal; a later agreement fails with CONFLICT_STATE |
 | proposed -> expired | 72 h without agreement, or reservation cancelled | no obligation |
 | proposed -> frozen | two live terms for one reservation signed by forked owner devices | evidence kept; frozenFrom proposed |
-| agreed -> funded | commerce.payment.acknowledged or commerce.payment.finalized for contextRef {rental_deposit, depositId} | proof acknowledged or final; emits rentals.deposit.funded |
+| agreed -> funded | commerce.payment.acknowledged (verificationSource counterparty or chain, the owner-signed payment_ack, N30) for contextRef {rental_deposit, depositId} | proof acknowledged; commerce.payment.finalized alone never triggers it; emits rentals.deposit.funded |
 | agreed -> withdrawn | owner's signed withdrawal over the same termsCid received before any funding claim exists | the agreement is void with CONFLICT_STATE in both vaults; the funding Deal is cancelled with commerce.deal.cancel signed by both; emits rentals.deposit.released with outcome not_funded |
 | agreed -> expired | reservation cancelled before any acknowledged payment, or the funding Deal expired or startsAt passed without funding | no money held; an open funding Deal is cancelled with commerce.deal.cancel signed by both parties; emits rentals.deposit.released with outcome not_funded |
 | agreed -> frozen | withdrawal received after a funding claim exists, or comms.consent.verify returns conflicted or revoked for the agreement | the renter's claim must be resolved explicitly |
@@ -37,7 +37,7 @@ Initial **proposed**; terminal **released**, **forfeited**, **withdrawn**, **exp
 | funded -> escalated_pending | the renter's deposit_dispute_notice or commerce.dispute.opened received in the owner vault | waiting to link the case |
 | funded -> frozen | contradictory signed statements from forked devices of one party | frozenFrom funded |
 | release_pending -> release_pending | rentals.deposit.attest_release by owner while no release Deal exists | releaseAmount as fixed by the path; release Deal opened with contextCid the attestation cid |
-| release_pending -> released | commerce.payment.acknowledged or commerce.payment.finalized for contextRef {rental_deposit_release, depositId} | renter has the money back; outcome released_full or released_partial; emits rentals.deposit.released |
+| release_pending -> released | commerce.payment.acknowledged (verificationSource counterparty or chain, the renter-signed payment_ack, N30) for contextRef {rental_deposit_release, depositId} | renter has the money back; outcome released_full or released_partial; emits rentals.deposit.released |
 | release_pending -> disputed | rentals.deposit.dispute by renter | release never arrived; renter is the opener |
 | release_pending -> escalated_pending | the renter's deposit_dispute_notice received in the owner vault | waiting to link the case |
 | release_pending -> frozen | contradictory release attestations, or a mapped dispute amount that differs from an existing release Deal | frozenFrom release_pending |
@@ -76,7 +76,7 @@ stateDiagram-v2
   proposed --> withdrawn: rentals.deposit.withdraw by owner (withdrawal) or renter (decline)
   proposed --> expired: 72 h without agreement, or reservation cancelled
   proposed --> frozen: two live terms for one reservation signed by forked owner devices
-  agreed --> funded: commerce.payment.acknowledged or commerce.payment.finalized for contextRef {rental_deposit, depositId}
+  agreed --> funded: commerce.payment.acknowledged (verificationSource counterparty or chain, the owner-signed payment_ack, N30) for contextRef {rental_deposit, depositId}
   agreed --> withdrawn: owner's signed withdrawal over the same termsCid received before any funding claim exists
   agreed --> expired: reservation cancelled before any acknowledged payment, or the funding Deal expired or startsAt passed without funding
   agreed --> frozen: withdrawal received after a funding claim exists, or comms.consent.verify returns conflicted or revoked for the agreement
@@ -87,7 +87,7 @@ stateDiagram-v2
   funded --> escalated_pending: the renter's deposit_dispute_notice or commerce.dispute.opened received in the owner vault
   funded --> frozen: contradictory signed statements from forked devices of one party
   release_pending --> release_pending: rentals.deposit.attest_release by owner while no release Deal exists
-  release_pending --> released: commerce.payment.acknowledged or commerce.payment.finalized for contextRef {rental_deposit_release, depositId}
+  release_pending --> released: commerce.payment.acknowledged (verificationSource counterparty or chain, the renter-signed payment_ack, N30) for contextRef {rental_deposit_release, depositId}
   release_pending --> disputed: rentals.deposit.dispute by renter
   release_pending --> escalated_pending: the renter's deposit_dispute_notice received in the owner vault
   release_pending --> frozen: contradictory release attestations, or a mapped dispute amount that differs from an existing release Deal
@@ -133,7 +133,7 @@ stateDiagram-v2
 | Test | Level | Covers | Scenario | Expected |
 |---|---|---|---|---|
 | TEST-PS-040-09.T03 | property | PS-040-03.R01, PS-040-03.R07 | random statement and event sequences including forks | only declared transitions succeed; terminal states never change; frozen leaves only through renegotiation, dispute or expiry |
-| TEST-PS-040-09.T04 | integration | PS-040-03.R02, PS-040-04.R03 | payment claimed only, confirming only, expired, then acknowledged | funded only at acknowledged or final; proof labels follow COM-4 |
+| TEST-PS-040-09.T04 | integration | PS-040-03.R02, PS-040-04.R03 | payment claimed only, confirming only, expired, then acknowledged | funded only on the payee-signed payment_ack; proof labels follow COM-4 |
 | TEST-PS-040-09.T05 | property | PS-040-01.R02, PS-040-03.R02, PS-040-09.R02 | random partial forfeits, forfeits claimed below the deposit and accepted in full, releases, and two damage claims | retained plus released equals funded; an accepted forfeit below the funded amount goes to release_pending with funded − amount, never forfeited; at most one forfeit per damage claim; integer minor units |
 | TEST-PS-040-09.T06 | integration | PS-040-03.R03 | forfeit claim unanswered past respondBy plus 72 h; owner silent for 7 days after return | escalation_due with a prefilled draft case in the owner vault and no case opened; overdue decision banner, no auto release or forfeit; after 30 days in escalation_due back to funded with decisionOverdue |
 | TEST-PS-040-09.T12 | integration | PS-040-03.R05, PS-040-04.R03 | reservation cancelled after funding, owner attests on day 40 | deposit moves to release_pending with the full amount and no release Deal; attest_release allowed without return attestation and after day 30; released after the renter acknowledges |
@@ -142,6 +142,7 @@ stateDiagram-v2
 | TEST-PS-040-09.T20 | integration | PS-040-02.R02, PS-040-03.R05 | not_returned forfeit without return attestation at overdue day 13 and day 15; damage resolved on day 40 after return and forfeit on day 50; forfeit for damage after a verified return_waiver; forfeit for damage above the agreedAmount of its resolved claim; not_returned forfeit without the recorded not_returned damage claim id | RENTALS_DEPOSIT_WINDOW on day 13; allowed on day 15; allowed until 14 days after the resolution; waiver case refused with RENTALS_DEPOSIT_WINDOW; the last two refused with VALIDATION_FAILED |
 | TEST-PS-040-09.T21 | integration | PS-040-03.R07, PS-040-06.R02 | frozen deposit renegotiated, disputed by the non-forking party, and left alone before and after funding | each exit reaches the documented state; expiry after 72 h before funding and escalation_due after 14 days after funding |
 | TEST-PS-040-09.T25 | integration | PS-040-04.R06, PS-040-03.R01 | comms.consent.revoked whose revokedIds[] holds the agreementCid of an agreed deposit with afterCommit false; the same for a funded deposit with afterCommit true; one naming an unrelated consent; the first revocationId replayed | the agreed deposit frozen with frozenFrom agreed and agreementRevocationId set after comms.consent.verify returns revoked; the funded deposit keeps its state with the revocation recorded; the unrelated and replayed cases change nothing |
+| TEST-PS-040-09.T26 | integration | PS-040-03.R02, PS-040-04.R03 | the payer verifier reaches final for the funding payment and, later, for the release payment while the payee has no verifier and has signed no payment_ack | the deposit stays agreed, then release_pending; it moves to funded or released only when the payee-signed payment_ack arrives |
 
 ## Dependencies
 

@@ -8,23 +8,25 @@
 
 - **PS-069-01.R01** A Deal stores contextRef {type, id}, the context statement cid, parties with roles, 1 to 10 obligations (payer, payee, Money amount, purpose), status, open case ids, expiry and revision; its dealId is a UUIDv8 (RFC 9562 section 5.8) made from the first 16 bytes of sha256 over JCS {contextRef, contextCid} with version and variant bits set, an explicit exception to CTR-ID-001 ID-1, so every vault derives the same ID and a new context statement such as an auction second-chance offer yields a new Deal.
 - **PS-069-01.R02** A PaymentClaim stores exactly the COM-2 fields plus dealId, obligationId, the method reference signed into the claim (cash termsCid or crypto request cid), verification per COM-4, statement cids and local receivedAt; there is no paid boolean anywhere in the schema.
-- **PS-069-01.R03** Deals and claims are P2 (parties only), kept by each party (a vault, or the relay for a listing_fee Deal whose payee is that relay's operator) as RET-EVIDENCE, and travel only as end-to-end encrypted signed envelopes between the parties (PRV-5).
+- **PS-069-01.R03** Deals and claims are P2 (parties only), kept by each party's vault (the operator's own vault for a listing_fee Deal) as RET-EVIDENCE and never by a relay, and travel only as end-to-end encrypted signed envelopes between the parties (PRV-5).
 - **PS-069-01.R04** dealCid is the cid of JCS {contextRef, contextCid, parties, obligations}, so independent opens of the same terms converge on one dealCid, and completionCid is the cid of the completion body {dealId, dealCid, outcome: completed} that every party signs as classrup.commerce.deal_completion/v1.
 - **PS-069-01.R05** Money in a Deal or claim whose currency is crypto or outside the bundled ISO snapshot carries the F09.S03.M01 asset descriptor {code, chainId, contract, decimals, digest}, so every vault reads the same minor units.
+- **PS-069-01.R06** A Deal stores the recipients [{did, mailboxId}] of its other parties and derives its statement stream thr:<base64url(sha256(dealId))[0..22]>, so the F11.S01.M02 chainKey of every statement is the per-Deal chain; PaymentClaim.seq and prev are read from that chainKey and never allocated by this module.
 
 ## Specification
 
 ### Deal
 
-Schema `classrup.commerce.deal/v1` · storage **relay+device** · privacy **P2** · retention **RET-EVIDENCE**
+Schema `classrup.commerce.deal/v1` · storage **device** · privacy **P2** · retention **RET-EVIDENCE**
 
 | Field | Type and constraints |
 |---|---|
 | id | uuid — UUIDv8 (RFC 9562 §5.8) from sha256(JCS {contextRef, contextCid}); explicit CTR-ID-001 ID-1 exception; primary key |
-| vaultId | uuidv7 — local vault scope (CTR-ID-001 tenant slot); the relay instance id for a relay-held listing_fee Deal |
+| vaultId | uuidv7 — local vault scope (CTR-ID-001 tenant slot) |
 | contextRef | object — {type, id: uuid}; type is a registered context type: core N5 types offer (id offerId; the root offerId for a Deal negotiated through F01.S04.M02) \| auction_result (id the auction result id; for a second-chance Deal the id F04.S01.M03 derives as the first 16 bytes of sha256(second_chance_offer cid) formatted as a UUID) \| cycle_compensation (id the cycle id, or recoveryCaseId for a recovery compensation) \| service_milestone (id milestoneId) \| rental_deposit (id depositId) \| rental_damage (id claimId) \| listing_fee (id publicationId), plus types a context module registers through ContextTermsPort (N5a: rental_reservation {id reservationId} and rental_cancellation_fee {id reservationId} by F05.S01.M01, rental_deposit_release {id depositId} by F05.S01.M02, rental_late_fee {id returnId} by F05.S02.M02); rental_deposit is implemented by F05.S01.M02 and rental_damage by F05.S02.M03 |
 | contextCid | string — sha256 cid of the signed context statement: offerCid (offer), auction result or, for a second-chance Deal, the second_chance_response cid (auction_result), committed cycle revision or the accepting classrup.mutiny.recovery_action/v1 cid (cycle_compensation), milestone approvalCid (service_milestone), reservation requestCid (rental_reservation), the renter's cancellation cid (rental_cancellation_fee), deposit agreementCid (rental_deposit), release attestation cid (rental_deposit_release), return attestation or receipt cid (rental_late_fee), damage acceptance, counter acceptance or F09.S02.M02 dispute outcomeCid (rental_damage), publication statementCid (listing_fee) |
 | parties | array — 2..20 entries {did (principal DID), role: payer\|payee\|both} |
+| recipients | array — 1..20 entries {did, mailboxId} naming the other parties' mailboxes, supplied by the context module through DealPort.open (for an offer the buyer's buyerMailboxHint and the seller's projection mailboxHints) or read from ext.recipients of the received deal statement; reused for every claim, ack, cancel and completion statement of the Deal |
 | openerRole | string — role in the context that signs the deal statement, resolved by ContextTermsPort.openerRole (for example listing author for offer) |
 | obligations | array — 1..10 entries {obligationId, payerId, payeeId, amount: Money, asset?: AssetDescriptor (F09.S03.M01), purpose: goods\|service\|deposit\|compensation\|rent\|damage\|listing_fee\|other, allowedMethods: cash\|crypto\|external subset} |
 | status | enum — open \| disputed \| completed \| cancelled \| expired |
@@ -46,12 +48,12 @@ Schema `classrup.commerce.deal/v1` · storage **relay+device** · privacy **P2**
 - payerId differs from payeeId in every obligation and both are parties.
 - status completed implies every obligation is covered by claims holding a payee-signed acknowledgement (source counterparty for cash or external, source chain for crypto) summing to at least its amount, and completion.completionCid is set.
 - id equals the UUIDv8 derivation of (contextRef, contextCid); one Deal per (vaultId, contextRef, contextCid), and a later Deal for the same contextRef needs a new context statement.
-- A relay holds a Deal only for a listing_fee context whose payee is that relay's operator DID.
+- A relay never holds a Deal or a claim; for a listing_fee context the payee is the operator principal acting from the operator's own vault.
 - A Deal with frozen set is never completed and no acknowledgement is signed for its claims in this vault until DealPort.unfreeze clears the flag or the Deal is cancelled.
 
 ### PaymentClaim
 
-Schema `classrup.commerce.payment_claim/v1` · storage **relay+device** · privacy **P2** · retention **RET-EVIDENCE**
+Schema `classrup.commerce.payment_claim/v1` · storage **device** · privacy **P2** · retention **RET-EVIDENCE**
 
 | Field | Type and constraints |
 |---|---|
@@ -77,8 +79,8 @@ Schema `classrup.commerce.payment_claim/v1` · storage **relay+device** · priva
 | claimCid? | string — sha256 of the signed claim statement; absent while sendHold is set |
 | ackCid? | string — cid of the payee-signed payment_ack (verification.source counterparty for cash or external, chain for crypto) |
 | disputeCid? | string — cid of the payee dispute statement |
-| seq | int — author's sequence number on this Deal, starting at 1 (FED-3) |
-| prev? | string — cid of the author's previous statement on this Deal (per-author seq and prev chain, FED-3) |
+| seq | int — read from the F11.S01.M02 chainKey {author, signerKey, stream = the Deal stream} of the claim statement, never allocated here (FED-3) |
+| prev? | string — cid of the author's previous statement on the Deal stream, read from the F11.S01.M02 chainKey |
 | forkDetected | boolean — true when two different statements by the same author share the same prev or seq; claim is frozen |
 | peerSync | string — local_committed \| prepared \| transport_acknowledged \| peer_accepted |
 | revision | int — CTR-ID-001 ID-4 |
@@ -112,7 +114,8 @@ CREATE INDEX commerce_claim_deal ON commerce_payment_claim(vault_id, deal_id, st
 | TEST-PS-069-09.T11 | contract | PS-069-05.R03, PS-069-01.R03 | inspect relay double traffic | only ciphertext and routing metadata observed |
 | TEST-PS-069-09.T21 | integration | PS-069-01.R01, PS-069-01.R04 | vaults A and B open the same accepted offer independently; an auction second-chance Deal opens with a new offer statement cid | A and B hold the same dealId and dealCid; the second-chance Deal has its own dealId; both vaults compute the same completionCid |
 | TEST-PS-069-09.T33 | unit | PS-069-01.R05, PS-069-02.R06 | USDC obligation whose asset descriptor states 18 decimals while the local registry has 6; matching descriptor | mismatch quarantined with COMMERCE_CURRENCY_MISMATCH; matching descriptor accepted |
+| TEST-PS-069-09.T39 | contract | PS-069-04.R07, PS-069-01.R06, PS-069-02.R05 | open a Deal from vault A with recipients, claim, acknowledge, cancel and complete through a StatementPublisherPort double, then ingest in vault B | every statement is created by federation.record.publish with audience participants, the stored recipients and stream thr:<base64url(sha256(dealId))[0..22]>, ciphertext at most 12288 bytes; seq and prev equal the F11.S01.M02 chainKey values and the module allocates none; both vaults compute the same dealCid |
 
 ## Dependencies
 
-Module depends on: F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).
+Module depends on: F09.S03.M01, F09.S03.M03, F07.S01.M01, F07.S02.M01, F07.S02.M02, F11.S01.M01, F11.S01.M02, F11.S01.M03, F16.S02.M03, F10.S01.M02, F10.S01.M03, F10.S01.M04, F10.S02.M02, CTR-COM-001, CTR-MNY-001, CTR-ID-001, CTR-EVT-001, CTR-ERR-001, CTR-CAP-001, CTR-IDM-001, CTR-PRV-001, CTR-FED-001, CTR-OBS-001. Predecessor: [module SPEC](SPEC.md).

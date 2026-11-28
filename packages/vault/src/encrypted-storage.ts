@@ -34,18 +34,28 @@ function decodeRow(table: TableName, bytes: Uint8Array): { key: string; row: obj
 
 export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{ storage: Storage; unlock(passphrase: string, required: boolean, replacement?: object): Promise<void> }> {
   const connection = await openIndexedDbConnection(options);
+  const { invalidation } = connection;
   let current: Storage | undefined;
+  let candidate: Storage | undefined;
   let key: CryptoKey | undefined;
   let addressKey: CryptoKey | undefined;
-  let closed = false;
+  let state: 'root-only' | 'opening' | 'ready' | 'closed' = 'root-only';
   let closeSettlement: Promise<void> | undefined;
   let preparedHeader: object | undefined;
   let inventory = new Map<string, string>();
-  const check = (): void => { if (closed) throw new Error('Vault closed'); };
+  const check = (): void => { if (state === 'closed' || invalidation.aborted) throw new Error('Vault closed'); };
+  const rootOnly = (snapshot: Snapshot): Storage => createStorage(createMemoryDriver({ kind: 'indexeddb',
+    snapshot: { records: (snapshot.records ?? []).filter(([id]) => id === IDENTITY) } }), { invalidation });
+  function discardSecrets(): void {
+    key = undefined;
+    addressKey = undefined;
+    preparedHeader = undefined;
+    inventory.clear();
+  }
   try {
     const initial = await connection.snapshot();
     // The protected signing identity is the only row readable before passphrase verification.
-    current = createStorage(createMemoryDriver({ kind: 'indexeddb', snapshot: { records: (initial.records ?? []).filter(([id]) => id === IDENTITY) } }));
+    current = rootOnly(initial);
   } catch (error) {
     try { await connection.close(); } catch { /* preserve snapshot error */ }
     throw error;
@@ -88,69 +98,83 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
     check();
     await connection.persist([...changes, { table: 'meta', key: INVENTORY, row: manifest }]);
     // Preserve the actual durable outcome, but do not restore closed in-memory state.
-    if (!closed) inventory = next;
+    if (state !== 'closed') inventory = next;
   }
   const storage: Storage = {
     kind: 'indexeddb',
-    transaction(fn, opts) { check(); if (!key) throw new Error('Vault storage locked'); return current!.transaction(fn, opts); },
+    invalidation,
+    transaction(fn, opts) { check(); if (state !== 'ready') throw new Error('Vault storage locked'); return current!.transaction(fn, opts); },
     read(fn) { check(); return current!.read(fn); },
-    ping() { check(); return current!.ping(); },
+    ping() { if (invalidation.aborted) return Promise.resolve(false); check(); return state === 'ready' ? current!.ping() : Promise.resolve(false); },
     close() {
       if (closeSettlement) return closeSettlement;
-      closed = true;
-      key = undefined;
-      addressKey = undefined;
-      preparedHeader = undefined;
-      inventory.clear();
+      state = 'closed';
+      invalidation.removeEventListener('abort', invalidate);
+      discardSecrets();
       const previous = current;
+      const opening = candidate;
       current = undefined;
+      candidate = undefined;
       // Every caller observes the same drain and connection-release outcome.
       closeSettlement = (async () => {
-        try { await previous?.close(); }
-        catch (error) {
-          try { await connection.close(); } catch { /* preserve drain error */ }
-          throw error;
+        let failed = false, failure: unknown;
+        for (const owned of [previous, opening]) {
+          try { await owned?.close(); }
+          catch (error) { if (!failed) { failed = true; failure = error; } }
         }
-        await connection.close();
+        try { await connection.close(); }
+        catch (error) { if (!failed) { failed = true; failure = error; } }
+        if (failed) throw failure;
       })();
       return closeSettlement;
     },
   };
+  // Revocation is synchronous; draining the candidate/current stores and native
+  // terminal work is asynchronous and shared with all explicit close callers.
+  const invalidate = (): void => { void storage.close().catch(() => undefined); };
+  invalidation.addEventListener('abort', invalidate, { once: true });
+  if (invalidation.aborted) {
+    try { await storage.close(); } catch { /* preserve the invalidated open */ }
+    throw new Error('Vault closed');
+  }
   return {
     storage,
     async unlock(passphrase, required, replacement) {
       check();
-      if (key) {
+      if (state === 'opening') throw new Error('Vault storage opening');
+      if (state === 'ready') {
         const verified = await unseal(preparedHeader, passphrase);
         verified.fill(0);
         check();
         return;
       }
-      const persisted = await connection.snapshot();
-      const header = persisted.meta?.find(([id]) => id === HEADER)?.[1];
-      if (required && !header) throw new Error('Missing encrypted storage header');
-      let material: Uint8Array;
-      let wrapped: object;
-      if (header) {
-        wrapped = header;
-        material = await unseal(header, passphrase);
-      } else {
-        material = crypto.getRandomValues(new Uint8Array(32));
-        try { wrapped = await seal(material, passphrase); }
-        catch (error) { material.fill(0); throw error; }
-      }
+      state = 'opening';
+      let working: Storage | undefined;
       try {
-        if (material.length !== 32) throw new Error('Invalid storage key');
-        const derivation = await crypto.subtle.importKey('raw', material.slice(), 'HKDF', false, ['deriveKey']);
-        const parameters = { name: 'HKDF', hash: 'SHA-256', salt: encoder.encode('classrup.storage/v1') };
-        const imported = await crypto.subtle.deriveKey({ ...parameters, info: encoder.encode('row encryption') }, derivation, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
-        const addresses = await crypto.subtle.deriveKey({ ...parameters, info: encoder.encode('row addressing') }, derivation, { name: 'HMAC', hash: 'SHA-256', length: 256 }, false, ['sign']);
-        check();
-        key = imported;
-        addressKey = addresses;
-        preparedHeader = wrapped;
-      } finally { material.fill(0); }
-      try {
+        const persisted = await connection.snapshot();
+        const header = persisted.meta?.find(([id]) => id === HEADER)?.[1];
+        if (required && !header) throw new Error('Missing encrypted storage header');
+        let material: Uint8Array;
+        let wrapped: object;
+        if (header) {
+          wrapped = header;
+          material = await unseal(header, passphrase);
+        } else {
+          material = crypto.getRandomValues(new Uint8Array(32));
+          try { wrapped = await seal(material, passphrase); }
+          catch (error) { material.fill(0); throw error; }
+        }
+        try {
+          if (material.length !== 32) throw new Error('Invalid storage key');
+          const derivation = await crypto.subtle.importKey('raw', material.slice(), 'HKDF', false, ['deriveKey']);
+          const parameters = { name: 'HKDF', hash: 'SHA-256', salt: encoder.encode('classrup.storage/v1') };
+          const imported = await crypto.subtle.deriveKey({ ...parameters, info: encoder.encode('row encryption') }, derivation, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+          const addresses = await crypto.subtle.deriveKey({ ...parameters, info: encoder.encode('row addressing') }, derivation, { name: 'HMAC', hash: 'SHA-256', length: 256 }, false, ['sign']);
+          check();
+          key = imported;
+          addressKey = addresses;
+          preparedHeader = wrapped;
+        } finally { material.fill(0); }
         if (header) {
           const storedManifest = persisted.meta?.find(([id]) => id === INVENTORY)?.[1] as EncryptedRow | undefined;
           if (!storedManifest || storedManifest.format !== FORMAT) throw new Error('Missing encrypted storage inventory');
@@ -218,17 +242,44 @@ export async function openEncryptedStorage(options: IndexedDbOptions): Promise<{
           } else if (migration.length !== 0) throw new Error('Uninitialized vault contains orphaned data');
         }
         check();
-        await current!.close();
-        check();
-        current = createStorage(createMemoryDriver({ kind: 'indexeddb', snapshot, persist: async changes => {
+        working = createStorage(createMemoryDriver({ kind: 'indexeddb', snapshot, persist: async changes => {
           const encrypted = await encryptedChanges(changes);
           check();
           await persistAuthenticated([...pendingMigration, ...encrypted]);
           pendingMigration = [];
-        } }));
-        const swept = await runRetentionSweep(current, options.clock ?? createSystemClock(), options.retention);
+        } }), { invalidation });
+        candidate = working;
+        // Initialization has no public read/write admission to the decrypted store.
+        // Maintenance must settle before the root-only snapshot is replaced.
+        const swept = await runRetentionSweep(working, options.clock ?? createSystemClock(), options.retention);
         if (!swept.ok) throw new AppErrorException(swept.error);
-      } catch (error) { key = undefined; addressKey = undefined; preparedHeader = undefined; inventory.clear(); throw error; }
+        check();
+        await current!.close();
+        check();
+        current = working;
+        candidate = undefined;
+        state = 'ready';
+      } catch (error) {
+        discardSecrets();
+        try {
+          await working?.close();
+          if (candidate === working) candidate = undefined;
+          check();
+          await current?.close();
+          check();
+          // Migration can already be durable when later maintenance fails. Read
+          // the actual sealed root instead of restoring a stale plaintext-era view.
+          const persisted = await connection.snapshot();
+          check();
+          current = rootOnly(persisted);
+          state = 'root-only';
+        } catch {
+          // A failed drain/refresh cannot justify retry on this handle. Preserve
+          // the initialization failure even when terminal cleanup also rejects.
+          try { await storage.close(); } catch { /* preserve initialization error */ }
+        }
+        throw error;
+      }
     },
   };
 }

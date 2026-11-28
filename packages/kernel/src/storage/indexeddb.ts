@@ -199,8 +199,13 @@ export interface IndexedDbOptions {
   readonly random?: RandomFill;
 }
 
+/** Fixed terminal causes contain no vault or record identifiers. */
+export type IndexedDbInvalidationReason = 'versionchange' | 'connection_closed';
+
 /** A fenced connection; callers serialize snapshot/persist operations and own authentication. */
 export interface IndexedDbConnection {
+  /** One terminal native cause; ordinary explicit close does not emit a native close event. */
+  readonly invalidation: AbortSignal;
   snapshot(): Promise<Snapshot>;
   persist(changes: readonly Change[]): Promise<void>;
   close(): Promise<void>;
@@ -211,35 +216,86 @@ export async function openIndexedDbConnection(opts: IndexedDbOptions): Promise<I
   const factory = opts.indexedDB ?? globalThis.indexedDB;
   if (!factory) throw new Error('IndexedDB is not available');
   const locks: VaultLocks | undefined = opts.locks ?? globalThis.navigator?.locks;
-  const release = locks ? await acquireLock(locks, `classrup-storage:${opts.name}`) : async () => undefined;
-  if (!release) throw vaultBusy('vault_locked');
+  const acquiredLease = locks ? await acquireLock(locks, `classrup-storage:${opts.name}`) : async () => undefined;
+  if (!acquiredLease) throw vaultBusy('vault_locked');
+  const release = acquiredLease;
   let db: IDBDatabase | undefined;
+  let closed = false;
+  let closeSettlement: Promise<void> | undefined;
+  let inFlight = 0;
+  let drained: (() => void) | undefined;
+  const invalidation = new AbortController();
+  const check = (): void => { if (closed) throw new Error('Storage closed'); };
+
+  function close(reason?: IndexedDbInvalidationReason): Promise<void> {
+    if (closeSettlement) {
+      if (reason && !invalidation.signal.aborted) invalidation.abort(reason);
+      return closeSettlement;
+    }
+    closed = true;
+    let resolve!: () => void;
+    let reject!: (error: unknown) => void;
+    // Reserve the shared settlement before notifying listeners: subscribers
+    // may synchronously start closing their own storage/session wrappers.
+    closeSettlement = new Promise<void>((accept, deny) => { resolve = accept; reject = deny; });
+    if (reason) invalidation.abort(reason);
+    let nativeCloseFailed = false;
+    let nativeCloseError: unknown;
+    try { db?.close(); } catch (error) { nativeCloseFailed = true; nativeCloseError = error; }
+    // Native close is requested immediately to unblock an upgrade. Its existing
+    // transactions still own their work until complete/abort; retain the lease.
+    void (async () => {
+      try {
+        if (inFlight > 0) await new Promise<void>(accept => { drained = accept; });
+        try { await release(); }
+        catch (error) { if (!nativeCloseFailed) throw error; }
+        if (nativeCloseFailed) throw nativeCloseError;
+      } finally {
+        db?.removeEventListener('versionchange', versionchange);
+        db?.removeEventListener('close', unexpectedlyClosed);
+      }
+    })().then(resolve, reject);
+    return closeSettlement;
+  }
+  // An event has no promise consumer. Observe its rejection here; explicit
+  // close callers still receive the original shared settlement, including error.
+  const versionchange = (): void => { void close('versionchange').catch(() => undefined); };
+  const unexpectedlyClosed = (): void => { void close('connection_closed').catch(() => undefined); };
+  async function operation<T>(read: boolean, work: () => Promise<T>): Promise<T> {
+    check();
+    inFlight++;
+    try {
+      const value = await work();
+      // Snapshots and startup cannot publish after invalidation. Durable writes
+      // report their actual terminal outcome even if closure followed admission.
+      if (read) check();
+      return value;
+    } finally {
+      inFlight--;
+      if (inFlight === 0) { drained?.(); drained = undefined; }
+    }
+  }
   try {
     db = await openDb(factory, opts.name);
     const conn = db;
-    conn.onversionchange = () => conn.close();
+    // Install before writer claim, which can itself be interrupted by a native
+    // versionchange or abnormal connection closure.
+    conn.addEventListener('versionchange', versionchange);
+    conn.addEventListener('close', unexpectedlyClosed);
     const token = new Uint8Array(16);
     (opts.random ?? webCryptoRandom)(token);
     const writer = bytesToBase64url(token);
-    await claimWriter(conn, writer);
-    let closed = false;
-    let closeSettlement: Promise<void> | undefined;
-    const check = (): void => { if (closed) throw new Error('Storage closed'); };
+    await operation(true, () => claimWriter(conn, writer));
+    check();
     return {
-      async snapshot() { check(); return loadSnapshot(conn); },
-      async persist(changes) { check(); await persist(conn, changes, writer); },
-      close() {
-        if (closeSettlement) return closeSettlement;
-        closed = true;
-        closeSettlement = (async () => {
-          try { conn.close(); } finally { await release(); }
-        })();
-        return closeSettlement;
-      },
+      invalidation: invalidation.signal,
+      snapshot: () => operation(true, () => loadSnapshot(conn)),
+      persist: changes => operation(false, () => persist(conn, changes, writer)),
+      close: () => close(),
     };
   } catch (error) {
     // Drain the acquired lease without replacing the original open failure.
-    try { try { db?.close(); } finally { await release(); } } catch { /* preserve open error */ }
+    try { await close(); } catch { /* preserve open error */ }
     throw error;
   }
 }
@@ -252,9 +308,10 @@ export async function openIndexedDbStorage(opts: IndexedDbOptions): Promise<Stor
     storage = createStorage(createMemoryDriver({
       kind: 'indexeddb', snapshot: await connection.snapshot(),
       persist: changes => connection.persist(changes), onClose: () => connection.close(),
-    }));
+    }), { invalidation: connection.invalidation });
     const swept = await runRetentionSweep(storage, opts.clock ?? createSystemClock(), opts.retention);
     if (!swept.ok) throw new AppErrorException(swept.error);
+    if (connection.invalidation.aborted) throw new Error('Storage closed');
     return storage;
   } catch (error) {
     try {

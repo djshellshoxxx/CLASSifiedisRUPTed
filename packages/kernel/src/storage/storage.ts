@@ -9,6 +9,8 @@ export type TxMode = 'read' | 'write';
 
 export interface Storage {
   readonly kind: DriverKind;
+  /** Native backing-store loss is terminal, including for cached reads and no-op writes. */
+  readonly invalidation?: AbortSignal;
   /**
    * Runs fn in one transaction. Commits when fn returns ok (write mode), rolls back on err or
    * exception (rethrown). Transactions are serialized; do not call transaction() from inside fn.
@@ -58,9 +60,13 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
     && typeof (value as { then?: unknown }).then === 'function';
 }
 
-async function runTx<T, E>(driver: StorageDriver, mode: TxMode, fn: (tx: Tx) => Result<T, E> | Promise<Result<T, E>>): Promise<Result<T, E>> {
+async function runTx<T, E>(driver: StorageDriver, mode: TxMode, fn: (tx: Tx) => Result<T, E> | Promise<Result<T, E>>,
+  checkInvalidation: () => void): Promise<Result<T, E>> {
   let active = true;
-  const guard = (): void => { if (!active) throw new Error('Transaction is no longer active'); };
+  const guard = (): void => {
+    if (!active) throw new Error('Transaction is no longer active');
+    checkInvalidation();
+  };
   // Guard the driver as well as the public port: an unawaited blob hash can resume
   // inside a public async method after the callback has already returned.
   const tx = bindLifetime(createTx(bindLifetime(driver.begin(mode), guard), driver.kind), guard);
@@ -69,6 +75,9 @@ async function runTx<T, E>(driver: StorageDriver, mode: TxMode, fn: (tx: Tx) => 
     const pending = fn(tx);
     // Do not yield to queued microtasks after a synchronous callback has returned.
     result = isThenable(pending) ? await pending : pending;
+    // A handler can retain a detached value across an await. Revoke publication
+    // as well as subsequent transaction methods when the backing store is lost.
+    checkInvalidation();
   } catch (e) {
     active = false;
     driver.rollback();
@@ -82,38 +91,54 @@ async function runTx<T, E>(driver: StorageDriver, mode: TxMode, fn: (tx: Tx) => 
     return result;
   }
   await driver.commit();
+  // A successful durable commit stays successful even if invalidation followed
+  // its admission. Rejecting here would falsely report rollback to its caller.
   return result;
 }
 
-export function createStorage(driver: StorageDriver): Storage {
+export function createStorage(driver: StorageDriver, options: { readonly invalidation?: AbortSignal } = {}): Storage {
+  const { invalidation } = options;
   const lock = createLock();
   let closed = false;
   let closeSettlement: Promise<void> | undefined;
+  const checkInvalidation = (): void => {
+    if (invalidation?.aborted) throw new Error('storage is invalidated');
+  };
   const guard = (): void => {
+    checkInvalidation();
     if (closed) throw new Error('storage is closed');
   };
+  const invalidate = (): void => { void storage.close().catch(() => undefined); };
   const storage: Storage = {
     kind: driver.kind,
+    ...(invalidation ? { invalidation } : {}),
     transaction: (fn, opts) => {
       guard();
-      return lock(() => {
+      const mode = opts?.mode ?? 'write';
+      const result = lock(() => {
         // A previously queued close() may complete after the call-site guard.
         // Check again at execution time so no handler can run against a closed driver.
         guard();
-        return runTx(driver, opts?.mode ?? 'write', fn);
+        return runTx(driver, mode, fn, checkInvalidation);
       });
+      // Native invalidation can run in a microtask after rollback but before the
+      // serialized result reaches its caller. Reads must also pass this boundary.
+      return mode === 'read' ? result.then(value => { checkInvalidation(); return value; }) : result;
     },
     read: async <T>(fn: (tx: Tx) => T | Promise<T>): Promise<T> => {
       const r = await storage.transaction<T, never>((tx) => {
         const pending = fn(tx);
         return isThenable(pending) ? Promise.resolve(pending).then(value => ok(value as T)) : ok(pending as T);
       }, { mode: 'read' });
+      checkInvalidation();
       if (!r.ok) throw new Error('read transaction failed');
       return r.value;
     },
     ping: async () => {
       try {
-        return (await storage.transaction(() => ok(true))).ok;
+        const result = await storage.transaction(() => ok(true));
+        guard();
+        return result.ok;
       } catch {
         return false;
       }
@@ -121,6 +146,7 @@ export function createStorage(driver: StorageDriver): Storage {
     close: () => {
       // Keep the original queued drain and its outcome, including a rejection.
       if (closeSettlement) return closeSettlement;
+      invalidation?.removeEventListener('abort', invalidate);
       closeSettlement = lock(async () => {
         closed = true;
         await driver.close();
@@ -128,6 +154,9 @@ export function createStorage(driver: StorageDriver): Storage {
       return closeSettlement;
     },
   };
+  invalidation?.addEventListener('abort', invalidate, { once: true });
+  // A native event may precede composition of the decrypted working set.
+  if (invalidation?.aborted) invalidate();
   return storage;
 }
 

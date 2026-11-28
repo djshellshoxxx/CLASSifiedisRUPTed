@@ -42,6 +42,7 @@ let listingEditor: ReturnType<typeof mountListingEditor> | undefined;
 let locationPreferences: ReturnType<typeof mountLocationPreferences> | undefined;
 let blindMatch: ReturnType<typeof mountBlindMatch> | undefined;
 let sessionProtection: ReturnType<typeof protectVaultSession> | undefined;
+let removeStorageInvalidation: (() => void) | undefined;
 let closingSession: Promise<void> | undefined;
 let storageCloseFailed = false;
 let listingMaintenance: ReturnType<typeof createListingMaintenance> | undefined;
@@ -237,6 +238,21 @@ async function refreshPeers(): Promise<void> {
 async function connect(session: UnlockedVault): Promise<void> {
   resetPeerSearch();
   unlocked = session;
+  removeStorageInvalidation?.(); removeStorageInvalidation = undefined;
+  const invalidation = session.storage.invalidation;
+  const connectionEnded = () => {
+    // Revoke the visible session immediately; storage drains through the same
+    // close path used by manual and idle locking.
+    void lockSession(session, 'Vault connection ended. Unlock again to continue.').catch(report);
+  };
+  if (invalidation) {
+    invalidation.addEventListener('abort', connectionEnded, { once: true });
+    removeStorageInvalidation = () => invalidation.removeEventListener('abort', connectionEnded);
+    if (invalidation.aborted) {
+      connectionEnded();
+      throw new Error('Vault connection ended. Unlock again to continue.');
+    }
+  }
   sessionProtection?.dispose();
   element<HTMLSelectElement>('vault-idle-minutes').value = '15';
   sessionProtection = protectVaultSession({ document,
@@ -319,6 +335,7 @@ async function connect(session: UnlockedVault): Promise<void> {
   sessionMessage('Vault unlocked. Local changes are persisted in this browser.');
 }
 function clearLocalViews() {
+  removeStorageInvalidation?.(); removeStorageInvalidation = undefined;
   sessionProtection?.dispose(); sessionProtection = undefined;
   listingMaintenance?.dispose(); listingMaintenance = undefined;
   if (maintenanceTimer !== undefined) clearInterval(maintenanceTimer);

@@ -23,3 +23,4 @@ Property: generated IDs are unique (1e6 sample) and monotonic per generator with
 ## ADR-0016 amendment (review pass, 2026-11-11)
 - **ID-8** Records whose IDs appear in public projections (P0) use UUIDv7 with the embedded timestamp floored to the hour (the remaining bits random), matching the public timestamp coarsening of F10.S02.M03; the monotonicity property of ID-1 applies only to the unfloored generator used for private records. Private records keep millisecond UUIDv7.
 - **ID-9** ID-3 is superseded by CTR-FED-001 FED-7: `cid = "sha256-" + base64url(SHA-256(JCS(envelope minus sig and cid)))`.
+- **ID-10** Deterministic IDs for aggregates that several vaults create independently are UUIDv8 (RFC 9562 §5.8): first 16 bytes of SHA-256(JCS(seed)), version and variant bits set; the seed names the aggregate kind and the cid of the creating statement (COORDINATION_NOTES N31). They are never used where ordering by time is assumed.

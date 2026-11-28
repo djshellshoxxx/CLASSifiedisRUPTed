@@ -22,6 +22,7 @@ export function mountBlindMatchLanguage(panel: HTMLElement) {
   let mounted = true;
   let request = 0;
   let lastSelection = '';
+  let failed = false;
   panel.lang = 'en';
   panel.dir = 'ltr';
   const i18n = createI18n({
@@ -57,11 +58,16 @@ export function mountBlindMatchLanguage(panel: HTMLElement) {
     const result = await i18n.setLocale(preferred);
     if (!mounted || ticket !== request || result.status === 'superseded') return;
     if (result.status === 'failed') {
+      failed = true;
       select.value = lastSelection;
       message(announcement, 'languageFailed');
       return;
     }
     lastSelection = selectedValue;
+    if (failed) {
+      announcement.replaceChildren();
+      failed = false;
+    }
     if (panel.lang === i18n.locale) return;
     panel.lang = i18n.locale;
     panel.dir = i18n.dir;

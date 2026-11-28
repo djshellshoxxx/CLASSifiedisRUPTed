@@ -1,3 +1,4 @@
+import { en as englishMessages } from '../../../packages/i18n/src/internationalization/languages/blindmatch/en.ts';
 import { mountBlindMatchLanguage, type BlindMatchMessage } from './blindmatch-language.ts';
 import { createLocalIntentStore, createLocalMatchSession, privateIntentCriteriaSchema,
   type LocalIntentStore, type LocalMatchSession, type LocalMatchSessionOptions,
@@ -7,7 +8,7 @@ import type { UnlockedVault } from '../../../packages/vault/src/index.ts';
 
 class PrivateIntentFormError extends Error {
   constructor(key: 'invalidExpiry' | 'needCurrency' | 'invalidFilters') {
-    super(key);
+    super(englishMessages[`blindmatch.${key}`]);
     this.key = key;
   }
   readonly key: BlindMatchMessage;

@@ -343,6 +343,13 @@ export async function main(args = process.argv.slice(2)) {
     } else throw new Error(HELP);
   }
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Node resolves entry-module symlinks by default, but argv[1] may retain them
+// (notably macOS temporary directories under /var). Keep ordinary imports inert.
+const modulePath = fileURLToPath(import.meta.url);
+const entryPath = process.argv[1] && path.resolve(process.argv[1]);
+const isEntry = entryPath && (entryPath === modulePath
+  || await Promise.all([fs.realpath(entryPath), fs.realpath(modulePath)])
+    .then(([entry, own]) => entry === own, () => false));
+if (isEntry) {
   main().catch(error => { console.error(`ClassRup: ${error.message}`); process.exitCode = 1; });
 }

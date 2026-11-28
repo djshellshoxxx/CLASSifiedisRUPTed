@@ -84,6 +84,23 @@ test('version uses checkout metadata from arbitrary paths without setup or node_
   await assert.rejects(fs.access(path.join(selected.checkout, '.classrup')), { code: 'ENOENT' });
 });
 
+test('version runs through a directory alias while an ordinary import remains inert', async t => {
+  const selected = await fixture(t);
+  const alias = path.join(selected.directory, 'checkout alias');
+  await fs.symlink(selected.checkout, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const aliasedScript = path.join(alias, 'tools/cli/classrup.mjs');
+  const result = run(aliasedScript, ['--version', '--json'], selected.cwd);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, '');
+  assert.equal(result.stdout, `${JSON.stringify(success(declaredVersion))}\n`);
+  const importer = path.join(selected.cwd, 'import-only.mjs');
+  await fs.writeFile(importer, `await import(${JSON.stringify(pathToFileURL(aliasedScript).href)});\n`);
+  const imported = run(importer, ['--version'], selected.cwd);
+  assert.equal(imported.status, 0, imported.stderr);
+  assert.equal(imported.stdout, '');
+  assert.equal(imported.stderr, '');
+});
+
 test('version accepts only its bounded grammar and never echoes unchecked arguments', async t => {
   const selected = await fixture(t);
   // Invalid grammar is rejected before any metadata read.
